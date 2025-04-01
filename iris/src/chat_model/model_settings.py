@@ -39,7 +39,6 @@ logger.info(f"Using API base URL: {BASE_URL}")
 # Environment-specific settings
 USE_SSL = IS_RBC_ENV
 USE_OAUTH = IS_RBC_ENV
-USE_DLP = IS_RBC_ENV
 
 # Model capability mapping - defines models for each capability in each environment
 MODELS = {

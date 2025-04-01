@@ -24,7 +24,6 @@ from openai import OpenAI
 from ..chat_model.model_settings import (
     IS_RBC_ENV, 
     BASE_URL, 
-    USE_DLP,
     REQUEST_TIMEOUT,
     MAX_RETRY_ATTEMPTS,
     RETRY_DELAY_SECONDS,
@@ -115,7 +114,6 @@ def call_llm(oauth_token: str, prompt_token_cost: float = 0, completion_token_co
                 - tool_choice (dict/str): Tool choice specification
                 - temperature (float): Randomness parameter
                 - max_tokens (int): Maximum tokens for model response
-                - extra_query (dict): Additional parameters for the API, including is_stateful_dlp
                 - ... any other parameters supported by the OpenAI API
     
     Returns:
@@ -130,9 +128,6 @@ def call_llm(oauth_token: str, prompt_token_cost: float = 0, completion_token_co
     # Set base URL for the API client (no query parameters here)
     api_base_url = BASE_URL
     
-    # Simple flag to enable stateful DLP in RBC environment
-    if IS_RBC_ENV and USE_DLP and 'extra_query' not in params:
-        params['extra_query'] = {"is_stateful_dlp": True}
     
     # Now create the OpenAI client with the properly formed URL
     client = OpenAI(
