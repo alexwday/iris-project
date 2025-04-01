@@ -126,44 +126,25 @@ def call_llm(oauth_token: str, prompt_token_cost: float = 0, completion_token_co
     attempts = 0
     last_exception = None
     
-    # Process any extra query parameters before creating the client
+    # Set base URL without any query parameters
     api_base_url = BASE_URL
-    
-    # Initialize extra_body_parameters
-    extra_body_params = {}
     
     # Handle extra query parameters
     if 'extra_query' in params:
         extra_query = params.pop('extra_query')
         
-        # Extract is_stateful_dlp value from extra_query if present
-        is_stateful_dlp = None
+        # If extra_query contains is_stateful_dlp, add it to the main params
         if 'is_stateful_dlp' in extra_query:
-            is_stateful_dlp = extra_query.pop('is_stateful_dlp')
+            params['is_stateful_dlp'] = extra_query.pop('is_stateful_dlp')
         
-        # Create a properly formatted query string for remaining parameters
-        if extra_query:
-            query_string = '&'.join([f"{k}={str(v).lower() if isinstance(v, bool) else v}" for k, v in extra_query.items()])
-            
-            if query_string:
-                # Check if the base URL already has query parameters
-                separator = '&' if '?' in api_base_url else '?'
-                # Update the base URL
-                api_base_url = f"{api_base_url}{separator}{query_string}"
+        # Process any remaining extra_query parameters
+        # Note: These are typically other parameters that aren't standard OpenAI params
+        for key, value in extra_query.items():
+            params[key] = value
     
-        # Handle is_stateful_dlp parameter by adding it to the URL
-        if is_stateful_dlp is not None:
-            # Check if the base URL already has query parameters
-            separator = '&' if '?' in api_base_url else '?'
-            # Add is_stateful_dlp as a query parameter
-            api_base_url = f"{api_base_url}{separator}is_stateful_dlp={str(is_stateful_dlp).lower()}"
-    
-    # Add default DLP in RBC environment as a URL parameter
-    elif IS_RBC_ENV and USE_DLP:
-        # Check if the base URL already has query parameters
-        separator = '&' if '?' in api_base_url else '?'
-        # Add is_stateful_dlp as a query parameter
-        api_base_url = f"{api_base_url}{separator}is_stateful_dlp=true"
+    # Add default DLP in RBC environment
+    elif IS_RBC_ENV and USE_DLP and 'is_stateful_dlp' not in params:
+        params['is_stateful_dlp'] = True
     
     # Now create the OpenAI client with the properly formed URL
     client = OpenAI(
