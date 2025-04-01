@@ -100,8 +100,7 @@ def model(conversation=None):
                 # Stream the actual response chunks
                 for chunk in response_from_conversation(
                     processed_conversation, 
-                    token, 
-                    routing_decision["thought"]
+                    token
                 ):
                     yield {
                         "type": "direct_response",
