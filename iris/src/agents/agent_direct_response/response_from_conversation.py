@@ -37,7 +37,7 @@ class DirectResponseError(Exception):
     """Base exception class for direct response errors."""
     pass
 
-def response_from_conversation(conversation, token, router_thought=None):
+def response_from_conversation(conversation, token):
     """
     Generate a direct response based solely on conversation context.
     
@@ -46,7 +46,6 @@ def response_from_conversation(conversation, token, router_thought=None):
         token (str): Authentication token for API access
             - In RBC environment: OAuth token
             - In local environment: API key
-        router_thought (str, optional): Reasoning from the router agent
             
     Returns:
         generator: Stream of response chunks for real-time display
@@ -62,14 +61,6 @@ def response_from_conversation(conversation, token, router_thought=None):
         messages = [system_message]
         if conversation and "messages" in conversation:
             messages.extend(conversation["messages"])
-            
-        # If we have router thought, append it as system message
-        if router_thought:
-            router_context = {
-                "role": "system", 
-                "content": f"Routing decision thought: {router_thought}"
-            }
-            messages.append(router_context)
         
         logger.info(f"Generating direct response using model: {MODEL_NAME}")
         
