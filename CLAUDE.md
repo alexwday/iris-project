@@ -3,10 +3,13 @@
 ## Build Commands
 - Install: `pip install -e .`
 - Run notebook: `jupyter notebook notebooks/test_notebook.ipynb`
+- Lint: `flake8 iris/`
+- Type check: `mypy iris/`
 
 ## Testing
 - Run tests: `pytest`
 - Single test: `pytest path/to/test.py::test_function_name`
+- With coverage: `pytest --cov=iris`
 
 ## Code Style
 
@@ -25,7 +28,7 @@
 - snake_case for functions and variables
 - PascalCase for classes
 - UPPER_SNAKE_CASE for constants
-- Document types in docstrings
+- Document types in docstrings and use type hints
 
 ### Error Handling
 - Use custom exception classes when appropriate

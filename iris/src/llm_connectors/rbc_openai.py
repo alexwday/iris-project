@@ -129,29 +129,30 @@ def call_llm(oauth_token: str, prompt_token_cost: float = 0, completion_token_co
     # Process any extra query parameters before creating the client
     api_base_url = BASE_URL
     
+    # Initialize extra_body_parameters
+    extra_body_params = {}
+    
     # Handle extra query parameters
     if 'extra_query' in params:
         extra_query = params.pop('extra_query')
         
-        # In RBC environment, merge with default DLP settings
-        if IS_RBC_ENV and USE_DLP and 'is_stateful_dlp' not in extra_query:
-            extra_query['is_stateful_dlp'] = True
-            
-        # Create a properly formatted query string
-        query_string = '&'.join([f"{k}={str(v).lower() if isinstance(v, bool) else v}" for k, v in extra_query.items()])
+        # Move stateful DLP to body parameters if present
+        if 'is_stateful_dlp' in extra_query:
+            extra_body_params['is_stateful_dlp'] = extra_query.pop('is_stateful_dlp')
         
-        if query_string:
-            # Check if the base URL already has query parameters
-            separator = '&' if '?' in api_base_url else '?'
-            # Update the base URL
-            api_base_url = f"{api_base_url}{separator}{query_string}"
+        # Create a properly formatted query string for remaining parameters
+        if extra_query:
+            query_string = '&'.join([f"{k}={str(v).lower() if isinstance(v, bool) else v}" for k, v in extra_query.items()])
             
-    # Don't add extra_query in local environment
-    elif IS_RBC_ENV and USE_DLP:
-        # Only add default DLP in RBC environment
-        query_string = 'is_stateful_dlp=true'
-        separator = '&' if '?' in api_base_url else '?'
-        api_base_url = f"{api_base_url}{separator}{query_string}"
+            if query_string:
+                # Check if the base URL already has query parameters
+                separator = '&' if '?' in api_base_url else '?'
+                # Update the base URL
+                api_base_url = f"{api_base_url}{separator}{query_string}"
+    
+    # Add default DLP in RBC environment as a body parameter
+    if IS_RBC_ENV and USE_DLP and 'is_stateful_dlp' not in extra_body_params:
+        extra_body_params['is_stateful_dlp'] = True
     
     # Now create the OpenAI client with the properly formed URL
     client = OpenAI(
@@ -191,6 +192,11 @@ def call_llm(oauth_token: str, prompt_token_cost: float = 0, completion_token_co
         try:
             logger.info(f"Attempt {attempts}/{MAX_RETRY_ATTEMPTS}: Sending request to OpenAI API")
             
+            # Add extra_body_params to the params
+            if extra_body_params:
+                logger.info(f"Adding body parameters: {extra_body_params}")
+                params.update(extra_body_params)
+                
             # Make the API call
             response = client.chat.completions.create(**params)
             
