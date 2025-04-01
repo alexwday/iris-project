@@ -126,16 +126,44 @@ def call_llm(oauth_token: str, prompt_token_cost: float = 0, completion_token_co
     attempts = 0
     last_exception = None
     
-    # Create OpenAI client with appropriate base URL
+    # Process any extra query parameters before creating the client
+    api_base_url = BASE_URL
+    
+    # Handle extra query parameters
+    if 'extra_query' in params:
+        extra_query = params.pop('extra_query')
+        
+        # In RBC environment, merge with default DLP settings
+        if IS_RBC_ENV and USE_DLP and 'is_stateful_dlp' not in extra_query:
+            extra_query['is_stateful_dlp'] = True
+            
+        # Create a properly formatted query string
+        query_string = '&'.join([f"{k}={str(v).lower() if isinstance(v, bool) else v}" for k, v in extra_query.items()])
+        
+        if query_string:
+            # Check if the base URL already has query parameters
+            separator = '&' if '?' in api_base_url else '?'
+            # Update the base URL
+            api_base_url = f"{api_base_url}{separator}{query_string}"
+            
+    # Don't add extra_query in local environment
+    elif IS_RBC_ENV and USE_DLP:
+        # Only add default DLP in RBC environment
+        query_string = 'is_stateful_dlp=true'
+        separator = '&' if '?' in api_base_url else '?'
+        api_base_url = f"{api_base_url}{separator}{query_string}"
+    
+    # Now create the OpenAI client with the properly formed URL
     client = OpenAI(
         api_key=oauth_token,
-        base_url=BASE_URL
+        base_url=api_base_url
     )
     
     # Log token preview for security
     token_preview = oauth_token[:TOKEN_PREVIEW_LENGTH] + "..." if len(oauth_token) > TOKEN_PREVIEW_LENGTH else oauth_token
     auth_type = "OAuth token" if IS_RBC_ENV else "API key"
     logger.info(f"Using {auth_type}: {token_preview}")
+    logger.info(f"Using API base URL: {api_base_url}")
     
     # Set timeout if not provided
     if 'timeout' not in params:
@@ -148,16 +176,6 @@ def call_llm(oauth_token: str, prompt_token_cost: float = 0, completion_token_co
         stream_options = params.get('stream_options', {})
         stream_options['include_usage'] = True
         params['stream_options'] = stream_options
-    
-    # Add RBC-specific parameters in RBC environment
-    if IS_RBC_ENV and USE_DLP:
-        # Add is_stateful_dlp parameter to extra_query
-        extra_query = params.get('extra_query', {})
-        extra_query['is_stateful_dlp'] = True
-        params['extra_query'] = extra_query
-    elif 'extra_query' in params:
-        # Remove RBC-specific parameters in local environment
-        params.pop('extra_query')
         
     # Log key parameters
     model = params.get('model', 'unknown')
