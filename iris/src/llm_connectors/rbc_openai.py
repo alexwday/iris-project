@@ -136,9 +136,10 @@ def call_llm(oauth_token: str, prompt_token_cost: float = 0, completion_token_co
     if 'extra_query' in params:
         extra_query = params.pop('extra_query')
         
-        # Move stateful DLP to body parameters if present
+        # Extract is_stateful_dlp value from extra_query if present
+        is_stateful_dlp = None
         if 'is_stateful_dlp' in extra_query:
-            extra_body_params['is_stateful_dlp'] = extra_query.pop('is_stateful_dlp')
+            is_stateful_dlp = extra_query.pop('is_stateful_dlp')
         
         # Create a properly formatted query string for remaining parameters
         if extra_query:
@@ -150,9 +151,19 @@ def call_llm(oauth_token: str, prompt_token_cost: float = 0, completion_token_co
                 # Update the base URL
                 api_base_url = f"{api_base_url}{separator}{query_string}"
     
-    # Add default DLP in RBC environment as a body parameter
-    if IS_RBC_ENV and USE_DLP and 'is_stateful_dlp' not in extra_body_params:
-        extra_body_params['is_stateful_dlp'] = True
+        # Handle is_stateful_dlp parameter by adding it to the URL
+        if is_stateful_dlp is not None:
+            # Check if the base URL already has query parameters
+            separator = '&' if '?' in api_base_url else '?'
+            # Add is_stateful_dlp as a query parameter
+            api_base_url = f"{api_base_url}{separator}is_stateful_dlp={str(is_stateful_dlp).lower()}"
+    
+    # Add default DLP in RBC environment as a URL parameter
+    elif IS_RBC_ENV and USE_DLP:
+        # Check if the base URL already has query parameters
+        separator = '&' if '?' in api_base_url else '?'
+        # Add is_stateful_dlp as a query parameter
+        api_base_url = f"{api_base_url}{separator}is_stateful_dlp=true"
     
     # Now create the OpenAI client with the properly formed URL
     client = OpenAI(
@@ -192,11 +203,6 @@ def call_llm(oauth_token: str, prompt_token_cost: float = 0, completion_token_co
         try:
             logger.info(f"Attempt {attempts}/{MAX_RETRY_ATTEMPTS}: Sending request to OpenAI API")
             
-            # Add extra_body_params to the params
-            if extra_body_params:
-                logger.info(f"Adding body parameters: {extra_body_params}")
-                params.update(extra_body_params)
-                
             # Make the API call
             response = client.chat.completions.create(**params)
             
