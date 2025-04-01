@@ -130,15 +130,9 @@ def call_llm(oauth_token: str, prompt_token_cost: float = 0, completion_token_co
     # Set base URL for the API client (no query parameters here)
     api_base_url = BASE_URL
     
-    # Handle stateful DLP in RBC environment by adding it to extra_query
-    if IS_RBC_ENV and USE_DLP:
-        # Initialize extra_query if it doesn't exist
-        if 'extra_query' not in params:
-            params['extra_query'] = {}
-        
-        # Add is_stateful_dlp parameter to extra_query if not already present
-        if 'is_stateful_dlp' not in params['extra_query']:
-            params['extra_query']['is_stateful_dlp'] = True
+    # Simple flag to enable stateful DLP in RBC environment
+    if IS_RBC_ENV and USE_DLP and 'extra_query' not in params:
+        params['extra_query'] = {"is_stateful_dlp": True}
     
     # Now create the OpenAI client with the properly formed URL
     client = OpenAI(
@@ -177,6 +171,9 @@ def call_llm(oauth_token: str, prompt_token_cost: float = 0, completion_token_co
         
         try:
             logger.info(f"Attempt {attempts}/{MAX_RETRY_ATTEMPTS}: Sending request to OpenAI API")
+            
+            # Log all actual parameters being sent to the API
+            logger.info(f"API call parameters: {params}")
             
             # Make the API call
             response = client.chat.completions.create(**params)
