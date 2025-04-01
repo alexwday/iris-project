@@ -167,8 +167,10 @@ def call_llm(oauth_token: str, prompt_token_cost: float = 0, completion_token_co
         try:
             logger.info(f"Attempt {attempts}/{MAX_RETRY_ATTEMPTS}: Sending request to OpenAI API")
             
-            # Log all actual parameters being sent to the API
-            logger.info(f"API call parameters: {params}")
+            # Log only non-sensitive API call parameters
+            safe_params = {k: v for k, v in params.items() 
+                         if k not in ['messages', 'tools', 'tool_choice']}
+            logger.info(f"API call parameters (excluding message content): {safe_params}")
             
             # Make the API call
             response = client.chat.completions.create(**params)
