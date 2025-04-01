@@ -129,22 +129,15 @@ def call_llm(oauth_token: str, prompt_token_cost: float = 0, completion_token_co
     # Set base URL without any query parameters
     api_base_url = BASE_URL
     
-    # Handle extra query parameters
-    if 'extra_query' in params:
-        extra_query = params.pop('extra_query')
-        
-        # If extra_query contains is_stateful_dlp, add it to the main params
-        if 'is_stateful_dlp' in extra_query:
-            params['is_stateful_dlp'] = extra_query.pop('is_stateful_dlp')
-        
-        # Process any remaining extra_query parameters
-        # Note: These are typically other parameters that aren't standard OpenAI params
-        for key, value in extra_query.items():
-            params[key] = value
-    
-    # Add default DLP in RBC environment
-    elif IS_RBC_ENV and USE_DLP and 'is_stateful_dlp' not in params:
-        params['is_stateful_dlp'] = True
+    # Keep the extra_query parameter if it exists, or create it for RBC environment
+    if 'extra_query' not in params:
+        # Create the extra_query parameter for RBC environment
+        if IS_RBC_ENV and USE_DLP:
+            params['extra_query'] = {"is_stateful_dlp": True}
+    else:
+        # If is_stateful_dlp isn't in extra_query for RBC environment, add it
+        if IS_RBC_ENV and USE_DLP and 'is_stateful_dlp' not in params['extra_query']:
+            params['extra_query']['is_stateful_dlp'] = True
     
     # Now create the OpenAI client with the properly formed URL
     client = OpenAI(
