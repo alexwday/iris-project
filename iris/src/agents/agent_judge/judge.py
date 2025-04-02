@@ -56,6 +56,9 @@ def evaluate_research_progress(research_statement, completed_queries, remaining_
         dict: Judgment with keys:
             - action: Either "continue_research" or "stop_research"
             - reason: Detailed explanation of the judgment
+            - summary: (Only when action is "stop_research") Final summarization
+              of all research results that guides the user to the most relevant
+              information without repeating database content
         
     Raises:
         JudgeError: If there is an error in evaluating research progress
@@ -110,11 +113,17 @@ def evaluate_research_progress(research_statement, completed_queries, remaining_
         database_message = {"role": "system", "content": database_content}
         messages.append(database_message)
         
-        # User message requesting judgment
-        user_message = {
-            "role": "user", 
-            "content": "Based on the completed queries and their results, should we continue with the remaining queries or stop research now?"
-        }
+        # User message requesting judgment, with additional context when no queries remain
+        if not remaining_queries:
+            user_message = {
+                "role": "user", 
+                "content": "All planned database queries have been completed. Please provide your final judgment and a comprehensive research summary."
+            }
+        else:
+            user_message = {
+                "role": "user", 
+                "content": "Based on the completed queries and their results, should we continue with the remaining queries or stop research now?"
+            }
         messages.append(user_message)
         
         logger.info(f"Evaluating research progress using model: {MODEL_NAME}")
@@ -156,6 +165,7 @@ def evaluate_research_progress(research_statement, completed_queries, remaining_
         # Extract judgment fields
         action = arguments.get("action")
         reason = arguments.get("reason")
+        summary = arguments.get("summary")
         
         if not action:
             raise JudgeError("Missing 'action' in tool arguments")
@@ -163,14 +173,32 @@ def evaluate_research_progress(research_statement, completed_queries, remaining_
         if not reason:
             raise JudgeError("Missing 'reason' in tool arguments")
         
+        # Force "stop_research" when no remaining queries
+        if not remaining_queries and action != "stop_research":
+            action = "stop_research"
+            logger.warning("Judge chose to continue but no queries remain; forcing stop_research")
+        
+        # Require summary if stopping research
+        if action == "stop_research" and not summary:
+            logger.warning("Missing research summary when stopping research")
+            summary = "No summary provided. Please review all research results."
+        
         # Log the judgment
         logger.info(f"Research judgment: {action}")
         logger.info(f"Reason: {reason[:1000]}...")
+        if summary:
+            logger.info(f"Research summary provided: {len(summary)} characters")
         
-        return {
+        result = {
             "action": action,
             "reason": reason
         }
+        
+        # Add summary to result if provided
+        if summary:
+            result["summary"] = summary
+            
+        return result
         
     except Exception as e:
         logger.error(f"Error evaluating research progress: {str(e)}")

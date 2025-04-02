@@ -72,12 +72,29 @@ Choose ONE of two options:
    - Results contain contradictions needing resolution
    - Authoritative sources are missing on key points
    - Remaining queries would likely provide essential information
+   - There are still unexecuted queries that could provide value
 
 2. STOP_RESEARCH when:
    - Results comprehensively answer the original question
    - Authoritative sources provide clear guidance on the topic
    - Additional queries would yield diminishing returns
    - Sufficient information exists for a well-supported response
+   - No remaining queries exist (research is naturally complete)
+
+# RESEARCH SUMMARIZATION
+You MUST provide a final research summary in TWO scenarios:
+1. When NO REMAINING QUERIES exist (research is naturally complete)
+2. When you choose to STOP_RESEARCH early
+
+Your summary should:
+1. Act as a guide to the research results, NOT a regurgitation of information
+2. Point the user to the most relevant database queries containing the answers
+3. Highlight any differences, inconsistencies, or conflicts between database results
+4. Note important considerations when interpreting the results 
+5. Explain the overall research process and why certain queries were valuable
+6. NOT repeat information from the databases, but direct users where to look
+7. Identify which queries were most productive and which were less helpful
+8. Be comprehensive yet concise (typically 300-600 words)
 
 # OUTPUT REQUIREMENTS
 - Submit your judgment using ONLY the provided tool
@@ -85,6 +102,7 @@ Choose ONE of two options:
 - Provide detailed reasoning explaining your decision
 - Reference specific findings from completed queries
 - Explain expected value from remaining queries (if continuing)
+- Include a research summary ONLY when stopping research
 """
 
 # Generate system prompt with context from global_prompts
@@ -112,6 +130,10 @@ TOOL_DEFINITIONS = [
                     "reason": {
                         "type": "string",
                         "description": "Detailed explanation of the judgment"
+                    },
+                    "summary": {
+                        "type": "string",
+                        "description": "Final summarization of research results (required when action is stop_research)"
                     }
                 },
                 "required": ["action", "reason"]
