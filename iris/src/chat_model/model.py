@@ -109,8 +109,8 @@ def model(
                     research_statement = clarifier_decision["output"]
                     is_continuation = clarifier_decision.get("is_continuation", False)
                     
-                    # We combine multiple small yields into larger chunks for efficiency
-                    yield f"Researching: {research_statement}\n\n"
+                    # Format the research statement with a title and better formatting
+                    yield f"## Research Statement\n{research_statement}\n\n"
                     
                     # Step 2: Create query plan
                     logger.info("Creating database query plan...")
