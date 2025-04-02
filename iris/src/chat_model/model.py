@@ -114,9 +114,9 @@ def model(
                     query_plan = create_query_plan(research_statement, token, is_continuation)
                     logger.info(f"Query plan created with {len(query_plan['queries'])} queries")
                     
-                    # Create a formatted markdown box with research plan
-                    research_plan_box = "```markdown\n"
-                    research_plan_box += "# Research Plan\n\n"
+                    # Create a formatted markdown box with research plan using horizontal rules
+                    research_plan_box = "---\n"
+                    research_plan_box += "# 📋 Research Plan\n\n"
                     research_plan_box += f"## Research Statement\n{research_statement}\n\n"
                     research_plan_box += "## Database Queries\n"
                     
@@ -124,7 +124,7 @@ def model(
                         db_name = query["database"]
                         research_plan_box += f"{j+1}. {db_name}: {query['query']}\n"
                     
-                    research_plan_box += "```\n\n"
+                    research_plan_box += "---\n\n"
                     
                     # Yield the entire research plan box
                     yield research_plan_box
