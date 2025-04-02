@@ -96,12 +96,10 @@ def model(
                 if clarifier_decision["action"] == "request_essential_context":
                     logger.info("Essential context needed, returning context questions")
                     
-                    # Stream the questions as a single block of text
-                    questions = clarifier_decision["output"].strip().split('\n')
+                    # Stream the questions, preserving any existing numbering
+                    questions = clarifier_decision["output"].strip()
                     questions_text = "Before proceeding with research, please clarify:\n\n"
-                    for i, question in enumerate(questions, 1):
-                        if question.strip():
-                            questions_text += f"{i}. {question.strip()}\n"
+                    questions_text += questions
                     
                     yield questions_text
                 
