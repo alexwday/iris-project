@@ -19,12 +19,15 @@ Dependencies:
     - Agent orchestration
 """
 
-import logging
+import json
+from datetime import datetime
 from ..global_prompts.database_statement import get_available_databases
+from ..llm_connectors.rbc_openai import get_token_usage
 
 def model(
     conversation=None,
-    html_callback=None
+    html_callback=None,
+    debug_mode=False
 ):
     """
     Main model function that processes conversations and yields streaming responses.
@@ -35,10 +38,37 @@ def model(
     Args:
         conversation (dict, optional): Conversation in OpenAI format with a 'messages' key.
         html_callback (callable, optional): Callback function for HTML rendering (not used)
+        debug_mode (bool, optional): When True, track agent decisions and yield debug data
             
     Returns:
-        generator: A generator that yields response chunks as strings
+        generator: A generator that yields response chunks as strings.
+                  When debug_mode is True, the final yielded item will be a debug
+                  data object (prefixed with "DEBUG_DATA:") containing all agent decisions.
     """
+    # Initialize debug tracking if debug mode is enabled
+    debug_data = {
+        "decisions": [], 
+        "tokens": {
+            "prompt": 0, 
+            "completion": 0, 
+            "total": 0,
+            "stages": {
+                "router": {"prompt": 0, "completion": 0, "total": 0, "cost": 0.0},
+                "clarifier": {"prompt": 0, "completion": 0, "total": 0, "cost": 0.0},
+                "planner": {"prompt": 0, "completion": 0, "total": 0, "cost": 0.0},
+                "judge": {"prompt": 0, "completion": 0, "total": 0, "cost": 0.0},
+                "database_query": {"prompt": 0, "completion": 0, "total": 0, "cost": 0.0},
+                "summary": {"prompt": 0, "completion": 0, "total": 0, "cost": 0.0}
+            }
+        },
+        "cost": 0.0,
+        "start_timestamp": datetime.now().isoformat()
+    } if debug_mode else None
+    
+    # Reset token usage tracking
+    if debug_mode:
+        from ..llm_connectors.rbc_openai import reset_token_usage, get_token_usage
+        reset_token_usage()
     # Import modules - using relative imports for better portability
     from ..initial_setup.logging_config import configure_logging
     from ..initial_setup.ssl.ssl import setup_ssl
@@ -73,6 +103,32 @@ def model(
             logger.info("Getting routing decision...")
             routing_decision = get_routing_decision(processed_conversation, token)
             
+            # Record routing decision in debug data if debug mode is enabled
+            if debug_mode and debug_data is not None:
+                # Get current token usage after router stage
+                token_usage = get_token_usage()
+                
+                # Calculate and store per-stage token usage
+                debug_data["tokens"]["stages"]["router"]["prompt"] = token_usage["prompt_tokens"]
+                debug_data["tokens"]["stages"]["router"]["completion"] = token_usage["completion_tokens"]
+                debug_data["tokens"]["stages"]["router"]["total"] = token_usage["total_tokens"]
+                debug_data["tokens"]["stages"]["router"]["cost"] = token_usage["cost"]
+                
+                debug_data["decisions"].append({
+                    "stage": "router",
+                    "decision": routing_decision,
+                    "timestamp": datetime.now().isoformat(),
+                    "token_usage": {
+                        "prompt": token_usage["prompt_tokens"],
+                        "completion": token_usage["completion_tokens"],
+                        "total": token_usage["total_tokens"],
+                        "cost": token_usage["cost"]
+                    }
+                })
+                
+                # Reset token usage for next stage
+                reset_token_usage()
+            
             # Handle response based on routing decision
             if routing_decision["function_name"] == "response_from_conversation":
                 # Direct response without research
@@ -92,6 +148,32 @@ def model(
                 # Step 1: Clarify research needs
                 logger.info("Clarifying research needs...")
                 clarifier_decision = clarify_research_needs(processed_conversation, token)
+                
+                # Record clarifier decision in debug data if debug mode is enabled
+                if debug_mode and debug_data is not None:
+                    # Get current token usage after clarifier stage
+                    token_usage = get_token_usage()
+                    
+                    # Calculate and store per-stage token usage
+                    debug_data["tokens"]["stages"]["clarifier"]["prompt"] = token_usage["prompt_tokens"]
+                    debug_data["tokens"]["stages"]["clarifier"]["completion"] = token_usage["completion_tokens"]
+                    debug_data["tokens"]["stages"]["clarifier"]["total"] = token_usage["total_tokens"]
+                    debug_data["tokens"]["stages"]["clarifier"]["cost"] = token_usage["cost"]
+                    
+                    debug_data["decisions"].append({
+                        "stage": "clarifier",
+                        "decision": clarifier_decision,
+                        "timestamp": datetime.now().isoformat(),
+                        "token_usage": {
+                            "prompt": token_usage["prompt_tokens"],
+                            "completion": token_usage["completion_tokens"],
+                            "total": token_usage["total_tokens"],
+                            "cost": token_usage["cost"]
+                        }
+                    })
+                    
+                    # Reset token usage for next stage
+                    reset_token_usage()
                 
                 # If we need more context, yield the context questions directly as strings
                 if clarifier_decision["action"] == "request_essential_context":
@@ -114,6 +196,32 @@ def model(
                     logger.info("Creating database query plan...")
                     query_plan = create_query_plan(research_statement, token, is_continuation)
                     logger.info(f"Query plan created with {len(query_plan['queries'])} queries")
+                    
+                    # Record planner decision in debug data if debug mode is enabled
+                    if debug_mode and debug_data is not None:
+                        # Get current token usage after planner stage
+                        token_usage = get_token_usage()
+                        
+                        # Calculate and store per-stage token usage
+                        debug_data["tokens"]["stages"]["planner"]["prompt"] = token_usage["prompt_tokens"]
+                        debug_data["tokens"]["stages"]["planner"]["completion"] = token_usage["completion_tokens"]
+                        debug_data["tokens"]["stages"]["planner"]["total"] = token_usage["total_tokens"]
+                        debug_data["tokens"]["stages"]["planner"]["cost"] = token_usage["cost"]
+                        
+                        debug_data["decisions"].append({
+                            "stage": "planner",
+                            "decision": query_plan,
+                            "timestamp": datetime.now().isoformat(),
+                            "token_usage": {
+                                "prompt": token_usage["prompt_tokens"],
+                                "completion": token_usage["completion_tokens"],
+                                "total": token_usage["total_tokens"],
+                                "cost": token_usage["cost"]
+                            }
+                        })
+                        
+                        # Reset token usage for next stage
+                        reset_token_usage()
                     
                     # Get database configurations for display names
                     available_databases = get_available_databases()
@@ -168,6 +276,37 @@ def model(
                             current_query["results"] = results
                             query_results.append(results)
                             
+                            # Record database query result in debug data if debug mode is enabled
+                            if debug_mode and debug_data is not None:
+                                # Get current token usage after database query
+                                token_usage = get_token_usage()
+                                
+                                # Calculate and store per-stage token usage
+                                # For database queries, we accumulate since there might be multiple
+                                debug_data["tokens"]["stages"]["database_query"]["prompt"] += token_usage["prompt_tokens"]
+                                debug_data["tokens"]["stages"]["database_query"]["completion"] += token_usage["completion_tokens"]
+                                debug_data["tokens"]["stages"]["database_query"]["total"] += token_usage["total_tokens"]
+                                debug_data["tokens"]["stages"]["database_query"]["cost"] += token_usage["cost"]
+                                
+                                debug_data["decisions"].append({
+                                    "stage": "database_query",
+                                    "decision": {
+                                        "database": db_name,
+                                        "query": current_query["query"],
+                                        "results_length": len(results) if results else 0
+                                    },
+                                    "timestamp": datetime.now().isoformat(),
+                                    "token_usage": {
+                                        "prompt": token_usage["prompt_tokens"],
+                                        "completion": token_usage["completion_tokens"],
+                                        "total": token_usage["total_tokens"],
+                                        "cost": token_usage["cost"]
+                                    }
+                                })
+                                
+                                # Reset token usage for next stage
+                                reset_token_usage()
+                            
                             # Yield result directly with ending horizontal rule
                             yield f"{results}\n\n---"
                             
@@ -191,12 +330,53 @@ def model(
                                 token
                             )
                             
+                            # Record judge decision in debug data if debug mode is enabled
+                            if debug_mode and debug_data is not None:
+                                # Get current token usage after judge evaluation
+                                token_usage = get_token_usage()
+                                
+                                # Calculate and store per-stage token usage
+                                debug_data["tokens"]["stages"]["judge"]["prompt"] += token_usage["prompt_tokens"]
+                                debug_data["tokens"]["stages"]["judge"]["completion"] += token_usage["completion_tokens"]
+                                debug_data["tokens"]["stages"]["judge"]["total"] += token_usage["total_tokens"]
+                                debug_data["tokens"]["stages"]["judge"]["cost"] += token_usage["cost"]
+                                
+                                debug_data["decisions"].append({
+                                    "stage": "judge",
+                                    "decision": judgment,
+                                    "timestamp": datetime.now().isoformat(),
+                                    "token_usage": {
+                                        "prompt": token_usage["prompt_tokens"],
+                                        "completion": token_usage["completion_tokens"],
+                                        "total": token_usage["total_tokens"],
+                                        "cost": token_usage["cost"]
+                                    }
+                                })
+                                
+                                # Reset token usage for next stage
+                                reset_token_usage()
+                            
                             # Determine whether to continue
                             continue_research = (judgment["action"] == "continue_research")
                             
                             if not continue_research:
                                 # Generate a streaming summary when stopping early with improved formatting
                                 yield "\n## 📊 Research Summary\n"
+                                
+                                # Record start of streaming summary in debug data if debug mode is enabled
+                                if debug_mode and debug_data is not None:
+                                    # Reset token usage for streaming summary
+                                    reset_token_usage()
+                                    
+                                    # Add a decision entry for summary start
+                                    debug_data["decisions"].append({
+                                        "stage": "summary",
+                                        "decision": {
+                                            "action": "start_streaming_summary",
+                                            "completed_queries": len(completed_queries)
+                                        },
+                                        "timestamp": datetime.now().isoformat()
+                                    })
                                 
                                 # Get streaming summary from judge agent
                                 for summary_chunk in generate_streaming_summary(
@@ -205,6 +385,36 @@ def model(
                                     token
                                 ):
                                     yield summary_chunk
+                                
+                                # Record completion of streaming summary in debug data if debug mode is enabled
+                                if debug_mode and debug_data is not None:
+                                    # Get token usage for summary generation
+                                    token_usage = get_token_usage()
+                                    
+                                    # Store per-stage token usage for summary
+                                    debug_data["tokens"]["stages"]["summary"]["prompt"] = token_usage["prompt_tokens"]
+                                    debug_data["tokens"]["stages"]["summary"]["completion"] = token_usage["completion_tokens"]
+                                    debug_data["tokens"]["stages"]["summary"]["total"] = token_usage["total_tokens"]
+                                    debug_data["tokens"]["stages"]["summary"]["cost"] = token_usage["cost"]
+                                    
+                                    # Add a decision entry for summary completion
+                                    debug_data["decisions"].append({
+                                        "stage": "summary",
+                                        "decision": {
+                                            "action": "complete_streaming_summary",
+                                            "completed_queries": len(completed_queries)
+                                        },
+                                        "timestamp": datetime.now().isoformat(),
+                                        "token_usage": {
+                                            "prompt": token_usage["prompt_tokens"],
+                                            "completion": token_usage["completion_tokens"],
+                                            "total": token_usage["total_tokens"],
+                                            "cost": token_usage["cost"]
+                                        }
+                                    })
+                                    
+                                    # Reset token usage for next stage
+                                    reset_token_usage()
                                 
                                 yield "\n\n---"
                                 
@@ -221,6 +431,21 @@ def model(
                         # Yield a header for the research summary with improved formatting
                         yield "\n## 📊 Research Summary\n"
                         
+                        # Record start of streaming summary in debug data if debug mode is enabled
+                        if debug_mode and debug_data is not None:
+                            # Reset token usage for streaming summary
+                            reset_token_usage()
+                            
+                            # Add a decision entry for summary start
+                            debug_data["decisions"].append({
+                                "stage": "summary",
+                                "decision": {
+                                    "action": "start_streaming_summary",
+                                    "completed_queries": len(completed_queries)
+                                },
+                                "timestamp": datetime.now().isoformat()
+                            })
+                        
                         # Get streaming summary from judge agent
                         for summary_chunk in generate_streaming_summary(
                             research_statement,
@@ -228,6 +453,36 @@ def model(
                             token
                         ):
                             yield summary_chunk
+                        
+                        # Record completion of streaming summary in debug data if debug mode is enabled
+                        if debug_mode and debug_data is not None:
+                            # Get token usage for summary generation
+                            token_usage = get_token_usage()
+                            
+                            # Store per-stage token usage for summary
+                            debug_data["tokens"]["stages"]["summary"]["prompt"] = token_usage["prompt_tokens"]
+                            debug_data["tokens"]["stages"]["summary"]["completion"] = token_usage["completion_tokens"]
+                            debug_data["tokens"]["stages"]["summary"]["total"] = token_usage["total_tokens"]
+                            debug_data["tokens"]["stages"]["summary"]["cost"] = token_usage["cost"]
+                            
+                            # Add a decision entry for summary completion
+                            debug_data["decisions"].append({
+                                "stage": "summary",
+                                "decision": {
+                                    "action": "complete_streaming_summary",
+                                    "completed_queries": len(completed_queries)
+                                },
+                                "timestamp": datetime.now().isoformat(),
+                                "token_usage": {
+                                    "prompt": token_usage["prompt_tokens"],
+                                    "completion": token_usage["completion_tokens"],
+                                    "total": token_usage["total_tokens"],
+                                    "cost": token_usage["cost"]
+                                }
+                            })
+                            
+                            # Reset token usage for next stage
+                            reset_token_usage()
                         
                         # Add a buffer after the summary with closing horizontal rule
                         yield "\n\n---"
@@ -247,7 +502,58 @@ def model(
             yield "Model initialized successfully, but no conversation was provided."
             
     except Exception as e:
-        yield f"Error processing request: {str(e)}"
+        error_msg = f"Error processing request: {str(e)}"
+        
+        # Record error in debug data if debug mode is enabled
+        if debug_mode and debug_data is not None:
+            debug_data["error"] = error_msg
+            debug_data["completed"] = False
+            
+            # Get token usage data from global counter
+            token_usage = get_token_usage()
+            debug_data["tokens"]["prompt"] = token_usage["prompt_tokens"]
+            debug_data["tokens"]["completion"] = token_usage["completion_tokens"]
+            debug_data["tokens"]["total"] = token_usage["total_tokens"]
+            debug_data["cost"] = token_usage["cost"]
+            
+            debug_data["end_timestamp"] = datetime.now().isoformat()
+            # Yield debug data as a special message
+            yield f"\n\nDEBUG_DATA:{json.dumps(debug_data)}"
+            
+        yield error_msg
+        
+    finally:
+        # Add completion status and yield debug data if debug mode is enabled
+        if debug_mode and debug_data is not None:
+            debug_data["completed"] = True
+            
+            # Get any remaining token usage data from global counter
+            token_usage = get_token_usage()
+            
+            # Update the overall token usage from the per-stage metrics
+            total_prompt = 0
+            total_completion = 0
+            total_tokens = 0
+            total_cost = 0
+            
+            # Sum up token usage across all stages
+            for stage, usage in debug_data["tokens"]["stages"].items():
+                total_prompt += usage["prompt"]
+                total_completion += usage["completion"]
+                total_tokens += usage["total"]
+                total_cost += usage["cost"]
+            
+            # Store the summed values in the main token usage
+            debug_data["tokens"]["prompt"] = total_prompt
+            debug_data["tokens"]["completion"] = total_completion
+            debug_data["tokens"]["total"] = total_tokens
+            debug_data["cost"] = total_cost
+            
+            # Add final timestamp
+            debug_data["end_timestamp"] = datetime.now().isoformat()
+            
+            # Yield debug data as a special message that can be parsed by the notebook
+            yield f"\n\nDEBUG_DATA:{json.dumps(debug_data)}"
 
 def format_remaining_queries(remaining_queries):
     """Format remaining queries for display to the user."""
