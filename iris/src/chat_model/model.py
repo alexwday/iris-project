@@ -20,6 +20,7 @@ Dependencies:
 """
 
 import logging
+from ..global_prompts.database_statement import get_available_databases
 
 def model(
     conversation=None,
@@ -114,6 +115,9 @@ def model(
                     query_plan = create_query_plan(research_statement, token, is_continuation)
                     logger.info(f"Query plan created with {len(query_plan['queries'])} queries")
                     
+                    # Get database configurations for display names
+                    available_databases = get_available_databases()
+                    
                     # Create a formatted markdown box with research plan using horizontal rules
                     research_plan_box = "---\n"
                     research_plan_box += "# 📋 Research Plan\n\n"
@@ -122,7 +126,9 @@ def model(
                     
                     for j, query in enumerate(query_plan["queries"]):
                         db_name = query["database"]
-                        research_plan_box += f"{j+1}. {db_name}: {query['query']}\n"
+                        # Get the display name from the database configuration
+                        db_display_name = available_databases.get(db_name, {}).get("name", db_name)
+                        research_plan_box += f"{j+1}. {db_display_name}: {query['query']}\n"
                     
                     research_plan_box += "---\n\n"
                     
@@ -147,9 +153,13 @@ def model(
                         # Get database name from the query
                         db_name = current_query["database"]
                         
-                        # Yield query information with improved formatting
+                        # Get the display name from the database configuration
+                        available_databases = get_available_databases()
+                        db_display_name = available_databases.get(db_name, {}).get("name", db_name)
+                        
+                        # Yield query information with improved formatting using display name
                         query_header = "---\n"
-                        query_header += f"## 🔍 Query {i+1}: {db_name} - {current_query['query']}\n\n"
+                        query_header += f"## 🔍 Query {i+1}: {db_display_name} - {current_query['query']}\n\n"
                         yield query_header
                         
                         # Execute the query
@@ -245,10 +255,16 @@ def format_remaining_queries(remaining_queries):
     if not remaining_queries:
         return "There are no remaining database queries."
     
+    # Get database configurations for display names
+    available_databases = get_available_databases()
+    
     message = "## ⏸️ Remaining Queries\n\n"
     message += "The following database queries were not processed:\n\n"
     for i, query in enumerate(remaining_queries, 1):
-        message += f"**{i}.** {query['database']}: {query['query']}\n"
+        db_name = query['database']
+        # Get the display name from the database configuration
+        db_display_name = available_databases.get(db_name, {}).get("name", db_name)
+        message += f"**{i}.** {db_display_name}: {query['query']}\n"
     
     message += "\nPlease let me know if you would like to continue with these remaining database queries in a new search."
     return message
