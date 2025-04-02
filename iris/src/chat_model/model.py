@@ -109,15 +109,25 @@ def model(
                     research_statement = clarifier_decision["output"]
                     is_continuation = clarifier_decision.get("is_continuation", False)
                     
-                    # Format the research statement with a title and better formatting
-                    yield f"## Research Statement\n{research_statement}\n\n"
-                    
                     # Step 2: Create query plan
                     logger.info("Creating database query plan...")
                     query_plan = create_query_plan(research_statement, token, is_continuation)
                     logger.info(f"Query plan created with {len(query_plan['queries'])} queries")
                     
-                    yield f"Research plan created with {len(query_plan['queries'])} queries.\n\n"
+                    # Create a formatted markdown box with research plan
+                    research_plan_box = "```markdown\n"
+                    research_plan_box += "# Research Plan\n\n"
+                    research_plan_box += f"## Research Statement\n{research_statement}\n\n"
+                    research_plan_box += "## Database Queries\n"
+                    
+                    for j, query in enumerate(query_plan["queries"]):
+                        db_name = query["database"]
+                        research_plan_box += f"{j+1}. {db_name}: {query['query']}\n"
+                    
+                    research_plan_box += "```\n\n"
+                    
+                    # Yield the entire research plan box
+                    yield research_plan_box
                     
                     # Prepare lists to track queries and results
                     completed_queries = []
