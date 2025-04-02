@@ -77,7 +77,7 @@ Also identify if the user is requesting continuation of previous research by:
 # OUTPUT REQUIREMENTS
 - Use ONLY the provided tool for your response
 - Your decision MUST be either request_essential_context OR create_research_statement
-- If requesting context, ask clear, specific questions (numbered list)
+- If requesting context, ask clear, specific questions in a numbered list format with a blank line between each question (e.g., "1. First question\n\n2. Second question\n\n3. Third question")
 - If creating a research statement, make it comprehensive and database-aware
 """
 
