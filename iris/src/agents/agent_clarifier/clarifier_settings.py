@@ -28,7 +28,8 @@ TEMPERATURE = 0.0
 
 # Define the clarifier agent role and task
 CLARIFIER_ROLE = "an expert clarifier agent in the IRIS workflow"
-CLARIFIER_TASK = """You determine if sufficient context exists to proceed with database research or if the user must provide additional information first.
+CLARIFIER_TASK = """You determine if sufficient context exists to proceed with 
+database research or if the user must provide additional information first.
 
 # WORKFLOW CONTEXT
 The IRIS system uses multiple specialized agents working together:
@@ -77,7 +78,8 @@ Also identify if the user is requesting continuation of previous research by:
 # OUTPUT REQUIREMENTS
 - Use ONLY the provided tool for your response
 - Your decision MUST be either request_essential_context OR create_research_statement
-- If requesting context, ask clear, specific questions in a numbered list format with each question on a new line (e.g., "1. First question\n2. Second question\n3. Third question")
+- If requesting context, ask clear, specific questions in a numbered list format with 
+  each question on a new line (e.g., "1. First question\n2. Second question")
 - If creating a research statement, make it comprehensive and database-aware
 """
 
@@ -120,3 +122,4 @@ TOOL_DEFINITIONS = [
 ]
 
 logger.debug("Clarifier agent settings initialized")
+
