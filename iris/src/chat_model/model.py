@@ -147,8 +147,11 @@ def model(
                         # Get database name from the query
                         db_name = current_query["database"]
                         
-                        # Yield query information
-                        yield f"Query {i+1}: {db_name} - {current_query['query']}\n\n"
+                        # Yield query information with improved formatting
+                        query_header = "---\n"
+                        query_header += f"## 🔍 Query {i+1}: {db_name}\n\n"
+                        query_header += f"{current_query['query']}\n\n"
+                        yield query_header
                         
                         # Execute the query
                         try:
@@ -157,8 +160,8 @@ def model(
                             current_query["results"] = results
                             query_results.append(results)
                             
-                            # Yield result directly
-                            yield f"{results}\n\n"
+                            # Yield result directly with ending horizontal rule
+                            yield f"{results}\n\n---\n\n"
                             
                         except Exception as e:
                             logger.error(f"Error executing query: {str(e)}")
@@ -166,7 +169,7 @@ def model(
                             current_query["results"] = error_message
                             query_results.append(error_message)
                             
-                            yield error_message
+                            yield f"{error_message}\n---\n\n"
                         
                         logger.info(f"Completed database query {i+1}/{len(query_plan['queries'])}: {db_name}")
                         
@@ -184,8 +187,8 @@ def model(
                             continue_research = (judgment["action"] == "continue_research")
                             
                             if not continue_research:
-                                # Generate a streaming summary when stopping early
-                                yield "\n## Research Summary\n"
+                                # Generate a streaming summary when stopping early with improved formatting
+                                yield "\n---\n## 📊 Research Summary\n"
                                 
                                 # Get streaming summary from judge agent
                                 for summary_chunk in generate_streaming_summary(
@@ -195,7 +198,7 @@ def model(
                                 ):
                                     yield summary_chunk
                                 
-                                yield "\n\n"
+                                yield "\n\n---\n\n"
                                 
                                 # If stopping, provide information about remaining queries
                                 if remaining_queries:
@@ -207,8 +210,8 @@ def model(
                     
                     # When naturally completing all queries, stream the final research summary
                     if not remaining_queries and completed_queries:
-                        # Yield a header for the research summary
-                        yield "\n## Research Summary\n"
+                        # Yield a header for the research summary with improved formatting
+                        yield "\n---\n## 📊 Research Summary\n"
                         
                         # Get streaming summary from judge agent
                         for summary_chunk in generate_streaming_summary(
@@ -218,8 +221,8 @@ def model(
                         ):
                             yield summary_chunk
                         
-                        # Add a buffer after the summary
-                        yield "\n\n"
+                        # Add a buffer after the summary with closing horizontal rule
+                        yield "\n\n---\n\n"
                     
                     # Final completion message
                     yield f"\nCompleted {len(completed_queries)} database queries.\n"
@@ -243,9 +246,10 @@ def format_remaining_queries(remaining_queries):
     if not remaining_queries:
         return "There are no remaining database queries."
     
-    message = "The following database queries were not processed:\n\n"
+    message = "## ⏸️ Remaining Queries\n\n"
+    message += "The following database queries were not processed:\n\n"
     for i, query in enumerate(remaining_queries, 1):
-        message += f"{i}. {query['database']}: {query['query']}\n"
+        message += f"**{i}.** {query['database']}: {query['query']}\n"
     
     message += "\nPlease let me know if you would like to continue with these remaining database queries in a new search."
     return message
