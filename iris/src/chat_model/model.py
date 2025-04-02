@@ -174,6 +174,10 @@ def model(
                             continue_research = (judgment["action"] == "continue_research")
                             
                             if not continue_research:
+                                # Display the judge's research summary if available
+                                if "summary" in judgment:
+                                    yield f"\n## Research Summary\n{judgment['summary']}\n\n"
+                                
                                 # If stopping, provide information about remaining queries
                                 if remaining_queries:
                                     yield format_remaining_queries(remaining_queries)
@@ -182,7 +186,21 @@ def model(
                         # Move to next query
                         i += 1
                     
-                    # Final summary
+                    # When naturally completing all queries, need final judgment and summary
+                    if not remaining_queries and completed_queries:
+                        # Get final judgment from judge (will include summary)
+                        final_judgment = evaluate_research_progress(
+                            research_statement,
+                            completed_queries,
+                            [],  # No remaining queries
+                            token
+                        )
+                        
+                        # Display the judge's research summary
+                        if "summary" in final_judgment:
+                            yield f"\n## Research Summary\n{final_judgment['summary']}\n\n"
+                    
+                    # Final completion message
                     yield f"\nCompleted {len(completed_queries)} database queries.\n"
                     logger.info("Completed research process")
             
