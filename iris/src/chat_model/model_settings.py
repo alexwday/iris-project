@@ -74,6 +74,9 @@ MAX_RETRY_ATTEMPTS = 3  # Maximum number of retry attempts
 RETRY_DELAY_SECONDS = 2  # Delay between retry attempts in seconds
 TOKEN_PREVIEW_LENGTH = 7  # Number of characters to show in token preview
 
+# Usage display settings
+SHOW_USAGE_SUMMARY = True  # Whether to display token usage summary at the end of responses
+
 def get_model_config(capability):
     """
     Get model configuration based on capability and current environment.

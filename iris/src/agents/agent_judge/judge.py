@@ -16,7 +16,7 @@ Dependencies:
 
 import json
 import logging
-from ...llm_connectors.rbc_openai import call_llm
+from ...llm_connectors.rbc_openai import call_llm, log_usage_statistics
 from ...chat_model.model_settings import get_model_config
 from .judge_settings import (
     MODEL_CAPABILITY,
@@ -204,7 +204,8 @@ def evaluate_research_progress(research_statement, completed_queries, remaining_
     except Exception as e:
         logger.error(f"Error evaluating research progress: {str(e)}")
         raise JudgeError(f"Failed to evaluate research progress: {str(e)}")
-        
+
+
 def generate_streaming_summary(research_statement, completed_queries, token):
     """
     Generate a streaming research summary based on completed queries.
@@ -283,9 +284,16 @@ def generate_streaming_summary(research_statement, completed_queries, token):
         
         # Return the streaming generator
         for chunk in stream:
+            # If chunk has usage data, capture it in logs but don't display it
+            if hasattr(chunk, 'usage') and chunk.usage:
+                log_usage_statistics(
+                    chunk, PROMPT_TOKEN_COST, COMPLETION_TOKEN_COST)
+                
+            # Yield content from the chunk
             if hasattr(chunk, 'choices') and chunk.choices and chunk.choices[0].delta.content:
                 yield chunk.choices[0].delta.content
                 
     except Exception as e:
         logger.error(f"Error generating streaming summary: {str(e)}")
         yield f"Error generating research summary: {str(e)}"
+

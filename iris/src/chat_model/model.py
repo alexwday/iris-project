@@ -22,7 +22,40 @@ Dependencies:
 import json
 from datetime import datetime
 from ..global_prompts.database_statement import get_available_databases
-from ..llm_connectors.rbc_openai import get_token_usage
+from ..llm_connectors.rbc_openai import get_token_usage, reset_token_usage
+
+
+def format_usage_summary(token_usage, start_time=None):
+    """
+    Format token usage and timing information into a nicely formatted string.
+    
+    Args:
+        token_usage (dict): Token usage dictionary with prompt_tokens, completion_tokens, etc.
+        start_time (str, optional): ISO format timestamp of when processing started
+        
+    Returns:
+        str: Formatted usage summary as markdown
+    """
+    # Calculate timing if start_time is provided
+    duration = None
+    if start_time:
+        from datetime import datetime as dt
+        end_dt = dt.now()
+        start_dt = dt.fromisoformat(start_time)
+        duration = (end_dt - start_dt).total_seconds()
+    
+    # Format the usage summary
+    usage_summary = "\n\n---\n"
+    usage_summary += "## Usage Statistics\n\n"
+    usage_summary += f"- Input tokens: {token_usage['prompt_tokens']}\n"
+    usage_summary += f"- Output tokens: {token_usage['completion_tokens']}\n"
+    usage_summary += f"- Total tokens: {token_usage['total_tokens']}\n"
+    usage_summary += f"- Cost: ${token_usage['cost']:.6f}\n"
+    if duration:
+        usage_summary += f"- Time: {duration:.2f} seconds\n"
+    
+    return usage_summary
+
 
 def model(
     conversation=None,
@@ -67,7 +100,6 @@ def model(
     
     # Reset token usage tracking
     if debug_mode:
-        from ..llm_connectors.rbc_openai import reset_token_usage, get_token_usage
         reset_token_usage()
     # Import modules - using relative imports for better portability
     from ..initial_setup.logging_config import configure_logging
@@ -140,6 +172,19 @@ def model(
                     token
                 ):
                     yield chunk
+                
+                # Add token usage summary if enabled
+                from .model_settings import SHOW_USAGE_SUMMARY
+                if SHOW_USAGE_SUMMARY:
+                    # Get the final token usage
+                    token_usage = get_token_usage()
+                    
+                    # Get the start timestamp from debug data if available
+                    start_time = debug_data["start_timestamp"] if debug_data else None
+                    
+                    # Format and yield usage summary
+                    usage_summary = format_usage_summary(token_usage, start_time)
+                    yield usage_summary
                     
             elif routing_decision["function_name"] == "research_from_database":
                 # Research path
@@ -480,16 +525,27 @@ def model(
                                     "cost": token_usage["cost"]
                                 }
                             })
-                            
-                            # Reset token usage for next stage
-                            reset_token_usage()
                         
                         # Add a buffer after the summary with closing horizontal rule
                         yield "\n\n---"
                     
                     # Final completion message
-                    yield f"\nCompleted {len(completed_queries)} database queries.\n"
+                    completion_message = f"\nCompleted {len(completed_queries)} database queries.\n"
+                    yield completion_message
                     logger.info("Completed research process")
+                    
+                    # Add token usage summary if enabled
+                    from .model_settings import SHOW_USAGE_SUMMARY
+                    if SHOW_USAGE_SUMMARY:
+                        # Get the final token usage
+                        token_usage = get_token_usage()
+                        
+                        # Get the start timestamp from debug data if available
+                        start_time = debug_data["start_timestamp"] if debug_data else None
+                        
+                        # Format and yield usage summary
+                        usage_summary = format_usage_summary(token_usage, start_time)
+                        yield usage_summary
             
             else:
                 # Unknown function - yield error
@@ -509,7 +565,7 @@ def model(
             debug_data["error"] = error_msg
             debug_data["completed"] = False
             
-            # Get token usage data from global counter
+            # Get token usage data
             token_usage = get_token_usage()
             debug_data["tokens"]["prompt"] = token_usage["prompt_tokens"]
             debug_data["tokens"]["completion"] = token_usage["completion_tokens"]
@@ -554,6 +610,7 @@ def model(
             
             # Yield debug data as a special message that can be parsed by the notebook
             yield f"\n\nDEBUG_DATA:{json.dumps(debug_data)}"
+
 
 def format_remaining_queries(remaining_queries):
     """Format remaining queries for display to the user."""
