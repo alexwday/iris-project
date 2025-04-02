@@ -24,7 +24,8 @@ from .judge_settings import (
     TEMPERATURE,
     SYSTEM_PROMPT,
     TOOL_DEFINITIONS,
-    AVAILABLE_DATABASES
+    AVAILABLE_DATABASES,
+    SUMMARY_PROMPT
 )
 
 # Get module logger (no configuration here - using centralized config)
@@ -203,3 +204,88 @@ def evaluate_research_progress(research_statement, completed_queries, remaining_
     except Exception as e:
         logger.error(f"Error evaluating research progress: {str(e)}")
         raise JudgeError(f"Failed to evaluate research progress: {str(e)}")
+        
+def generate_streaming_summary(research_statement, completed_queries, token):
+    """
+    Generate a streaming research summary based on completed queries.
+    
+    This function produces a streaming response that can be yielded directly 
+    to the user, unlike the tool-based approach used by evaluate_research_progress.
+    
+    Args:
+        research_statement (str): The original research statement
+        completed_queries (list): List of completed queries with their results
+        token (str): Authentication token for API access
+            
+    Returns:
+        generator: A generator that yields response chunks as strings
+        
+    Raises:
+        JudgeError: If there is an error generating the summary
+    """
+    try:
+        # Prepare system message with summary prompt
+        system_message = {"role": "system", "content": SUMMARY_PROMPT}
+        
+        # Prepare messages for the API call
+        messages = [system_message]
+        
+        # Add research statement
+        research_message = {
+            "role": "system", 
+            "content": f"Research Statement: {research_statement}"
+        }
+        messages.append(research_message)
+        
+        # Add completed queries
+        completed_content = "Completed Queries and Results:\n"
+        for i, query in enumerate(completed_queries):
+            completed_content += f"\n=== QUERY {i+1} ===\n"
+            completed_content += f"Database: {query.get('database', 'Unknown')}\n"
+            completed_content += f"Query: {query.get('query', 'Unknown')}\n"
+            completed_content += f"Results: {query.get('results', 'No results')}\n"
+        
+        completed_message = {"role": "system", "content": completed_content}
+        messages.append(completed_message)
+        
+        # Add database information for better context
+        database_content = "Available Databases Information:\n"
+        for db_id, db_info in AVAILABLE_DATABASES.items():
+            database_content += f"\n{db_info['name']} ({db_id}):\n"
+            database_content += f"  - Content: {db_info['content_type']}\n"
+            database_content += f"  - Search method: {db_info['query_type']}\n"
+            database_content += f"  - Use when: {db_info['use_when']}\n"
+        
+        database_message = {"role": "system", "content": database_content}
+        messages.append(database_message)
+        
+        # User message requesting summary
+        user_message = {
+            "role": "user", 
+            "content": "Please generate a comprehensive summary of the research results that guides the user to the most relevant information. Format your response with markdown."
+        }
+        messages.append(user_message)
+        
+        logger.info(f"Generating streaming research summary using model: {MODEL_NAME}")
+        logger.info(f"Summarizing {len(completed_queries)} completed queries")
+        
+        # Make the API call with streaming enabled
+        stream = call_llm(
+            oauth_token=token,
+            model=MODEL_NAME,
+            messages=messages,
+            max_tokens=MAX_TOKENS,
+            temperature=TEMPERATURE,
+            stream=True,
+            prompt_token_cost=PROMPT_TOKEN_COST,
+            completion_token_cost=COMPLETION_TOKEN_COST
+        )
+        
+        # Return the streaming generator
+        for chunk in stream:
+            if hasattr(chunk, 'choices') and chunk.choices and chunk.choices[0].delta.content:
+                yield chunk.choices[0].delta.content
+                
+    except Exception as e:
+        logger.error(f"Error generating streaming summary: {str(e)}")
+        yield f"Error generating research summary: {str(e)}"

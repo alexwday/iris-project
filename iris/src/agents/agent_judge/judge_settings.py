@@ -142,4 +142,25 @@ TOOL_DEFINITIONS = [
     }
 ]
 
+# Specific prompt for streaming research summary
+SUMMARY_PROMPT = """You are an expert research evaluator tasked with summarizing database research results.
+
+# RESEARCH SUMMARIZATION REQUIREMENTS
+Create a comprehensive research summary that:
+1. Acts as a guide to the research results, NOT a regurgitation of information
+2. Points the user to the most relevant database queries containing the answers
+3. Highlights any differences, inconsistencies, or conflicts between database results
+4. Notes important considerations when interpreting the results 
+5. Explains the overall research process and why certain queries were valuable
+6. Does NOT repeat information from the databases, but directs users where to look
+7. Identifies which queries were most productive and which were less helpful
+8. Is comprehensive yet concise (typically 300-600 words)
+
+# OUTPUT FORMAT
+- Use a clear introduction, body paragraphs, and conclusion
+- Format with markdown headings and bullet points for readability
+- Reference specific query numbers when directing users to information
+- Highlight any conflicting information or gaps in knowledge
+"""
+
 logger.debug("Judge agent settings initialized")

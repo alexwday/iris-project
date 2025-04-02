@@ -47,7 +47,7 @@ def model(
     from ..agents.agent_direct_response.response_from_conversation import response_from_conversation
     from ..agents.agent_clarifier.clarifier import clarify_research_needs
     from ..agents.agent_planner.planner import create_query_plan
-    from ..agents.agent_judge.judge import evaluate_research_progress
+    from ..agents.agent_judge.judge import evaluate_research_progress, generate_streaming_summary
     from ..agents.database_subagents.database_router import route_database_query
     
     try:
@@ -174,9 +174,18 @@ def model(
                             continue_research = (judgment["action"] == "continue_research")
                             
                             if not continue_research:
-                                # Display the judge's research summary if available
-                                if "summary" in judgment:
-                                    yield f"\n## Research Summary\n{judgment['summary']}\n\n"
+                                # Generate a streaming summary when stopping early
+                                yield "\n## Research Summary\n"
+                                
+                                # Get streaming summary from judge agent
+                                for summary_chunk in generate_streaming_summary(
+                                    research_statement,
+                                    completed_queries,
+                                    token
+                                ):
+                                    yield summary_chunk
+                                
+                                yield "\n\n"
                                 
                                 # If stopping, provide information about remaining queries
                                 if remaining_queries:
@@ -186,19 +195,21 @@ def model(
                         # Move to next query
                         i += 1
                     
-                    # When naturally completing all queries, need final judgment and summary
+                    # When naturally completing all queries, stream the final research summary
                     if not remaining_queries and completed_queries:
-                        # Get final judgment from judge (will include summary)
-                        final_judgment = evaluate_research_progress(
+                        # Yield a header for the research summary
+                        yield "\n## Research Summary\n"
+                        
+                        # Get streaming summary from judge agent
+                        for summary_chunk in generate_streaming_summary(
                             research_statement,
                             completed_queries,
-                            [],  # No remaining queries
                             token
-                        )
+                        ):
+                            yield summary_chunk
                         
-                        # Display the judge's research summary
-                        if "summary" in final_judgment:
-                            yield f"\n## Research Summary\n{final_judgment['summary']}\n\n"
+                        # Add a buffer after the summary
+                        yield "\n\n"
                     
                     # Final completion message
                     yield f"\nCompleted {len(completed_queries)} database queries.\n"
