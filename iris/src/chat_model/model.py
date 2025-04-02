@@ -158,8 +158,7 @@ def model(
                         db_display_name = available_databases.get(db_name, {}).get("name", db_name)
                         
                         # Yield query information with improved formatting using display name
-                        query_header = "---\n"
-                        query_header += f"## 🔍 Query {i+1}: {db_display_name} - {current_query['query']}\n\n"
+                        query_header = f"\n## 🔍 Query {i+1}: {db_display_name} - {current_query['query']}\n\n"
                         yield query_header
                         
                         # Execute the query
@@ -170,7 +169,7 @@ def model(
                             query_results.append(results)
                             
                             # Yield result directly with ending horizontal rule
-                            yield f"{results}\n\n---\n\n"
+                            yield f"{results}\n\n---"
                             
                         except Exception as e:
                             logger.error(f"Error executing query: {str(e)}")
@@ -178,7 +177,7 @@ def model(
                             current_query["results"] = error_message
                             query_results.append(error_message)
                             
-                            yield f"{error_message}\n---\n\n"
+                            yield f"{error_message}\n---"
                         
                         logger.info(f"Completed database query {i+1}/{len(query_plan['queries'])}: {db_name}")
                         
@@ -197,7 +196,7 @@ def model(
                             
                             if not continue_research:
                                 # Generate a streaming summary when stopping early with improved formatting
-                                yield "\n---\n## 📊 Research Summary\n"
+                                yield "\n## 📊 Research Summary\n"
                                 
                                 # Get streaming summary from judge agent
                                 for summary_chunk in generate_streaming_summary(
@@ -207,7 +206,7 @@ def model(
                                 ):
                                     yield summary_chunk
                                 
-                                yield "\n\n---\n\n"
+                                yield "\n\n---"
                                 
                                 # If stopping, provide information about remaining queries
                                 if remaining_queries:
@@ -220,7 +219,7 @@ def model(
                     # When naturally completing all queries, stream the final research summary
                     if not remaining_queries and completed_queries:
                         # Yield a header for the research summary with improved formatting
-                        yield "\n---\n## 📊 Research Summary\n"
+                        yield "\n## 📊 Research Summary\n"
                         
                         # Get streaming summary from judge agent
                         for summary_chunk in generate_streaming_summary(
@@ -231,7 +230,7 @@ def model(
                             yield summary_chunk
                         
                         # Add a buffer after the summary with closing horizontal rule
-                        yield "\n\n---\n\n"
+                        yield "\n\n---"
                     
                     # Final completion message
                     yield f"\nCompleted {len(completed_queries)} database queries.\n"
