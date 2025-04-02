@@ -21,28 +21,22 @@ Dependencies:
 
 import logging
 
-def model(conversation=None):
+def model(
+    conversation=None,
+    html_callback=None
+):
     """
-    Initialize the model by setting up SSL certificates, OAuth authentication,
-    processing the input conversation if provided, and orchestrating the agent workflow.
+    Main model function that processes conversations and yields streaming responses.
     
-    This function:
-    1. Configures centralized logging
-    2. Configures SSL certificates for secure communication
-    3. Obtains an OAuth token for API authentication
-    4. Processes the input conversation if provided
-    5. Orchestrates the full agent workflow for handling the query
+    This function matches the signature and behavior of the original chat model,
+    yielding response chunks directly as strings rather than as dictionaries.
     
     Args:
         conversation (dict, optional): Conversation in OpenAI format with a 'messages' key.
-            If None, only the initial setup is performed.
-    
+        html_callback (callable, optional): Callback function for HTML rendering (not used)
+            
     Returns:
-        dict: Result containing:
-            - cert_path: SSL certificate path
-            - token: OAuth token
-            - processed_conversation: Processed conversation (if input was provided)
-            - response_content: Final response content (if conversation was provided)
+        generator: A generator that yields response chunks as strings
     """
     # Import modules - using relative imports for better portability
     from ..initial_setup.logging_config import configure_logging
@@ -56,303 +50,165 @@ def model(conversation=None):
     from ..agents.agent_judge.judge import evaluate_research_progress
     from ..agents.database_subagents.database_router import route_database_query
     
-    # Set up centralized logging
-    logger = configure_logging()
-    
-    logger.info("Initializing model setup...")
-    
-    # Set up SSL certificates for secure communication
-    cert_path = setup_ssl()
-    
-    # Obtain OAuth token
-    token = setup_oauth()
-    
-    # Process conversation if provided
-    processed_conversation = None
-    response_content = None
-    
-    if conversation:
-        logger.info("Processing input conversation...")
-        processed_conversation = process_conversation(conversation)
-        logger.info(f"Conversation processed: {len(processed_conversation['messages'])} messages")
+    try:
+        # Set up centralized logging
+        logger = configure_logging()
         
-        # Get routing decision
-        logger.info("Getting routing decision...")
-        routing_decision = get_routing_decision(processed_conversation, token)
-        logger.info(f"Routing decision received: {routing_decision['function_name']}")
+        logger.info("Initializing model setup...")
         
-        # Handle response based on routing decision
-        if routing_decision["function_name"] == "response_from_conversation":
-            # Direct response without research
-            logger.info("Using direct response path based on routing decision")
+        # Set up SSL certificates for secure communication
+        cert_path = setup_ssl()
+        
+        # Obtain OAuth token
+        token = setup_oauth()
+        
+        # Process conversation if provided
+        if conversation:
+            logger.info("Processing input conversation...")
+            processed_conversation = process_conversation(conversation)
+            logger.info(f"Conversation processed: {len(processed_conversation['messages'])} messages")
             
-            # Return a generator that yields response chunks for streaming
-            def stream_direct_response():
-                # Set up metadata in the first yield
-                yield {
-                    "cert_path": cert_path,
-                    "token": token,
-                    "processed_conversation": processed_conversation,
-                    "type": "direct_response",
-                    "response_chunk": None  # Initial chunk with no content
-                }
+            # Get routing decision
+            logger.info("Getting routing decision...")
+            routing_decision = get_routing_decision(processed_conversation, token)
+            
+            # Handle response based on routing decision
+            if routing_decision["function_name"] == "response_from_conversation":
+                # Direct response without research
+                logger.info("Using direct response path based on routing decision")
                 
-                # Stream the actual response chunks
+                # Get the streaming response directly - each chunk is already a string
                 for chunk in response_from_conversation(
                     processed_conversation, 
                     token
                 ):
-                    yield {
-                        "type": "direct_response",
-                        "response_chunk": chunk
-                    }
-            
-            # Return the generator directly
-            return stream_direct_response()
-            
-        elif routing_decision["function_name"] == "research_from_database":
-            # Research path
-            logger.info("Using research path based on routing decision")
-            
-            # Step 1: Clarify research needs
-            logger.info("Clarifying research needs...")
-            clarifier_decision = clarify_research_needs(processed_conversation, token)
-            
-            # If we need more context, return a generator that yields the context questions
-            if clarifier_decision["action"] == "request_essential_context":
-                logger.info("Essential context needed, returning context questions")
-                
-                def stream_context_questions():
-                    # Initial metadata
-                    yield {
-                        "cert_path": cert_path,
-                        "token": token,
-                        "processed_conversation": processed_conversation,
-                        "type": "context_questions",
-                        "response_chunk": None  # Initial chunk with no content
-                    }
+                    yield chunk
                     
-                    # Stream the questions one by one
+            elif routing_decision["function_name"] == "research_from_database":
+                # Research path
+                logger.info("Using research path based on routing decision")
+                
+                # Step 1: Clarify research needs
+                logger.info("Clarifying research needs...")
+                clarifier_decision = clarify_research_needs(processed_conversation, token)
+                
+                # If we need more context, yield the context questions directly as strings
+                if clarifier_decision["action"] == "request_essential_context":
+                    logger.info("Essential context needed, returning context questions")
+                    
+                    # Stream the questions as a single block of text
                     questions = clarifier_decision["output"].strip().split('\n')
-                    for question in questions:
+                    questions_text = "Before proceeding with research, please clarify:\n\n"
+                    for i, question in enumerate(questions, 1):
                         if question.strip():
-                            yield {
-                                "type": "context_questions",
-                                "response_chunk": question.strip() + "\n"
-                            }
-                
-                return stream_context_questions()
-            
-            # Otherwise, proceed with research
-            logger.info("Creating research statement, proceeding with research")
-            research_statement = clarifier_decision["output"]
-            is_continuation = clarifier_decision.get("is_continuation", False)
-            
-            # Create a streaming generator for the research path
-            def stream_research_results():
-                # Initial metadata yield
-                yield {
-                    "cert_path": cert_path,
-                    "token": token,
-                    "processed_conversation": processed_conversation,
-                    "type": "research_results",
-                    "response_chunk": None,  # Initial chunk with no content
-                    "stage": "init"
-                }
-                
-                # Step 2: Create query plan
-                logger.info("Creating database query plan...")
-                yield {
-                    "type": "research_results",
-                    "response_chunk": "Creating research query plan...\n",
-                    "stage": "planning"
-                }
-                
-                query_plan = create_query_plan(research_statement, token, is_continuation)
-                logger.info(f"Query plan created with {len(query_plan['queries'])} queries")
-                
-                yield {
-                    "type": "research_results",
-                    "response_chunk": f"Research plan created with {len(query_plan['queries'])} queries.\n\n",
-                    "stage": "planning_complete"
-                }
-                
-                # We now use the router to handle all database queries
-                
-                # Step 3: Execute queries and evaluate progress
-                completed_queries = []
-                remaining_queries = query_plan["queries"].copy()
-                
-                # Stream the strategy
-                yield {
-                    "type": "research_results",
-                    "response_chunk": f"# Research Strategy\n{query_plan['overall_strategy']}\n\n# Executing Queries\n\n",
-                    "stage": "execution_start"
-                }
-                
-                query_counter = 0
-                while remaining_queries:
-                    # Take the next query
-                    current_query = remaining_queries.pop(0)
-                    query_counter += 1
+                            questions_text += f"{i}. {question.strip()}\n"
                     
-                    logger.info(f"Executing query on {current_query['database']}: {current_query['query']}")
+                    yield questions_text
+                
+                # Otherwise, proceed with research
+                else:  # create_research_statement
+                    logger.info("Creating research statement, proceeding with research")
+                    research_statement = clarifier_decision["output"]
+                    is_continuation = clarifier_decision.get("is_continuation", False)
                     
-                    # Stream query start notification
-                    yield {
-                        "type": "research_results",
-                        "response_chunk": f"## Query {query_counter}: {current_query['database']}\n",
-                        "stage": "query_start",
-                        "query_number": query_counter,
-                        "database": current_query['database']
-                    }
+                    # We combine multiple small yields into larger chunks for efficiency
+                    yield f"Researching: {research_statement}\n\n"
                     
-                    yield {
-                        "type": "research_results",
-                        "response_chunk": f"Search: {current_query['query']}\n\n",
-                        "stage": "query_details"
-                    }
+                    # Step 2: Create query plan
+                    logger.info("Creating database query plan...")
+                    query_plan = create_query_plan(research_statement, token, is_continuation)
+                    logger.info(f"Query plan created with {len(query_plan['queries'])} queries")
                     
-                    # Get database name from the query
-                    db_name = current_query["database"]
+                    yield f"Research plan created with {len(query_plan['queries'])} queries.\n\n"
                     
-                    # Execute the query
-                    try:
-                        yield {
-                            "type": "research_results",
-                            "response_chunk": "Searching database...\n",
-                            "stage": "query_executing"
-                        }
+                    # Prepare lists to track queries and results
+                    completed_queries = []
+                    query_results = []
+                    remaining_queries = query_plan["queries"].copy()
+                    
+                    # Process queries one by one
+                    i = 0
+                    while i < len(query_plan["queries"]) and remaining_queries:
+                        # Get the current query
+                        current_query = query_plan["queries"][i]
                         
-                        results = route_database_query(db_name, current_query["query"], token)
-                        current_query["results"] = results
-                        completed_queries.append(current_query)
-                        logger.info(f"Query completed successfully")
-                        
-                        # Stream the results
-                        yield {
-                            "type": "research_results",
-                            "response_chunk": f"{results}\n\n",
-                            "stage": "query_results"
-                        }
-                        
-                    except Exception as e:
-                        logger.error(f"Error executing query: {str(e)}")
-                        error_message = f"Error: {str(e)}"
-                        current_query["results"] = error_message
+                        # Remove from remaining and add to completed
+                        remaining_queries.remove(current_query)
                         completed_queries.append(current_query)
                         
-                        yield {
-                            "type": "research_results",
-                            "response_chunk": f"{error_message}\n\n",
-                            "stage": "query_error"
-                        }
-                    
-                    # If there are remaining queries, check if we should continue
-                    if remaining_queries:
-                        logger.info("Evaluating whether to continue research...")
-                        yield {
-                            "type": "research_results",
-                            "response_chunk": "Evaluating research progress...\n",
-                            "stage": "evaluation"
-                        }
+                        # Get database name from the query
+                        db_name = current_query["database"]
                         
-                        judgment = evaluate_research_progress(
-                            research_statement, 
-                            completed_queries, 
-                            remaining_queries, 
-                            token
-                        )
+                        # Yield query information
+                        yield f"Query {i+1}: {db_name} - {current_query['query']}\n\n"
                         
-                        if judgment["action"] == "stop_research":
-                            logger.info(f"Research stopped early: {judgment['reason']}")
-                            yield {
-                                "type": "research_results",
-                                "response_chunk": f"Research complete. {judgment['reason']}\n\n",
-                                "stage": "early_termination",
-                                "reason": judgment['reason']
-                            }
-                            break
+                        # Execute the query
+                        try:
+                            # Execute database query and yield result directly
+                            results = route_database_query(db_name, current_query["query"], token)
+                            current_query["results"] = results
+                            query_results.append(results)
+                            
+                            # Yield result directly
+                            yield f"{results}\n\n"
+                            
+                        except Exception as e:
+                            logger.error(f"Error executing query: {str(e)}")
+                            error_message = f"Error: {str(e)}\n\n"
+                            current_query["results"] = error_message
+                            query_results.append(error_message)
+                            
+                            yield error_message
                         
-                        logger.info("Continuing with next query")
-                        yield {
-                            "type": "research_results",
-                            "response_chunk": "Continuing with next query...\n\n",
-                            "stage": "continue_research"
-                        }
-                
-                # If we stopped early, add info about unprocessed queries
-                if remaining_queries:
-                    yield {
-                        "type": "research_results",
-                        "response_chunk": "\n## Unprocessed Queries\n",
-                        "stage": "unprocessed_queries_header"
-                    }
+                        logger.info(f"Completed database query {i+1}/{len(query_plan['queries'])}: {db_name}")
+                        
+                        # Only consult judge if there are more queries to process
+                        if remaining_queries:
+                            # Consult judge to decide whether to continue
+                            judgment = evaluate_research_progress(
+                                research_statement, 
+                                completed_queries, 
+                                remaining_queries, 
+                                token
+                            )
+                            
+                            # Determine whether to continue
+                            continue_research = (judgment["action"] == "continue_research")
+                            
+                            if not continue_research:
+                                # If stopping, provide information about remaining queries
+                                if remaining_queries:
+                                    yield format_remaining_queries(remaining_queries)
+                                break
+                        
+                        # Move to next query
+                        i += 1
                     
-                    yield {
-                        "type": "research_results",
-                        "response_chunk": "The following queries were planned but not executed:\n\n",
-                        "stage": "unprocessed_queries_intro"
-                    }
-                    
-                    for i, query in enumerate(remaining_queries):
-                        yield {
-                            "type": "research_results",
-                            "response_chunk": f"- {query['database']}: {query['query']}\n",
-                            "stage": "unprocessed_query",
-                            "query_number": i+1
-                        }
-                
-                # Final completion message
-                yield {
-                    "type": "research_results",
-                    "response_chunk": "\n# Research Summary\n\n",
-                    "stage": "summary_header"
-                }
-                
-                yield {
-                    "type": "research_results",
-                    "response_chunk": f"Completed {len(completed_queries)} queries across {len(set(q['database'] for q in completed_queries))} databases.\n",
-                    "stage": "summary_stats"
-                }
-                
-                yield {
-                    "type": "research_results",
-                    "response_chunk": "Research process complete.\n",
-                    "stage": "complete"
-                }
+                    # Final summary
+                    yield f"\nCompleted {len(completed_queries)} database queries.\n"
+                    logger.info("Completed research process")
             
-            # Return the streaming generator
-            return stream_research_results()
+            else:
+                # Unknown function - yield error
+                logger.error(f"Unknown routing function: {routing_decision['function_name']}")
+                yield "Error: Unable to process query due to internal routing error."
         
         else:
-            # Unknown function - return error generator
-            logger.error(f"Unknown routing function: {routing_decision['function_name']}")
+            # If no conversation was provided, yield initialization message
+            logger.info("Model initialization complete")
+            yield "Model initialized successfully, but no conversation was provided."
             
-            def stream_error_response():
-                # Initial metadata
-                yield {
-                    "cert_path": cert_path,
-                    "token": token,
-                    "processed_conversation": processed_conversation,
-                    "type": "error",
-                    "response_chunk": None
-                }
-                
-                # Error message
-                yield {
-                    "type": "error",
-                    "response_chunk": "Error: Unable to process query due to internal routing error."
-                }
-            
-            return stream_error_response()
+    except Exception as e:
+        yield f"Error processing request: {str(e)}"
+
+def format_remaining_queries(remaining_queries):
+    """Format remaining queries for display to the user."""
+    if not remaining_queries:
+        return "There are no remaining database queries."
     
-    # If no conversation was provided, just return the setup information
-    logger.info("Model initialization complete")
+    message = "The following database queries were not processed:\n\n"
+    for i, query in enumerate(remaining_queries, 1):
+        message += f"{i}. {query['database']}: {query['query']}\n"
     
-    # Return the basic initialization information
-    return {
-        "cert_path": cert_path,
-        "token": token,
-        "type": "initialization_only"
-    }
+    message += "\nPlease let me know if you would like to continue with these remaining database queries in a new search."
+    return message

@@ -19,7 +19,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Authentication settings for local environment
-OPENAI_API_KEY = ""  # Set your OpenAI API key as an environment variable instead
+OPENAI_API_KEY = ""  # Set your OpenAI API key here or use an environment variable
 
 # Token preview settings for logging
 TOKEN_PREVIEW_LENGTH = 7  # Number of characters to show in token preview

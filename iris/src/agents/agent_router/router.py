@@ -99,7 +99,7 @@ def get_routing_decision(conversation, token):
         except json.JSONDecodeError:
             raise RouterError(f"Invalid JSON in tool arguments: {tool_call.function.arguments}")
         
-        # Extract function name only - thought is no longer needed
+        # Extract function name only
         function_name = arguments.get("function_name")
         
         if not function_name:
