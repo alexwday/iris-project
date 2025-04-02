@@ -19,7 +19,7 @@ Dependencies:
 
 import logging
 import time
-from typing import Any
+from typing import Any, Dict
 from openai import OpenAI
 from ..chat_model.model_settings import (
     IS_RBC_ENV,
@@ -32,6 +32,14 @@ from ..chat_model.model_settings import (
 
 # Get module logger (no configuration here - using centralized config)
 logger = logging.getLogger(__name__)
+
+# Global variables for token usage tracking
+_token_usage = {
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "total_tokens": 0,
+    "cost": 0.0
+}
 
 
 class OpenAIConnectorError(Exception):
@@ -70,6 +78,8 @@ def log_usage_statistics(response, prompt_token_cost, completion_token_cost):
     Returns:
         dict: Usage statistics including token counts and costs
     """
+    global _token_usage
+    
     if hasattr(response, "usage"):
         completion_tokens = response.usage.completion_tokens
         prompt_tokens = response.usage.prompt_tokens
@@ -87,6 +97,12 @@ def log_usage_statistics(response, prompt_token_cost, completion_token_cost):
             f"Prompt: {prompt_tokens} (${prompt_cost:.4f}), "
             f"Total: {total_tokens} tokens, Total Cost: ${total_cost:.4f}"
         )
+        
+        # Update global token usage tracker
+        _token_usage["prompt_tokens"] += prompt_tokens
+        _token_usage["completion_tokens"] += completion_tokens
+        _token_usage["total_tokens"] += total_tokens
+        _token_usage["cost"] += total_cost
 
         return {
             "completion_tokens": completion_tokens,
@@ -209,3 +225,27 @@ def call_llm(oauth_token: str, prompt_token_cost: float = 0,
     raise OpenAIConnectorError(
         f"Failed to complete OpenAI API call: {str(last_exception)}"
     )
+
+
+def get_token_usage() -> Dict[str, Any]:
+    """
+    Get the current token usage statistics.
+    
+    Returns:
+        Dict containing prompt_tokens, completion_tokens, total_tokens, and cost
+    """
+    global _token_usage
+    return _token_usage.copy()
+
+
+def reset_token_usage() -> None:
+    """
+    Reset the token usage statistics to zero.
+    """
+    global _token_usage
+    _token_usage = {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "total_tokens": 0,
+        "cost": 0.0
+    }
