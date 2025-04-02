@@ -64,6 +64,9 @@ For each database query:
 3. Create concise, focused queries rather than compound questions
 4. Consider each database's search method (semantic vs. keyword)
 5. Prioritize queries by relevance, authority, and comprehensiveness
+6. Format queries clearly and professionally as they will be displayed to users in titles
+7. Keep queries concise (under 100 characters if possible) for better display in headers
+8. Use proper capitalization and punctuation in queries
 
 # CONTINUATION HANDLING
 If this is a continuation of previous research:

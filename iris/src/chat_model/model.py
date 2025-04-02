@@ -149,8 +149,7 @@ def model(
                         
                         # Yield query information with improved formatting
                         query_header = "---\n"
-                        query_header += f"## 🔍 Query {i+1}: {db_name}\n\n"
-                        query_header += f"{current_query['query']}\n\n"
+                        query_header += f"## 🔍 Query {i+1}: {db_name} - {current_query['query']}\n\n"
                         yield query_header
                         
                         # Execute the query
