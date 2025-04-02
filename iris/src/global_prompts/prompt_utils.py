@@ -139,24 +139,25 @@ def split_task_sections(task: str) -> Tuple[str, Dict[str, str]]:
     """
     lines = task.strip().split('\n')
     current_section = None
-    main_task = []
-    sections = {}
+    main_task: List[str] = []
+    section_lines: Dict[str, List[str]] = {}
     
     for line in lines:
         # Check if this is a section header
         if line.strip().startswith('# '):
             current_section = line.strip()[2:].strip()
-            sections[current_section] = []
+            section_lines[current_section] = []
         # If we're in a section, add to it
         elif current_section:
-            sections[current_section].append(line)
+            section_lines[current_section].append(line)
         # Otherwise add to main task
         else:
             main_task.append(line)
     
     # Join sections back together
-    for section_name, section_lines in sections.items():
-        sections[section_name] = '\n'.join(section_lines).strip()
+    sections: Dict[str, str] = {}
+    for section_name, lines_list in section_lines.items():
+        sections[section_name] = '\n'.join(lines_list).strip()
     
     # Join main task
     main_task_str = '\n'.join(main_task).strip()
@@ -192,15 +193,16 @@ def standardize_task_format(task: str) -> str:
     }
     
     # Group sections by standard name
-    standardized_sections = {}
+    section_content_lists: Dict[str, List[str]] = {}
     for section_name, content in sections.items():
         std_name = section_mapping.get(section_name, section_name)
-        if std_name not in standardized_sections:
-            standardized_sections[std_name] = []
-        standardized_sections[std_name].append(content)
+        if std_name not in section_content_lists:
+            section_content_lists[std_name] = []
+        section_content_lists[std_name].append(content)
     
     # Combine sections with the same standard name
-    for std_name, contents in standardized_sections.items():
+    standardized_sections: Dict[str, str] = {}
+    for std_name, contents in section_content_lists.items():
         standardized_sections[std_name] = '\n\n'.join(contents)
     
     # Construct the new task string with standard sections
@@ -223,8 +225,8 @@ def standardize_task_format(task: str) -> str:
     return result
 
 # Additional convenience functions
-def get_full_system_prompt(agent_role: str, agent_task: str, include_components: List[str] = None, 
-                          profile: str = None, standardize: bool = True) -> str:
+def get_full_system_prompt(agent_role: str, agent_task: str, include_components: Optional[List[str]] = None, 
+                          profile: Optional[str] = None, standardize: bool = True) -> str:
     """
     Generate a complete system prompt with context and agent instructions.
     
@@ -255,7 +257,12 @@ def get_full_system_prompt(agent_role: str, agent_task: str, include_components:
     }
     
     # Get basic prefix with standard components
-    prefix = get_agent_prompt_prefix(**flags)
+    prefix = get_agent_prompt_prefix(
+        include_project=flags.get("include_project", True),
+        include_fiscal=flags.get("include_fiscal", True),
+        include_databases=flags.get("include_databases", False),
+        include_restrictions=flags.get("include_restrictions", True)
+    )
     
     # Query guidance is now included in planner settings directly
     

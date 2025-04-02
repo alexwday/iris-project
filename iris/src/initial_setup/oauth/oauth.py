@@ -24,7 +24,7 @@ from ...chat_model.model_settings import IS_RBC_ENV, USE_OAUTH
 
 # Import appropriate settings based on environment
 if IS_RBC_ENV and USE_OAUTH:
-    from .local_auth_settings import (
+    from .oauth_settings import (
         OAUTH_URL,
         CLIENT_ID,
         CLIENT_SECRET,
@@ -129,14 +129,17 @@ def setup_oauth() -> str:
             if not token:
                 raise ValueError("OAuth token not found in response")
                 
+            # Ensure token is a string
+            token_str: str = str(token)
+                
             # Create a preview of the token for logging
-            token_preview = token[:TOKEN_PREVIEW_LENGTH] + "..." if len(token) > TOKEN_PREVIEW_LENGTH else token
+            token_preview = token_str[:TOKEN_PREVIEW_LENGTH] + "..." if len(token_str) > TOKEN_PREVIEW_LENGTH else token_str
             logger.info(f"Successfully obtained OAuth token: {token_preview}")
             
-            total_time = time.time() - start_time
-            logger.info(f"Total OAuth process completed in {total_time:.2f} seconds after {attempts} attempt(s)")
+            total_time_seconds = time.time() - start_time
+            logger.info(f"Total OAuth process completed in {total_time_seconds:.2f} seconds after {attempts} attempt(s)")
             
-            return token
+            return token_str
             
         except (requests.exceptions.RequestException, ValueError) as e:
             last_exception = e
@@ -148,6 +151,6 @@ def setup_oauth() -> str:
                 time.sleep(RETRY_DELAY_SECONDS)
     
     # If we've exhausted all retries, raise the last exception
-    total_time = time.time() - start_time
-    logger.error(f"Failed to obtain OAuth token after {attempts} attempts and {total_time:.2f} seconds")
+    total_time_seconds = time.time() - start_time
+    logger.error(f"Failed to obtain OAuth token after {attempts} attempts and {total_time_seconds:.2f} seconds")
     raise last_exception or requests.exceptions.RequestException("Failed to obtain OAuth token")
