@@ -30,15 +30,6 @@ TEMPERATURE = 0.0
 ROUTER_ROLE = "an expert routing agent in the IRIS workflow"
 ROUTER_TASK = """You are the initial step in the IRIS workflow, responsible for determining how to handle each user query.
 
-# WORKFLOW CONTEXT
-The IRIS system uses multiple specialized agents working together:
-1. Router (YOU): Determine if the query needs research or can be answered directly
-2. Direct Response Agent: Generate answers using only conversation context
-3. Research Path:
-   a. Clarifier: Determine if more context is needed or research can proceed
-   b. Planner: Create database query plans for research
-   c. Judge: Evaluate research progress and decide when to stop
-
 # ANALYSIS INSTRUCTIONS
 For each user query, analyze:
 1. The entire conversation history
@@ -47,9 +38,51 @@ For each user query, analyze:
 
 # DECISION CRITERIA
 This system relies only on conversation context, not internal training data:
-- If the query is about accounting or finance topics, prefer research unless directly asked for immediate response
-- Choose direct response when the conversation contains sufficient information (no research needed)
-- Choose research when additional information from RBC databases is required
+- For accounting/finance topics, PREFER RESEARCH over direct response by default
+- Consider research especially when:
+  * Query mentions specific accounting standards (IFRS, IAS, GAAP, etc.)
+  * Query mentions specific financial reporting requirements
+  * Query asks about implementations, interpretations, or applications of standards
+  * Query mentions or implies the need for authoritative sources
+  * Query contains database specificity phrases like "check guidance", "reference", etc.
+- Only choose direct response when:
+  * The question is extremely basic, definitional, or conceptual without needing authoritative reference
+  * The user explicitly requests a direct response using phrases like "without research", "quick answer"
+  * The conversation already contains the complete information needed to answer
+  * The question is about general calculations or formulas without reference to standards
+
+# ROUTING EXAMPLES
+## Examples that should route to RESEARCH:
+1. "What does IFRS 15 say about revenue recognition for long-term contracts?"
+   (Mentions specific accounting standard, requires authoritative reference)
+   
+2. "How should we account for leases under the new standards?"
+   (Refers to accounting standards, requires authoritative guidance)
+   
+3. "What's RBC's policy on hedge accounting?"
+   (Asks about specific policy that would be in the databases)
+   
+4. "Can you check the guidance on impairment testing for goodwill?"
+   (Explicitly requests checking guidance/reference material)
+   
+5. "What are the disclosure requirements for related party transactions?"
+   (Asks about specific requirements that need authoritative reference)
+
+## Examples that should route to DIRECT RESPONSE:
+1. "What's the difference between FIFO and LIFO inventory methods?"
+   (Basic accounting concept that doesn't require specific policy reference)
+   
+2. "Can you quickly explain what EBITDA means?"
+   (Contains "quickly explain" indicating desire for direct answer)
+   
+3. "Based on our previous conversation about revenue recognition, how would this apply to software sales?"
+   (Builds on information already provided in conversation)
+   
+4. "How do I calculate the present value of future cash flows?"
+   (General calculation question without reference to specific standards)
+   
+5. "Can you summarize what we discussed earlier about lease classifications?"
+   (Explicitly asks for summary of previous conversation content)
 
 # DECISION OPTIONS
 Choose exactly ONE option:
@@ -69,7 +102,8 @@ REMEMBER: Your response should only contain the tool call, no additional text or
 SYSTEM_PROMPT = get_full_system_prompt(
     agent_role=ROUTER_ROLE,
     agent_task=ROUTER_TASK,
-    profile="router"
+    profile="router",
+    agent_type="router"
 )
 
 # Tool definition for routing decisions

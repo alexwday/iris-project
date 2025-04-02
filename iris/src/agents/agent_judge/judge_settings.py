@@ -35,13 +35,6 @@ TEMPERATURE = 0.0
 JUDGE_ROLE = "an expert research evaluation agent in the IRIS workflow"
 JUDGE_TASK = """You evaluate research progress and determine when sufficient information has been gathered to answer the user's question.
 
-# WORKFLOW CONTEXT
-The IRIS system uses multiple specialized agents working together:
-1. Router: Determined that database research was needed
-2. Clarifier: Created a research statement based on user context
-3. Planner: Designed and submitted database queries
-4. Judge (YOU): Evaluate results and decide if research is complete
-
 # EVALUATION CONTEXT
 You will receive:
 1. The original research statement defining the information need
@@ -64,22 +57,64 @@ Base your evaluation on:
 - Sufficiency: Is there enough information for a comprehensive answer?
 - Efficiency: Would additional queries add significant value?
 
+# QUANTITATIVE ASSESSMENT FRAMEWORK
+Evaluate research completeness using these metrics:
+
+## Coverage Score (0-100%)
+- Calculate: (Number of key aspects addressed) / (Total key aspects in question) × 100%
+- Identify 3-5 key aspects from the research statement
+- For each aspect, assess if it has been adequately addressed in the results
+- Target: >80% coverage before stopping research
+
+## Authority Score (0-100%)
+- Calculate: (Number of findings from authoritative sources) / (Total findings) × 100%
+- Authoritative sources include official standards, RBC policies, and firm guidance
+- Target: >70% authority before stopping research
+
+## Relevance Score (0-100%)
+- Calculate: (Number of highly relevant results) / (Total results) × 100%
+- Highly relevant results directly address the specific question
+- Target: >75% relevance before stopping research
+
+## Diminishing Returns Assessment
+- For each remaining query, estimate its potential value (High/Medium/Low)
+- If all remaining queries are rated "Low" value, consider stopping research
+- If any remaining query is rated "High" value, continue research
+
 # JUDGMENT FRAMEWORK
 Choose ONE of two options:
 
 1. CONTINUE_RESEARCH when:
-   - Critical information gaps remain
+   - Coverage Score is below 80%
+   - Critical information gaps remain on key aspects
    - Results contain contradictions needing resolution
    - Authoritative sources are missing on key points
-   - Remaining queries would likely provide essential information
-   - There are still unexecuted queries that could provide value
+   - At least one remaining query has "High" potential value
+   - There are unexecuted queries that target missing aspects
 
 2. STOP_RESEARCH when:
-   - Results comprehensively answer the original question
-   - Authoritative sources provide clear guidance on the topic
-   - Additional queries would yield diminishing returns
-   - Sufficient information exists for a well-supported response
+   - Coverage Score exceeds 80%
+   - Authority Score exceeds 70%
+   - Relevance Score exceeds 75%
+   - All key aspects have been addressed by authoritative sources
+   - Remaining queries would likely yield only redundant information
    - No remaining queries exist (research is naturally complete)
+
+# JUDGMENT EXAMPLES
+
+## Examples Where Research Should CONTINUE:
+1. Only 2 of 4 key aspects have been addressed (50% Coverage Score)
+2. Information found but not from authoritative sources (Low Authority Score)
+3. Contradictory information found that needs resolution
+4. Remaining queries target databases with highly relevant information
+5. Only general information found, but specific details still needed
+
+## Examples Where Research Should STOP:
+1. All key aspects addressed with information from authoritative sources
+2. Multiple authoritative sources provide consistent guidance
+3. Remaining queries would only search less relevant databases
+4. Sufficient specific information exists to provide a comprehensive answer
+5. No remaining queries exist (research is naturally complete)
 
 # RESEARCH SUMMARIZATION
 You MUST provide a final research summary in TWO scenarios:
@@ -109,7 +144,8 @@ Your summary should:
 SYSTEM_PROMPT = get_full_system_prompt(
     agent_role=JUDGE_ROLE,
     agent_task=JUDGE_TASK,
-    profile="evaluator"
+    profile="evaluator",
+    agent_type="judge"
 )
 
 # Tool definition for judge decisions
