@@ -19,6 +19,7 @@ import importlib
 import inspect
 from typing import Union, Generator, Any, TypeVar, cast, Optional
 from ...global_prompts.database_statement import get_available_databases
+from ...chat_model.model_settings import ENVIRONMENT
 
 # Define a response type for database queries
 DatabaseResponse = Union[str, Generator[str, None, None]]
@@ -67,8 +68,16 @@ def route_database_query(database: str, query: str, token: Optional[str] = None)
         
         # Check if result is a generator (for streaming)
         if inspect.isgenerator(result):
-            # For streaming results (like from internal_wiki), return the generator
-            return result
+            # For streaming results (like from internal_wiki)
+            if ENVIRONMENT == "rbc":
+                # In RBC environment, convert generator to string for backward compatibility
+                # This handles cases where calling code might try to call len() on the result
+                logger.info("Converting generator result to string for RBC environment compatibility")
+                result_list = list(result)  # Consume the generator
+                return "".join(result_list)
+            else:
+                # In local environment, return the generator directly
+                return result
         else:
             # For non-streaming results (legacy subagents), return the string directly
             return result
