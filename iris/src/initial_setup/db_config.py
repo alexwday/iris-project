@@ -14,12 +14,12 @@ LOCAL_DB_PARAMS = {
     'password': ""  # No password needed for local development
 }
 
-# Production database parameters will be set in the RBC environment
-# This is just a placeholder - these values will be replaced in production
-PROD_DB_PARAMS = {
+# RBC environment database parameters
+# This is just a placeholder - these values will be replaced in the RBC environment
+RBC_DB_PARAMS = {
     'host': "x",
     'port': "x",
-    'dbname': "maven-finance",
+    'dbname': "maven-finance", 
     'user': "x",
     'password': "x"
 }
@@ -30,13 +30,13 @@ def get_db_params(env: str = "local") -> Dict[str, Any]:
     Get database connection parameters based on environment.
     
     Args:
-        env: Environment type ("local" or "prod")
+        env: Environment type ("local" or "rbc")
         
     Returns:
         Dictionary with database connection parameters
     """
-    if env.lower() == "prod":
-        return PROD_DB_PARAMS
+    if env.lower() == "rbc":
+        return RBC_DB_PARAMS
     return LOCAL_DB_PARAMS
 
 
@@ -45,7 +45,7 @@ def connect_to_db(env: str = "local") -> Optional[psycopg2.extensions.connection
     Connect to the PostgreSQL database.
     
     Args:
-        env: Environment type ("local" or "prod")
+        env: Environment type ("local" or "rbc")
         
     Returns:
         Database connection object or None if connection fails

@@ -16,6 +16,7 @@ import re
 from typing import Dict, List, Any, Optional, Union, Generator, cast
 
 from ....initial_setup.db_config import connect_to_db
+from ....chat_model.model_settings import ENVIRONMENT
 
 from .catalog_selection_prompt import get_catalog_selection_prompt
 from .content_synthesis_prompt import get_content_synthesis_prompt
@@ -90,10 +91,10 @@ def fetch_wiki_catalog(query: str) -> List[Dict[str, Any]]:
     Returns:
         List[Dict[str, Any]]: List of catalog records
     """
-    logger.info(f"Fetching wiki catalog with query: {query}")
+    logger.info(f"Fetching wiki catalog with query: {query} (environment: {ENVIRONMENT})")
     
-    # Connect to database
-    conn = connect_to_db("local")
+    # Connect to database using the environment from model_settings
+    conn = connect_to_db(ENVIRONMENT)
     catalog_records: List[Dict[str, Any]] = []
     
     if not conn:
@@ -152,8 +153,8 @@ def fetch_document_content(doc_ids: List[str]) -> List[Dict[str, Any]]:
         logger.warning("No valid document IDs to fetch")
         return []
     
-    # Connect to database
-    conn = connect_to_db("local")
+    # Connect to database using the environment from model_settings
+    conn = connect_to_db(ENVIRONMENT)
     result: List[Dict[str, Any]] = []
     
     if not conn:
