@@ -140,17 +140,9 @@ def fetch_document_content(doc_ids: List[str]) -> List[Dict[str, Any]]:
     """
     logger.info(f"Fetching content for documents: {doc_ids}")
     
-    # Convert string IDs to integers if needed (our database uses integer IDs)
-    # Also handle any non-numeric IDs gracefully
-    numeric_ids = []
-    for doc_id in doc_ids:
-        try:
-            numeric_ids.append(int(doc_id))
-        except ValueError:
-            logger.warning(f"Skipping non-numeric ID: {doc_id}")
-    
-    if not numeric_ids:
-        logger.warning("No valid document IDs to fetch")
+    # Use document IDs directly without conversion
+    if not doc_ids:
+        logger.warning("No document IDs to fetch")
         return []
     
     # Connect to database using the environment from model_settings
@@ -165,13 +157,13 @@ def fetch_document_content(doc_ids: List[str]) -> List[Dict[str, Any]]:
         # First, get the document names for all requested IDs from the catalog
         doc_names = {}
         with conn.cursor() as cur:
-            placeholders = ','.join(['%s'] * len(numeric_ids))
+            placeholders = ','.join(['%s'] * len(doc_ids))
             cur.execute(f"""
                 SELECT id, document_name 
                 FROM apg_catalog 
-                WHERE id IN ({placeholders})
+                WHERE id::text IN ({placeholders})
                 AND document_source = 'internal_wiki'
-            """, numeric_ids)
+            """, doc_ids)
             
             for row in cur.fetchall():
                 doc_names[row[0]] = row[1]
