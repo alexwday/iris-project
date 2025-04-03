@@ -8,5 +8,7 @@ setup(
         "openai",
         "requests",
         "cryptography",
+        "psycopg2-binary",
+        "jupyter",
     ],
 )
