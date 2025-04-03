@@ -339,7 +339,7 @@ def model(
                                     "decision": {
                                         "database": db_name,
                                         "query": current_query["query"],
-                                        "results_length": len(results) if results else 0
+                                        "results_type": str(type(results).__name__) 
                                     },
                                     "timestamp": datetime.now().isoformat(),
                                     "token_usage": {
@@ -356,8 +356,17 @@ def model(
                             # Handle streaming results (generators) or direct string results
                             if inspect.isgenerator(results):
                                 # For generator results, iterate and yield each chunk
+                                # This ensures we always yield strings, never a nested generator
                                 for chunk in results:
-                                    yield chunk
+                                    if isinstance(chunk, str):
+                                        yield chunk
+                                    elif inspect.isgenerator(chunk):
+                                        # Handle nested generators by consuming them
+                                        for subchunk in chunk:
+                                            yield str(subchunk)
+                                    else:
+                                        # Convert any non-string objects to strings
+                                        yield str(chunk)
                                 # Add horizontal rule after all chunks
                                 yield "\n\n---"
                             else:

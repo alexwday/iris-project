@@ -66,21 +66,9 @@ def route_database_query(database: str, query: str, token: Optional[str] = None)
         # Call the query_database function from the module
         result = subagent_module.query_database(query, token)
         
-        # Check if result is a generator (for streaming)
-        if inspect.isgenerator(result):
-            # For streaming results (like from internal_wiki)
-            if ENVIRONMENT == "rbc":
-                # In RBC environment, convert generator to string for backward compatibility
-                # This handles cases where calling code might try to call len() on the result
-                logger.info("Converting generator result to string for RBC environment compatibility")
-                result_list = list(result)  # Consume the generator
-                return "".join(result_list)
-            else:
-                # In local environment, return the generator directly
-                return result
-        else:
-            # For non-streaming results (legacy subagents), return the string directly
-            return result
+        # Always return the result directly
+        # The model.py file now handles all types of results appropriately
+        return result
     
     except Exception as e:
         logger.error(f"Error routing database query: {str(e)}")
