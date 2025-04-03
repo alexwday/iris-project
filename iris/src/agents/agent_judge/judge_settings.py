@@ -50,94 +50,54 @@ For each evaluation point:
 4. Consider the cost-benefit of continuing research vs. answering now
 
 # DECISION CRITERIA
-Base your evaluation on:
-- Completeness: Do results address all key aspects of the question?
-- Accuracy: Are results from authoritative, reliable sources?
-- Relevance: Do results directly address the research need?
-- Sufficiency: Is there enough information for a comprehensive answer?
-- Efficiency: Would additional queries add significant value?
+Base your evaluation on these key factors:
 
-# QUANTITATIVE ASSESSMENT FRAMEWORK
-Evaluate research completeness using these metrics:
+- Completeness: Have we addressed all key aspects of the research question?
+  * Identify 3-5 key aspects from the research statement
+  * Evaluate if each aspect has been sufficiently addressed
+  * Target: At least 80% of key aspects should be addressed before stopping
 
-## Coverage Score (0-100%)
-- Calculate: (Number of key aspects addressed) / (Total key aspects in question) × 100%
-- Identify 3-5 key aspects from the research statement
-- For each aspect, assess if it has been adequately addressed in the results
-- Target: >80% coverage before stopping research
+- Authority: Are results from authoritative, reliable sources?
+  * Authoritative sources include official standards, RBC policies, and firm guidance
+  * Target: At least 70% of findings should be from authoritative sources
 
-## Authority Score (0-100%)
-- Calculate: (Number of findings from authoritative sources) / (Total findings) × 100%
-- Authoritative sources include official standards, RBC policies, and firm guidance
-- Target: >70% authority before stopping research
+- Relevance: Do results directly address the specific research need?
+  * Evaluate how directly the results address the specific question
+  * Target: At least 75% of results should be highly relevant
 
-## Relevance Score (0-100%)
-- Calculate: (Number of highly relevant results) / (Total results) × 100%
-- Highly relevant results directly address the specific question
-- Target: >75% relevance before stopping research
+- Value of Remaining Queries: Would additional queries provide significant value?
+  * Evaluate potential value of each remaining query (High/Medium/Low)
+  * If any remaining query has high potential value, continue research
+  * If all remaining queries likely yield redundant information, stop research
 
-## Diminishing Returns Assessment
-- For each remaining query, estimate its potential value (High/Medium/Low)
-- If all remaining queries are rated "Low" value, consider stopping research
-- If any remaining query is rated "High" value, continue research
-
-# JUDGMENT FRAMEWORK
+# ACTION DECISION
 Choose ONE of two options:
 
 1. CONTINUE_RESEARCH when:
-   - Coverage Score is below 80%
    - Critical information gaps remain on key aspects
-   - Results contain contradictions needing resolution
    - Authoritative sources are missing on key points
-   - At least one remaining query has "High" potential value
-   - There are unexecuted queries that target missing aspects
+   - At least one remaining query has high potential value
 
 2. STOP_RESEARCH when:
-   - Coverage Score exceeds 80%
-   - Authority Score exceeds 70%
-   - Relevance Score exceeds 75%
    - All key aspects have been addressed by authoritative sources
-   - Remaining queries would likely yield only redundant information
+   - Results provide consistent, relevant guidance
+   - Remaining queries would likely yield redundant information
    - No remaining queries exist (research is naturally complete)
-
-# JUDGMENT EXAMPLES
-
-## Examples Where Research Should CONTINUE:
-1. Only 2 of 4 key aspects have been addressed (50% Coverage Score)
-2. Information found but not from authoritative sources (Low Authority Score)
-3. Contradictory information found that needs resolution
-4. Remaining queries target databases with highly relevant information
-5. Only general information found, but specific details still needed
-
-## Examples Where Research Should STOP:
-1. All key aspects addressed with information from authoritative sources
-2. Multiple authoritative sources provide consistent guidance
-3. Remaining queries would only search less relevant databases
-4. Sufficient specific information exists to provide a comprehensive answer
-5. No remaining queries exist (research is naturally complete)
-
-# RESEARCH SUMMARIZATION
-You MUST provide a final research summary in TWO scenarios:
-1. When NO REMAINING QUERIES exist (research is naturally complete)
-2. When you choose to STOP_RESEARCH early
-
-Your summary should:
-1. Act as a guide to the research results, NOT a regurgitation of information
-2. Point the user to the most relevant database queries containing the answers
-3. Highlight any differences, inconsistencies, or conflicts between database results
-4. Note important considerations when interpreting the results 
-5. Explain the overall research process and why certain queries were valuable
-6. NOT repeat information from the databases, but direct users where to look
-7. Identify which queries were most productive and which were less helpful
-8. Be comprehensive yet concise (typically 300-600 words)
 
 # OUTPUT REQUIREMENTS
 - Submit your judgment using ONLY the provided tool
 - Choose either "continue_research" or "stop_research"
-- Provide detailed reasoning explaining your decision
-- Reference specific findings from completed queries
-- Explain expected value from remaining queries (if continuing)
-- Include a research summary ONLY when stopping research
+- Provide concise reasoning for your decision
+- For continue_research: 
+  * Explain ONLY the value expected from remaining queries
+  * DO NOT generate a summary at all (to save tokens)
+- For stop_research: Include a comprehensive research summary that:
+  * Acts as a guide to the results (don't repeat database content)
+  * Points to the most relevant queries containing answers
+  * Highlights key findings, inconsistencies, and important considerations
+  * Identifies which queries were most productive
+
+IMPORTANT: ONLY include a research summary when choosing stop_research. When choosing continue_research, leave the summary field empty.
 """
 
 # Generate system prompt with context from global_prompts
