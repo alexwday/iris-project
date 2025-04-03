@@ -334,6 +334,7 @@ def model(
                                 debug_data["tokens"]["stages"]["database_query"]["total"] += token_usage["total_tokens"]
                                 debug_data["tokens"]["stages"]["database_query"]["cost"] += token_usage["cost"]
                                 
+                                # Make sure we store only serializable data
                                 debug_data["decisions"].append({
                                     "stage": "database_query",
                                     "decision": {
@@ -349,6 +350,11 @@ def model(
                                         "cost": token_usage["cost"]
                                     }
                                 })
+                                
+                                # Store only serializable data for current_query results
+                                # We don't want to store the actual generator in the debug data
+                                if inspect.isgenerator(results):
+                                    current_query["results"] = "<generator>"
                                 
                                 # Reset token usage for next stage
                                 reset_token_usage()
