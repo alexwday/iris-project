@@ -20,6 +20,7 @@ Dependencies:
 """
 
 import json
+import inspect
 from datetime import datetime
 from ..global_prompts.database_statement import get_available_databases
 from ..llm_connectors.rbc_openai import get_token_usage, reset_token_usage
@@ -352,8 +353,16 @@ def model(
                                 # Reset token usage for next stage
                                 reset_token_usage()
                             
-                            # Yield result directly with ending horizontal rule
-                            yield f"{results}\n\n---"
+                            # Handle streaming results (generators) or direct string results
+                            if inspect.isgenerator(results):
+                                # For generator results, iterate and yield each chunk
+                                for chunk in results:
+                                    yield chunk
+                                # Add horizontal rule after all chunks
+                                yield "\n\n---"
+                            else:
+                                # For string results, yield directly with ending horizontal rule
+                                yield f"{results}\n\n---"
                             
                         except Exception as e:
                             logger.error(f"Error executing query: {str(e)}")

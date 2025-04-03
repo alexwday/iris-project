@@ -11,11 +11,18 @@ Functions:
 Dependencies:
     - logging
     - database subagent modules
+    - typing (for type hints)
 """
 
 import logging
 import importlib
+import inspect
+from typing import Union, Generator, Any, TypeVar, cast, Optional
 from ...global_prompts.database_statement import get_available_databases
+
+# Define a response type for database queries
+DatabaseResponse = Union[str, Generator[str, None, None]]
+T = TypeVar('T')
 
 # Get available databases from the central configuration
 AVAILABLE_DATABASES = get_available_databases()
@@ -23,7 +30,7 @@ AVAILABLE_DATABASES = get_available_databases()
 # Get module logger
 logger = logging.getLogger(__name__)
 
-def route_database_query(database, query, token=None):
+def route_database_query(database: str, query: str, token: Optional[str] = None) -> DatabaseResponse:
     """
     Routes a database query to the appropriate subagent module.
     
@@ -33,7 +40,8 @@ def route_database_query(database, query, token=None):
         token (str, optional): Authentication token for API access
             
     Returns:
-        str: Query results from the selected database
+        DatabaseResponse: Query results from the selected database
+        either as a full string or a streaming generator that yields chunks
         
     Raises:
         ValueError: If the database is not recognized
@@ -55,7 +63,15 @@ def route_database_query(database, query, token=None):
         logger.debug(f"Successfully imported module: {module_path}")
         
         # Call the query_database function from the module
-        return subagent_module.query_database(query, token)
+        result = subagent_module.query_database(query, token)
+        
+        # Check if result is a generator (for streaming)
+        if inspect.isgenerator(result):
+            # For streaming results (like from internal_wiki), return the generator
+            return result
+        else:
+            # For non-streaming results (legacy subagents), return the string directly
+            return result
     
     except Exception as e:
         logger.error(f"Error routing database query: {str(e)}")

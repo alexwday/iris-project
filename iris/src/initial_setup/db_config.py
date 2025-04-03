@@ -52,10 +52,9 @@ def connect_to_db(env: str = "local") -> Optional[psycopg2.extensions.connection
     """
     db_params = get_db_params(env)
     try:
-        print(f"Connecting to {db_params['dbname']} at {db_params['host']}:{db_params['port']}...")
+        # Connect silently without printing messages
         conn = psycopg2.connect(**db_params)
         conn.autocommit = False
-        print("Connected successfully! 🎉")
         return conn
     except Exception as e:
         print(f"Error connecting to database: {e}")
