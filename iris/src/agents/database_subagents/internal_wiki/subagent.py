@@ -167,6 +167,10 @@ def fetch_document_content(doc_ids: List[str]) -> List[Dict[str, Any]]:
             
             for row in cur.fetchall():
                 doc_names[row[0]] = row[1]
+                logger.info(f"Found document: ID={row[0]}, Name={row[1]}")
+                
+            if not doc_names:
+                logger.warning(f"No documents found for IDs: {doc_ids}")
         
         # Then, for each document, get its content sections
         for doc_id, doc_name in doc_names.items():

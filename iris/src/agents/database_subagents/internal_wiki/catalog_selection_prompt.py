@@ -43,8 +43,8 @@ Each catalog entry contains:
 # OUTPUT
 You must respond with ONLY the IDs of the most relevant documents. 
 Return a maximum of 5 document IDs.
-Your response must be formatted as a JSON array of document IDs, for example:
-["doc_123", "doc_456", "doc_789"]
+Your response must be formatted as a JSON array of document IDs as strings, for example:
+["1", "2", "3"]
 
 If no documents seem relevant, return an empty array: []
 """
