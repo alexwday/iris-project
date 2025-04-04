@@ -745,7 +745,7 @@ def format_remaining_queries(remaining_queries):
         db_name = query['database']
         # Get the display name from the database configuration
         db_display_name = available_databases.get(db_name, {}).get("name", db_name)
-        message += f"**{i}.** {db_display_name}: {query['query']}\n"
+        message += f"**{i}.** {db_display_name}: {query['query']}\n\n" # Add second newline
     
     message += "\nPlease let me know if you would like to continue with these remaining database queries in a new search."
     return message
