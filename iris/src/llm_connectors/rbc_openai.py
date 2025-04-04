@@ -19,7 +19,7 @@ Dependencies:
 
 import logging
 import time
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 from openai import OpenAI
 from ..chat_model.model_settings import (
     IS_RBC_ENV,
@@ -66,56 +66,87 @@ def calculate_cost(prompt_tokens: int, completion_tokens: int,
     return prompt_cost + completion_cost
 
 
-def log_usage_statistics(response, prompt_token_cost, completion_token_cost):
+def log_usage_statistics(response, prompt_token_cost, completion_token_cost, database_name: Optional[str] = None):
     """
     Log token usage and cost statistics from the model response.
+
+    Updates both the global token counter and, if provided, the database-specific counter.
 
     Args:
         response: Model response object with usage attribute
         prompt_token_cost (float): Cost per 1K prompt tokens in USD
         completion_token_cost (float): Cost per 1K completion tokens in USD
+        database_name (str, optional): Identifier for database-specific tracking. Defaults to None.
 
     Returns:
         dict: Usage statistics including token counts and costs
     """
     global _token_usage
     
-    if hasattr(response, "usage"):
-        completion_tokens = response.usage.completion_tokens
-        prompt_tokens = response.usage.prompt_tokens
-        total_tokens = response.usage.total_tokens
-
-        # Calculate costs
-        total_cost = calculate_cost(
-            prompt_tokens, completion_tokens, prompt_token_cost, completion_token_cost
-        )
-        prompt_cost = (prompt_tokens / 1000) * prompt_token_cost
-        completion_cost = (completion_tokens / 1000) * completion_token_cost
-
-        logger.info(
-            f"Token usage - Completion: {completion_tokens} (${completion_cost:.4f}), "
-            f"Prompt: {prompt_tokens} (${prompt_cost:.4f}), "
-            f"Total: {total_tokens} tokens, Total Cost: ${total_cost:.4f}"
-        )
+    # Ensure response and usage attribute exist
+    if not response or not hasattr(response, "usage") or not response.usage:
+        logger.warning("Attempted to log usage statistics but response or usage attribute was missing/None.")
+        return None
         
-        # Update global token usage tracker
-        _token_usage["prompt_tokens"] += prompt_tokens
-        _token_usage["completion_tokens"] += completion_tokens
-        _token_usage["total_tokens"] += total_tokens
-        _token_usage["cost"] += total_cost
+    # Safely access usage attributes
+    completion_tokens = getattr(response.usage, 'completion_tokens', 0)
+    prompt_tokens = getattr(response.usage, 'prompt_tokens', 0)
+    total_tokens = getattr(response.usage, 'total_tokens', 0)
+    
+    # Check if tokens are None (which can happen) and default to 0
+    completion_tokens = completion_tokens if completion_tokens is not None else 0
+    prompt_tokens = prompt_tokens if prompt_tokens is not None else 0
+    total_tokens = total_tokens if total_tokens is not None else 0
 
-        return {
-            "completion_tokens": completion_tokens,
-            "prompt_tokens": prompt_tokens,
-            "total_tokens": total_tokens,
-            "cost": total_cost
-        }
+    # Calculate costs
+    total_cost = calculate_cost(
+        prompt_tokens, completion_tokens, prompt_token_cost, completion_token_cost
+    )
+    prompt_cost = (prompt_tokens / 1000) * prompt_token_cost
+    completion_cost = (completion_tokens / 1000) * completion_token_cost
 
-    return None
+    logger.info(
+        f"Token usage - Completion: {completion_tokens} (${completion_cost:.4f}), "
+        f"Prompt: {prompt_tokens} (${prompt_cost:.4f}), "
+        f"Total: {total_tokens} tokens, Total Cost: ${total_cost:.4f}"
+        f"{f' (Database: {database_name})' if database_name else ''}"
+    )
+    
+    # Update global token usage tracker
+    _token_usage["prompt_tokens"] += prompt_tokens
+    _token_usage["completion_tokens"] += completion_tokens
+    _token_usage["total_tokens"] += total_tokens
+    _token_usage["cost"] += total_cost
+    
+    # Update database-specific token usage if database_name is provided
+    if database_name:
+        try:
+            # Import dynamically to avoid circular dependency issues at module load time
+            from ..agents.database_subagents.database_router import update_database_token_usage
+            
+            token_diff = {
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "total_tokens": total_tokens,
+                "cost": total_cost
+            }
+            update_database_token_usage(database_name, token_diff)
+            logger.info(f"Updated token usage for database '{database_name}': {total_tokens} tokens")
+        except ImportError:
+            logger.error("Could not import update_database_token_usage for database-specific tracking.")
+        except Exception as e:
+            logger.error(f"Error updating database-specific token usage for '{database_name}': {str(e)}")
+
+    return {
+        "completion_tokens": completion_tokens,
+        "prompt_tokens": prompt_tokens,
+        "total_tokens": total_tokens,
+        "cost": total_cost
+    }
 
 
 def call_llm(oauth_token: str, prompt_token_cost: float = 0,
-             completion_token_cost: float = 0, **params) -> Any:
+             completion_token_cost: float = 0, database_name: Optional[str] = None, **params) -> Any:
     """
     Makes a call to the OpenAI API with the given parameters.
 
@@ -128,6 +159,7 @@ def call_llm(oauth_token: str, prompt_token_cost: float = 0,
             - In local environment: OpenAI API key
         prompt_token_cost (float): Cost per 1K prompt tokens in USD
         completion_token_cost (float): Cost per 1K completion tokens in USD
+        database_name (str, optional): Identifier for database-specific tracking. Defaults to None.
         **params: Parameters to pass to the OpenAI API
             Required parameters:
                 - model (str): The model to use
@@ -205,9 +237,9 @@ def call_llm(oauth_token: str, prompt_token_cost: float = 0,
             elapsed_time = time.time() - attempt_start
             logger.info(f"Received response in {elapsed_time:.2f} seconds")
 
-            # Log usage for non-streaming responses
+            # Log usage for non-streaming responses, passing database_name if provided
             if not is_streaming and prompt_token_cost and completion_token_cost:
-                log_usage_statistics(response, prompt_token_cost, completion_token_cost)
+                log_usage_statistics(response, prompt_token_cost, completion_token_cost, database_name=database_name)
 
             return response
 

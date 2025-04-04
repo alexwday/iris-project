@@ -240,6 +240,10 @@ def get_completion(capability: str, prompt: str, max_tokens: int = 1000,
     if stream:
         # Define a generator to yield chunks
         def response_generator():
+            # Track usage before streaming starts
+            from ....llm_connectors.rbc_openai import get_token_usage, log_usage_statistics
+            before_usage = get_token_usage()
+            
             response = call_llm(
                 oauth_token=token or "placeholder_token",
                 prompt_token_cost=prompt_cost,
@@ -251,12 +255,50 @@ def get_completion(capability: str, prompt: str, max_tokens: int = 1000,
                 stream=True  # Enable streaming
             )
             
+            # Flag to check if we've seen a usage event
+            has_usage = False
+            
             # Iterate through streaming response chunks
             for chunk in response:
+                # Check for usage information in the stream
+                if hasattr(chunk, 'usage'):
+                    has_usage = True
+                    # Log the usage statistics directly from the stream
+                    log_usage_statistics(chunk, prompt_cost, completion_cost)
+                
+                # Extract content from delta
                 if hasattr(chunk, 'choices') and chunk.choices:
                     delta = chunk.choices[0].delta
                     if hasattr(delta, 'content') and delta.content:
                         yield delta.content
+            
+            # After all chunks processed, check if usage has been updated
+            try:
+                after_usage = get_token_usage()
+                
+                # Ensure we have valid token usage data
+                if before_usage and after_usage and all(key in before_usage and key in after_usage for key in ["prompt_tokens", "completion_tokens", "total_tokens", "cost"]):
+                    if after_usage["total_tokens"] > before_usage["total_tokens"]:
+                        logger.info(f"Streaming response completed with {after_usage['total_tokens'] - before_usage['total_tokens']} tokens")
+                        
+                        # Update database-specific token usage
+                        if not has_usage:  # Only do this if we didn't see explicit usage events
+                            from ...database_subagents.database_router import update_database_token_usage
+                            token_diff = {
+                                "prompt_tokens": after_usage["prompt_tokens"] - before_usage["prompt_tokens"],
+                                "completion_tokens": after_usage["completion_tokens"] - before_usage["completion_tokens"],
+                                "total_tokens": after_usage["total_tokens"] - before_usage["total_tokens"],
+                                "cost": after_usage["cost"] - before_usage["cost"]
+                            }
+                            # We use the database name as a string directly to match the name in the router
+                            database_name = "internal_icfr"
+                            update_database_token_usage(database_name, token_diff)
+                            logger.info(f"Updated token usage for {database_name}: {token_diff['total_tokens']} tokens")
+                else:
+                    logger.warning("Unable to calculate token usage in get_completion: incomplete token usage data")
+            except Exception as e:
+                logger.warning(f"Error updating token usage in streaming response: {str(e)}")
+
             
         response_value = response_generator()
         return response_value
@@ -413,10 +455,19 @@ def query_database(query: str, token: Optional[str] = None) -> Union[str, Genera
     """
     logger.info(f"Querying Internal ICFR database: {query}")
     
+    # Import directly for token tracking
+    from ....llm_connectors.rbc_openai import get_token_usage, log_usage_statistics
+    
     # This outer function always returns a generator for streaming
     # model.py expectation is to get chunks it can yield
     def response_generator():
         try:
+            # Get model configurations for token cost tracking
+            from ....chat_model.model_settings import get_model_config
+            model_config = get_model_config("large")  # Use large model config for costs
+            prompt_cost = model_config["prompt_token_cost"]
+            completion_cost = model_config["completion_token_cost"]
+            
             # Start without a header, let the content speak for itself
             # No header to yield here
             
@@ -443,9 +494,42 @@ def query_database(query: str, token: Optional[str] = None) -> Union[str, Genera
             # Step 4: Synthesize a response from the document content (streaming)
             response_stream = synthesize_response(query, documents, token, stream=True)
             
+            # Track usage events and content separately
+            latest_usage = get_token_usage()
+            
             # Pass through all chunks from the synthesize_response generator
             for chunk in response_stream:
+                # Check if token usage has changed since last check
+                current_usage = get_token_usage()
+                if (current_usage["total_tokens"] > latest_usage["total_tokens"]):
+                    # Log the change in usage
+                    logger.info(f"Token usage updated during streaming: {current_usage['total_tokens'] - latest_usage['total_tokens']} new tokens")
+                    latest_usage = current_usage
+                
                 yield chunk
+            
+            # After all chunks are processed, get final token usage and update database-specific tracking
+            try:
+                from ...database_subagents.database_router import update_database_token_usage
+                final_usage = get_token_usage()
+                
+                # Ensure we have valid token usage data before calculating differences
+                if final_usage and latest_usage and all(key in final_usage and key in latest_usage for key in ["prompt_tokens", "completion_tokens", "total_tokens", "cost"]):
+                    token_diff = {
+                        "prompt_tokens": final_usage["prompt_tokens"] - latest_usage["prompt_tokens"],
+                        "completion_tokens": final_usage["completion_tokens"] - latest_usage["completion_tokens"],
+                        "total_tokens": final_usage["total_tokens"] - latest_usage["total_tokens"],
+                        "cost": final_usage["cost"] - latest_usage["cost"]
+                    }
+                    
+                    # If we had token usage that wasn't captured, update it
+                    if token_diff["total_tokens"] > 0:
+                        update_database_token_usage("internal_icfr", token_diff)
+                        logger.info(f"Final ICFR database token usage update: {token_diff['total_tokens']} tokens, Cost: ${token_diff['cost']:.4f}")
+                else:
+                    logger.warning("Unable to calculate token difference: incomplete token usage data")
+            except Exception as e:
+                logger.warning(f"Error updating token usage: {str(e)}")
                 
         except Exception as e:
             error_msg = f"Error querying Internal ICFR database: {str(e)}"

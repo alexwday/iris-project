@@ -207,7 +207,7 @@ def fetch_document_content(doc_ids: List[str]) -> List[Dict[str, Any]]:
 
 def get_completion(capability: str, prompt: str, max_tokens: int = 1000,
                   temperature: float = 0.7, token: Optional[str] = None, 
-                  stream: bool = False) -> Union[str, Generator[str, None, None]]:
+                  stream: bool = False, database_name: Optional[str] = None) -> Union[str, Generator[str, None, None]]:
     """
     Helper function to get a completion from the LLM, either as full response or streaming chunks.
     
@@ -218,6 +218,7 @@ def get_completion(capability: str, prompt: str, max_tokens: int = 1000,
         temperature (float, optional): Temperature parameter. Defaults to 0.7.
         token (str, optional): OAuth token for API access. Defaults to None.
         stream (bool, optional): Whether to stream the response. Defaults to False.
+        database_name (str, optional): Identifier for database-specific tracking. Defaults to None.
         
     Returns:
         Union[str, Generator[str, None, None]]: The model's response as string or generator of chunks
@@ -240,6 +241,8 @@ def get_completion(capability: str, prompt: str, max_tokens: int = 1000,
     if stream:
         # Define a generator to yield chunks
         def response_generator():
+            from ....llm_connectors.rbc_openai import log_usage_statistics
+            
             response = call_llm(
                 oauth_token=token or "placeholder_token",
                 prompt_token_cost=prompt_cost,
@@ -248,15 +251,23 @@ def get_completion(capability: str, prompt: str, max_tokens: int = 1000,
                 messages=messages,
                 max_tokens=max_tokens,
                 temperature=temperature,
-                stream=True  # Enable streaming
+                stream=True,  # Enable streaming
+                database_name=database_name # Pass database name for tracking
             )
             
             # Iterate through streaming response chunks
             for chunk in response:
+                # Only log usage if the usage attribute exists in the chunk (usually the last one)
+                if hasattr(chunk, 'usage') and chunk.usage:
+                    log_usage_statistics(chunk, prompt_cost, completion_cost, database_name=database_name)
+                
+                # Extract content from delta
                 if hasattr(chunk, 'choices') and chunk.choices:
                     delta = chunk.choices[0].delta
                     if hasattr(delta, 'content') and delta.content:
                         yield delta.content
+            
+            # No need for post-stream usage calculation here, log_usage_statistics handles it
             
         response_value = response_generator()
         return response_value
@@ -271,16 +282,30 @@ def get_completion(capability: str, prompt: str, max_tokens: int = 1000,
             messages=messages,
             max_tokens=max_tokens,
             temperature=temperature,
-            stream=False
+            stream=False,
+            database_name=database_name # Pass database name for tracking
         )
         
-        # Extract the text content from the response
-        response_value = response.choices[0].message.content.strip()
+        # Extract the text content from the response with error handling
+        response_value = ""
+        if response and hasattr(response, 'choices') and response.choices:
+            message = response.choices[0].message
+            if message and hasattr(message, 'content'):
+                response_value = message.content.strip() if message.content else ""
+            else:
+                logger.warning("LLM response message or content attribute missing in non-streaming call.")
+        else:
+            logger.error("LLM response object or choices attribute missing/empty in non-streaming call.")
+            # Optionally raise an error or return a default message
+            # raise ValueError("Failed to get valid response from LLM")
+            response_value = "Error: Could not retrieve response content."
+            
+        # Usage is logged by call_llm -> log_usage_statistics for non-streaming
         return response_value
 
 
 def select_relevant_documents(query: str, catalog: List[Dict[str, Any]], 
-                              token: Optional[str] = None) -> List[str]:
+                              token: Optional[str] = None, database_name: str = "internal_wiki") -> List[str]:
     """
     Use an LLM to select the most relevant documents from the catalog based on the query.
     
@@ -309,10 +334,11 @@ def select_relevant_documents(query: str, catalog: List[Dict[str, Any]],
             prompt=selection_prompt,
             max_tokens=200,
             token=token,
-            stream=False  # Explicitly use non-streaming
+            stream=False,  # Explicitly use non-streaming
+            database_name=database_name # Pass database name
         )
         
-        # Cast response to string for mypy
+        # Cast response to string for mypy - response is now guaranteed to be string or error message
         response_str = cast(str, response)
         
         # Parse the response to extract document IDs
@@ -338,7 +364,7 @@ def select_relevant_documents(query: str, catalog: List[Dict[str, Any]],
 
 def synthesize_response(query: str, documents: List[Dict[str, Any]], 
                        token: Optional[str] = None,
-                       stream: bool = False) -> Union[str, Generator[str, None, None]]:
+                       stream: bool = False, database_name: str = "internal_wiki") -> Union[str, Generator[str, None, None]]:
     """
     Use an LLM to synthesize a response from the document content.
     
@@ -377,7 +403,8 @@ def synthesize_response(query: str, documents: List[Dict[str, Any]],
             max_tokens=1500,
             temperature=0.3,  # Lower temperature for more focused synthesis
             token=token,
-            stream=stream  # Pass through the stream parameter
+            stream=stream,  # Pass through the stream parameter
+            database_name=database_name # Pass database name
         )
     
     except Exception as e:
@@ -415,8 +442,15 @@ def query_database(query: str, token: Optional[str] = None) -> Union[str, Genera
     
     # This outer function always returns a generator for streaming
     # model.py expectation is to get chunks it can yield
+    # No need for local token tracking imports or calculations here anymore
     def response_generator():
         try:
+            # Get model configurations for token cost tracking
+            from ....chat_model.model_settings import get_model_config
+            model_config = get_model_config("large")  # Use large model config for costs
+            prompt_cost = model_config["prompt_token_cost"]
+            completion_cost = model_config["completion_token_cost"]
+            
             # Start without a header, let the content speak for itself
             # No header to yield here
             
@@ -429,7 +463,8 @@ def query_database(query: str, token: Optional[str] = None) -> Union[str, Genera
                 return
             
             # Step 2: Select relevant documents using LLM (non-streaming for tool calls)
-            doc_ids = select_relevant_documents(query, catalog, token)
+            # Pass database name for tracking
+            doc_ids = select_relevant_documents(query, catalog, token, database_name="internal_wiki")
             logger.info(f"Selected {len(doc_ids)} relevant documents")
             
             if not doc_ids:
@@ -441,11 +476,15 @@ def query_database(query: str, token: Optional[str] = None) -> Union[str, Genera
             logger.info(f"Retrieved content for {len(documents)} documents")
             
             # Step 4: Synthesize a response from the document content (streaming)
-            response_stream = synthesize_response(query, documents, token, stream=True)
+            # Pass database name for tracking
+            response_stream = synthesize_response(query, documents, token, stream=True, database_name="internal_wiki")
             
             # Pass through all chunks from the synthesize_response generator
+            # Usage is handled within get_completion -> log_usage_statistics
             for chunk in response_stream:
                 yield chunk
+            
+            # No need for post-stream usage calculation here
                 
         except Exception as e:
             error_msg = f"Error querying Internal Wiki database: {str(e)}"

@@ -24,6 +24,7 @@ import inspect
 from datetime import datetime
 from ..global_prompts.database_statement import get_available_databases
 from ..llm_connectors.rbc_openai import get_token_usage, reset_token_usage
+from ..agents.database_subagents.database_router import get_database_token_usage
 
 
 def format_usage_summary(token_usage, start_time=None):
@@ -45,6 +46,9 @@ def format_usage_summary(token_usage, start_time=None):
         start_dt = dt.fromisoformat(start_time)
         duration = (end_dt - start_dt).total_seconds()
     
+    # Get database-specific token usage
+    db_token_usage = get_database_token_usage()
+    
     # Format the usage summary
     usage_summary = "\n\n---\n"
     usage_summary += "## Usage Statistics\n\n"
@@ -54,6 +58,17 @@ def format_usage_summary(token_usage, start_time=None):
     usage_summary += f"- Cost: ${token_usage['cost']:.6f}\n"
     if duration:
         usage_summary += f"- Time: {duration:.2f} seconds\n"
+    
+    # Add database token usage if there is any
+    if db_token_usage:
+        usage_summary += "\n### Database Token Usage\n\n"
+        for db_name, usage in db_token_usage.items():
+            db_display_name = get_available_databases().get(db_name, {}).get("name", db_name)
+            usage_summary += f"**{db_display_name}**\n"
+            usage_summary += f"- Input tokens: {usage['prompt_tokens']}\n"
+            usage_summary += f"- Output tokens: {usage['completion_tokens']}\n"
+            usage_summary += f"- Total tokens: {usage['total_tokens']}\n"
+            usage_summary += f"- Cost: ${usage['cost']:.6f}\n\n"
     
     return usage_summary
 
@@ -93,7 +108,8 @@ def model(
                 "judge": {"prompt": 0, "completion": 0, "total": 0, "cost": 0.0},
                 "database_query": {"prompt": 0, "completion": 0, "total": 0, "cost": 0.0},
                 "summary": {"prompt": 0, "completion": 0, "total": 0, "cost": 0.0}
-            }
+            },
+            "databases": {}  # This will be filled with per-database usage data
         },
         "cost": 0.0,
         "start_timestamp": datetime.now().isoformat()
@@ -182,6 +198,11 @@ def model(
                     
                     # Get the start timestamp from debug data if available
                     start_time = debug_data["start_timestamp"] if debug_data else None
+                    
+                    # If debug data exists, update it with the latest database token usage
+                    if debug_mode and debug_data is not None:
+                        db_token_usage = get_database_token_usage()
+                        debug_data["tokens"]["databases"] = db_token_usage.copy()
                     
                     # Format and yield usage summary
                     usage_summary = format_usage_summary(token_usage, start_time)
@@ -319,45 +340,18 @@ def model(
                         try:
                             # Execute database query and yield result directly
                             results = route_database_query(db_name, current_query["query"], token)
-                            current_query["results"] = results
-                            query_results.append(results)
+                            # Store the original result type before potentially consuming the generator
+                            results_type = str(type(results).__name__)
                             
-                            # Record database query result in debug data if debug mode is enabled
-                            if debug_mode and debug_data is not None:
-                                # Get current token usage after database query
-                                token_usage = get_token_usage()
-                                
-                                # Calculate and store per-stage token usage
-                                # For database queries, we accumulate since there might be multiple
-                                debug_data["tokens"]["stages"]["database_query"]["prompt"] += token_usage["prompt_tokens"]
-                                debug_data["tokens"]["stages"]["database_query"]["completion"] += token_usage["completion_tokens"]
-                                debug_data["tokens"]["stages"]["database_query"]["total"] += token_usage["total_tokens"]
-                                debug_data["tokens"]["stages"]["database_query"]["cost"] += token_usage["cost"]
-                                
-                                # Make sure we store only serializable data
-                                debug_data["decisions"].append({
-                                    "stage": "database_query",
-                                    "decision": {
-                                        "database": db_name,
-                                        "query": current_query["query"],
-                                        "results_type": str(type(results).__name__) 
-                                    },
-                                    "timestamp": datetime.now().isoformat(),
-                                    "token_usage": {
-                                        "prompt": token_usage["prompt_tokens"],
-                                        "completion": token_usage["completion_tokens"],
-                                        "total": token_usage["total_tokens"],
-                                        "cost": token_usage["cost"]
-                                    }
-                                })
-                                
-                                # Store only serializable data for current_query results
-                                # We don't want to store the actual generator in the debug data
-                                if inspect.isgenerator(results):
-                                    current_query["results"] = "<generator>"
-                                
-                                # Reset token usage for next stage
-                                reset_token_usage()
+                            # Store placeholder for results in the query plan if it's a generator
+                            if inspect.isgenerator(results):
+                                current_query["results"] = "<generator>"
+                            else:
+                                current_query["results"] = results # Store direct string result
+                            
+                            query_results.append(results) # Keep the actual result (generator or string) for processing
+                            
+                            # --- Token usage capture moved after result processing ---
                             
                             # Handle streaming results (generators) or direct string results
                             if inspect.isgenerator(results):
@@ -378,6 +372,38 @@ def model(
                             else:
                                 # For string results, yield directly with ending horizontal rule
                                 yield f"{results}\n\n---"
+
+                            # --- Capture token usage AFTER processing results (stream consumed) ---
+                            if debug_mode and debug_data is not None:
+                                # Get token usage *after* the database query stream is finished
+                                token_usage = get_token_usage()
+                                
+                                # Calculate and store per-stage token usage
+                                # For database queries, we accumulate since there might be multiple
+                                debug_data["tokens"]["stages"]["database_query"]["prompt"] += token_usage["prompt_tokens"]
+                                debug_data["tokens"]["stages"]["database_query"]["completion"] += token_usage["completion_tokens"]
+                                debug_data["tokens"]["stages"]["database_query"]["total"] += token_usage["total_tokens"]
+                                debug_data["tokens"]["stages"]["database_query"]["cost"] += token_usage["cost"]
+                                
+                                # Add decision entry for this specific query
+                                debug_data["decisions"].append({
+                                    "stage": "database_query",
+                                    "decision": {
+                                        "database": db_name,
+                                        "query": current_query["query"],
+                                        "results_type": results_type # Use the stored type
+                                    },
+                                    "timestamp": datetime.now().isoformat(),
+                                    "token_usage": {
+                                        "prompt": token_usage["prompt_tokens"],
+                                        "completion": token_usage["completion_tokens"],
+                                        "total": token_usage["total_tokens"],
+                                        "cost": token_usage["cost"]
+                                    }
+                                })
+                                
+                                # Reset token usage *after* logging it for this stage
+                                reset_token_usage()
                             
                         except Exception as e:
                             logger.error(f"Error executing query: {str(e)}")
@@ -429,6 +455,12 @@ def model(
                             continue_research = (judgment["action"] == "continue_research")
                             
                             if not continue_research:
+                                # Collect database token usage after all queries are processed
+                                if debug_mode and debug_data is not None:
+                                    # Get the latest database token usage information
+                                    db_token_usage = get_database_token_usage()
+                                    debug_data["tokens"]["databases"] = db_token_usage.copy()
+                                
                                 # Generate a streaming summary when stopping early with improved formatting
                                 yield "\n## 📊 Research Summary\n"
                                 
@@ -497,23 +529,29 @@ def model(
                     
                     # When naturally completing all queries, stream the final research summary
                     if not remaining_queries and completed_queries:
+                        # Collect database token usage after all queries are complete
+                        if debug_mode and debug_data is not None:
+                            # Get the latest database token usage information
+                            db_token_usage = get_database_token_usage()
+                            debug_data["tokens"]["databases"] = db_token_usage.copy()
+                            
                         # Yield a header for the research summary with improved formatting
                         yield "\n## 📊 Research Summary\n"
+                    
+                    # Record start of streaming summary in debug data if debug mode is enabled
+                    if debug_mode and debug_data is not None:
+                        # Reset token usage for streaming summary
+                        reset_token_usage()
                         
-                        # Record start of streaming summary in debug data if debug mode is enabled
-                        if debug_mode and debug_data is not None:
-                            # Reset token usage for streaming summary
-                            reset_token_usage()
-                            
-                            # Add a decision entry for summary start
-                            debug_data["decisions"].append({
-                                "stage": "summary",
-                                "decision": {
-                                    "action": "start_streaming_summary",
-                                    "completed_queries": len(completed_queries)
-                                },
-                                "timestamp": datetime.now().isoformat()
-                            })
+                        # Add a decision entry for summary start
+                        debug_data["decisions"].append({
+                            "stage": "summary",
+                            "decision": {
+                                "action": "start_streaming_summary",
+                                "completed_queries": len(completed_queries)
+                            },
+                            "timestamp": datetime.now().isoformat()
+                        })
                         
                         # Get streaming summary from judge agent
                         for summary_chunk in generate_streaming_summary(
@@ -567,6 +605,11 @@ def model(
                         # Get the start timestamp from debug data if available
                         start_time = debug_data["start_timestamp"] if debug_data else None
                         
+                        # If debug data exists, update it with the latest database token usage
+                        if debug_mode and debug_data is not None:
+                            db_token_usage = get_database_token_usage()
+                            debug_data["tokens"]["databases"] = db_token_usage.copy()
+                        
                         # Format and yield usage summary
                         usage_summary = format_usage_summary(token_usage, start_time)
                         yield usage_summary
@@ -609,6 +652,10 @@ def model(
             
             # Get any remaining token usage data from global counter
             token_usage = get_token_usage()
+            
+            # Ensure the latest database token usage is included
+            db_token_usage = get_database_token_usage()
+            debug_data["tokens"]["databases"] = db_token_usage.copy()
             
             # Update the overall token usage from the per-stage metrics
             total_prompt = 0

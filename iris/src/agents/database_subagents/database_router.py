@@ -17,9 +17,10 @@ Dependencies:
 import logging
 import importlib
 import inspect
-from typing import Union, Generator, Any, TypeVar, cast, Optional
+from typing import Union, Generator, Any, TypeVar, cast, Optional, Dict
 from ...global_prompts.database_statement import get_available_databases
 from ...chat_model.model_settings import ENVIRONMENT
+from ...llm_connectors.rbc_openai import get_token_usage, reset_token_usage
 
 # Define a response type for database queries
 DatabaseResponse = Union[str, Generator[str, None, None]]
@@ -30,6 +31,61 @@ AVAILABLE_DATABASES = get_available_databases()
 
 # Get module logger
 logger = logging.getLogger(__name__)
+
+# Global variable for database-specific token usage tracking
+_database_token_usage: Dict[str, Dict[str, Any]] = {}
+
+def get_database_token_usage() -> Dict[str, Dict[str, Any]]:
+    """
+    Get the current database token usage statistics.
+    
+    Returns:
+        Dict[str, Dict[str, Any]]: Token usage statistics per database
+    """
+    global _database_token_usage
+    return _database_token_usage.copy()
+
+def reset_database_token_usage(database=None):
+    """
+    Reset the database token usage statistics.
+    
+    Args:
+        database (str, optional): Database identifier to reset. 
+            If None, resets all databases. Defaults to None.
+    """
+    global _database_token_usage
+    if database:
+        if database in _database_token_usage:
+            _database_token_usage[database] = {
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+                "cost": 0.0
+            }
+    else:
+        _database_token_usage = {}
+
+def update_database_token_usage(database: str, token_diff: Dict[str, Any]):
+    """
+    Update token usage for a specific database.
+    
+    Args:
+        database (str): Database identifier
+        token_diff (Dict[str, Any]): Token usage difference to add
+    """
+    global _database_token_usage
+    if database not in _database_token_usage:
+        _database_token_usage[database] = {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "cost": 0.0
+        }
+    
+    _database_token_usage[database]["prompt_tokens"] += token_diff["prompt_tokens"]
+    _database_token_usage[database]["completion_tokens"] += token_diff["completion_tokens"]
+    _database_token_usage[database]["total_tokens"] += token_diff["total_tokens"]
+    _database_token_usage[database]["cost"] += token_diff["cost"]
 
 def route_database_query(database: str, query: str, token: Optional[str] = None) -> DatabaseResponse:
     """
@@ -55,6 +111,9 @@ def route_database_query(database: str, query: str, token: Optional[str] = None)
         logger.error(error_msg)
         raise ValueError(error_msg)
     
+    # Token usage is now handled centrally by log_usage_statistics in rbc_openai.py
+    # No need for before/after comparison here.
+    
     try:
         # Dynamically import the subagent module
         module_path = f".{database}.subagent"
@@ -66,11 +125,15 @@ def route_database_query(database: str, query: str, token: Optional[str] = None)
         # Call the query_database function from the module
         result = subagent_module.query_database(query, token)
         
+        # Token usage is now handled centrally by log_usage_statistics in rbc_openai.py
+        # which is called by the subagent's get_completion helper.
+        
         # Always return the result directly
         # The model.py file now handles all types of results appropriately
         return result
     
     except Exception as e:
-        logger.error(f"Error routing database query: {str(e)}")
+        # Log the error and re-raise
+        # Token usage during the failed call should have been logged by log_usage_statistics if possible
+        logger.error(f"Error routing database query to {database}: {str(e)}")
         raise
-
