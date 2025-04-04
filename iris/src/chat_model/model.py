@@ -564,9 +564,9 @@ def model(
                                     
                                     # Reset token usage for next stage
                                     reset_token_usage()
-                                
-                                yield "\n\n---"
-                                
+
+                                yield "\n\n---\n\n" # Add extra newline for markdown spacing
+
                                 # If stopping, provide information about remaining queries
                                 if remaining_queries:
                                     yield format_remaining_queries(remaining_queries)
