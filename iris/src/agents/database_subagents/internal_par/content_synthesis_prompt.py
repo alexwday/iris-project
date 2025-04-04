@@ -19,7 +19,7 @@ def get_content_synthesis_prompt(user_query: str, formatted_documents: str) -> s
         str: The formatted prompt for the LLM
     """
     prompt = f"""# TASK
-You are helping to synthesize information from multiple internal PAR (Process and Risk) documents
+You are helping to synthesize information from multiple internal PAR (Project Approval Request Guidance) documents
 to provide a comprehensive answer to a user query.
 
 ## User Query

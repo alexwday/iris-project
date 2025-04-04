@@ -15,82 +15,76 @@ logger = logging.getLogger(__name__)
 # Complete database configuration for all available databases
 AVAILABLE_DATABASES = {
     "internal_capm": {
-        "name": "Central Accounting Policy Manual",
-        "description": "Central Accounting Policy Manual - Contains formal accounting policies",
+        "name": "Corporate Accounting Policy Manuals",
+        "description": "Corporate Accounting Policy Manuals. Contains internal accounting policies published by the Accounting Policy Group in RBC. Flags IFRS/US GAAP differences.",
         "query_type": "semantic search",
         "content_type": "policies and procedures",
-        "use_when": "Needing official policy statements, procedures, or authoritative guidance"
+        "use_when": "Tier 1 (Official RBC Policy). Primary source for official policy statements. Check US GAAP flags. Corroborate with IASB for IFRS."
+    },
+     "internal_cheatsheet": { # Replaces internal_infographic based on user feedback
+        "name": "APG Cheat Sheet Infographics",
+        "description": "Summarized accounting guidance in one to two pages on specific limited topics. Internal RBC documentation.",
+        "query_type": "keyword search", # Assuming keyword based on previous value for cheatsheet/infographic
+        "content_type": "summarized guidance / infographics",
+        "use_when": "Tier 2 (Implementation Guidance). Use for quick visual summaries on limited topics."
     },
     "internal_wiki": {
-        "name": "Internal Wiki",
-        "description": "Internal wiki with practical examples and implementation guides",
+        "name": "APG Wiki Entries",
+        "description": "Contains accounting treatment conclusions for specific RBC transactions. Internal RBC documentation.",
         "query_type": "semantic search",
-        "content_type": "practical guides",
-        "use_when": "Seeking practical implementation guidance, examples, or informal advice"
+        "content_type": "RBC-specific conclusions / guides",
+        "use_when": "Tier 2 (Implementation Guidance). Use for RBC-specific issue conclusions."
     },
-    "internal_cheatsheet": {
-        "name": "Accounting Cheatsheets",
-        "description": "Quick reference guides and cheatsheets for accounting concepts",
-        "query_type": "keyword search",
-        "content_type": "quick references",
-        "use_when": "Looking for quick summaries or reference material"
-    },
-    "internal_memos": {
-        "name": "Technical Memos",
-        "description": "Technical memoranda on complex accounting issues",
+    "internal_memos": { # Renamed from internal_memo to match existing key
+        "name": "Internal Accounting Memos",
+        "description": "Internal accounting memos written by finance and approved by APG. Internal RBC documentation.",
         "query_type": "semantic search",
         "content_type": "technical analysis",
-        "use_when": "Researching complex or nuanced accounting interpretations"
+        "use_when": "Tier 2 (Implementation Guidance). Use for approved analysis on complex issues."
     },
     "internal_par": {
-        "name": "Process and Review Documentation",
-        "description": "Process and review documentation for accounting workflows",
+        "name": "Project Approval Request Guidance",
+        "description": "RBC internal Project Approval Requests Policy guidance and interpretations.",
         "query_type": "semantic search",
-        "content_type": "workflow documentation",
-        "use_when": "Understanding accounting process workflows and review requirements"
+        "content_type": "policy guidance / interpretations",
+        "use_when": "Tier 1 (Primary for its specific domain). Use for Project Approval Requests Policy questions."
     },
     "internal_icfr": {
-        "name": "Internal Controls Framework",
-        "description": "Documentation on internal controls over financial reporting",
+        "name": "Internal Control over Financial Reporting Policy",
+        "description": "Comprehensive guidelines for maintaining reliable financial reporting controls. Outlines approach for identifying, evaluating, documenting controls and management responsibilities.",
         "query_type": "semantic search",
         "content_type": "control documentation",
-        "use_when": "Researching internal controls, compliance requirements, or audit procedures"
+        "use_when": "Tier 1 (Primary for its specific domain). Use for researching financial control requirements, compliance, and data integrity."
     },
     "external_ey": {
-        "name": "EY Accounting Resources",
-        "description": "EY accounting resources, guides, and publications",
+        "name": "EY IFRS Guidance",
+        "description": "IFRS accounting guidance and interpretations published by EY. Includes IFRS disclosure requirement checklist.",
         "query_type": "semantic search",
         "content_type": "external guidance",
-        "use_when": "Seeking external auditor perspective or accounting firm guidance"
+        "use_when": "Tier 1 (External IFRS Guidance). Use for external firm perspective and disclosure checklists."
     },
     "external_kpmg": {
-        "name": "KPMG Accounting Resources",
-        "description": "KPMG accounting resources, guides, and publications",
+        "name": "KPMG IFRS Guidance",
+        "description": "IFRS accounting guidance and interpretations published by KPMG.",
         "query_type": "semantic search",
         "content_type": "external guidance",
-        "use_when": "Seeking external auditor perspective or accounting firm guidance"
+        "use_when": "Tier 1 (External IFRS Guidance). Use for external firm perspective."
     },
     "external_pwc": {
-        "name": "PwC Accounting Resources",
-        "description": "PwC accounting resources, guides, and publications",
+        "name": "PwC IFRS Guidance",
+        "description": "IFRS accounting guidance and interpretations published by PwC.",
         "query_type": "semantic search",
         "content_type": "external guidance",
-        "use_when": "Seeking external auditor perspective or accounting firm guidance"
+        "use_when": "Tier 1 (External IFRS Guidance). Use for external firm perspective."
     },
     "external_iasb": {
-        "name": "IASB Publications",
-        "description": "Official IASB publications, standards, and interpretations",
+        "name": "IASB Standards and Interpretations",
+        "description": "Official IFRS standards and IFRICs/SICs interpretations published by the International Accounting Standards Board. Includes main guidance, examples, and basis for conclusions.",
         "query_type": "semantic search",
         "content_type": "standards and interpretations",
-        "use_when": "Researching official accounting standards, interpretations, or basis for conclusions"
-    },
-    "internal_infographic": {
-        "name": "Accounting Infographics",
-        "description": "Visual infographics and diagrams explaining accounting concepts",
-        "query_type": "keyword search",
-        "content_type": "visual explanations",
-        "use_when": "Looking for visual explanations of processes or concepts"
+        "use_when": "Tier 1 (Official IFRS Standards). Use for official standard text, interpretations (IFRICs/SICs), and basis for conclusions."
     }
+    # Removed internal_infographic as it's covered by internal_cheatsheet
 }
 
 def get_database_statement() -> str:

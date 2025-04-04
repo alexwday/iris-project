@@ -85,19 +85,14 @@ Choose ONE of two options:
    - No remaining queries exist (research is naturally complete)
 
 # OUTPUT REQUIREMENTS
-- Submit your judgment using ONLY the provided tool
-- Choose either "continue_research" or "stop_research"
-- Provide concise reasoning for your decision
-- For continue_research: 
-  * Explain ONLY the value expected from remaining queries
-  * DO NOT generate a summary at all (to save tokens)
-- For stop_research: Include a comprehensive research summary that:
-  * Acts as a guide to the results (don't repeat database content)
-  * Points to the most relevant queries containing answers
-  * Highlights key findings, inconsistencies, and important considerations
-  * Identifies which queries were most productive
+- Submit your judgment using ONLY the provided tool.
+- Choose either "continue_research" or "stop_research".
+- Provide concise reasoning for your decision, focusing on the decision criteria.
+- For continue_research: Explain ONLY the value expected from remaining queries.
+- For stop_research: Explain ONLY why the research is considered complete based on the criteria.
+- DO NOT generate any summary of the research findings. Your sole focus is the decision to continue or stop.
 
-IMPORTANT: ONLY include a research summary when choosing stop_research. When choosing continue_research, leave the summary field empty.
+IMPORTANT: Use the provided tool to submit ONLY the action (continue_research or stop_research) and a brief reason.
 """
 
 # Generate system prompt with context from global_prompts
@@ -113,23 +108,19 @@ TOOL_DEFINITIONS = [
     {
         "type": "function",
         "function": {
-            "name": "submit_judgment",
-            "description": "Submit a judgment on whether to continue or stop research",
+            "name": "submit_research_decision",
+            "description": "Submit a decision on whether to continue or stop research based on the evaluation.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "action": {
                         "type": "string",
-                        "description": "Whether to continue or stop research",
+                        "description": "The decision whether to continue or stop the research process.",
                         "enum": ["continue_research", "stop_research"]
                     },
                     "reason": {
                         "type": "string",
-                        "description": "Detailed explanation of the judgment"
-                    },
-                    "summary": {
-                        "type": "string",
-                        "description": "Final summarization of research results (required when action is stop_research)"
+                        "description": "A concise explanation for the decision, based on the evaluation criteria."
                     }
                 },
                 "required": ["action", "reason"]
@@ -137,26 +128,5 @@ TOOL_DEFINITIONS = [
         }
     }
 ]
-
-# Specific prompt for streaming research summary
-SUMMARY_PROMPT = """You are an expert research evaluator tasked with summarizing database research results.
-
-# RESEARCH SUMMARIZATION REQUIREMENTS
-Create a comprehensive research summary that:
-1. Acts as a guide to the research results, NOT a regurgitation of information
-2. Points the user to the most relevant database queries containing the answers
-3. Highlights any differences, inconsistencies, or conflicts between database results
-4. Notes important considerations when interpreting the results 
-5. Explains the overall research process and why certain queries were valuable
-6. Does NOT repeat information from the databases, but directs users where to look
-7. Identifies which queries were most productive and which were less helpful
-8. Is comprehensive yet concise (typically 300-600 words)
-
-# OUTPUT FORMAT
-- Use a clear introduction, body paragraphs, and conclusion
-- Format with markdown headings and bullet points for readability
-- Reference specific query numbers when directing users to information
-- Highlight any conflicting information or gaps in knowledge
-"""
 
 logger.debug("Judge agent settings initialized")

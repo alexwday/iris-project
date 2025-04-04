@@ -127,7 +127,8 @@ def model(
     from ..agents.agent_direct_response.response_from_conversation import response_from_conversation
     from ..agents.agent_clarifier.clarifier import clarify_research_needs
     from ..agents.agent_planner.planner import create_query_plan
-    from ..agents.agent_judge.judge import evaluate_research_progress, generate_streaming_summary
+    from ..agents.agent_judge.judge import evaluate_research_progress # Only decision function
+    from ..agents.agent_summarizer.summarizer import generate_streaming_summary # New summary function
     from ..agents.database_subagents.database_router import route_database_query
     
     try:
@@ -451,10 +452,11 @@ def model(
                                 # Reset token usage for next stage
                                 reset_token_usage()
                             
-                            # Determine whether to continue
+                            # Determine whether to continue based on judge's decision
                             continue_research = (judgment["action"] == "continue_research")
                             
                             if not continue_research:
+                                logger.info(f"Stopping research based on judge decision: {judgment['reason']}")
                                 # Collect database token usage after all queries are processed
                                 if debug_mode and debug_data is not None:
                                     # Get the latest database token usage information
@@ -479,10 +481,10 @@ def model(
                                         "timestamp": datetime.now().isoformat()
                                     })
                                 
-                                # Get streaming summary from judge agent
+                                # Get streaming summary from NEW summarizer agent
                                 for summary_chunk in generate_streaming_summary(
                                     research_statement,
-                                    completed_queries,
+                                    completed_queries, # Pass completed queries
                                     token
                                 ):
                                     yield summary_chunk
@@ -553,10 +555,10 @@ def model(
                             "timestamp": datetime.now().isoformat()
                         })
                         
-                        # Get streaming summary from judge agent
+                        # Get streaming summary from NEW summarizer agent
                         for summary_chunk in generate_streaming_summary(
                             research_statement,
-                            completed_queries,
+                            completed_queries, # Pass completed queries
                             token
                         ):
                             yield summary_chunk

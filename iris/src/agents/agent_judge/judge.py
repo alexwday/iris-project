@@ -24,8 +24,7 @@ from .judge_settings import (
     TEMPERATURE,
     SYSTEM_PROMPT,
     TOOL_DEFINITIONS,
-    AVAILABLE_DATABASES,
-    SUMMARY_PROMPT
+    AVAILABLE_DATABASES
 )
 
 # Get module logger (no configuration here - using centralized config)
@@ -56,13 +55,10 @@ def evaluate_research_progress(research_statement, completed_queries, remaining_
     Returns:
         dict: Judgment with keys:
             - action: Either "continue_research" or "stop_research"
-            - reason: Detailed explanation of the judgment
-            - summary: (Only when action is "stop_research") Final summarization
-              of all research results that guides the user to the most relevant
-              information without repeating database content
+            - reason: Concise explanation of the decision
         
     Raises:
-        JudgeError: If there is an error in evaluating research progress
+        JudgeError: If there is an error in evaluating the research decision
     """
     try:
         # Prepare system message with judge prompt
@@ -138,7 +134,7 @@ def evaluate_research_progress(research_statement, completed_queries, remaining_
             max_tokens=MAX_TOKENS,
             temperature=TEMPERATURE,
             tools=TOOL_DEFINITIONS,
-            tool_choice={"type": "function", "function": {"name": "submit_judgment"}},
+            tool_choice={"type": "function", "function": {"name": "submit_research_decision"}},
             stream=False,
             prompt_token_cost=PROMPT_TOKEN_COST,
             completion_token_cost=COMPLETION_TOKEN_COST
@@ -154,7 +150,7 @@ def evaluate_research_progress(research_statement, completed_queries, remaining_
         tool_call = response.choices[0].message.tool_calls[0]
         
         # Verify that the correct function was called
-        if tool_call.function.name != "submit_judgment":
+        if tool_call.function.name != "submit_research_decision":
             raise JudgeError(f"Unexpected function call: {tool_call.function.name}")
         
         # Parse the arguments
@@ -163,137 +159,35 @@ def evaluate_research_progress(research_statement, completed_queries, remaining_
         except json.JSONDecodeError:
             raise JudgeError(f"Invalid JSON in tool arguments: {tool_call.function.arguments}")
         
-        # Extract judgment fields
+        # Extract decision fields
         action = arguments.get("action")
         reason = arguments.get("reason")
-        summary = arguments.get("summary")
         
         if not action:
             raise JudgeError("Missing 'action' in tool arguments")
         
         if not reason:
-            raise JudgeError("Missing 'reason' in tool arguments")
+            # Allow empty reason, but log a warning
+            logger.warning("Missing 'reason' in tool arguments, proceeding with empty reason.")
+            reason = "" # Default to empty string if missing
         
         # Force "stop_research" when no remaining queries
         if not remaining_queries and action != "stop_research":
             action = "stop_research"
             logger.warning("Judge chose to continue but no queries remain; forcing stop_research")
         
-        # Require summary if stopping research
-        if action == "stop_research" and not summary:
-            logger.warning("Missing research summary when stopping research")
-            summary = "No summary provided. Please review all research results."
+        # Log the decision
+        logger.info(f"Research decision: {action}")
+        logger.info(f"Reason: {reason[:1000]}...") # Log first 1000 chars
         
-        # Log the judgment
-        logger.info(f"Research judgment: {action}")
-        logger.info(f"Reason: {reason[:1000]}...")
-        if summary:
-            logger.info(f"Research summary provided: {len(summary)} characters")
-        
+        # Return only action and reason
         result = {
             "action": action,
             "reason": reason
         }
-        
-        # Add summary to result if provided
-        if summary:
-            result["summary"] = summary
             
         return result
         
     except Exception as e:
         logger.error(f"Error evaluating research progress: {str(e)}")
         raise JudgeError(f"Failed to evaluate research progress: {str(e)}")
-
-
-def generate_streaming_summary(research_statement, completed_queries, token):
-    """
-    Generate a streaming research summary based on completed queries.
-    
-    This function produces a streaming response that can be yielded directly 
-    to the user, unlike the tool-based approach used by evaluate_research_progress.
-    
-    Args:
-        research_statement (str): The original research statement
-        completed_queries (list): List of completed queries with their results
-        token (str): Authentication token for API access
-            
-    Returns:
-        generator: A generator that yields response chunks as strings
-        
-    Raises:
-        JudgeError: If there is an error generating the summary
-    """
-    try:
-        # Prepare system message with summary prompt
-        system_message = {"role": "system", "content": SUMMARY_PROMPT}
-        
-        # Prepare messages for the API call
-        messages = [system_message]
-        
-        # Add research statement
-        research_message = {
-            "role": "system", 
-            "content": f"Research Statement: {research_statement}"
-        }
-        messages.append(research_message)
-        
-        # Add completed queries
-        completed_content = "Completed Queries and Results:\n"
-        for i, query in enumerate(completed_queries):
-            completed_content += f"\n=== QUERY {i+1} ===\n"
-            completed_content += f"Database: {query.get('database', 'Unknown')}\n"
-            completed_content += f"Query: {query.get('query', 'Unknown')}\n"
-            completed_content += f"Results: {query.get('results', 'No results')}\n"
-        
-        completed_message = {"role": "system", "content": completed_content}
-        messages.append(completed_message)
-        
-        # Add database information for better context
-        database_content = "Available Databases Information:\n"
-        for db_id, db_info in AVAILABLE_DATABASES.items():
-            database_content += f"\n{db_info['name']} ({db_id}):\n"
-            database_content += f"  - Content: {db_info['content_type']}\n"
-            database_content += f"  - Search method: {db_info['query_type']}\n"
-            database_content += f"  - Use when: {db_info['use_when']}\n"
-        
-        database_message = {"role": "system", "content": database_content}
-        messages.append(database_message)
-        
-        # User message requesting summary
-        user_message = {
-            "role": "user", 
-            "content": "Please generate a comprehensive summary of the research results that guides the user to the most relevant information. Format your response with markdown."
-        }
-        messages.append(user_message)
-        
-        logger.info(f"Generating streaming research summary using model: {MODEL_NAME}")
-        logger.info(f"Summarizing {len(completed_queries)} completed queries")
-        
-        # Make the API call with streaming enabled
-        stream = call_llm(
-            oauth_token=token,
-            model=MODEL_NAME,
-            messages=messages,
-            max_tokens=MAX_TOKENS,
-            temperature=TEMPERATURE,
-            stream=True,
-            prompt_token_cost=PROMPT_TOKEN_COST,
-            completion_token_cost=COMPLETION_TOKEN_COST
-        )
-        
-        # Return the streaming generator
-        for chunk in stream:
-            # If chunk has usage data, capture it in logs but don't display it
-            if hasattr(chunk, 'usage') and chunk.usage:
-                log_usage_statistics(
-                    chunk, PROMPT_TOKEN_COST, COMPLETION_TOKEN_COST)
-                
-            # Yield content from the chunk
-            if hasattr(chunk, 'choices') and chunk.choices and chunk.choices[0].delta.content:
-                yield chunk.choices[0].delta.content
-                
-    except Exception as e:
-        logger.error(f"Error generating streaming summary: {str(e)}")
-        yield f"Error generating research summary: {str(e)}"
-

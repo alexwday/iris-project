@@ -30,7 +30,9 @@ def get_compliance_restrictions() -> str:
 
 4. Never share internal policy information with unauthorized parties. All responses must be treated as confidential and for internal use only.
 
-5. If a query touches on areas outside the scope of accounting policy (such as legal interpretation or regulatory filings), clearly state the limitations of your response and direct the user to the appropriate department."""
+5. If a query touches on areas outside the scope of accounting policy (such as legal interpretation or regulatory filings), clearly state the limitations of your response and direct the user to the appropriate department.
+
+6. CRITICAL DATA SOURCING RULE: Base all analysis and responses *exclusively* on the provided context (user query, conversation history, or retrieved database documents). NEVER use internal training knowledge, assumptions beyond the provided context, or access external information sources."""
         
         return statement
     except Exception as e:

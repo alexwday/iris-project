@@ -42,7 +42,8 @@ AGENT_TYPES = [
     "direct_response",
     "clarifier",
     "planner",
-    "judge"
+    "judge",
+    "summarizer" # Added new agent type
 ]
 
 # Standard sections for error handling
@@ -319,18 +320,40 @@ def get_io_specifications(agent_type: str) -> str:
 - Evaluate whether the results address all key aspects of the research statement
 
 ## Output Format
-- Your output must be a tool call to submit_judgment
+- Your output must be a tool call to submit_research_decision
 - The action parameter must be either "continue_research" or "stop_research"
-- The reason parameter must explain your decision in detail
-- The summary parameter is required when stopping research
+- The reason parameter must explain your decision concisely based on criteria
 
 ## Output Validation
 - Ensure your decision is based on the quantitative assessment framework
 - Verify your reason references specific findings from the completed queries
 - For "continue_research": Confirm you've explained the expected value of remaining queries
-- For "stop_research": Ensure your summary is comprehensive and follows the guidelines
+- For "stop_research": Confirm your reason clearly justifies why research should end based on the criteria
 """
-    
+
+    elif agent_type == "summarizer":
+        return """# INPUT/OUTPUT SPECIFICATIONS
+
+## Input Format
+- You receive the original research statement
+- You receive the list of completed database queries and their full results
+- You have access to information about all available databases
+
+## Input Validation
+- Verify that you understand the original research need
+- Confirm that the completed query results are present and accessible
+
+## Output Format
+- Your output must be ONLY the markdown-formatted summary text
+- Do not include any preamble or extra conversational text
+- Follow the structure and content requirements defined in your main task prompt
+
+## Output Validation
+- Ensure your summary accurately reflects the findings in the query results
+- Verify the summary guides the user without excessive repetition of results
+- Check that markdown formatting is correct and enhances readability
+"""
+
     else:
         logger.warning(f"Unknown agent type: {agent_type}, returning empty IO specifications")
         return ""
@@ -412,12 +435,19 @@ def get_error_handling_instructions(agent_type: str) -> str:
     elif agent_type == "judge":
         return common_instructions + """
 ## Judge-Specific Error Handling
-- If query results are contradictory, highlight the contradictions in your summary
-- If key information is missing despite research, note the gaps in your summary
-- If results are of low quality, acknowledge this in your evaluation
-- If uncertain about stopping research, err on the side of continuing research
+- If results are of low quality, acknowledge this in your evaluation reason
+- If uncertain about stopping research, err on the side of continuing research, providing a clear reason based on potential value or gaps
 """
-    
+
+    elif agent_type == "summarizer":
+        return common_instructions + """
+## Summarizer-Specific Error Handling
+- If query results are missing or incomplete, generate the best possible summary from available data and note the limitations
+- If results are contradictory, clearly highlight the contradictions in the summary
+- If results are sparse or low quality, reflect this honestly in the summary's tone and conclusions
+- Focus on synthesizing the provided information; do not introduce external knowledge
+"""
+
     else:
         logger.warning(f"Unknown agent type: {agent_type}, returning empty error handling instructions")
         return ""
@@ -436,7 +466,7 @@ def get_workflow_context(agent_type: str) -> str:
         return """# WORKFLOW CONTEXT
 
 ## Complete Agent Workflow
-User Query → Router (YOU) → [Direct Response OR Research Path (Clarifier → Planner → Database Queries → Judge)]
+User Query → Router (YOU) → [Direct Response OR Research Path (Clarifier → Planner → Database Queries → Judge → Summarizer)]
 
 ## Your Position
 You are the ROUTER AGENT, positioned at the FIRST STAGE of the workflow.
@@ -454,15 +484,15 @@ Success means correctly routing queries based on whether they can be answered fr
 
 ## Downstream Impact
 After you:
-- If you choose "response_from_conversation": The Direct Response Agent will generate an immediate answer without database research
-- If you choose "research_from_database": The Clarifier Agent will assess if sufficient context exists to proceed with research
-- Your decision directly impacts response time, comprehensiveness, and authority of information provided to the user"""
+- If you choose "response_from_conversation": The Direct Response Agent will generate an immediate answer without database research.
+- If you choose "research_from_database": The Clarifier Agent will assess if sufficient context exists to proceed with research.
+- Your decision directly impacts response time, comprehensiveness, and authority of information provided to the user."""
     
     elif agent_type == "direct_response":
         return """# WORKFLOW CONTEXT
 
 ## Complete Agent Workflow
-User Query → Router → Direct Response (YOU) OR Research Path (Clarifier → Planner → Database Queries → Judge)
+User Query → Router → [Direct Response (YOU) OR Research Path (Clarifier → Planner → Database Queries → Judge → Summarizer)]
 
 ## Your Position
 You are the DIRECT RESPONSE AGENT, activated when the Router determines a query can be answered without database research.
@@ -487,7 +517,7 @@ After you:
         return """# WORKFLOW CONTEXT
 
 ## Complete Agent Workflow
-User Query → Router → [Direct Response OR Research Path (Clarifier (YOU) → Planner → Database Queries → Judge)]
+User Query → Router → [Direct Response OR Research Path (Clarifier (YOU) → Planner → Database Queries → Judge → Summarizer)]
 
 ## Your Position
 You are the CLARIFIER AGENT, the first stage in the research path after the Router determines database research is needed.
@@ -504,15 +534,15 @@ Success means either obtaining essential missing context or creating a comprehen
 
 ## Downstream Impact
 After you:
-- If you choose "request_essential_context": The user will be asked to provide additional information
-- If you choose "create_research_statement": The Planner Agent will use your research statement to design database queries
-- Your decision impacts research quality, efficiency, and the user's experience with the system"""
+- If you choose "request_essential_context": The user will be asked to provide additional information.
+- If you choose "create_research_statement": The Planner Agent will use your research statement to design database queries.
+- Your decision impacts research quality, efficiency, and the user's experience with the system."""
     
     elif agent_type == "planner":
         return """# WORKFLOW CONTEXT
 
 ## Complete Agent Workflow
-User Query → Router → Research Path (Clarifier → Planner (YOU) → Database Queries → Judge)
+User Query → Router → Research Path (Clarifier → Planner (YOU) → Database Queries → Judge → Summarizer)
 
 ## Your Position
 You are the PLANNER AGENT, responsible for designing the database query strategy after the Clarifier confirms sufficient context exists.
@@ -530,18 +560,18 @@ Success means creating a comprehensive query plan that efficiently targets the m
 
 ## Downstream Impact
 After you:
-- Your query plan will be executed against the specified databases
-- The Judge Agent will evaluate the results of your queries to determine if research is complete
-- The quality and relevance of information found depends directly on your query design"""
+- Your query plan will be executed against the specified databases.
+- The Judge Agent will evaluate the results of your queries to determine if research should continue or stop.
+- The quality and relevance of information found depends directly on your query design."""
     
     elif agent_type == "judge":
         return """# WORKFLOW CONTEXT
 
 ## Complete Agent Workflow
-User Query → Router → Research Path (Clarifier → Planner → Database Queries → Judge (YOU))
+User Query → Router → Research Path (Clarifier → Planner → Database Queries → Judge (YOU) → Summarizer)
 
 ## Your Position
-You are the JUDGE AGENT, the final stage in the research path, evaluating results and determining when research is complete.
+You are the JUDGE AGENT, responsible for evaluating research progress after each query (if needed) and deciding whether to continue or stop.
 
 ## Upstream Context
 Before you:
@@ -552,15 +582,38 @@ Before you:
 - You receive the research statement, completed queries with results, and any remaining planned queries
 
 ## Your Responsibility
-Your core task is to EVALUATE RESEARCH PROGRESS AND DETERMINE WHEN SUFFICIENT INFORMATION HAS BEEN GATHERED.
-Success means correctly identifying when enough authoritative information has been found to answer the user's question comprehensively.
+Your core task is to EVALUATE RESEARCH PROGRESS AND DECIDE WHETHER TO CONTINUE OR STOP.
+Success means correctly identifying when enough authoritative information has been found OR when remaining queries offer little value.
 
 ## Downstream Impact
 After you:
-- If you choose "continue_research": Additional database queries will be executed
-- If you choose "stop_research": A final research summary will be provided to the user
-- Your decision determines the balance between research thoroughness and response efficiency"""
-    
+- If you choose "continue_research": The next database query in the plan will be executed.
+- If you choose "stop_research": The Summarizer Agent will be invoked to generate the final research summary for the user.
+- Your decision determines the balance between research thoroughness and response efficiency."""
+
+    elif agent_type == "summarizer":
+        return """# WORKFLOW CONTEXT
+
+## Complete Agent Workflow
+User Query → Router → Research Path (Clarifier → Planner → Database Queries → Judge → Summarizer (YOU))
+
+## Your Position
+You are the SUMMARIZER AGENT, the final stage in the research path, responsible for synthesizing all gathered information into a user-friendly summary.
+
+## Upstream Context
+Before you:
+- The research process has concluded, either by the Judge deciding to stop or by completing all planned queries.
+- You receive the original research statement and all completed queries with their results.
+
+## Your Responsibility
+Your core task is to GENERATE A COMPREHENSIVE, CLEAR, AND CONCISE SUMMARY of the research findings.
+Success means providing a summary that accurately reflects the research, guides the user to relevant details, and highlights key takeaways and potential inconsistencies.
+
+## Downstream Impact
+After you:
+- Your generated summary will be streamed directly to the user as the final output of the research process.
+- The user will evaluate the quality, clarity, and usefulness of your summary."""
+
     else:
         logger.warning(f"Unknown agent type: {agent_type}, returning empty workflow context")
         return ""

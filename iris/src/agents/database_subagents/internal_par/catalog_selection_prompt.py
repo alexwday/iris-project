@@ -19,7 +19,7 @@ def get_catalog_selection_prompt(user_query: str, formatted_catalog: str) -> str
         str: The formatted prompt for the LLM
     """
     prompt = f"""# TASK
-You are helping to search through a catalog of internal PAR (Process and Risk) documents to find
+You are helping to search through a catalog of internal PAR (Project Approval Request Guidance) documents to find
 the most relevant ones for answering a user query.
 
 ## User Query
