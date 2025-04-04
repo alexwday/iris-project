@@ -358,21 +358,32 @@ def model(
                             if inspect.isgenerator(results):
                                 # For generator results, iterate and yield each chunk
                                 # This ensures we always yield strings, never a nested generator
+                                full_result_text = "" # Initialize variable to capture full text
                                 for chunk in results:
+                                    chunk_str = ""
                                     if isinstance(chunk, str):
-                                        yield chunk
+                                        chunk_str = chunk
                                     elif inspect.isgenerator(chunk):
                                         # Handle nested generators by consuming them
                                         for subchunk in chunk:
-                                            yield str(subchunk)
+                                            chunk_str += str(subchunk)
                                     else:
                                         # Convert any non-string objects to strings
-                                        yield str(chunk)
+                                        chunk_str = str(chunk)
+                                    
+                                    yield chunk_str # Yield the chunk to the user
+                                    full_result_text += chunk_str # Append to the full text
+                                
+                                # --- Store the captured full text AFTER the loop ---
+                                current_query["results"] = full_result_text # Store the complete text
+                                
                                 # Add horizontal rule after all chunks
                                 yield "\n\n---"
                             else:
                                 # For string results, yield directly with ending horizontal rule
                                 yield f"{results}\n\n---"
+                                # Ensure non-generator results are also stored correctly
+                                current_query["results"] = results # Already handled above, but explicit here
 
                             # --- Capture token usage AFTER processing results (stream consumed) ---
                             if debug_mode and debug_data is not None:
