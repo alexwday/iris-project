@@ -24,7 +24,7 @@ import inspect
 from datetime import datetime
 from ..global_prompts.database_statement import get_available_databases
 from ..llm_connectors.rbc_openai import get_token_usage, reset_token_usage
-from ..agents.database_subagents.database_router import get_database_token_usage
+from ..agents.database_subagents.database_router import get_database_token_usage, reset_database_token_usage # Added reset import
 
 
 def format_usage_summary(agent_token_usage, start_time=None):
@@ -729,7 +729,10 @@ def model(
             
             # Yield debug data as a special message that can be parsed by the notebook
             yield f"\n\nDEBUG_DATA:{json.dumps(debug_data)}"
-
+            
+        # Ensure token usage is reset regardless of success or failure
+        reset_token_usage() 
+        reset_database_token_usage() # Reset database usage as well
 
 def format_remaining_queries(remaining_queries):
     """Format remaining queries for display to the user."""
