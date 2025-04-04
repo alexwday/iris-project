@@ -27,14 +27,17 @@ from ..llm_connectors.rbc_openai import get_token_usage, reset_token_usage
 from ..agents.database_subagents.database_router import get_database_token_usage
 
 
-def format_usage_summary(token_usage, start_time=None):
+def format_usage_summary(agent_token_usage, start_time=None):
     """
-    Format token usage and timing information into a nicely formatted string.
-    
+    Format token usage and timing information into a nicely formatted string,
+    breaking down usage by agent, database subagents, and overall total.
+
     Args:
-        token_usage (dict): Token usage dictionary with prompt_tokens, completion_tokens, etc.
+        agent_token_usage (dict): Token usage dictionary for main agent processes
+                                  (router, planner, judge, summarizer, etc.)
+                                  with prompt_tokens, completion_tokens, etc.
         start_time (str, optional): ISO format timestamp of when processing started
-        
+
     Returns:
         str: Formatted usage summary as markdown
     """
@@ -45,23 +48,32 @@ def format_usage_summary(token_usage, start_time=None):
         end_dt = dt.now()
         start_dt = dt.fromisoformat(start_time)
         duration = (end_dt - start_dt).total_seconds()
-    
+
     # Get database-specific token usage
     db_token_usage = get_database_token_usage()
-    
-    # Format the usage summary
+
+    # Initialize totals for database usage
+    total_db_prompt_tokens = 0
+    total_db_completion_tokens = 0
+    total_db_tokens = 0
+    total_db_cost = 0.0
+
+    # --- Start Formatting ---
     usage_summary = "\n\n---\n"
-    usage_summary += "## Usage Statistics\n\n"
-    usage_summary += f"- Input tokens: {token_usage['prompt_tokens']}\n"
-    usage_summary += f"- Output tokens: {token_usage['completion_tokens']}\n"
-    usage_summary += f"- Total tokens: {token_usage['total_tokens']}\n"
-    usage_summary += f"- Cost: ${token_usage['cost']:.6f}\n"
+
+    # --- Agent Usage Section ---
+    usage_summary += "## Agent Usage Statistics\n\n"
+    usage_summary += f"- Input tokens: {agent_token_usage['prompt_tokens']}\n"
+    usage_summary += f"- Output tokens: {agent_token_usage['completion_tokens']}\n"
+    usage_summary += f"- Total tokens: {agent_token_usage['total_tokens']}\n"
+    usage_summary += f"- Cost: ${agent_token_usage['cost']:.6f}\n"
     if duration:
+        # Display time only in the agent section for brevity
         usage_summary += f"- Time: {duration:.2f} seconds\n"
-    
-    # Add database token usage if there is any
+
+    # --- Database Subagent Usage Section ---
     if db_token_usage:
-        usage_summary += "\n### Database Token Usage\n\n"
+        usage_summary += "\n### Database Subagent Usage\n\n"
         for db_name, usage in db_token_usage.items():
             db_display_name = get_available_databases().get(db_name, {}).get("name", db_name)
             usage_summary += f"**{db_display_name}**\n"
@@ -69,7 +81,30 @@ def format_usage_summary(token_usage, start_time=None):
             usage_summary += f"- Output tokens: {usage['completion_tokens']}\n"
             usage_summary += f"- Total tokens: {usage['total_tokens']}\n"
             usage_summary += f"- Cost: ${usage['cost']:.6f}\n\n"
-    
+            # Accumulate totals for overall calculation
+            total_db_prompt_tokens += usage.get('prompt_tokens', 0)
+            total_db_completion_tokens += usage.get('completion_tokens', 0)
+            total_db_tokens += usage.get('total_tokens', 0)
+            total_db_cost += usage.get('cost', 0.0)
+        # Remove the trailing newline from the last database entry
+        usage_summary = usage_summary.rstrip('\n') + "\n"
+
+
+    # --- Overall Usage Section ---
+    overall_prompt_tokens = agent_token_usage['prompt_tokens'] + total_db_prompt_tokens
+    overall_completion_tokens = agent_token_usage['completion_tokens'] + total_db_completion_tokens
+    overall_total_tokens = agent_token_usage['total_tokens'] + total_db_tokens
+    overall_cost = agent_token_usage['cost'] + total_db_cost
+
+    usage_summary += "\n### Overall Usage Statistics\n\n"
+    usage_summary += f"- Overall Input tokens: {overall_prompt_tokens}\n"
+    usage_summary += f"- Overall Output tokens: {overall_completion_tokens}\n"
+    usage_summary += f"- Overall Total tokens: {overall_total_tokens}\n"
+    usage_summary += f"- Overall Cost: ${overall_cost:.6f}\n"
+    # Optionally repeat duration here if desired, but kept in agent section for now
+    # if duration:
+    #     usage_summary += f"- Total Time: {duration:.2f} seconds\n"
+
     return usage_summary
 
 
