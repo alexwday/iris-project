@@ -12,75 +12,67 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 def get_compliance_restrictions() -> str:
     """
     Generate a statement about compliance restrictions for outputs.
-    
+
     Returns:
         str: Formatted compliance restrictions statement
     """
     try:
         statement = """IMPORTANT COMPLIANCE RESTRICTIONS:
 
-1. Do not provide definitive legal, tax, or regulatory advice. Always frame responses as educational information rather than specific professional advice.
+1. No definitive legal/tax/regulatory advice; provide educational info only.
+2. Include disclaimer: Info is general guidance, verify with APG specialist before implementation.
+3. Material impacts: Stress need for analysis & APG consultation.
+4. Confidentiality: Internal use only; do not share internal policy externally.
+5. **Out-of-Scope Queries:** If a query falls outside the scope of RBC accounting policy (e.g., legal, tax, regulatory filings, general knowledge), clearly state inability to answer, explain the system's focus on accounting policy, and if appropriate, suggest consulting the relevant department. Do not attempt to answer out-of-scope questions.
+6. **CRITICAL DATA SOURCING:** Base responses **EXCLUSIVELY** on information from: (a) the current user query, (b) retrieved database documents from this system, or (c) conversation history *if that history itself contains information clearly sourced from (a) or (b)*. **ABSOLUTELY NO internal training knowledge, external information, or assumptions beyond this provided context.** This applies to ALL agents, including Direct Response."""
 
-2. All responses must include a disclaimer that the information provided is general guidance and should be verified with the appropriate accounting policy specialist before implementation.
-
-3. When discussing accounting treatments that could have material financial impacts, emphasize the importance of thorough analysis and consultation with the Accounting Policy Group.
-
-4. Never share internal policy information with unauthorized parties. All responses must be treated as confidential and for internal use only.
-
-5. If a query touches on areas outside the scope of accounting policy (such as legal interpretation or regulatory filings), clearly state the limitations of your response and direct the user to the appropriate department.
-
-6. CRITICAL DATA SOURCING RULE: Base all analysis and responses *exclusively* on the provided context (user query, conversation history, or retrieved database documents). NEVER use internal training knowledge, assumptions beyond the provided context, or access external information sources."""
-        
         return statement
     except Exception as e:
         logger.error(f"Error generating compliance restrictions: {str(e)}")
         # Fallback statement in case of errors
         return "Responses must include a disclaimer and should not provide definitive legal, tax, or regulatory advice."
 
+
 def get_quality_guidelines() -> str:
     """
     Generate a statement about output quality guidelines.
-    
+
     Returns:
         str: Formatted quality guidelines statement
     """
     try:
         statement = """OUTPUT QUALITY GUIDELINES:
 
-1. Structure all responses with clear headings and organized sections for readability.
+1. Structure responses clearly (headings, sections).
+2. Cite specific policies/standards/guidelines (e.g., IFRS 15.31, CAPM 3.4.2) when citing provided context.
+3. Complex topics: Provide concise summary upfront, then details.
+4. Use practical examples where helpful, based *only* on provided context.
+5. Use clear language; define technical terms on first use.
+6. Present multiple approaches/interpretations if found in provided context.
+7. Research responses: Briefly note sources consulted (from provided context)."""
 
-2. Include specific references to relevant accounting policies, standards, or guidelines when applicable (e.g., "According to IFRS 15.31" or "As per CAPM Section 3.4.2").
-
-3. For complex topics, provide both a concise summary at the beginning and detailed explanation in the body of the response.
-
-4. When appropriate, include practical examples to illustrate the application of accounting concepts.
-
-5. Use clear, straightforward language while maintaining technical accuracy. Define specialized accounting terms when they first appear.
-
-6. Where multiple accounting approaches or interpretations exist, clearly present the options and their implications rather than presenting only one view.
-
-7. For research-based responses, include a brief note about the sources consulted to add credibility and transparency."""
-        
         return statement
     except Exception as e:
         logger.error(f"Error generating quality guidelines: {str(e)}")
         # Fallback statement in case of errors
         return "Responses should be well-structured, include references, and use clear language."
 
+
 def get_restrictions_statement() -> str:
     """
     Generate a combined restrictions and guidelines statement for use in prompts.
-    
+
     Returns:
         str: Formatted restrictions statement combining compliance and quality guidelines
     """
     try:
         compliance = get_compliance_restrictions()
         quality = get_quality_guidelines()
-        
+
         combined_statement = f"{compliance}\n\n{quality}"
         return combined_statement
     except Exception as e:

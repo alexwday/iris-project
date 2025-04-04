@@ -14,6 +14,7 @@ Attributes:
 """
 
 import logging
+
 from ...global_prompts.prompt_utils import get_full_system_prompt
 
 # Get module logger (no configuration here - using centralized config)
@@ -21,18 +22,21 @@ logger = logging.getLogger(__name__)
 
 # Import database configuration from global prompts
 from ...global_prompts.database_statement import get_available_databases
+
 AVAILABLE_DATABASES = get_available_databases()
 
 # Model capability - used to get specific model based on environment
 # Consider using a 'large' model for potentially better summarization quality
-MODEL_CAPABILITY = "large" 
+MODEL_CAPABILITY = "large"
 
 # Model settings
 MAX_TOKENS = 4096
-TEMPERATURE = 0.1 # Slightly higher temp might allow for more nuanced summaries
+TEMPERATURE = 0.1  # Slightly higher temp might allow for more nuanced summaries
 
 # Define the summarizer agent role and task
-SUMMARIZER_ROLE = "an expert research analyst specializing in synthesizing complex information"
+SUMMARIZER_ROLE = (
+    "an expert research analyst specializing in synthesizing complex information"
+)
 SUMMARIZER_TASK = """You are tasked with creating a final summary of database research results.
 
 # CONTEXT
@@ -58,14 +62,29 @@ Create a comprehensive research summary that:
 - Format with markdown headings (e.g., `## Key Findings`) and bullet points for readability.
 - Reference specific query numbers when directing users to information (e.g., "See Query 3 for details on...").
 - Highlight any conflicting information or gaps in knowledge discovered during the research.
+
+
+# WORKFLOW & ROLE SUMMARY
+- You are the SUMMARIZER, the final step in the research path.
+- Input: Original research statement, completed query results, DB info. Research is complete (Judge stopped or all queries ran).
+- Task: Generate a comprehensive, clear, concise summary of findings. Guide user to details in results, don't repeat excessively. Highlight key takeaways/inconsistencies.
+- Impact: Your summary is the final output streamed to the user.
+
+# I/O SPECIFICATIONS (Markdown Output)
+- Input: Research statement, query results, DB info.
+- Validation: Understand need? Results present/accessible?
+- Output: ONLY the markdown-formatted summary text (no preamble). Follow structure/content requirements from main task.
+- Validation: Accurately reflects findings? Guides user (doesn't just repeat)? Correct markdown?
+
+# ERROR HANDLING SUMMARY
+- General: Handle unexpected input, ambiguity (choose likely, state assumption), missing info (assume reasonably, state assumption), limitations (acknowledge). Use confidence signaling.
+- Summarizer Specific: Missing/incomplete results -> summarize best possible, note limits. Contradictory results -> highlight contradictions. Sparse/low quality -> reflect honestly. Synthesize provided info ONLY, no external knowledge.
 """
 
 # Generate system prompt with context from global_prompts
+# Now uses the simplified get_full_system_prompt which includes global context by default
 SYSTEM_PROMPT = get_full_system_prompt(
-    agent_role=SUMMARIZER_ROLE,
-    agent_task=SUMMARIZER_TASK,
-    profile="analyst", # Profile focused on synthesis and analysis
-    agent_type="summarizer"
+    agent_role=SUMMARIZER_ROLE, agent_task=SUMMARIZER_TASK
 )
 
 logger.debug("Summarizer agent settings initialized")

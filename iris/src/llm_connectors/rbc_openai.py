@@ -20,14 +20,16 @@ Dependencies:
 import logging
 import time
 from typing import Any, Dict, Optional
+
 from openai import OpenAI
+
 from ..chat_model.model_settings import (
-    IS_RBC_ENV,
     BASE_URL,
-    REQUEST_TIMEOUT,
+    IS_RBC_ENV,
     MAX_RETRY_ATTEMPTS,
+    REQUEST_TIMEOUT,
     RETRY_DELAY_SECONDS,
-    TOKEN_PREVIEW_LENGTH
+    TOKEN_PREVIEW_LENGTH,
 )
 
 # Get module logger (no configuration here - using centralized config)
@@ -38,17 +40,22 @@ _token_usage = {
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "total_tokens": 0,
-    "cost": 0.0
+    "cost": 0.0,
 }
 
 
 class OpenAIConnectorError(Exception):
     """Base exception class for OpenAI connector errors."""
+
     pass
 
 
-def calculate_cost(prompt_tokens: int, completion_tokens: int,
-                   prompt_token_cost: float, completion_token_cost: float) -> float:
+def calculate_cost(
+    prompt_tokens: int,
+    completion_tokens: int,
+    prompt_token_cost: float,
+    completion_token_cost: float,
+) -> float:
     """
     Calculate total cost based on token usage and per-token costs.
 
@@ -66,7 +73,12 @@ def calculate_cost(prompt_tokens: int, completion_tokens: int,
     return prompt_cost + completion_cost
 
 
-def log_usage_statistics(response, prompt_token_cost, completion_token_cost, database_name: Optional[str] = None):
+def log_usage_statistics(
+    response,
+    prompt_token_cost,
+    completion_token_cost,
+    database_name: Optional[str] = None,
+):
     """
     Log token usage and cost statistics from the model response.
 
@@ -82,17 +94,19 @@ def log_usage_statistics(response, prompt_token_cost, completion_token_cost, dat
         dict: Usage statistics including token counts and costs
     """
     global _token_usage
-    
+
     # Ensure response and usage attribute exist
     if not response or not hasattr(response, "usage") or not response.usage:
-        logger.warning("Attempted to log usage statistics but response or usage attribute was missing/None.")
+        logger.warning(
+            "Attempted to log usage statistics but response or usage attribute was missing/None."
+        )
         return None
-        
+
     # Safely access usage attributes
-    completion_tokens = getattr(response.usage, 'completion_tokens', 0)
-    prompt_tokens = getattr(response.usage, 'prompt_tokens', 0)
-    total_tokens = getattr(response.usage, 'total_tokens', 0)
-    
+    completion_tokens = getattr(response.usage, "completion_tokens", 0)
+    prompt_tokens = getattr(response.usage, "prompt_tokens", 0)
+    total_tokens = getattr(response.usage, "total_tokens", 0)
+
     # Check if tokens are None (which can happen) and default to 0
     completion_tokens = completion_tokens if completion_tokens is not None else 0
     prompt_tokens = prompt_tokens if prompt_tokens is not None else 0
@@ -111,42 +125,55 @@ def log_usage_statistics(response, prompt_token_cost, completion_token_cost, dat
         f"Total: {total_tokens} tokens, Total Cost: ${total_cost:.4f}"
         f"{f' (Database: {database_name})' if database_name else ''}"
     )
-    
+
     # Update global token usage tracker
     _token_usage["prompt_tokens"] += prompt_tokens
     _token_usage["completion_tokens"] += completion_tokens
     _token_usage["total_tokens"] += total_tokens
     _token_usage["cost"] += total_cost
-    
+
     # Update database-specific token usage if database_name is provided
     if database_name:
         try:
             # Import dynamically to avoid circular dependency issues at module load time
-            from ..agents.database_subagents.database_router import update_database_token_usage
-            
+            from ..agents.database_subagents.database_router import (
+                update_database_token_usage,
+            )
+
             token_diff = {
                 "prompt_tokens": prompt_tokens,
                 "completion_tokens": completion_tokens,
                 "total_tokens": total_tokens,
-                "cost": total_cost
+                "cost": total_cost,
             }
             update_database_token_usage(database_name, token_diff)
-            logger.info(f"Updated token usage for database '{database_name}': {total_tokens} tokens")
+            logger.info(
+                f"Updated token usage for database '{database_name}': {total_tokens} tokens"
+            )
         except ImportError:
-            logger.error("Could not import update_database_token_usage for database-specific tracking.")
+            logger.error(
+                "Could not import update_database_token_usage for database-specific tracking."
+            )
         except Exception as e:
-            logger.error(f"Error updating database-specific token usage for '{database_name}': {str(e)}")
+            logger.error(
+                f"Error updating database-specific token usage for '{database_name}': {str(e)}"
+            )
 
     return {
         "completion_tokens": completion_tokens,
         "prompt_tokens": prompt_tokens,
         "total_tokens": total_tokens,
-        "cost": total_cost
+        "cost": total_cost,
     }
 
 
-def call_llm(oauth_token: str, prompt_token_cost: float = 0,
-             completion_token_cost: float = 0, database_name: Optional[str] = None, **params) -> Any:
+def call_llm(
+    oauth_token: str,
+    prompt_token_cost: float = 0,
+    completion_token_cost: float = 0,
+    database_name: Optional[str] = None,
+    **params,
+) -> Any:
     """
     Makes a call to the OpenAI API with the given parameters.
 
@@ -154,7 +181,7 @@ def call_llm(oauth_token: str, prompt_token_cost: float = 0,
     It works in both RBC and local environments.
 
     Args:
-        oauth_token (str): 
+        oauth_token (str):
             - In RBC environment: OAuth token for API authentication
             - In local environment: OpenAI API key
         prompt_token_cost (float): Cost per 1K prompt tokens in USD
@@ -185,32 +212,33 @@ def call_llm(oauth_token: str, prompt_token_cost: float = 0,
     api_base_url = BASE_URL
 
     # Now create the OpenAI client with the properly formed URL
-    client = OpenAI(
-        api_key=oauth_token,
-        base_url=api_base_url
-    )
+    client = OpenAI(api_key=oauth_token, base_url=api_base_url)
 
     # Log token preview for security
-    token_preview = oauth_token[:TOKEN_PREVIEW_LENGTH] + "..." if len(oauth_token) > TOKEN_PREVIEW_LENGTH else oauth_token
+    token_preview = (
+        oauth_token[:TOKEN_PREVIEW_LENGTH] + "..."
+        if len(oauth_token) > TOKEN_PREVIEW_LENGTH
+        else oauth_token
+    )
     auth_type = "OAuth token" if IS_RBC_ENV else "API key"
     logger.info(f"Using {auth_type}: {token_preview}")
     logger.info(f"Using API base URL: {api_base_url}")
 
     # Set timeout if not provided
-    if 'timeout' not in params:
-        params['timeout'] = REQUEST_TIMEOUT
+    if "timeout" not in params:
+        params["timeout"] = REQUEST_TIMEOUT
 
     # Handle streaming with usage tracking
-    is_streaming = params.get('stream', False)
+    is_streaming = params.get("stream", False)
     if is_streaming:
         # Ensure stream_options with include_usage is set
-        stream_options = params.get('stream_options', {})
-        stream_options['include_usage'] = True
-        params['stream_options'] = stream_options
+        stream_options = params.get("stream_options", {})
+        stream_options["include_usage"] = True
+        params["stream_options"] = stream_options
 
     # Log key parameters
-    model = params.get('model', 'unknown')
-    has_tools = 'tools' in params
+    model = params.get("model", "unknown")
+    has_tools = "tools" in params
     env_type = "RBC" if IS_RBC_ENV else "local"
     logger.info(
         f"Making {'streaming' if is_streaming else 'non-streaming'} call to model: {model}"
@@ -222,14 +250,19 @@ def call_llm(oauth_token: str, prompt_token_cost: float = 0,
         attempts += 1
 
         try:
-            logger.info(f"Attempt {attempts}/{MAX_RETRY_ATTEMPTS}: Sending request to OpenAI API")
+            logger.info(
+                f"Attempt {attempts}/{MAX_RETRY_ATTEMPTS}: Sending request to OpenAI API"
+            )
 
             # Log only non-sensitive API call parameters
             safe_params = {
-                k: v for k, v in params.items()
-                if k not in ['messages', 'tools', 'tool_choice']
+                k: v
+                for k, v in params.items()
+                if k not in ["messages", "tools", "tool_choice"]
             }
-            logger.info(f"API call parameters (excluding message content): {safe_params}")
+            logger.info(
+                f"API call parameters (excluding message content): {safe_params}"
+            )
 
             # Make the API call
             response = client.chat.completions.create(**params)
@@ -239,14 +272,21 @@ def call_llm(oauth_token: str, prompt_token_cost: float = 0,
 
             # Log usage for non-streaming responses, passing database_name if provided
             if not is_streaming and prompt_token_cost and completion_token_cost:
-                log_usage_statistics(response, prompt_token_cost, completion_token_cost, database_name=database_name)
+                log_usage_statistics(
+                    response,
+                    prompt_token_cost,
+                    completion_token_cost,
+                    database_name=database_name,
+                )
 
             return response
 
         except Exception as e:
             last_exception = e
             attempt_time = time.time() - attempt_start
-            logger.warning(f"Call attempt {attempts} failed after {attempt_time:.2f} seconds: {str(e)}")
+            logger.warning(
+                f"Call attempt {attempts} failed after {attempt_time:.2f} seconds: {str(e)}"
+            )
 
             if attempts < MAX_RETRY_ATTEMPTS:
                 logger.info(f"Retrying in {RETRY_DELAY_SECONDS} seconds...")
@@ -262,7 +302,7 @@ def call_llm(oauth_token: str, prompt_token_cost: float = 0,
 def get_token_usage() -> Dict[str, Any]:
     """
     Get the current token usage statistics.
-    
+
     Returns:
         Dict containing prompt_tokens, completion_tokens, total_tokens, and cost
     """
@@ -279,5 +319,5 @@ def reset_token_usage() -> None:
         "prompt_tokens": 0,
         "completion_tokens": 0,
         "total_tokens": 0,
-        "cost": 0.0
+        "cost": 0.0,
     }

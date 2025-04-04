@@ -14,22 +14,23 @@ import time
 # Get module logger
 logger = logging.getLogger(__name__)
 
+
 def query_database(query, token=None):
     """
     Query the Central Accounting Policy Manual database.
-    
+
     Args:
         query (str): Search query for the database
         token (str, optional): Authentication token for API access
-            
+
     Returns:
         str: Query results from the policy database
     """
     logger.info(f"Querying CAPM database: {query}")
-    
+
     # Simulate database processing time for realism
     time.sleep(0.5)
-    
+
     # Placeholder response
     response = f"""
     CENTRAL ACCOUNTING POLICY MANUAL RESULTS
@@ -53,6 +54,6 @@ def query_database(query, token=None):
        - Decision trees for classification challenges
        - Documentation requirements for audit purposes
     """
-    
+
     logger.info("CAPM database query completed")
     return response

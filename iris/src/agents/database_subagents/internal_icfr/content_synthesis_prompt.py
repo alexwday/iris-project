@@ -10,11 +10,11 @@ content from multiple ICFR documents to form a comprehensive response.
 def get_content_synthesis_prompt(user_query: str, formatted_documents: str) -> str:
     """
     Generate a prompt for synthesizing content from retrieved ICFR documents.
-    
+
     Args:
         user_query (str): The original user query
         formatted_documents (str): The formatted content of retrieved ICFR documents
-        
+
     Returns:
         str: The formatted prompt for the LLM
     """

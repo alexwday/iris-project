@@ -10,11 +10,11 @@ the most relevant documents from the ICFR catalog based on the user query.
 def get_catalog_selection_prompt(user_query: str, formatted_catalog: str) -> str:
     """
     Generate a prompt for selecting relevant documents from the ICFR catalog.
-    
+
     Args:
         user_query (str): The original user query
         formatted_catalog (str): The formatted catalog of ICFR documents
-        
+
     Returns:
         str: The formatted prompt for the LLM
     """

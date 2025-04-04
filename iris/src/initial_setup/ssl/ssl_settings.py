@@ -19,8 +19,8 @@ Dependencies:
     - datetime
 """
 
-import os
 import logging
+import os
 from datetime import datetime, timedelta
 
 # Get module logger (no configuration here - using centralized config)
@@ -40,4 +40,6 @@ EXPIRY_WARNING_DAYS = 30  # Warn if certificate expires within this many days
 
 logger.debug(f"SSL settings initialized")
 logger.debug(f"Calculated SSL_CERT_PATH: {SSL_CERT_PATH}")
-logger.debug(f"Certificate expiry checking: {'Enabled' if CHECK_CERT_EXPIRY else 'Disabled'}")
+logger.debug(
+    f"Certificate expiry checking: {'Enabled' if CHECK_CERT_EXPIRY else 'Disabled'}"
+)

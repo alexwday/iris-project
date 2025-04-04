@@ -10,11 +10,11 @@ content from multiple PAR documents to form a comprehensive response.
 def get_content_synthesis_prompt(user_query: str, formatted_documents: str) -> str:
     """
     Generate a prompt for synthesizing content from retrieved PAR documents.
-    
+
     Args:
         user_query (str): The original user query
         formatted_documents (str): The formatted content of retrieved PAR documents
-        
+
     Returns:
         str: The formatted prompt for the LLM
     """

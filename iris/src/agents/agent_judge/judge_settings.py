@@ -15,6 +15,7 @@ Attributes:
 """
 
 import logging
+
 from ...global_prompts.prompt_utils import get_full_system_prompt
 
 # Get module logger (no configuration here - using centralized config)
@@ -22,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 # Import database configuration from global prompts
 from ...global_prompts.database_statement import get_available_databases
+
 AVAILABLE_DATABASES = get_available_databases()
 
 # Model capability - used to get specific model based on environment
@@ -87,21 +89,31 @@ Choose ONE of two options:
 # OUTPUT REQUIREMENTS
 - Submit your judgment using ONLY the provided tool.
 - Choose either "continue_research" or "stop_research".
-- Provide concise reasoning for your decision, focusing on the decision criteria.
-- For continue_research: Explain ONLY the value expected from remaining queries.
-- For stop_research: Explain ONLY why the research is considered complete based on the criteria.
 - DO NOT generate any summary of the research findings. Your sole focus is the decision to continue or stop.
 
-IMPORTANT: Use the provided tool to submit ONLY the action (continue_research or stop_research) and a brief reason.
+IMPORTANT: Use the provided tool to submit ONLY the action (continue_research or stop_research).
+
+
+# WORKFLOW & ROLE SUMMARY
+- You are the JUDGE, evaluating research progress after DB queries.
+- Input: Research statement, completed query results, remaining planned queries, DB info.
+- Task: Decide whether to CONTINUE_RESEARCH or STOP_RESEARCH based on evaluation criteria.
+- Impact: Your decision determines if more queries run or if the Summarizer generates the final response. Balances thoroughness vs. efficiency.
+
+# I/O SPECIFICATIONS (Tool Call Only)
+- Input: Research statement, query results, remaining queries, DB info.
+- Validation: Understand need? Assess results quality/relevance? Results address key aspects?
+- Output: `submit_research_decision` tool call (`action`: "continue_research" or "stop_research").
+- Validation: Decision based on framework?
+
+# ERROR HANDLING SUMMARY
+- General: Handle unexpected input, ambiguity (choose likely, state assumption), missing info (assume reasonably, state assumption), limitations (acknowledge). Use confidence signaling.
+- Judge Specific: Low quality results -> acknowledge in reason. Uncertain -> err on continuing research, explain why (value/gaps).
 """
 
 # Generate system prompt with context from global_prompts
-SYSTEM_PROMPT = get_full_system_prompt(
-    agent_role=JUDGE_ROLE,
-    agent_task=JUDGE_TASK,
-    profile="evaluator",
-    agent_type="judge"
-)
+# Now uses the simplified get_full_system_prompt which includes global context by default
+SYSTEM_PROMPT = get_full_system_prompt(agent_role=JUDGE_ROLE, agent_task=JUDGE_TASK)
 
 # Tool definition for judge decisions
 TOOL_DEFINITIONS = [
@@ -116,16 +128,12 @@ TOOL_DEFINITIONS = [
                     "action": {
                         "type": "string",
                         "description": "The decision whether to continue or stop the research process.",
-                        "enum": ["continue_research", "stop_research"]
-                    },
-                    "reason": {
-                        "type": "string",
-                        "description": "A concise explanation for the decision, based on the evaluation criteria."
+                        "enum": ["continue_research", "stop_research"],
                     }
                 },
-                "required": ["action", "reason"]
-            }
-        }
+                "required": ["action"],
+            },
+        },
     }
 ]
 

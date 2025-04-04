@@ -15,6 +15,7 @@ Attributes:
 """
 
 import logging
+
 from ...global_prompts.prompt_utils import get_full_system_prompt
 
 # Get module logger (no configuration here - using centralized config)
@@ -29,6 +30,7 @@ TEMPERATURE = 0.0
 
 # Import database configuration from global prompts
 from ...global_prompts.database_statement import get_available_databases
+
 AVAILABLE_DATABASES = get_available_databases()
 
 # Define the planner agent role and task
@@ -37,53 +39,11 @@ PLANNER_TASK = """You create strategic database query plans to efficiently resea
 
 # ANALYSIS INSTRUCTIONS
 For each research statement:
-1. Analyze the core accounting question and information needs
-2. Identify which databases would contain the most relevant information
-3. Create specific, targeted queries optimized for each database
-4. Develop a comprehensive, multi-source research strategy
-
-# QUERY PRIORITIZATION FRAMEWORK
-Prioritize databases and queries based on relevance and source authority:
-
-## Tier 1: Primary & Authoritative Sources
-- internal_capm: Primary source for official RBC policies. Check US GAAP flags.
-- external_iasb: Third source for official IFRS standards & interpretations (IFRICs/SICs).
-- external_ey/kpmg/pwc: Fifth primary source for external firm guidance on IFRS.
-*Note: internal_par is primary for PAR policy; internal_icfr is primary for financial controls.*
-
-## Tier 2: Secondary & Implementation Guidance
-- internal_wiki: Secondary source for RBC-specific examples & conclusions.
-- internal_memos: Secondary source for approved technical analysis.
-- internal_cheatsheet: Secondary source for quick summaries/infographics.
-*Note: internal_par & internal_icfr may also fit here if query is about implementation within their domains.*
-
-## Tier 3: Supplementary Context
-- Use Tier 2 sources (Wiki, Memos, Cheatsheet) if not already included and relevant for context or quick reference.
-*Note: Prioritize Tier 1 & 2 based on the specific question.*
-
-## Query Sequence Logic
-1. Start with 1-2 queries to the most relevant primary/authoritative sources (Tier 1, considering topic-specific primaries like PAR/ICFR).
-2. Follow with 1-2 queries to implementation guidance (Tier 2)
-3. Add 0-1 supplementary queries (Tier 3) if needed
-4. Limit total queries to 5 maximum, prioritizing higher tiers
-
-# DATABASE-SPECIFIC QUERY OPTIMIZATION
-
-## For Standards Databases (external_iasb, external_ey/kpmg/pwc)
-- Include specific standard numbers (e.g., "IFRS 15", "IAS 38") and interpretations (IFRIC/SIC).
-- Use technical terminology from the standards.
-- Focus on specific paragraphs or sections when known.
-
-## For Policy Databases (internal_capm, internal_par, internal_icfr)
-- Use RBC-specific terminology when available.
-- Include specific policy areas or sections (e.g., check US GAAP flags in CAPM).
-- Reference specific processes or workflows (especially for PAR, ICFR).
-
-## For Implementation/Secondary Databases (internal_wiki, internal_memos, internal_cheatsheet)
-- Focus on practical application aspects or specific RBC conclusions (Wiki).
-- Include industry or scenario-specific terms.
-- Use action-oriented language (e.g., "implementing", "applying").
-- Use concise, keyword-focused queries for Cheatsheets.
+1. Analyze the core accounting question and information needs **as defined in the research statement**.
+2. Identify which databases contain the most relevant information based on the statement's scope.
+3. **Scale the number of queries (1-5) based on the complexity of the research statement.** Simple requests (e.g., definition of a single term) may only require 1-2 queries to authoritative sources. Complex requests involving multiple facets, comparisons, or specific scenarios may require more queries across different tiers.
+4. Create specific, targeted queries optimized for each chosen database.
+5. Develop a comprehensive, multi-source research strategy appropriate for the statement's complexity, referencing the database details provided in the CONTEXT section for strategic guidance.
 
 # QUERY FORMULATION GUIDELINES
 For each database query:
@@ -103,20 +63,32 @@ If this is a continuation of previous research:
 - Build upon insights from earlier query results
 
 # OUTPUT REQUIREMENTS
-- Submit your query plan using ONLY the provided tool
-- Create 1-5 queries depending on research complexity
-- Each query must include a specific database and query text
-- Provide a clear overall strategy explaining your approach
-- Queries should work together as a cohesive research plan
+- Submit your query plan using ONLY the provided tool.
+- **Create 1-5 queries, scaling the number based on the research statement's complexity.** A simple definition might need only 1 query; a complex comparison might need 3-5. Do not create unnecessary queries.
+- Each query must include a specific database and query text.
+- Queries should work together as a cohesive research plan.
+
+
+# WORKFLOW & ROLE SUMMARY
+- You are the PLANNER, following the Clarifier in the research path.
+- Input: Research statement from Clarifier, database info, continuation status.
+- Task: Design an optimal query plan (1-5 queries) targeting relevant databases.
+- Impact: Your plan determines the queries executed and evaluated by the Judge. Quality of results depends on your plan.
+
+# I/O SPECIFICATIONS (Tool Call Only)
+- Input: Research statement, DB info, continuation status.
+- Validation: Understand need? Identify topics/standards? Determine relevant DBs?
+- Output: `submit_query_plan` tool call (`queries`: array of {database, query}).
+- Validation: Queries optimized? DBs prioritized? Logical progression? No duplicate queries on continuation?
+
+# ERROR HANDLING SUMMARY
+- General: Handle unexpected input, ambiguity (choose likely, state assumption), missing info (assume reasonably, state assumption), limitations (acknowledge). Use confidence signaling.
+- Planner Specific: Vague statement -> query likely interpretations. Unsure DBs -> include broader range. Multiple standards -> query each. Missing continuation info -> avoid duplicating likely previous queries.
 """
 
 # Generate system prompt with context from global_prompts
-SYSTEM_PROMPT = get_full_system_prompt(
-    agent_role=PLANNER_ROLE,
-    agent_task=PLANNER_TASK,
-    profile="researcher",
-    agent_type="planner"
-)
+# Now uses the simplified get_full_system_prompt which includes global context by default
+SYSTEM_PROMPT = get_full_system_prompt(agent_role=PLANNER_ROLE, agent_task=PLANNER_TASK)
 
 # Tool definition for query planning
 # Create query plan tool with database enum from central config
@@ -138,24 +110,20 @@ TOOL_DEFINITIONS = [
                                 "database": {
                                     "type": "string",
                                     "description": "The database to query",
-                                    "enum": list(AVAILABLE_DATABASES.keys())
+                                    "enum": list(AVAILABLE_DATABASES.keys()),
                                 },
                                 "query": {
                                     "type": "string",
-                                    "description": "The search query text"
+                                    "description": "The search query text",
                                 },
                             },
-                            "required": ["database", "query"]
-                        }
-                    },
-                    "overall_strategy": {
-                        "type": "string",
-                        "description": "The overall research strategy and reasoning behind the query plan"
+                            "required": ["database", "query"],
+                        },
                     }
                 },
-                "required": ["queries", "overall_strategy"]
-            }
-        }
+                "required": ["queries"],
+            },
+        },
     }
 ]
 

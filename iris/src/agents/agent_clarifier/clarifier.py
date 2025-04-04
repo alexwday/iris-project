@@ -17,14 +17,15 @@ Dependencies:
 
 import json
 import logging
-from ...llm_connectors.rbc_openai import call_llm
+
 from ...chat_model.model_settings import get_model_config
+from ...llm_connectors.rbc_openai import call_llm
 from .clarifier_settings import (
-    MODEL_CAPABILITY,
     MAX_TOKENS,
-    TEMPERATURE,
+    MODEL_CAPABILITY,
     SYSTEM_PROMPT,
-    TOOL_DEFINITIONS
+    TEMPERATURE,
+    TOOL_DEFINITIONS,
 )
 
 # Get module logger (no configuration here - using centralized config)
@@ -37,11 +38,10 @@ PROMPT_TOKEN_COST = model_config["prompt_token_cost"]
 COMPLETION_TOKEN_COST = model_config["completion_token_cost"]
 
 
-
 class ClarifierError(Exception):
     """Base exception class for clarifier-related errors."""
-    pass
 
+    pass
 
 
 def clarify_research_needs(conversation, token):
@@ -83,28 +83,28 @@ def clarify_research_needs(conversation, token):
             temperature=TEMPERATURE,
             tools=TOOL_DEFINITIONS,
             tool_choice={
-                "type": "function", 
-                "function": {"name": "make_clarifier_decision"}
+                "type": "function",
+                "function": {"name": "make_clarifier_decision"},
             },
             stream=False,
             prompt_token_cost=PROMPT_TOKEN_COST,
-            completion_token_cost=COMPLETION_TOKEN_COST
+            completion_token_cost=COMPLETION_TOKEN_COST,
         )
 
         # Extract the tool call from the response
-        if (not response.choices or
-                not response.choices[0].message or
-                not response.choices[0].message.tool_calls or
-                not response.choices[0].message.tool_calls[0]):
+        if (
+            not response.choices
+            or not response.choices[0].message
+            or not response.choices[0].message.tool_calls
+            or not response.choices[0].message.tool_calls[0]
+        ):
             raise ClarifierError("No tool call received in response")
 
         tool_call = response.choices[0].message.tool_calls[0]
 
         # Verify that the correct function was called
         if tool_call.function.name != "make_clarifier_decision":
-            raise ClarifierError(
-                f"Unexpected function call: {tool_call.function.name}"
-            )
+            raise ClarifierError(f"Unexpected function call: {tool_call.function.name}")
 
         # Parse the arguments
         try:
@@ -129,11 +129,7 @@ def clarify_research_needs(conversation, token):
         logger.info(f"Clarifier decision: {action}")
         logger.info(f"Is continuation: {is_continuation}")
 
-        return {
-            "action": action,
-            "output": output,
-            "is_continuation": is_continuation
-        }
+        return {"action": action, "output": output, "is_continuation": is_continuation}
 
     except Exception as e:
         logger.error(f"Error clarifying research needs: {str(e)}")

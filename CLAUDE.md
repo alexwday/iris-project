@@ -2,8 +2,9 @@
 
 ## Build Commands
 - Install: `pip install -e .`
+- Install dev tools: `pip install -e ".[dev]"`
 - Run notebook: `jupyter notebook notebooks/test_notebook.ipynb`
-- Lint: `flake8 iris/`
+- Lint: `black iris/`
 - Type check: `mypy iris/`
 
 ## Testing
@@ -19,8 +20,8 @@
 - Group related imports together
 
 ### Formatting
-- 4-space indentation
-- 80-100 character line limit
+- 4-space indentation (enforced by Black)
+- 88 character line limit (Black default)
 - Triple double quotes for docstrings (`"""`)
 - Google-style docstrings with Args/Returns/Raises sections
 

@@ -16,81 +16,82 @@ logger = logging.getLogger(__name__)
 AVAILABLE_DATABASES = {
     "internal_capm": {
         "name": "Corporate Accounting Policy Manuals",
-        "description": "Corporate Accounting Policy Manuals. Contains internal accounting policies published by the Accounting Policy Group in RBC. Flags IFRS/US GAAP differences.",
+        "description": "Internal RBC accounting policies (CAPMs) from APG. Notes IFRS/US GAAP differences.",
         "query_type": "semantic search",
         "content_type": "policies and procedures",
-        "use_when": "Tier 1 (Official RBC Policy). Primary source for official policy statements. Check US GAAP flags. Corroborate with IASB for IFRS."
+        "use_when": "Tier 1: Official RBC policy statements. **Strategy:** Always check first. Check US GAAP flags. Corroborate IFRS w/ IASB. **Query:** Use RBC terms, policy areas; check US GAAP flags.",
     },
-     "internal_cheatsheet": { # Replaces internal_infographic based on user feedback
+    "internal_cheatsheet": {  # Replaces internal_infographic based on user feedback
         "name": "APG Cheat Sheet Infographics",
-        "description": "Summarized accounting guidance in one to two pages on specific limited topics. Internal RBC documentation.",
-        "query_type": "keyword search", # Assuming keyword based on previous value for cheatsheet/infographic
+        "description": "1-2 page summaries/infographics on specific accounting topics (Internal RBC).",
+        "query_type": "keyword search",  # Assuming keyword based on previous value for cheatsheet/infographic
         "content_type": "summarized guidance / infographics",
-        "use_when": "Tier 2 (Implementation Guidance). Use for quick visual summaries on limited topics."
+        "use_when": "Tier 2: Quick visual summaries on specific topics. **Strategy:** Consider early for definitions/overviews. **Query:** Use concise, keyword-focused queries.",
     },
     "internal_wiki": {
         "name": "APG Wiki Entries",
-        "description": "Contains accounting treatment conclusions for specific RBC transactions. Internal RBC documentation.",
+        "description": "Accounting conclusions for specific RBC transactions (Internal RBC).",
         "query_type": "semantic search",
         "content_type": "RBC-specific conclusions / guides",
-        "use_when": "Tier 2 (Implementation Guidance). Use for RBC-specific issue conclusions."
+        "use_when": "Tier 2: RBC-specific transaction conclusions. **Strategy:** Query after `internal_capm` or for highly specific transaction types. **Query:** Focus on application, specific conclusions, industry/scenario terms.",
     },
-    "internal_memos": { # Renamed from internal_memo to match existing key
+    "internal_memos": {  # Renamed from internal_memo to match existing key
         "name": "Internal Accounting Memos",
-        "description": "Internal accounting memos written by finance and approved by APG. Internal RBC documentation.",
+        "description": "Internal memos on accounting topics, written by finance, approved by APG.",
         "query_type": "semantic search",
         "content_type": "technical analysis",
-        "use_when": "Tier 2 (Implementation Guidance). Use for approved analysis on complex issues."
+        "use_when": "Tier 2: Approved analysis on complex issues. **Strategy:** Query after `internal_capm` or for complex issues where analysis might exist. **Query:** Focus on application, specific conclusions, industry/scenario terms.",
     },
     "internal_par": {
         "name": "Project Approval Request Guidance",
-        "description": "RBC internal Project Approval Requests Policy guidance and interpretations.",
+        "description": "RBC internal policy guidance/interpretations for Project Approval Requests (PAR).",
         "query_type": "semantic search",
         "content_type": "policy guidance / interpretations",
-        "use_when": "Tier 1 (Primary for its specific domain). Use for Project Approval Requests Policy questions."
+        "use_when": "Tier 1 (Domain Specific): Project Approval Requests Policy questions. **Strategy:** Query if statement relates to PAR; treat as primary within domain. **Query:** Use RBC terms, reference PAR processes/workflows.",
     },
     "internal_icfr": {
         "name": "Internal Control over Financial Reporting Policy",
-        "description": "Comprehensive guidelines for maintaining reliable financial reporting controls. Outlines approach for identifying, evaluating, documenting controls and management responsibilities.",
+        "description": "RBC guidelines for financial reporting controls (ICFR): identification, evaluation, documentation, responsibilities.",
         "query_type": "semantic search",
         "content_type": "control documentation",
-        "use_when": "Tier 1 (Primary for its specific domain). Use for researching financial control requirements, compliance, and data integrity."
+        "use_when": "Tier 1 (Domain Specific): Financial control requirements, compliance, data integrity. **Strategy:** Query if statement relates to ICFR; treat as primary within domain. **Query:** Use RBC terms, reference ICFR processes/workflows.",
     },
     "external_ey": {
         "name": "EY IFRS Guidance",
-        "description": "IFRS accounting guidance and interpretations published by EY. Includes IFRS disclosure requirement checklist.",
+        "description": "External IFRS guidance and interpretations from EY. Includes disclosure checklist.",
         "query_type": "semantic search",
         "content_type": "external guidance",
-        "use_when": "Tier 1 (External IFRS Guidance). Use for external firm perspective and disclosure checklists."
+        "use_when": "Tier 1: External firm perspective on IFRS; disclosure checklists. **Strategy:** Query after internal/IASB for context, interpretation, disclosure. **Query:** Use standard numbers (IFRS 15, IAS 38), technical terms, specific paragraphs.",
     },
     "external_kpmg": {
         "name": "KPMG IFRS Guidance",
-        "description": "IFRS accounting guidance and interpretations published by KPMG.",
+        "description": "External IFRS accounting guidance and interpretations from KPMG.",
         "query_type": "semantic search",
         "content_type": "external guidance",
-        "use_when": "Tier 1 (External IFRS Guidance). Use for external firm perspective."
+        "use_when": "Tier 1: External firm perspective on IFRS. **Strategy:** Query after internal/IASB for context, interpretation. **Query:** Use standard numbers (IFRS 15, IAS 38), technical terms, specific paragraphs.",
     },
     "external_pwc": {
         "name": "PwC IFRS Guidance",
-        "description": "IFRS accounting guidance and interpretations published by PwC.",
+        "description": "External IFRS accounting guidance and interpretations from PwC.",
         "query_type": "semantic search",
         "content_type": "external guidance",
-        "use_when": "Tier 1 (External IFRS Guidance). Use for external firm perspective."
+        "use_when": "Tier 1: External firm perspective on IFRS. **Strategy:** Query after internal/IASB for context, interpretation. **Query:** Use standard numbers (IFRS 15, IAS 38), technical terms, specific paragraphs.",
     },
     "external_iasb": {
         "name": "IASB Standards and Interpretations",
-        "description": "Official IFRS standards and IFRICs/SICs interpretations published by the International Accounting Standards Board. Includes main guidance, examples, and basis for conclusions.",
+        "description": "Official IFRS standards & interpretations (IFRICs/SICs) from IASB. Includes guidance, examples, basis for conclusions.",
         "query_type": "semantic search",
         "content_type": "standards and interpretations",
-        "use_when": "Tier 1 (Official IFRS Standards). Use for official standard text, interpretations (IFRICs/SICs), and basis for conclusions."
-    }
+        "use_when": "Tier 1: Official IFRS standard text, interpretations, basis for conclusions. **Strategy:** Query after relevant internal sources, for official text, or if internal unclear. **Query:** Use standard numbers (IFRS 15, IAS 38), interpretations (IFRIC/SIC), technical terms, specific paragraphs.",
+    },
     # Removed internal_infographic as it's covered by internal_cheatsheet
 }
+
 
 def get_database_statement() -> str:
     """
     Returns a formatted statement about available databases for use in agent prompts.
-    
+
     Returns:
         str: Formatted statement describing available databases
     """
@@ -100,25 +101,29 @@ def get_database_statement() -> str:
 The following databases are available for research:
 
 """
-    
-    # Add each database with description
+
+    # Add each database with concise description and usage guidance
     for db_name, db_info in AVAILABLE_DATABASES.items():
-        statement += f"## {db_info['name']} (`{db_name}`)\n"
-        statement += f"{db_info['description']}\n"
-        statement += f"- Content type: {db_info['content_type']}\n"
-        statement += f"- Search method: {db_info['query_type']}\n"
-        statement += f"- Use when: {db_info['use_when']}\n\n"
-    
+        statement += f"### {db_info['name']} (`{db_name}`)\n"  # Use H3 for compactness
+        statement += f"Desc: {db_info['description']}\n"
+        statement += f"Content: {db_info['content_type']}\n"  # Keep Content Type
+        statement += f"Search: {db_info['query_type']}\n"  # Keep Query Type
+        statement += f"Use: {db_info['use_when']}\n\n"  # Keep Use When guidance
+
+    # Remove trailing newlines
+    statement = statement.strip()
     return statement
+
 
 # Export database configuration for other modules
 def get_available_databases():
     """
     Returns the dictionary of available databases.
-    
+
     Returns:
         dict: Dictionary of available database configurations
     """
     return AVAILABLE_DATABASES
+
 
 logger.debug("Database statement module initialized")

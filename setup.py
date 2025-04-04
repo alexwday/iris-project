@@ -11,4 +11,12 @@ setup(
         "psycopg2-binary",
         "jupyter",
     ],
+    extras_require={
+        "dev": [
+            "pytest",
+            "pytest-cov",
+            "black",
+            "mypy",
+        ],
+    },
 )
