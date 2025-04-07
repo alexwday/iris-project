@@ -85,7 +85,7 @@ def fetch_memos_catalog() -> List[Dict[str, Any]]:
                 """
                 SELECT id, document_name, document_description
                 FROM apg_catalog
-                WHERE document_source = 'internal_memos'
+                WHERE document_source = 'internal_memo'
                 ORDER BY document_name
             """
             )
@@ -130,7 +130,7 @@ def fetch_document_content(doc_ids: List[str]) -> List[Dict[str, Any]]:
                 SELECT id, document_name
                 FROM apg_catalog
                 WHERE id::text IN ({placeholders})
-                AND document_source = 'internal_memos'
+                AND document_source = 'internal_memo'
             """,
                 doc_ids,
             )
@@ -144,7 +144,7 @@ def fetch_document_content(doc_ids: List[str]) -> List[Dict[str, Any]]:
                     """
                     SELECT section_id, section_name, section_content
                     FROM apg_content
-                    WHERE document_source = 'internal_memos'
+                    WHERE document_source = 'internal_memo'
                     AND document_name = %s
                     ORDER BY section_id
                 """,
@@ -261,19 +261,19 @@ def select_relevant_documents(
     query: str,
     catalog: List[Dict[str, Any]],
     token: Optional[str] = None,
-    database_name: str = "internal_memos",
+    database_name: str = "internal_memo",
 ) -> List[str]:
     """
-    Use an LLM to select the most relevant Memos documents synchronously.
+    Use an LLM to select the most relevant Memo documents synchronously.
     """
-    logger.info("Selecting relevant Memos documents from catalog")
+    logger.info("Selecting relevant Memo documents from catalog")
     formatted_catalog = format_catalog_for_llm(catalog)
     selection_prompt = get_catalog_selection_prompt(
         query, formatted_catalog
     )  # Assumes this prompt asks for JSON list
 
     try:
-        logger.info(f"Initiating Memos Document Selection API call (DB: {database_name})") # Added contextual log
+        logger.info(f"Initiating Memo Document Selection API call (DB: {database_name})") # Added contextual log
         # Direct synchronous call
         response_str = get_completion(
             capability="small",
@@ -295,31 +295,31 @@ def select_relevant_documents(
             if isinstance(selected_ids, list) and all(
                 isinstance(i, str) for i in selected_ids
             ):
-                logger.info(f"LLM selected Memos document IDs: {selected_ids}")
+                logger.info(f"LLM selected Memo document IDs: {selected_ids}")
                 return selected_ids
             else:
                 logger.error(
-                    f"LLM response for Memos selection was valid JSON but not list of strings: {response_str}"
+                    f"LLM response for Memo selection was valid JSON but not list of strings: {response_str}"
                 )
                 return []
         except json.JSONDecodeError:
             logger.error(
-                "Failed to parse Memos selection LLM response as JSON, attempting fallback"
+                "Failed to parse Memo selection LLM response as JSON, attempting fallback"
             )
             matches = re.findall(r'"([^"]+)"', response_str)
-            # Accept any ID, not just digits, as Memos IDs might be strings
+            # Accept any ID, not just digits, as Memo IDs might be strings
             valid_ids = [m.strip() for m in matches if m.strip()]
             if valid_ids:
                 logger.warning(
-                    f"Extracted Memos document IDs using fallback regex: {valid_ids}"
+                    f"Extracted Memo document IDs using fallback regex: {valid_ids}"
                 )
                 return valid_ids
             logger.error(
-                "Could not extract Memos document IDs from response using fallback."
+                "Could not extract Memo document IDs from response using fallback."
             )
             return []
     except Exception as e:
-        logger.error(f"Error during LLM Memos document selection: {str(e)}")
+        logger.error(f"Error during LLM Memo document selection: {str(e)}")
         return []
 
 
@@ -352,10 +352,10 @@ def synthesize_response_and_status(
     query: str,
     documents: List[Dict[str, Any]],
     token: Optional[str] = None,
-    database_name: str = "internal_memos",
+    database_name: str = "internal_memo",
 ) -> ResearchResponse:
     """
-    Use an LLM tool call to synthesize a detailed research response AND status summary for Memos (synchronous).
+    Use an LLM tool call to synthesize a detailed research response AND status summary for Memo (synchronous).
     """
     logger.info(
         f"Synthesizing response and status for {database_name} using tool call."
@@ -379,7 +379,7 @@ def synthesize_response_and_status(
     synthesis_prompt = get_content_synthesis_prompt(query, formatted_documents)
 
     try:
-        logger.info(f"Initiating Memos Synthesis API call (DB: {database_name})") # Added contextual log
+        logger.info(f"Initiating Memo Synthesis API call (DB: {database_name})") # Added contextual log
         # Direct synchronous call
         response_obj = get_completion(
             capability="large",
@@ -495,30 +495,30 @@ def query_database_sync(
     query: str, scope: str, token: Optional[str] = None
 ) -> DatabaseResponse:
     """
-    Synchronously query the Internal Memos database based on the specified scope.
+    Synchronously query the Internal Memo database based on the specified scope.
     """
-    logger.info(f"Querying Internal Memos database (sync): '{query}' with scope: {scope}")
-    database_name = "internal_memos"
+    logger.info(f"Querying Internal Memo database (sync): '{query}' with scope: {scope}")
+    database_name = "internal_memo"
     default_error_status = "❌ Error during query processing."
 
     try:
         # Direct synchronous calls
-        catalog = fetch_memos_catalog()
-        logger.info(f"Retrieved {len(catalog)} total Memos catalog entries")
+        catalog = fetch_memos_catalog() # Function name kept for consistency, queries 'internal_memo'
+        logger.info(f"Retrieved {len(catalog)} total Memo catalog entries")
         if not catalog:
             if scope == "metadata":
                 return []
             else:
                 return {
-                    "detailed_research": "No documents found in the Internal Memos database catalog.",
+                    "detailed_research": "No documents found in the Internal Memo database catalog.",
                     "status_summary": "📄 No documents found in catalog.",
                 }
 
         # Select documents
-        doc_ids = select_relevant_documents(
+        doc_ids = select_relevant_documents( # Function name kept for consistency, uses 'internal_memo' db name
             query, catalog, token, database_name=database_name
         )
-        logger.info(f"LLM selected {len(doc_ids)} relevant Memos document IDs: {doc_ids}")
+        logger.info(f"LLM selected {len(doc_ids)} relevant Memo document IDs: {doc_ids}")
         if not doc_ids:
             if scope == "metadata":
                 return []
@@ -531,29 +531,29 @@ def query_database_sync(
         # Process based on scope
         if scope == "metadata":
             selected_items = [item for item in catalog if item.get("id") in doc_ids]
-            logger.info(f"Returning {len(selected_items)} selected Memos metadata items.")
+            logger.info(f"Returning {len(selected_items)} selected Memo metadata items.")
             return selected_items
         elif scope == "research":
             # Fetch content and synthesize
-            documents = fetch_document_content(doc_ids)
+            documents = fetch_document_content(doc_ids) # Function name kept for consistency, queries 'internal_memo'
             logger.info(
-                f"Retrieved content for {len(documents)} Memos documents for research."
+                f"Retrieved content for {len(documents)} Memo documents for research."
             )
-            research_result = synthesize_response_and_status(
+            research_result = synthesize_response_and_status( # Function name kept for consistency, uses 'internal_memo' db name
                 query, documents, token, database_name=database_name
             )
             return research_result
         else:
-            logger.error(f"Invalid scope provided to internal_memos subagent: {scope}")
+            logger.error(f"Invalid scope provided to internal_memo subagent: {scope}")
             raise ValueError(f"Invalid scope: {scope}")
 
     except Exception as e:
-        error_msg = f"Error querying Internal Memos database (scope: {scope}): {str(e)}"
+        error_msg = f"Error querying Internal Memo database (scope: {scope}): {str(e)}"
         logger.error(error_msg, exc_info=True)
         if scope == "metadata":
             return []
         else:
             return {
-                "detailed_research": f"**Error processing request for Internal Memos:** {str(e)}",
+                "detailed_research": f"**Error processing request for Internal Memo:** {str(e)}",
                 "status_summary": default_error_status,
             }
