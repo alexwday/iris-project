@@ -19,7 +19,7 @@ Dependencies:
 
 import logging
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Iterator
 
 from openai import OpenAI
 
@@ -78,9 +78,10 @@ def log_usage_statistics(
     prompt_token_cost,
     completion_token_cost,
     database_name: Optional[str] = None,
+    usage_data=None,  # Allow passing usage data directly for streams
 ):
     """
-    Log token usage and cost statistics from the model response.
+    Log token usage and cost statistics from the model response or provided data.
 
     Updates both the global token counter and, if provided, the database-specific counter.
 
@@ -95,17 +96,21 @@ def log_usage_statistics(
     """
     global _token_usage
 
-    # Ensure response and usage attribute exist
-    if not response or not hasattr(response, "usage") or not response.usage:
-        logger.warning(
-            "Attempted to log usage statistics but response or usage attribute was missing/None."
-        )
-        return None
+    # Use provided usage_data if available, otherwise try to get from response
+    usage = usage_data
+    if usage is None:
+        if response and hasattr(response, "usage") and response.usage:
+            usage = response.usage
+        else:
+            logger.warning(
+                "Attempted to log usage statistics but no usage data was found in response or arguments."
+            )
+            return None
 
-    # Safely access usage attributes
-    completion_tokens = getattr(response.usage, "completion_tokens", 0)
-    prompt_tokens = getattr(response.usage, "prompt_tokens", 0)
-    total_tokens = getattr(response.usage, "total_tokens", 0)
+    # Safely access usage attributes from the determined source
+    completion_tokens = getattr(usage, "completion_tokens", 0)
+    prompt_tokens = getattr(usage, "prompt_tokens", 0)
+    total_tokens = getattr(usage, "total_tokens", 0)
 
     # Check if tokens are None (which can happen) and default to 0
     completion_tokens = completion_tokens if completion_tokens is not None else 0
@@ -123,7 +128,7 @@ def log_usage_statistics(
         f"Token usage - Completion: {completion_tokens} (${completion_cost:.4f}), "
         f"Prompt: {prompt_tokens} (${prompt_cost:.4f}), "
         f"Total: {total_tokens} tokens, Total Cost: ${total_cost:.4f}"
-        f"{f' (Database: {database_name})' if database_name else ''}"
+        f"{f' (Database: {database_name})' if database_name else ''}",
     )
 
     # Update global token usage tracker
@@ -132,32 +137,12 @@ def log_usage_statistics(
     _token_usage["total_tokens"] += total_tokens
     _token_usage["cost"] += total_cost
 
-    # Update database-specific token usage if database_name is provided
+    # Database-specific tracking was removed from database_router.py
+    # The code attempting to call update_database_token_usage has been removed.
+    # Global tracking above still works.
     if database_name:
-        try:
-            # Import dynamically to avoid circular dependency issues at module load time
-            from ..agents.database_subagents.database_router import (
-                update_database_token_usage,
-            )
+         logger.debug(f"Database name '{database_name}' provided, but specific tracking is disabled.")
 
-            token_diff = {
-                "prompt_tokens": prompt_tokens,
-                "completion_tokens": completion_tokens,
-                "total_tokens": total_tokens,
-                "cost": total_cost,
-            }
-            update_database_token_usage(database_name, token_diff)
-            logger.info(
-                f"Updated token usage for database '{database_name}': {total_tokens} tokens"
-            )
-        except ImportError:
-            logger.error(
-                "Could not import update_database_token_usage for database-specific tracking."
-            )
-        except Exception as e:
-            logger.error(
-                f"Error updating database-specific token usage for '{database_name}': {str(e)}"
-            )
 
     return {
         "completion_tokens": completion_tokens,
@@ -173,7 +158,7 @@ def call_llm(
     completion_token_cost: float = 0,
     database_name: Optional[str] = None,
     **params,
-) -> Any:
+) -> Any:  # Returns completion object or stream iterator
     """
     Makes a call to the OpenAI API with the given parameters.
 
@@ -200,7 +185,7 @@ def call_llm(
                 - ... any other parameters supported by the OpenAI API
 
     Returns:
-        Any: OpenAI API response (completion object or stream)
+        Any: OpenAI API response (completion object or a generator yielding stream chunks)
 
     Raises:
         OpenAIConnectorError: If the API call fails after all retry attempts
@@ -235,6 +220,11 @@ def call_llm(
         stream_options = params.get("stream_options", {})
         stream_options["include_usage"] = True
         params["stream_options"] = stream_options
+    else:
+        # Ensure stream_options is not present for non-streaming calls if it causes issues
+        # (Though generally harmless, explicit removal might prevent future API conflicts)
+        params.pop("stream_options", None)
+
 
     # Log key parameters
     model = params.get("model", "unknown")
@@ -265,21 +255,30 @@ def call_llm(
             )
 
             # Make the API call
-            response = client.chat.completions.create(**params)
+            api_response = client.chat.completions.create(**params)
 
             elapsed_time = time.time() - attempt_start
-            logger.info(f"Received response in {elapsed_time:.2f} seconds")
+            logger.info(f"Received {'initial stream chunk' if is_streaming else 'response'} in {elapsed_time:.2f} seconds")
 
-            # Log usage for non-streaming responses, passing database_name if provided
-            if not is_streaming and prompt_token_cost and completion_token_cost:
-                log_usage_statistics(
-                    response,
+            # Handle streaming vs non-streaming response and logging
+            if is_streaming:
+                # Return a generator that wraps the stream and logs usage at the end
+                return _stream_wrapper(
+                    api_response,
                     prompt_token_cost,
                     completion_token_cost,
-                    database_name=database_name,
+                    database_name,
                 )
-
-            return response
+            else:
+                # Log usage for non-streaming responses immediately
+                if prompt_token_cost and completion_token_cost:
+                    log_usage_statistics(
+                        api_response,
+                        prompt_token_cost,
+                        completion_token_cost,
+                        database_name=database_name,
+                    )
+                return api_response # Return the complete response object
 
         except Exception as e:
             last_exception = e
@@ -297,6 +296,34 @@ def call_llm(
     raise OpenAIConnectorError(
         f"Failed to complete OpenAI API call: {str(last_exception)}"
     )
+
+
+# Helper generator for streaming responses to log usage at the end
+def _stream_wrapper(
+    stream: Iterator,
+    prompt_token_cost: float,
+    completion_token_cost: float,
+    database_name: Optional[str] = None,
+) -> Iterator:
+    """Wraps the OpenAI stream iterator to log usage statistics after completion."""
+    last_chunk = None
+    try:
+        for chunk in stream:
+            yield chunk
+            last_chunk = chunk # Keep track of the last chunk
+    finally:
+        # After the stream is exhausted (or loop breaks), check the last chunk for usage
+        if last_chunk and hasattr(last_chunk, "usage") and last_chunk.usage:
+            logger.info("Stream finished. Logging usage from final chunk.")
+            log_usage_statistics(
+                response=None, # Pass None as response, we use usage_data
+                prompt_token_cost=prompt_token_cost,
+                completion_token_cost=completion_token_cost,
+                database_name=database_name,
+                usage_data=last_chunk.usage, # Pass the usage data directly
+            )
+        else:
+            logger.warning("Stream finished, but no usage data found in the final chunk.")
 
 
 def get_token_usage() -> Dict[str, Any]:

@@ -1,59 +1,67 @@
 # python/iris/src/agents/database_subagents/internal_capm/subagent.py
 """
-Central Accounting Policy Manual Subagent
+Central Accounting Policy Manual Subagent (Async Stub)
 
-This module handles queries to the Central Accounting Policy Manual database.
+This module provides a placeholder asynchronous interface for the CAPM database.
+It returns placeholder data according to the expected async structure.
 
 Functions:
-    query_database: Query the CAPM database
+    query_database: Asynchronously returns placeholder data for CAPM.
 """
 
+import asyncio
 import logging
 import time
+from typing import Any, Dict, List, Optional, Union
+
+# Define response types consistent with database_router
+MetadataResponse = List[Dict[str, Any]]
+# ResearchResponse is now a dictionary containing detailed research and status
+ResearchResponse = Dict[str, str]
+DatabaseResponse = Union[MetadataResponse, ResearchResponse]
 
 # Get module logger
 logger = logging.getLogger(__name__)
 
 
-def query_database(query, token=None):
+def query_database_sync(
+    query: str, scope: str, token: Optional[str] = None
+) -> DatabaseResponse:
     """
-    Query the Central Accounting Policy Manual database.
+    Synchronously query the Central Accounting Policy Manual (CAPM) database (Placeholder Stub).
 
     Args:
-        query (str): Search query for the database
-        token (str, optional): Authentication token for API access
+        query (str): Search query for the database.
+        scope (str): The scope of the query ('metadata' or 'research').
+        token (str, optional): Authentication token (unused in stub).
 
     Returns:
-        str: Query results from the policy database
+        DatabaseResponse: Empty list [] for 'metadata', or a placeholder
+                          Dict[str, str] for 'research'.
     """
-    logger.info(f"Querying CAPM database: {query}")
+    logger.warning(f"Querying CAPM STUB: '{query}' with scope: {scope}. Returning placeholder data.")
+    database_name = "internal_capm"
 
-    # Simulate database processing time for realism
-    time.sleep(0.5)
+    # Removed asyncio.sleep for synchronous stub
 
-    # Placeholder response
-    response = f"""
-    CENTRAL ACCOUNTING POLICY MANUAL RESULTS
-    
-    Query: {query}
-    
-    The following policy guidelines were found:
-    
-    1. Policy Section PR-23.4: Accounting for Financial Instruments
-       - Classification and measurement requirements
-       - Recognition criteria for derivatives and embedded derivatives
-       - De-recognition principles for financial assets and liabilities
-    
-    2. Policy Section PR-14.7: Revenue Recognition Standards
-       - Five-step revenue recognition model
-       - Contract identification and modification guidance
-       - Performance obligation identification and fulfillment criteria
-    
-    3. Procedural Guidance PG-112: Implementation Examples
-       - Case studies for complex financial instruments
-       - Decision trees for classification challenges
-       - Documentation requirements for audit purposes
-    """
-
-    logger.info("CAPM database query completed")
-    return response
+    if scope == "metadata":
+        # Return empty list for metadata scope
+        logger.info(f"Returning empty metadata list for {database_name} stub.")
+        return []
+    elif scope == "research":
+        # Return placeholder dictionary for research scope
+        placeholder_research = f"Placeholder detailed research for CAPM query: '{query}'. Implementation pending."
+        placeholder_status = f"ℹ️ Placeholder status for {database_name}."
+        logger.info(f"Returning placeholder research dict for {database_name} stub.")
+        return {
+            "detailed_research": placeholder_research,
+            "status_summary": placeholder_status
+        }
+    else:
+        # Handle invalid scope
+        logger.error(f"Invalid scope provided to {database_name} subagent stub: {scope}")
+        # Return research-style error dict as a fallback
+        return {
+             "detailed_research": f"Error: Invalid scope '{scope}' provided to {database_name} stub.",
+             "status_summary": f"❌ Error: Invalid scope '{scope}'."
+        }

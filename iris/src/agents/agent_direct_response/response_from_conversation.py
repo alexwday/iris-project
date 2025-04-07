@@ -62,6 +62,7 @@ def response_from_conversation(conversation, token):
             messages.extend(conversation["messages"])
 
         logger.info(f"Generating direct response using model: {MODEL_NAME}")
+        logger.info("Initiating Direct Response stream API call") # Added contextual log
 
         # Make the API call with streaming
         response_stream = call_llm(

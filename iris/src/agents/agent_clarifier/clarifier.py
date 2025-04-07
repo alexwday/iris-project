@@ -73,6 +73,7 @@ def clarify_research_needs(conversation, token):
             messages.extend(conversation["messages"])
 
         logger.info(f"Clarifying research needs using model: {MODEL_NAME}")
+        logger.info("Initiating Clarifier API call") # Added contextual log
 
         # Make the API call with tool calling
         response = call_llm(
@@ -117,6 +118,7 @@ def clarify_research_needs(conversation, token):
         # Extract decision fields
         action = arguments.get("action")
         output = arguments.get("output")
+        scope = arguments.get("scope")  # Extract the new scope field
         is_continuation = arguments.get("is_continuation", False)
 
         if not action:
@@ -125,11 +127,35 @@ def clarify_research_needs(conversation, token):
         if not output:
             raise ClarifierError("Missing 'output' in tool arguments")
 
+        # Validate scope: required only when creating a research statement
+        if action == "create_research_statement":
+            if not scope:
+                raise ClarifierError(
+                    "Missing 'scope' in tool arguments when action is 'create_research_statement'"
+                )
+            if scope not in ["metadata", "research"]:
+                raise ClarifierError(
+                    f"Invalid 'scope' value: {scope}. Must be 'metadata' or 'research'."
+                )
+        elif scope:
+            # Scope should not be provided if action is request_essential_context
+            logger.warning(
+                f"Scope '{scope}' provided but action is '{action}'. Scope will be ignored."
+            )
+            scope = None # Ensure scope is None if not applicable
+
         # Log the clarifier decision
         logger.info(f"Clarifier decision: {action}")
+        if action == "create_research_statement":
+            logger.info(f"Determined scope: {scope}")
         logger.info(f"Is continuation: {is_continuation}")
 
-        return {"action": action, "output": output, "is_continuation": is_continuation}
+        return {
+            "action": action,
+            "output": output,
+            "scope": scope,  # Include scope in the return dictionary
+            "is_continuation": is_continuation,
+        }
 
     except Exception as e:
         logger.error(f"Error clarifying research needs: {str(e)}")

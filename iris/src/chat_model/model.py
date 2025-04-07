@@ -1,908 +1,862 @@
 # python/iris/src/chat_model/model.py
 """
-Model Initialization and Setup Module
+Model Initialization and Setup Module (Async Core with Sync Wrapper)
 
-This module serves as the main entry point for the IRIS application,
-handling the full initialization process including logging setup,
-SSL configuration, OAuth authentication, conversation processing,
-and the full agent orchestration flow.
+This module serves as the main entry point for the IRIS application.
+It uses an asynchronous core for parallel processing but provides a
+synchronous interface for compatibility with standard Python iteration.
 
 Functions:
-    model: Main initialization function that sets up the necessary components
-           and processes incoming conversations
+    model: Synchronous wrapper that runs the async core and yields results.
+    _model_async_generator: Main async core function handling the workflow.
 
 Dependencies:
     - logging
     - SSL certificate setup
     - OAuth authentication
     - Conversation processing
-    - Agent orchestration
+    - Agent orchestration (async components)
 """
 
 import inspect
+import concurrent.futures
 import json
+import logging
+import time
 from datetime import datetime
+from typing import Any, Dict, List, Optional, Union, Generator # Removed AsyncGenerator
 
-from ..agents.database_subagents.database_router import (  # Added reset import
-    get_database_token_usage,
-    reset_database_token_usage,
-)
+# ... (Keep existing imports) ...
 from ..global_prompts.database_statement import get_available_databases
 from ..llm_connectors.rbc_openai import get_token_usage, reset_token_usage
+# Import sync version of route_query
+from ..agents.database_subagents.database_router import route_query_sync
 
 
-def format_usage_summary(agent_token_usage, start_time=None):
+# --- Formatting Function (Remains Synchronous) ---
+def format_usage_summary(agent_token_usage: Dict[str, Any], start_time: Optional[str] = None) -> str:
     """
-    Format token usage and timing information into a nicely formatted string,
-    breaking down usage by agent, database subagents, and overall total.
+    Format token usage and timing information into a nicely formatted string.
+    Note: Database usage is now included within agent_token_usage due to central logging.
 
     Args:
-        agent_token_usage (dict): Token usage dictionary for main agent processes
-                                  (router, planner, judge, summarizer, etc.)
-                                  with prompt_tokens, completion_tokens, etc.
-        start_time (str, optional): ISO format timestamp of when processing started
+        agent_token_usage (dict): Accumulated token usage dictionary with keys like
+                                  'prompt_tokens', 'completion_tokens', 'total_tokens', 'cost'.
+        start_time (str, optional): ISO format timestamp of when processing started.
 
     Returns:
-        str: Formatted usage summary as markdown
+        str: Formatted usage summary as markdown.
     """
-    # Calculate timing if start_time is provided
     duration = None
     if start_time:
-        from datetime import datetime as dt
+        try:
+            end_dt = datetime.now()
+            start_dt = datetime.fromisoformat(start_time)
+            duration = (end_dt - start_dt).total_seconds()
+        except ValueError:
+            # Use root logger if module logger isn't configured yet
+            logging.getLogger().warning(f"Could not parse start_time for duration calculation: {start_time}")
+            duration = None # Ensure duration is None if parsing fails
 
-        end_dt = dt.now()
-        start_dt = dt.fromisoformat(start_time)
-        duration = (end_dt - start_dt).total_seconds()
-
-    # Get database-specific token usage
-    db_token_usage = get_database_token_usage()
-
-    # Initialize totals for database usage
-    total_db_prompt_tokens = 0
-    total_db_completion_tokens = 0
-    total_db_tokens = 0
-    total_db_cost = 0.0
-
-    # --- Start Formatting ---
     usage_summary = "\n\n---\n"
-
-    # --- Agent Usage Section ---
-    usage_summary += "## Agent Usage Statistics\n\n"
-    usage_summary += f"- Input tokens: {agent_token_usage['prompt_tokens']}\n"
-    usage_summary += f"- Output tokens: {agent_token_usage['completion_tokens']}\n"
-    usage_summary += f"- Total tokens: {agent_token_usage['total_tokens']}\n"
-    usage_summary += f"- Cost: ${agent_token_usage['cost']:.6f}\n"
-    if duration:
-        # Display time only in the agent section for brevity
-        usage_summary += f"- Time: {duration:.2f} seconds\n"
-
-    # --- Database Subagent Usage Section ---
-    if db_token_usage:
-        usage_summary += "\n### Database Subagent Usage\n\n"
-        for db_name, usage in db_token_usage.items():
-            db_display_name = (
-                get_available_databases().get(db_name, {}).get("name", db_name)
-            )
-            usage_summary += f"**{db_display_name}**\n"
-            usage_summary += f"- Input tokens: {usage['prompt_tokens']}\n"
-            usage_summary += f"- Output tokens: {usage['completion_tokens']}\n"
-            usage_summary += f"- Total tokens: {usage['total_tokens']}\n"
-            usage_summary += f"- Cost: ${usage['cost']:.6f}\n\n"
-            # Accumulate totals for overall calculation
-            total_db_prompt_tokens += usage.get("prompt_tokens", 0)
-            total_db_completion_tokens += usage.get("completion_tokens", 0)
-            total_db_tokens += usage.get("total_tokens", 0)
-            total_db_cost += usage.get("cost", 0.0)
-        # Remove the trailing newline from the last database entry
-        usage_summary = usage_summary.rstrip("\n") + "\n"
-
-    # --- Overall Usage Section ---
-    overall_prompt_tokens = agent_token_usage["prompt_tokens"] + total_db_prompt_tokens
-    overall_completion_tokens = (
-        agent_token_usage["completion_tokens"] + total_db_completion_tokens
-    )
-    overall_total_tokens = agent_token_usage["total_tokens"] + total_db_tokens
-    overall_cost = agent_token_usage["cost"] + total_db_cost
-
-    usage_summary += "\n### Overall Usage Statistics\n\n"
-    usage_summary += f"- Overall Input tokens: {overall_prompt_tokens}\n"
-    usage_summary += f"- Overall Output tokens: {overall_completion_tokens}\n"
-    usage_summary += f"- Overall Total tokens: {overall_total_tokens}\n"
-    usage_summary += f"- Overall Cost: ${overall_cost:.6f}\n"
-    # Optionally repeat duration here if desired, but kept in agent section for now
-    # if duration:
-    #     usage_summary += f"- Total Time: {duration:.2f} seconds\n"
+    usage_summary += "## Agent Usage Statistics\n\n" # Renamed for clarity
+    usage_summary += f"- Overall Input tokens: {agent_token_usage.get('prompt_tokens', 0)}\n"
+    usage_summary += f"- Overall Output tokens: {agent_token_usage.get('completion_tokens', 0)}\n"
+    usage_summary += f"- Overall Total tokens: {agent_token_usage.get('total_tokens', 0)}\n"
+    usage_summary += f"- Overall Cost: ${agent_token_usage.get('cost', 0.0):.6f}\n"
+    if duration is not None: # Check if duration calculation was successful
+        usage_summary += f"- Total Time: {duration:.2f} seconds\n"
 
     return usage_summary
 
 
-def model(conversation=None, html_callback=None, debug_mode=False):
+# --- Worker Function for Threaded Query Execution ---
+def _execute_query_worker(db_name: str, query_text: str, scope: str, token: str,
+                          db_display_name: str, query_index: int, total_queries: int, 
+                          debug_mode: bool = False) -> Dict[str, Any]:
     """
-    Main model function that processes conversations and yields streaming responses.
-
-    This function matches the signature and behavior of the original chat model,
-    yielding response chunks directly as strings rather than as dictionaries.
+    Worker function executed by each thread to run a single database query.
 
     Args:
-        conversation (dict, optional): Conversation in OpenAI format with a 'messages' key.
-        html_callback (callable, optional): Callback function for HTML rendering (not used)
-        debug_mode (bool, optional): When True, track agent decisions and yield debug data
+        db_name (str): Internal database identifier.
+        query_text (str): The query string for the database.
+        scope (str): The scope of the query ('research' or 'metadata').
+        token (str): Authentication token.
+        db_display_name (str): User-facing name of the database.
+        query_index (int): The 0-based index of this query.
+        total_queries (int): The total number of queries being run.
+        debug_mode (bool): Whether to enable debug mode.
 
     Returns:
-        generator: A generator that yields response chunks as strings.
-                  When debug_mode is True, the final yielded item will be a debug
-                  data object (prefixed with "DEBUG_DATA:") containing all agent decisions.
+        dict: A dictionary containing query details, result, exception (if any),
+              and token usage for this specific query.
     """
-    # Initialize debug tracking if debug mode is enabled
-    debug_data = (
-        {
+    logger = logging.getLogger(__name__) # Get logger instance
+    result = None
+    task_exception = None
+    token_usage = {}
+    
+    # Import process monitor if debug mode is enabled
+    if debug_mode:
+        from ..initial_setup.process_monitor import get_process_monitor
+        process_monitor = get_process_monitor()
+        
+        # Create a unique name for this query
+        query_stage_name = f"db_query_{db_name}_{query_index}"
+        
+        # Start query stage
+        process_monitor.start_stage(query_stage_name)
+        process_monitor.add_stage_details(
+            query_stage_name,
+            db_name=db_name,
+            db_display_name=db_display_name,
+            query_text=query_text,
+            scope=scope,
+            query_index=query_index,
+            total_queries=total_queries
+        )
+
+    try:
+        logger.info(f"Thread executing query {query_index + 1}/{total_queries} for database: {db_name}")
+        # Reset token usage specifically for this thread's context before the call
+        reset_token_usage()
+        
+        start_time = time.time()
+        # Call the synchronous router function
+        result = route_query_sync(db_name, query_text, scope, token)
+        execution_time = time.time() - start_time
+        
+        # Get token usage immediately after the call completes
+        token_usage = get_token_usage()
+        logger.info(f"Thread completed query for database: {db_name} in {execution_time:.2f}s")
+        
+        # End query stage if debug mode is enabled
+        if debug_mode:
+            process_monitor.end_stage(query_stage_name)
+            process_monitor.update_stage_tokens(
+                query_stage_name,
+                prompt_tokens=token_usage.get("prompt_tokens", 0),
+                completion_tokens=token_usage.get("completion_tokens", 0),
+                total_tokens=token_usage.get("total_tokens", 0),
+                cost=token_usage.get("cost", 0.0)
+            )
+            
+            # Add result details
+            if scope == "metadata" and isinstance(result, list):
+                process_monitor.add_stage_details(
+                    query_stage_name,
+                    result_count=len(result),
+                    document_names=[item.get('document_name', 'Unnamed') for item in result[:10]],  # First 10 docs
+                    has_more_documents=len(result) > 10
+                )
+            elif scope == "research" and isinstance(result, dict):
+                process_monitor.add_stage_details(
+                    query_stage_name,
+                    status_summary=result.get('status_summary', 'No status provided'),
+                    has_detailed_research=bool(result.get('detailed_research'))
+                )
+            
+    except Exception as e:
+        task_exception = e
+        # Also capture token usage even if there was an error during the query itself
+        token_usage = get_token_usage()
+        logger.error(f"Thread error executing query for {db_name}: {str(e)}", exc_info=True)
+        
+        # End query stage with error if debug mode is enabled
+        if debug_mode:
+            process_monitor.end_stage(query_stage_name, "error")
+            process_monitor.update_stage_tokens(
+                query_stage_name,
+                prompt_tokens=token_usage.get("prompt_tokens", 0),
+                completion_tokens=token_usage.get("completion_tokens", 0),
+                total_tokens=token_usage.get("total_tokens", 0),
+                cost=token_usage.get("cost", 0.0)
+            )
+            process_monitor.add_stage_details(
+                query_stage_name,
+                error=str(e)
+            )
+
+    return {
+        "db_name": db_name,
+        "query_text": query_text,
+        "scope": scope,
+        "db_display_name": db_display_name,
+        "query_index": query_index,
+        "total_queries": total_queries,
+        "result": result,
+        "exception": task_exception,
+        "token_usage": token_usage
+    }
+
+
+# --- Main Synchronous Core Function ---
+def _model_generator(conversation: Optional[Dict[str, Any]] = None,
+                     html_callback: Optional[callable] = None,
+                     debug_mode: bool = False) -> Generator[str, None, None]:
+    """
+    Core synchronous generator handling the agent workflow.
+    (Internal function called by the synchronous wrapper)
+    """
+    # Import process monitor
+    from ..initial_setup.process_monitor import enable_monitoring, get_process_monitor
+    
+    # Enable process monitoring if debug mode is enabled
+    if debug_mode:
+        enable_monitoring(True)
+        
+    # Get process monitor instance
+    process_monitor = get_process_monitor()
+    
+    # Initialize legacy debug tracking for backward compatibility
+    debug_data = None
+    if debug_mode:
+        debug_data = {
             "decisions": [],
             "tokens": {
-                "prompt": 0,
-                "completion": 0,
-                "total": 0,
-                "stages": {
+                "prompt": 0, "completion": 0, "total": 0, "cost": 0.0, # Overall accumulated
+                "stages": { # Per-stage accumulated usage
                     "router": {"prompt": 0, "completion": 0, "total": 0, "cost": 0.0},
-                    "clarifier": {
-                        "prompt": 0,
-                        "completion": 0,
-                        "total": 0,
-                        "cost": 0.0,
-                    },
+                    "clarifier": {"prompt": 0, "completion": 0, "total": 0, "cost": 0.0},
                     "planner": {"prompt": 0, "completion": 0, "total": 0, "cost": 0.0},
-                    "judge": {"prompt": 0, "completion": 0, "total": 0, "cost": 0.0},
-                    "database_query": {
-                        "prompt": 0,
-                        "completion": 0,
-                        "total": 0,
-                        "cost": 0.0,
-                    },
+                    "database_query": {"prompt": 0, "completion": 0, "total": 0, "cost": 0.0}, # Accumulated across all parallel queries
                     "summary": {"prompt": 0, "completion": 0, "total": 0, "cost": 0.0},
-                },
-                "databases": {},  # This will be filled with per-database usage data
+                }
             },
-            "cost": 0.0,
             "start_timestamp": datetime.now().isoformat(),
+            "error": None,
+            "completed": False
         }
-        if debug_mode
-        else None
-    )
 
-    # Reset token usage tracking
-    if debug_mode:
-        reset_token_usage()
-    # Import modules - using relative imports for better portability
+    # Reset global token usage tracking at the start
+    reset_token_usage()
+
+    # Import necessary modules
     from ..agents.agent_clarifier.clarifier import clarify_research_needs
-    from ..agents.agent_direct_response.response_from_conversation import (
-        response_from_conversation,
-    )
-    from ..agents.agent_judge.judge import (
-        evaluate_research_progress,
-    )  # Only decision function
+    from ..agents.agent_direct_response.response_from_conversation import response_from_conversation
     from ..agents.agent_planner.planner import create_query_plan
     from ..agents.agent_router.router import get_routing_decision
-    from ..agents.agent_summarizer.summarizer import (
-        generate_streaming_summary,
-    )  # New summary function
-    from ..agents.database_subagents.database_router import route_database_query
+    # TODO: Ensure generate_streaming_summary becomes async or is properly wrapped
+    from ..agents.agent_summarizer.summarizer import generate_streaming_summary
     from ..conversation_setup.conversation import process_conversation
     from ..initial_setup.logging_config import configure_logging
     from ..initial_setup.oauth.oauth import setup_oauth
     from ..initial_setup.ssl.ssl import setup_ssl
+    from .model_settings import SHOW_USAGE_SUMMARY
+
+    logger = configure_logging() # Ensure logger is configured early
 
     try:
-        # Set up centralized logging
-        logger = configure_logging()
-
-        logger.info("Initializing model setup...")
-
-        # Set up SSL certificates for secure communication
+        logger.info("Initializing model setup (sync core)...")
+        
+        # Start SSL setup stage
+        if debug_mode:
+            process_monitor.start_stage("ssl_setup")
+        
         cert_path = setup_ssl()
-
-        # Obtain OAuth token
+        
+        # End SSL setup stage
+        if debug_mode:
+            process_monitor.end_stage("ssl_setup")
+            process_monitor.add_stage_details("ssl_setup", cert_path=cert_path)
+        
+        # Start OAuth setup stage
+        if debug_mode:
+            process_monitor.start_stage("oauth_setup")
+        
         token = setup_oauth()
+        
+        # End OAuth setup stage
+        if debug_mode:
+            process_monitor.end_stage("oauth_setup")
+            process_monitor.add_stage_details("oauth_setup", token_length=len(token) if token else 0)
 
-        # Process conversation if provided
-        if conversation:
-            logger.info("Processing input conversation...")
-            processed_conversation = process_conversation(conversation)
-            logger.info(
-                f"Conversation processed: {len(processed_conversation['messages'])} messages"
+        if not conversation or 'messages' not in conversation or not conversation['messages']:
+            logger.warning("No conversation provided or conversation is empty.")
+            yield "Model initialized, but no conversation provided to process."
+            return
+
+        # Start conversation processing stage
+        if debug_mode:
+            process_monitor.start_stage("conversation_processing")
+            
+        logger.info("Processing input conversation...")
+        processed_conversation = process_conversation(conversation)
+        logger.info(f"Conversation processed: {len(processed_conversation['messages'])} messages")
+        
+        # End conversation processing stage
+        if debug_mode:
+            process_monitor.end_stage("conversation_processing")
+            process_monitor.add_stage_details(
+                "conversation_processing", 
+                message_count=len(processed_conversation['messages'])
             )
+        
+        # Start router stage
+        if debug_mode:
+            process_monitor.start_stage("router")
+            
+        logger.info("Getting routing decision...")
+        routing_decision = get_routing_decision(processed_conversation, token)
+        
+        # Get token usage for router
+        token_usage = get_token_usage()
+        
+        # End router stage
+        if debug_mode:
+            process_monitor.end_stage("router")
+            process_monitor.update_stage_tokens(
+                "router",
+                prompt_tokens=token_usage.get("prompt_tokens", 0),
+                completion_tokens=token_usage.get("completion_tokens", 0),
+                total_tokens=token_usage.get("total_tokens", 0),
+                cost=token_usage.get("cost", 0.0)
+            )
+            process_monitor.add_stage_details(
+                "router", 
+                function_name=routing_decision.get("function_name"),
+                decision=routing_decision
+            )
+            
+        # --- Debug: Record Router Decision (legacy) ---
+        if debug_mode and debug_data is not None:
+            debug_data["tokens"]["stages"]["router"] = token_usage.copy()
+            debug_data["decisions"].append({
+                "stage": "router", "decision": routing_decision,
+                "timestamp": datetime.now().isoformat(), "token_usage": token_usage.copy()
+            })
+            reset_token_usage()
+        # --- End Debug ---
 
-            # Get routing decision
-            logger.info("Getting routing decision...")
-            routing_decision = get_routing_decision(processed_conversation, token)
+        # --- Direct Response Path ---
+        if routing_decision["function_name"] == "response_from_conversation":
+            logger.info("Using direct response path based on routing decision")
+            
+            # Start direct response stage
+            if debug_mode:
+                process_monitor.start_stage("direct_response")
+            
+            # Assuming sync generator
+            for chunk in response_from_conversation(processed_conversation, token):
+                yield chunk
+            
+            # Get token usage for direct response
+            direct_response_token_usage = get_token_usage()
+            
+            # End direct response stage
+            if debug_mode:
+                process_monitor.end_stage("direct_response")
+                process_monitor.update_stage_tokens(
+                    "direct_response",
+                    prompt_tokens=direct_response_token_usage.get("prompt_tokens", 0),
+                    completion_tokens=direct_response_token_usage.get("completion_tokens", 0),
+                    total_tokens=direct_response_token_usage.get("total_tokens", 0),
+                    cost=direct_response_token_usage.get("cost", 0.0)
+                )
+                
+                # End overall monitoring and yield summary if debug mode is enabled
+                process_monitor.end_monitoring()
+                yield process_monitor.format_summary()
+            
+            # --- Legacy Debug: Add Usage Summary ---
+            elif SHOW_USAGE_SUMMARY:
+                final_token_usage = get_token_usage()
+                start_time = debug_data["start_timestamp"] if debug_data else None
+                usage_summary = format_usage_summary(final_token_usage, start_time)
+                yield usage_summary
+            # --- End Debug ---
 
-            # Record routing decision in debug data if debug mode is enabled
+        # --- Research Path ---
+        elif routing_decision["function_name"] == "research_from_database":
+            logger.info("Using research path based on routing decision")
+
+            # Step 1: Clarify research needs (assuming sync)
+            
+            # Start clarifier stage
+            if debug_mode:
+                process_monitor.start_stage("clarifier")
+                
+            logger.info("Clarifying research needs...")
+            clarifier_decision = clarify_research_needs(processed_conversation, token)
+            
+            # Get token usage for clarifier
+            clarifier_token_usage = get_token_usage()
+            
+            # End clarifier stage
+            if debug_mode:
+                process_monitor.end_stage("clarifier")
+                process_monitor.update_stage_tokens(
+                    "clarifier",
+                    prompt_tokens=clarifier_token_usage.get("prompt_tokens", 0),
+                    completion_tokens=clarifier_token_usage.get("completion_tokens", 0),
+                    total_tokens=clarifier_token_usage.get("total_tokens", 0),
+                    cost=clarifier_token_usage.get("cost", 0.0)
+                )
+                process_monitor.add_stage_details(
+                    "clarifier",
+                    action=clarifier_decision.get("action"),
+                    scope=clarifier_decision.get("scope"),
+                    is_continuation=clarifier_decision.get("is_continuation", False),
+                    decision=clarifier_decision
+                )
+
+            # --- Legacy Debug: Record Clarifier Decision ---
             if debug_mode and debug_data is not None:
-                # Get current token usage after router stage
-                token_usage = get_token_usage()
-
-                # Calculate and store per-stage token usage
-                debug_data["tokens"]["stages"]["router"]["prompt"] = token_usage[
-                    "prompt_tokens"
-                ]
-                debug_data["tokens"]["stages"]["router"]["completion"] = token_usage[
-                    "completion_tokens"
-                ]
-                debug_data["tokens"]["stages"]["router"]["total"] = token_usage[
-                    "total_tokens"
-                ]
-                debug_data["tokens"]["stages"]["router"]["cost"] = token_usage["cost"]
-
-                debug_data["decisions"].append(
-                    {
-                        "stage": "router",
-                        "decision": routing_decision,
-                        "timestamp": datetime.now().isoformat(),
-                        "token_usage": {
-                            "prompt": token_usage["prompt_tokens"],
-                            "completion": token_usage["completion_tokens"],
-                            "total": token_usage["total_tokens"],
-                            "cost": token_usage["cost"],
-                        },
-                    }
-                )
-
-                # Reset token usage for next stage
+                debug_data["tokens"]["stages"]["clarifier"] = clarifier_token_usage.copy()
+                debug_data["decisions"].append({
+                    "stage": "clarifier", "decision": clarifier_decision,
+                    "timestamp": datetime.now().isoformat(), "token_usage": clarifier_token_usage.copy()
+                })
                 reset_token_usage()
+            # --- End Debug ---
 
-            # Handle response based on routing decision
-            if routing_decision["function_name"] == "response_from_conversation":
-                # Direct response without research
-                logger.info("Using direct response path based on routing decision")
+            if clarifier_decision["action"] == "request_essential_context":
+                logger.info("Essential context needed, returning context questions")
+                questions = clarifier_decision["output"].strip()
+                questions_text = "Before proceeding with research, please clarify:\n\n" + questions
+                yield questions_text
 
-                # Get the streaming response directly - each chunk is already a string
-                for chunk in response_from_conversation(processed_conversation, token):
-                    yield chunk
+            else: # create_research_statement
+                logger.info("Creating research statement, proceeding with research")
+                research_statement = clarifier_decision["output"]
+                scope = clarifier_decision.get("scope")
+                is_continuation = clarifier_decision.get("is_continuation", False)
 
-                # Add token usage summary if enabled
-                from .model_settings import SHOW_USAGE_SUMMARY
+                if not scope:
+                     logger.error("Scope missing from clarifier decision.")
+                     yield "Error: Internal configuration error - missing research scope."
+                     return
 
-                if SHOW_USAGE_SUMMARY:
-                    # Get the final token usage
-                    token_usage = get_token_usage()
+                logger.info(f"Research scope determined: {scope}")
 
-                    # Get the start timestamp from debug data if available
-                    start_time = debug_data["start_timestamp"] if debug_data else None
+                # Step 2: Create query plan (assuming sync)
+                
+                # Start planner stage
+                if debug_mode:
+                    process_monitor.start_stage("planner")
+                
+                logger.info("Creating database query plan...")
+                query_plan = create_query_plan(research_statement, token, is_continuation)
+                logger.info(f"Query plan created with {len(query_plan['queries'])} queries")
+                
+                # Get token usage for planner
+                planner_token_usage = get_token_usage()
+                
+                # End planner stage
+                if debug_mode:
+                    process_monitor.end_stage("planner")
+                    process_monitor.update_stage_tokens(
+                        "planner",
+                        prompt_tokens=planner_token_usage.get("prompt_tokens", 0),
+                        completion_tokens=planner_token_usage.get("completion_tokens", 0),
+                        total_tokens=planner_token_usage.get("total_tokens", 0),
+                        cost=planner_token_usage.get("cost", 0.0)
+                    )
+                    process_monitor.add_stage_details(
+                        "planner",
+                        query_count=len(query_plan.get('queries', [])),
+                        databases=[q.get('database') for q in query_plan.get('queries', [])],
+                        decision=query_plan
+                    )
 
-                    # If debug data exists, update it with the latest database token usage
-                    if debug_mode and debug_data is not None:
-                        db_token_usage = get_database_token_usage()
-                        debug_data["tokens"]["databases"] = db_token_usage.copy()
-
-                    # Format and yield usage summary
-                    usage_summary = format_usage_summary(token_usage, start_time)
-                    yield usage_summary
-
-            elif routing_decision["function_name"] == "research_from_database":
-                # Research path
-                logger.info("Using research path based on routing decision")
-
-                # Step 1: Clarify research needs
-                logger.info("Clarifying research needs...")
-                clarifier_decision = clarify_research_needs(
-                    processed_conversation, token
-                )
-
-                # Record clarifier decision in debug data if debug mode is enabled
+                # --- Legacy Debug: Record Planner Decision ---
                 if debug_mode and debug_data is not None:
-                    # Get current token usage after clarifier stage
-                    token_usage = get_token_usage()
-
-                    # Calculate and store per-stage token usage
-                    debug_data["tokens"]["stages"]["clarifier"]["prompt"] = token_usage[
-                        "prompt_tokens"
-                    ]
-                    debug_data["tokens"]["stages"]["clarifier"]["completion"] = (
-                        token_usage["completion_tokens"]
-                    )
-                    debug_data["tokens"]["stages"]["clarifier"]["total"] = token_usage[
-                        "total_tokens"
-                    ]
-                    debug_data["tokens"]["stages"]["clarifier"]["cost"] = token_usage[
-                        "cost"
-                    ]
-
-                    debug_data["decisions"].append(
-                        {
-                            "stage": "clarifier",
-                            "decision": clarifier_decision,
-                            "timestamp": datetime.now().isoformat(),
-                            "token_usage": {
-                                "prompt": token_usage["prompt_tokens"],
-                                "completion": token_usage["completion_tokens"],
-                                "total": token_usage["total_tokens"],
-                                "cost": token_usage["cost"],
-                            },
-                        }
-                    )
-
-                    # Reset token usage for next stage
+                    debug_data["tokens"]["stages"]["planner"] = planner_token_usage.copy()
+                    debug_data["decisions"].append({
+                        "stage": "planner", "decision": query_plan,
+                        "timestamp": datetime.now().isoformat(), "token_usage": planner_token_usage.copy()
+                    })
                     reset_token_usage()
+                # --- End Debug ---
 
-                # If we need more context, yield the context questions directly as strings
-                if clarifier_decision["action"] == "request_essential_context":
-                    logger.info("Essential context needed, returning context questions")
+                # --- Display Updated Research/Search Plan ---
+                available_databases = get_available_databases()
+                if scope == "metadata":
+                    yield "---\n# 🔍 File Search Plan\n\n"
+                    yield f"## Search Criteria\n{research_statement}\n\n"
+                else: # scope == "research"
+                    yield "---\n# 📋 Research Plan\n\n"
+                    yield f"## Research Statement\n{research_statement}\n\n"
 
-                    # Stream the questions, preserving any existing numbering
-                    questions = clarifier_decision["output"].strip()
-                    questions_text = (
-                        "Before proceeding with research, please clarify:\n\n"
-                    )
-                    questions_text += questions
+                db_names_in_plan = [
+                    available_databases.get(q["database"], {}).get("name", q["database"])
+                    for q in query_plan["queries"]
+                ]
+                if db_names_in_plan:
+                     if len(db_names_in_plan) == 1: names_str = db_names_in_plan[0]
+                     elif len(db_names_in_plan) == 2: names_str = f"{db_names_in_plan[0]} and {db_names_in_plan[1]}"
+                     else: names_str = ", ".join(db_names_in_plan[:-1]) + f", and {db_names_in_plan[-1]}"
+                     yield f"Searching the following databases: {names_str}.\n\n---\n"
+                else:
+                     yield "No databases selected for search.\n\n---\n"
+                logger.info("Displayed simplified research plan.")
+                # --- End Plan Display ---
 
-                    yield questions_text
+                # --- Parallel Query Execution ---
+                tasks_with_details = [] # Store tasks along with their details
+                if not query_plan["queries"]:
+                     logger.warning("Query plan is empty, skipping database search.")
+                else:
+                    # --- Concurrent Query Execution using ThreadPoolExecutor ---
+                    logger.info(f"Starting {len(query_plan['queries'])} database queries concurrently...")
+                    aggregated_detailed_research = {}
+                    metadata_results_by_db: Dict[str, List[Dict[str, Any]]] = {}
+                    total_metadata_items = 0
+                    futures = []
+                    db_stage_token_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "cost": 0.0}
 
-                # Otherwise, proceed with research
-                else:  # create_research_statement
-                    logger.info("Creating research statement, proceeding with research")
-                    research_statement = clarifier_decision["output"]
-                    is_continuation = clarifier_decision.get("is_continuation", False)
-
-                    # Step 2: Create query plan
-                    logger.info("Creating database query plan...")
-                    query_plan = create_query_plan(
-                        research_statement, token, is_continuation
-                    )
-                    logger.info(
-                        f"Query plan created with {len(query_plan['queries'])} queries"
-                    )
-
-                    # Record planner decision in debug data if debug mode is enabled
-                    if debug_mode and debug_data is not None:
-                        # Get current token usage after planner stage
-                        token_usage = get_token_usage()
-
-                        # Calculate and store per-stage token usage
-                        debug_data["tokens"]["stages"]["planner"]["prompt"] = (
-                            token_usage["prompt_tokens"]
-                        )
-                        debug_data["tokens"]["stages"]["planner"]["completion"] = (
-                            token_usage["completion_tokens"]
-                        )
-                        debug_data["tokens"]["stages"]["planner"]["total"] = (
-                            token_usage["total_tokens"]
-                        )
-                        debug_data["tokens"]["stages"]["planner"]["cost"] = token_usage[
-                            "cost"
-                        ]
-
-                        debug_data["decisions"].append(
-                            {
-                                "stage": "planner",
-                                "decision": query_plan,
-                                "timestamp": datetime.now().isoformat(),
-                                "token_usage": {
-                                    "prompt": token_usage["prompt_tokens"],
-                                    "completion": token_usage["completion_tokens"],
-                                    "total": token_usage["total_tokens"],
-                                    "cost": token_usage["cost"],
-                                },
-                            }
-                        )
-
-                        # Reset token usage for next stage
-                        reset_token_usage()
-
-                    # Get database configurations for display names
-                    available_databases = get_available_databases()
-
-                    # Create a formatted markdown box with research plan using horizontal rules
-                    research_plan_box = "---\n"
-                    research_plan_box += "# 📋 Research Plan\n\n"
-                    research_plan_box += (
-                        f"## Research Statement\n{research_statement}\n\n"
-                    )
-                    research_plan_box += "## Database Queries\n"
-
-                    for j, query in enumerate(query_plan["queries"]):
-                        db_name = query["database"]
-                        # Get the display name from the database configuration
-                        db_display_name = available_databases.get(db_name, {}).get(
-                            "name", db_name
-                        )
-                        research_plan_box += (
-                            f"{j+1}. {db_display_name}: {query['query']}\n"
-                        )
-
-                    research_plan_box += "---\n\n"
-
-                    # Yield the entire research plan box
-                    yield research_plan_box
-
-                    # Prepare lists to track queries and results
-                    completed_queries = []
-                    query_results = []
-                    remaining_queries = query_plan["queries"].copy()
-
-                    # Process queries one by one
-                    i = 0
-                    while i < len(query_plan["queries"]) and remaining_queries:
-                        # Get the current query
-                        current_query = query_plan["queries"][i]
-
-                        # Remove from remaining and add to completed
-                        remaining_queries.remove(current_query)
-                        completed_queries.append(current_query)
-
-                        # Get database name from the query
-                        db_name = current_query["database"]
-
-                        # Get the display name from the database configuration
-                        available_databases = get_available_databases()
-                        db_display_name = available_databases.get(db_name, {}).get(
-                            "name", db_name
-                        )
-
-                        # Yield query information with improved formatting using display name
-                        query_header = f"\n## 🔍 Query {i+1}: {db_display_name} - {current_query['query']}\n\n"
-                        yield query_header
-
-                        # Execute the query
-                        try:
-                            # Execute database query and yield result directly
-                            results = route_database_query(
-                                db_name, current_query["query"], token
+                    with concurrent.futures.ThreadPoolExecutor() as executor:
+                        for i, query_dict in enumerate(query_plan["queries"]):
+                            db_name = query_dict["database"]
+                            query_text = query_dict["query"]
+                            db_display_name = available_databases.get(db_name, {}).get("name", db_name)
+                            # Submit the worker function to the executor
+                            future = executor.submit(
+                                _execute_query_worker,
+                                db_name, query_text, scope, token,
+                                db_display_name, i, len(query_plan["queries"]),
+                                debug_mode
                             )
-                            # Store the original result type before potentially consuming the generator
-                            results_type = str(type(results).__name__)
+                            futures.append(future)
 
-                            # Store placeholder for results in the query plan if it's a generator
-                            if inspect.isgenerator(results):
-                                current_query["results"] = "<generator>"
-                            else:
-                                current_query["results"] = (
-                                    results  # Store direct string result
-                                )
+                        logger.info(f"Submitted {len(futures)} queries to thread pool.")
 
-                            query_results.append(
-                                results
-                            )  # Keep the actual result (generator or string) for processing
+                        # Process results as they complete
+                        for future in concurrent.futures.as_completed(futures):
+                            try:
+                                result_data = future.result() # Get result from the completed future
+                            except Exception as exc:
+                                # This catches errors in the future.result() call itself, unlikely if worker handles exceptions
+                                logger.error(f"Error retrieving result from future: {exc}", exc_info=True)
+                                # Skip yielding status for this specific failed future to avoid interrupting the flow for other successful queries.
+                                continue # Skip processing this future
 
-                            # --- Token usage capture moved after result processing ---
+                            # Extract data from the worker's return dictionary
+                            db_name = result_data["db_name"]
+                            query_text = result_data["query_text"]
+                            db_display_name = result_data["db_display_name"]
+                            task_exception = result_data["exception"]
+                            result = result_data["result"]
+                            query_token_usage = result_data["token_usage"]
+                            scope = result_data["scope"] # Get scope back from result
 
-                            # Handle streaming results (generators) or direct string results
-                            if inspect.isgenerator(results):
-                                # For generator results, iterate and yield each chunk
-                                # This ensures we always yield strings, never a nested generator
-                                full_result_text = (
-                                    ""  # Initialize variable to capture full text
-                                )
-                                for chunk in results:
-                                    chunk_str = ""
-                                    if isinstance(chunk, str):
-                                        chunk_str = chunk
-                                    elif inspect.isgenerator(chunk):
-                                        # Handle nested generators by consuming them
-                                        for subchunk in chunk:
-                                            chunk_str += str(subchunk)
-                                    else:
-                                        # Convert any non-string objects to strings
-                                        chunk_str = str(chunk)
+                            # --- Accumulate Token Usage (from this specific query) ---
+                            db_stage_token_usage["prompt_tokens"] += query_token_usage.get("prompt_tokens", 0)
+                            db_stage_token_usage["completion_tokens"] += query_token_usage.get("completion_tokens", 0)
+                            db_stage_token_usage["total_tokens"] += query_token_usage.get("total_tokens", 0)
+                            db_stage_token_usage["cost"] += query_token_usage.get("cost", 0.0)
+                            # --- End Token Accumulation ---
 
-                                    yield chunk_str  # Yield the chunk to the user
-                                    full_result_text += (
-                                        chunk_str  # Append to the full text
-                                    )
-
-                                # --- Store the captured full text AFTER the loop ---
-                                current_query["results"] = (
-                                    full_result_text  # Store the complete text
-                                )
-
-                                # Add horizontal rule after all chunks
-                                yield "\n\n---"
-                            else:
-                                # For string results, yield directly with ending horizontal rule
-                                yield f"{results}\n\n---"
-                                # Ensure non-generator results are also stored correctly
-                                current_query["results"] = (
-                                    results  # Already handled above, but explicit here
-                                )
-
-                            # --- Capture token usage AFTER processing results (stream consumed) ---
+                            # --- Debug: Record Individual Query Completion/Error ---
                             if debug_mode and debug_data is not None:
-                                # Get token usage *after* the database query stream is finished
-                                token_usage = get_token_usage()
-
-                                # Calculate and store per-stage token usage
-                                # For database queries, we accumulate since there might be multiple
-                                debug_data["tokens"]["stages"]["database_query"][
-                                    "prompt"
-                                ] += token_usage["prompt_tokens"]
-                                debug_data["tokens"]["stages"]["database_query"][
-                                    "completion"
-                                ] += token_usage["completion_tokens"]
-                                debug_data["tokens"]["stages"]["database_query"][
-                                    "total"
-                                ] += token_usage["total_tokens"]
-                                debug_data["tokens"]["stages"]["database_query"][
-                                    "cost"
-                                ] += token_usage["cost"]
-
-                                # Add decision entry for this specific query
-                                debug_data["decisions"].append(
-                                    {
-                                        "stage": "database_query",
-                                        "decision": {
-                                            "database": db_name,
-                                            "query": current_query["query"],
-                                            "results_type": results_type,  # Use the stored type
-                                        },
-                                        "timestamp": datetime.now().isoformat(),
-                                        "token_usage": {
-                                            "prompt": token_usage["prompt_tokens"],
-                                            "completion": token_usage[
-                                                "completion_tokens"
-                                            ],
-                                            "total": token_usage["total_tokens"],
-                                            "cost": token_usage["cost"],
-                                        },
-                                    }
-                                )
-
-                                # Reset token usage *after* logging it for this stage
-                                reset_token_usage()
-
-                        except Exception as e:
-                            logger.error(f"Error executing query: {str(e)}")
-                            error_message = f"Error: {str(e)}\n\n"
-                            current_query["results"] = error_message
-                            query_results.append(error_message)
-
-                            yield f"{error_message}\n---"
-
-                        logger.info(
-                            f"Completed database query {i+1}/{len(query_plan['queries'])}: {db_name}"
-                        )
-
-                        # Only consult judge if there are more queries to process
-                        if remaining_queries:
-                            # Consult judge to decide whether to continue
-                            judgment = evaluate_research_progress(
-                                research_statement,
-                                completed_queries,
-                                remaining_queries,
-                                token,
-                            )
-
-                            # Record judge decision in debug data if debug mode is enabled
-                            if debug_mode and debug_data is not None:
-                                # Get current token usage after judge evaluation
-                                token_usage = get_token_usage()
-
-                                # Calculate and store per-stage token usage
-                                debug_data["tokens"]["stages"]["judge"][
-                                    "prompt"
-                                ] += token_usage["prompt_tokens"]
-                                debug_data["tokens"]["stages"]["judge"][
-                                    "completion"
-                                ] += token_usage["completion_tokens"]
-                                debug_data["tokens"]["stages"]["judge"][
-                                    "total"
-                                ] += token_usage["total_tokens"]
-                                debug_data["tokens"]["stages"]["judge"][
-                                    "cost"
-                                ] += token_usage["cost"]
-
-                                debug_data["decisions"].append(
-                                    {
-                                        "stage": "judge",
-                                        "decision": judgment,
-                                        "timestamp": datetime.now().isoformat(),
-                                        "token_usage": {
-                                            "prompt": token_usage["prompt_tokens"],
-                                            "completion": token_usage[
-                                                "completion_tokens"
-                                            ],
-                                            "total": token_usage["total_tokens"],
-                                            "cost": token_usage["cost"],
-                                        },
-                                    }
-                                )
-
-                                # Reset token usage for next stage
-                                reset_token_usage()
-
-                            # Determine whether to continue based on judge's decision
-                            continue_research = (
-                                judgment["action"] == "continue_research"
-                            )
-
-                            if not continue_research:
-                                logger.info(
-                                    f"Stopping research based on judge decision."
-                                )  # Removed reason
-                                # Collect database token usage after all queries are processed
-                                if debug_mode and debug_data is not None:
-                                    # Get the latest database token usage information
-                                    db_token_usage = get_database_token_usage()
-                                    debug_data["tokens"][
-                                        "databases"
-                                    ] = db_token_usage.copy()
-
-                                # Generate a streaming summary when stopping early with improved formatting
-                                yield "\n## 📊 Research Summary\n"
-
-                                # Record start of streaming summary in debug data if debug mode is enabled
-                                if debug_mode and debug_data is not None:
-                                    # Reset token usage for streaming summary
-                                    reset_token_usage()
-
-                                    # Add a decision entry for summary start
-                                    debug_data["decisions"].append(
-                                        {
-                                            "stage": "summary",
-                                            "decision": {
-                                                "action": "start_streaming_summary",
-                                                "completed_queries": len(
-                                                    completed_queries
-                                                ),
-                                            },
-                                            "timestamp": datetime.now().isoformat(),
-                                        }
-                                    )
-
-                                # Get streaming summary from NEW summarizer agent
-                                for summary_chunk in generate_streaming_summary(
-                                    research_statement,
-                                    completed_queries,  # Pass completed queries
-                                    token,
-                                ):
-                                    yield summary_chunk
-
-                                # Record completion of streaming summary in debug data if debug mode is enabled
-                                if debug_mode and debug_data is not None:
-                                    # Get token usage for summary generation
-                                    token_usage = get_token_usage()
-
-                                    # Store per-stage token usage for summary
-                                    debug_data["tokens"]["stages"]["summary"][
-                                        "prompt"
-                                    ] = token_usage["prompt_tokens"]
-                                    debug_data["tokens"]["stages"]["summary"][
-                                        "completion"
-                                    ] = token_usage["completion_tokens"]
-                                    debug_data["tokens"]["stages"]["summary"][
-                                        "total"
-                                    ] = token_usage["total_tokens"]
-                                    debug_data["tokens"]["stages"]["summary"][
-                                        "cost"
-                                    ] = token_usage["cost"]
-
-                                    # Add a decision entry for summary completion
-                                    debug_data["decisions"].append(
-                                        {
-                                            "stage": "summary",
-                                            "decision": {
-                                                "action": "complete_streaming_summary",
-                                                "completed_queries": len(
-                                                    completed_queries
-                                                ),
-                                            },
-                                            "timestamp": datetime.now().isoformat(),
-                                            "token_usage": {
-                                                "prompt": token_usage["prompt_tokens"],
-                                                "completion": token_usage[
-                                                    "completion_tokens"
-                                                ],
-                                                "total": token_usage["total_tokens"],
-                                                "cost": token_usage["cost"],
-                                            },
-                                        }
-                                    )
-
-                                    # Reset token usage for next stage
-                                    reset_token_usage()
-
-                                yield "\n\n---\n\n"  # Add extra newline for markdown spacing
-
-                                # If stopping, provide information about remaining queries
-                                if remaining_queries:
-                                    yield format_remaining_queries(remaining_queries)
-                                break
-
-                        # Move to next query
-                        i += 1
-
-                    # When naturally completing all queries, stream the final research summary
-                    if not remaining_queries and completed_queries:
-                        # Collect database token usage after all queries are complete
-                        if debug_mode and debug_data is not None:
-                            # Get the latest database token usage information
-                            db_token_usage = get_database_token_usage()
-                            debug_data["tokens"]["databases"] = db_token_usage.copy()
-
-                        # Yield a header for the research summary with improved formatting
-                        yield "\n## 📊 Research Summary\n"
-
-                    # Record start of streaming summary in debug data if debug mode is enabled
-                    if debug_mode and debug_data is not None:
-                        # Reset token usage for streaming summary
-                        reset_token_usage()
-
-                        # Add a decision entry for summary start
-                        debug_data["decisions"].append(
-                            {
-                                "stage": "summary",
-                                "decision": {
-                                    "action": "start_streaming_summary",
-                                    "completed_queries": len(completed_queries),
-                                },
-                                "timestamp": datetime.now().isoformat(),
-                            }
-                        )
-
-                        # Get streaming summary from NEW summarizer agent
-                        for summary_chunk in generate_streaming_summary(
-                            research_statement,
-                            completed_queries,  # Pass completed queries
-                            token,
-                        ):
-                            yield summary_chunk
-
-                        # Record completion of streaming summary in debug data if debug mode is enabled
-                        if debug_mode and debug_data is not None:
-                            # Get token usage for summary generation
-                            token_usage = get_token_usage()
-
-                            # Store per-stage token usage for summary
-                            debug_data["tokens"]["stages"]["summary"]["prompt"] = (
-                                token_usage["prompt_tokens"]
-                            )
-                            debug_data["tokens"]["stages"]["summary"]["completion"] = (
-                                token_usage["completion_tokens"]
-                            )
-                            debug_data["tokens"]["stages"]["summary"]["total"] = (
-                                token_usage["total_tokens"]
-                            )
-                            debug_data["tokens"]["stages"]["summary"]["cost"] = (
-                                token_usage["cost"]
-                            )
-
-                            # Add a decision entry for summary completion
-                            debug_data["decisions"].append(
-                                {
-                                    "stage": "summary",
-                                    "decision": {
-                                        "action": "complete_streaming_summary",
-                                        "completed_queries": len(completed_queries),
-                                    },
-                                    "timestamp": datetime.now().isoformat(),
-                                    "token_usage": {
-                                        "prompt": token_usage["prompt_tokens"],
-                                        "completion": token_usage["completion_tokens"],
-                                        "total": token_usage["total_tokens"],
-                                        "cost": token_usage["cost"],
-                                    },
+                                decision_info = {
+                                    "database": db_name, "scope": scope,
+                                    "result_type": type(result).__name__ if result else None,
+                                    "error": str(task_exception) if task_exception else None
                                 }
-                            )
+                                stage_name = "database_query_complete" if not task_exception else "database_query_error"
+                                debug_data["decisions"].append({
+                                    "stage": stage_name,
+                                    "decision": decision_info,
+                                    "timestamp": datetime.now().isoformat(),
+                                    "token_usage": query_token_usage # Log usage for this specific query
+                                })
+                            # --- End Debug ---
 
-                        # Add a buffer after the summary with closing horizontal rule
+                            # --- Yield Status Update and Aggregate Results ---
+                            # Initialize status_summary earlier
+                            status_summary = "❓ Unknown status (Processing error)."
+
+                            if task_exception:
+                                status_summary = f"❌ Error: {str(task_exception)}"
+                                # Store error message for potential later use
+                                if scope == "research":
+                                    aggregated_detailed_research[db_name] = f"Error during query execution: {str(task_exception)}"
+                                elif scope == "metadata":
+                                    if db_name not in metadata_results_by_db: metadata_results_by_db[db_name] = []
+                                    metadata_results_by_db[db_name].append({"error": str(task_exception)})
+                            elif result is not None:
+                                # Process successful result
+                                if scope == "research":
+                                    if isinstance(result, dict) and "detailed_research" in result and "status_summary" in result:
+                                        status_summary = result["status_summary"]
+                                        detailed_research = result["detailed_research"]
+                                        aggregated_detailed_research[db_name] = detailed_research
+                                    else:
+                                        logger.error(f"Unexpected result type '{type(result).__name__}' for research scope from {db_name}. Expected Dict.")
+                                        status_summary = "❌ Error: Received unexpected result format."
+                                        aggregated_detailed_research[db_name] = f"Error: Unexpected result format: {str(result)[:200]}..."
+                                elif scope == "metadata":
+                                    if isinstance(result, list):
+                                        logger.info(f"Received {len(result)} metadata items from {db_name}.")
+                                        if db_name not in metadata_results_by_db: metadata_results_by_db[db_name] = []
+                                        metadata_results_by_db[db_name].extend(result)
+                                        total_metadata_items += len(result)
+                                        status_summary = f"✅ Found {len(result)} items."
+                                    else:
+                                        logger.error(f"Unexpected result type '{type(result).__name__}' for metadata scope from {db_name}. Expected List.")
+                                        status_summary = "❌ Error: Received unexpected result format."
+                                        if db_name not in metadata_results_by_db: metadata_results_by_db[db_name] = []
+                                        metadata_results_by_db[db_name].append({"error": "Unexpected result format"})
+                            # No final 'else' needed as status_summary is initialized above
+
+                            # Yield the status block regardless of success/failure
+                            status_block = f"\n\n---\n**Database:** {db_display_name}\n**Query:** `{query_text}`\n**Status:** {status_summary}\n---"
+                            yield status_block
+                            # --- End Yield and Aggregation ---
+
+                    logger.info("All concurrent database queries completed processing.")
+
+                    # --- Debug: Store Aggregated DB Token Usage ---
+                    if debug_mode and debug_data is not None:
+                        # Store the total accumulated usage for the DB stage
+                        debug_data["tokens"]["stages"]["database_query"] = db_stage_token_usage.copy()
+                        # Add a marker decision indicating all DB queries finished processing
+                        debug_data["decisions"].append({
+                            "stage": "database_queries_all_completed",
+                            "decision": {"total_queries": len(query_plan['queries'])},
+                            "timestamp": datetime.now().isoformat(),
+                            "token_usage": db_stage_token_usage.copy() # Log total usage for this stage
+                        })
+                    # --- End Debug ---
+
+                    # Ensure all planned DBs have an entry in the metadata results dict if scope is metadata, even if empty or errored
+                    if scope == "metadata":
+                        for query_dict in query_plan["queries"]:
+                            db_name = query_dict["database"]
+                            if db_name not in metadata_results_by_db:
+                                metadata_results_by_db[db_name] = [] # Initialize if completely missing (e.g., future.result() failed)
+                # --- End Concurrent Query Execution ---
+
+                # --- Final Summarization / Metadata Return ---
+                if scope == "research":
+                    if aggregated_detailed_research:
+                        yield "\n\n## 📊 Research Summary\n"
+                        # Start summary stage
+                        if debug_mode:
+                            process_monitor.start_stage("summary")
+                            process_monitor.add_stage_details(
+                                "summary",
+                                scope=scope,
+                                num_results=len(aggregated_detailed_research),
+                                sources=list(aggregated_detailed_research.keys())
+                            )
+                        
+                        # --- Legacy Debug: Record Summary Start ---
+                        if debug_mode and debug_data is not None:
+                            reset_token_usage()
+                            debug_data["decisions"].append({"stage": "summary", "decision": {"action": "start_summary", "scope": scope, "num_results": len(aggregated_detailed_research)}, "timestamp": datetime.now().isoformat()})
+                        # --- End Debug ---
+
+                        # Assuming generate_streaming_summary is still sync generator
+                        try:
+                            logger.info("Calling generate_streaming_summary (assuming sync generator)")
+                            summary_stream = generate_streaming_summary(aggregated_detailed_research, scope, token, original_query_plan=query_plan)
+                            for summary_chunk in summary_stream:
+                                 yield summary_chunk
+                                 
+                            # Get token usage for summary
+                            summary_token_usage = get_token_usage()
+                            
+                            # End summary stage
+                            if debug_mode:
+                                process_monitor.end_stage("summary")
+                                process_monitor.update_stage_tokens(
+                                    "summary",
+                                    prompt_tokens=summary_token_usage.get("prompt_tokens", 0),
+                                    completion_tokens=summary_token_usage.get("completion_tokens", 0),
+                                    total_tokens=summary_token_usage.get("total_tokens", 0),
+                                    cost=summary_token_usage.get("cost", 0.0)
+                                )
+                        except Exception as summary_exc:
+                             logger.error(f"Error during summarization: {summary_exc}", exc_info=True)
+                             yield f"\n\n**Error during final summarization:** {str(summary_exc)}"
+                             
+                             # End summary stage with error
+                             if debug_mode:
+                                process_monitor.end_stage("summary", "error")
+                                process_monitor.add_stage_details("summary", error=str(summary_exc))
+
+                        # --- Legacy Debug: Record Summary Completion ---
+                        if debug_mode and debug_data is not None:
+                            token_usage = get_token_usage()
+                            debug_data["tokens"]["stages"]["summary"] = token_usage.copy()
+                            debug_data["decisions"].append({"stage": "summary", "decision": {"action": "complete_summary", "scope": scope}, "timestamp": datetime.now().isoformat(), "token_usage": token_usage.copy()})
+                        # --- End Debug ---
                         yield "\n\n---"
 
-                    # Final completion message
-                    completion_message = (
-                        f"\nCompleted {len(completed_queries)} database queries.\n"
-                    )
+                    completion_message = f"\nCompleted processing {len(query_plan['queries'])} database queries for scope '{scope}'.\n"
                     yield completion_message
-                    logger.info("Completed research process")
+                    logger.info(f"Completed process for scope '{scope}'")
 
-                    # Add token usage summary if enabled
-                    from .model_settings import SHOW_USAGE_SUMMARY
+                elif scope == "metadata":
+                    yield f"\n\nCompleted metadata search across {len(query_plan['queries'])} databases. Found {total_metadata_items} relevant items:\n"
+                    for db_name, items_list in metadata_results_by_db.items():
+                        db_display_name = available_databases.get(db_name, {}).get("name", db_name)
+                        yield f"\n**{db_display_name}:**\n"
+                        if items_list:
+                            for item in items_list:
+                                # Check if item is an error marker
+                                if isinstance(item, dict) and "error" in item:
+                                    yield f"- Error processing query for this database: {item['error']}\n"
+                                else:
+                                    doc_name = item.get('document_name', 'Unknown Document')
+                                    doc_desc = item.get('document_description', 'No description available')
+                                    yield f"- **{doc_name}:** {doc_desc}\n"
+                        else:
+                            yield "- No relevant items found.\n"
+                    yield "\n---" # Add a separator at the end
+                    logger.info(f"Completed process for scope '{scope}', returning {total_metadata_items} items internally.")
 
-                    if SHOW_USAGE_SUMMARY:
-                        # Get the final token usage
-                        token_usage = get_token_usage()
 
-                        # Get the start timestamp from debug data if available
-                        start_time = (
-                            debug_data["start_timestamp"] if debug_data else None
-                        )
+                # --- Debug: Add Final Usage Summary ---
+                if debug_mode:
+                    # End overall monitoring and yield summary
+                    process_monitor.end_monitoring()
+                    yield process_monitor.format_summary()
+                elif SHOW_USAGE_SUMMARY:
+                    # Legacy usage summary if debug mode is not enabled
+                    start_time = debug_data["start_timestamp"] if debug_data else None
+                    final_agent_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "cost": 0.0}
+                    if debug_data:
+                         for stage_usage in debug_data["tokens"]["stages"].values():
+                             final_agent_usage["prompt_tokens"] += stage_usage.get("prompt", 0)
+                             final_agent_usage["completion_tokens"] += stage_usage.get("completion", 0)
+                             final_agent_usage["total_tokens"] += stage_usage.get("total", 0)
+                             final_agent_usage["cost"] += stage_usage.get("cost", 0.0)
+                         # Get any usage accumulated *after* the last stage (e.g., formatting the summary itself)
+                         final_usage_after_stages = get_token_usage()
+                         final_agent_usage["prompt_tokens"] += final_usage_after_stages.get("prompt_tokens", 0)
+                         final_agent_usage["completion_tokens"] += final_usage_after_stages.get("completion_tokens", 0)
+                         final_agent_usage["total_tokens"] += final_usage_after_stages.get("total_tokens", 0)
+                         final_agent_usage["cost"] += final_usage_after_stages.get("cost", 0.0)
+                    else:
+                         # If debug data not available, just get whatever the current global usage is
+                         final_agent_usage = get_token_usage()
+                    usage_summary = format_usage_summary(final_agent_usage, start_time)
+                    yield usage_summary
+                # --- End Debug ---
 
-                        # If debug data exists, update it with the latest database token usage
-                        if debug_mode and debug_data is not None:
-                            db_token_usage = get_database_token_usage()
-                            debug_data["tokens"]["databases"] = db_token_usage.copy()
-
-                        # Format and yield usage summary
-                        usage_summary = format_usage_summary(token_usage, start_time)
-                        yield usage_summary
-
-            else:
-                # Unknown function - yield error
-                logger.error(
-                    f"Unknown routing function: {routing_decision['function_name']}"
-                )
-                yield "Error: Unable to process query due to internal routing error."
-
-        else:
-            # If no conversation was provided, yield initialization message
-            logger.info("Model initialization complete")
-            yield "Model initialized successfully, but no conversation was provided."
+        else: # Unknown routing decision
+            logger.error(f"Unknown routing function: {routing_decision['function_name']}")
+            yield "Error: Unable to process query due to internal routing error."
 
     except Exception as e:
-        error_msg = f"Error processing request: {str(e)}"
+        error_msg = f"Critical error processing request: {str(e)}"
+        logger.error(error_msg, exc_info=True)
 
-        # Record error in debug data if debug mode is enabled
+        # Record error in process monitor
+        if debug_mode:
+            process_monitor.end_monitoring()
+            # Add global error
+            process_monitor.add_stage_details("_global", error=error_msg)
+            # Yield process monitor summary
+            yield process_monitor.format_summary()
+
+        # --- Legacy Debug: Record Error ---
         if debug_mode and debug_data is not None:
             debug_data["error"] = error_msg
             debug_data["completed"] = False
-
-            # Get token usage data
-            token_usage = get_token_usage()
-            debug_data["tokens"]["prompt"] = token_usage["prompt_tokens"]
-            debug_data["tokens"]["completion"] = token_usage["completion_tokens"]
-            debug_data["tokens"]["total"] = token_usage["total_tokens"]
-            debug_data["cost"] = token_usage["cost"]
-
+            # Try to capture total usage up to the point of error
+            token_usage = get_token_usage() # Get current usage
+            # Sum up stage usage recorded so far
+            prompt_total = sum(s.get("prompt", 0) for s in debug_data["tokens"]["stages"].values())
+            completion_total = sum(s.get("completion", 0) for s in debug_data["tokens"]["stages"].values())
+            cost_total = sum(s.get("cost", 0.0) for s in debug_data["tokens"]["stages"].values())
+            # Add current usage (might double count last stage if error was within it, but better than nothing)
+            debug_data["tokens"]["prompt"] = prompt_total + token_usage.get("prompt_tokens", 0)
+            debug_data["tokens"]["completion"] = completion_total + token_usage.get("completion_tokens", 0)
+            debug_data["tokens"]["total"] = debug_data["tokens"]["prompt"] + debug_data["tokens"]["completion"]
+            debug_data["cost"] = cost_total + token_usage.get("cost", 0.0)
             debug_data["end_timestamp"] = datetime.now().isoformat()
-            # Yield debug data as a special message
             yield f"\n\nDEBUG_DATA:{json.dumps(debug_data)}"
+        # --- End Debug ---
 
-        yield error_msg
+        yield f"**Error:** {error_msg}"
 
     finally:
-        # Add completion status and yield debug data if debug mode is enabled
-        if debug_mode and debug_data is not None:
+        # --- Ensure process monitoring is properly ended in all cases ---
+        if debug_mode and process_monitor.enabled:
+            if not hasattr(process_monitor, "end_time") or not process_monitor.end_time:
+                process_monitor.end_monitoring()
+
+        # --- Legacy Debug: Final Yield ---
+        if debug_mode and debug_data is not None and not debug_data.get("error"):
             debug_data["completed"] = True
+            # Calculate final totals from stages if not already done by error block
+            if "end_timestamp" not in debug_data: # Check if error block already calculated totals
+                final_agent_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "cost": 0.0}
+                for stage_usage in debug_data["tokens"]["stages"].values():
+                     final_agent_usage["prompt_tokens"] += stage_usage.get("prompt", 0)
+                     final_agent_usage["completion_tokens"] += stage_usage.get("completion", 0)
+                     final_agent_usage["total_tokens"] += stage_usage.get("total", 0)
+                     final_agent_usage["cost"] += stage_usage.get("cost", 0.0)
+                # Add any final usage after last stage
+                final_usage_after_stages = get_token_usage()
+                final_agent_usage["prompt_tokens"] += final_usage_after_stages.get("prompt_tokens", 0)
+                final_agent_usage["completion_tokens"] += final_usage_after_stages.get("completion_tokens", 0)
+                final_agent_usage["total_tokens"] += final_usage_after_stages.get("total_tokens", 0)
+                final_agent_usage["cost"] += final_usage_after_stages.get("cost", 0.0)
 
-            # Get any remaining token usage data from global counter
-            token_usage = get_token_usage()
-
-            # Ensure the latest database token usage is included
-            db_token_usage = get_database_token_usage()
-            debug_data["tokens"]["databases"] = db_token_usage.copy()
-
-            # Update the overall token usage from the per-stage metrics
-            total_prompt = 0
-            total_completion = 0
-            total_tokens = 0
-            total_cost = 0
-
-            # Sum up token usage across all stages
-            for stage, usage in debug_data["tokens"]["stages"].items():
-                total_prompt += usage["prompt"]
-                total_completion += usage["completion"]
-                total_tokens += usage["total"]
-                total_cost += usage["cost"]
-
-            # Store the summed values in the main token usage
-            debug_data["tokens"]["prompt"] = total_prompt
-            debug_data["tokens"]["completion"] = total_completion
-            debug_data["tokens"]["total"] = total_tokens
-            debug_data["cost"] = total_cost
-
-            # Add final timestamp
-            debug_data["end_timestamp"] = datetime.now().isoformat()
-
-            # Yield debug data as a special message that can be parsed by the notebook
+                debug_data["tokens"]["prompt"] = final_agent_usage["prompt_tokens"]
+                debug_data["tokens"]["completion"] = final_agent_usage["completion_tokens"]
+                debug_data["tokens"]["total"] = final_agent_usage["total_tokens"]
+                debug_data["cost"] = final_agent_usage["cost"]
+                debug_data["end_timestamp"] = datetime.now().isoformat()
             yield f"\n\nDEBUG_DATA:{json.dumps(debug_data)}"
+        # --- End Legacy Debug ---
 
-        # Ensure token usage is reset regardless of success or failure
         reset_token_usage()
-        reset_database_token_usage()  # Reset database usage as well
 
 
-def format_remaining_queries(remaining_queries):
+# --- Synchronous Wrapper Function ---
+def model(conversation: Optional[Dict[str, Any]] = None,
+          html_callback: Optional[callable] = None,
+           debug_mode: bool = False) -> Generator[str, None, None]:
+    """
+    Synchronous wrapper for the model generator.
+
+    This function runs the `_model_generator` and yields its results,
+    making it compatible with synchronous calling code.
+
+    Args:
+        conversation (dict, optional): Conversation in OpenAI format.
+        html_callback (callable, optional): Unused callback.
+        debug_mode (bool, optional): Enables debug data tracking.
+
+    Returns:
+        generator: A standard generator yielding response chunks as strings.
+    """
+    logger = logging.getLogger(__name__) # Ensure logger is available
+    logger.debug("Entering synchronous model wrapper.")
+
+    # Directly iterate over the synchronous generator
+    try:
+        sync_gen = _model_generator(conversation, html_callback, debug_mode)
+        for chunk in sync_gen:
+            yield chunk
+        logger.debug("Synchronous generator completed.")
+    except Exception as e:
+        # Catch any exceptions raised during the generator's execution
+        error_msg = f"Error during synchronous model execution: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        yield f"**Error:** {error_msg}"
+
+
+# --- Helper Function (Remains Synchronous) ---
+def format_remaining_queries(remaining_queries: List[Dict[str, Any]]) -> str:
     """Format remaining queries for display to the user."""
+    # ... (implementation remains the same) ...
     if not remaining_queries:
-        return "There are no remaining database queries."
+        return "" # Return empty string if none remain
 
-    # Get database configurations for display names
     available_databases = get_available_databases()
-
     message = "## ⏸️ Remaining Queries\n\n"
     message += "The following database queries were not processed:\n\n"
     for i, query in enumerate(remaining_queries, 1):
         db_name = query["database"]
-        # Get the display name from the database configuration
         db_display_name = available_databases.get(db_name, {}).get("name", db_name)
-        message += (
-            f"**{i}.** {db_display_name}: {query['query']}\n\n"  # Add second newline
-        )
+        message += f"**{i}.** {db_display_name}: {query['query']}\n\n"
 
     message += "\nPlease let me know if you would like to continue with these remaining database queries in a new search."
     return message

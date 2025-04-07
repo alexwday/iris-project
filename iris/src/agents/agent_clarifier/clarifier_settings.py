@@ -34,10 +34,12 @@ database research or if the user must provide additional information first.
 
 # ANALYSIS INSTRUCTIONS
 Carefully evaluate:
-1. The entire conversation history
-2. The user's latest question
-3. The specific databases available and their capabilities
-4. What information would be necessary for effective database research
+1. The entire conversation history, **paying close attention to the last assistant message for potential follow-up context**.
+2. The user's latest question/request.
+3. The specific databases available and their capabilities.
+4. What information would be necessary for effective database research.
+5. **User Intent:** Determine if the user wants a quick list of relevant items ('metadata' scope) or a detailed analysis/answer based on content ('research' scope). Keywords like "find documents", "list items", "catalog search" suggest 'metadata'. Keywords like "analyze", "summarize", "explain", "what does X say about Y" suggest 'research'.
+6. **Follow-up Context:** Examine the **content** of the last assistant message. If it presented a list of items (likely from a previous 'metadata' search, formatted like `* **Document Name** (ID: `doc_id`) - Description`), and the user's current request refers to analyzing one of those specific items (e.g., "analyze Document Name", "tell me more about `doc_id`"), this is a follow-up research request. **Carefully extract the specific Document Name and/or ID mentioned by the user.**
 
 # DATABASE-AWARE ASSESSMENT
 When determining necessary context, consider:
@@ -51,7 +53,11 @@ When determining necessary context, consider:
   with research
 
 # DECISION CRITERIA
-You must choose ONE of two paths:
+
+## PRIORITY OVERRIDE RULE
+**BEFORE ANYTHING ELSE:** If the user's message contains phrases like "no more clarification", "just search", "no clarification", "skip clarification", or "search without clarification", you MUST choose CREATE_RESEARCH_STATEMENT path immediately, without any further analysis. This overrides all other rules and criteria.
+
+Otherwise, you must choose ONE of two paths:
 
 1. REQUEST_ESSENTIAL_CONTEXT - When critical information is missing:
    - Which accounting standard is relevant (IFRS, US GAAP, etc.)
@@ -75,15 +81,30 @@ You must choose ONE of two paths:
      - **If this is a continuation:** Briefly summarize previous findings/gaps
        and list any remaining planned queries from the prior step to guide the
        Planner.
-   - Structure the statement to clearly guide the Planner's query development.
-     This statement is the *only* context the Planner receives.
+   - Structure the statement to clearly guide the Planner's query development. This statement is the *only* context the Planner receives.
+   - **For Follow-up Research:** If identified as a follow-up based on the previous assistant message's list, create a highly specific research statement targeting the requested item(s) identified in step 6 (e.g., "Analyze 'Document Name' [ID: `doc_id`] based on the previous metadata search results."). Include both name and ID if possible.
+
+# SCOPE DETERMINATION
+Based on your analysis (user intent, follow-up context), determine the `scope`:
+- **'metadata'**: User wants a list/catalog of relevant items.
+- **'research'**: User wants content analysis, synthesis, or answers, OR this is a follow-up request to analyze specific items from a previous metadata search.
 
 # CONTEXT SUFFICIENCY CRITERIA
-Sufficient context exists when the query contains enough information to
-formulate effective database queries.
-The following elements contribute to context sufficiency:
+Sufficient context exists when the query contains enough information to formulate effective database queries *for the determined scope*.
 
-## Essential Elements (at least ONE required):
+**IMPORTANT FOR SCOPE 'metadata':** If the determined scope is 'metadata' (e.g., user asks to list files, find documents), context is almost always sufficient. Do NOT request accounting-specific context (like standards, fiscal year, transaction type) for these requests. Proceed directly to `create_research_statement` unless the request is completely unintelligible.
+
+**IMPORTANT FOR USER STATEMENTS:** The following user instructions MUST be respected:
+
+1. If the user explicitly states they want to skip clarification (e.g., "no more clarification", "just search", "no clarification", "skip clarification", "search without clarification"), IMMEDIATELY proceed to `create_research_statement` without asking any questions, regardless of how little context is available. This is a hard requirement.
+
+2. If the user explicitly states they cannot provide more clarity (e.g., "I can't provide more detail", "just give me a general idea") AND the request is relatively simple (especially for 'metadata' scope), RESPECT THIS and proceed to `create_research_statement` with the information available.
+
+In these cases, do not force clarification questions under any circumstances.
+
+The following elements contribute to context sufficiency (primarily for **scope 'research'**):
+
+## Essential Elements (at least ONE required for 'research' scope):
 - Specific accounting standard mentioned (e.g., "IFRS 15", "IAS 38")
 - Specific accounting topic clearly identified (e.g., "revenue recognition",
   "lease accounting")
@@ -98,28 +119,25 @@ The following elements contribute to context sufficiency:
 - Transaction type
 - Specific scenario details
 
-## Proceed with Research When:
-- ANY Essential Element is present
-- The query uses professional accounting terminology
-- The query is specific enough to formulate targeted database searches
-- Previous conversation provides sufficient context even if the latest query
-  is brief
+## Proceed with Research (`create_research_statement`) When:
+- **Scope is 'metadata'**: Almost always proceed, unless the query is unintelligible.
+- **Scope is 'research'**:
+    - ANY Essential Element is present.
+    - The query uses professional accounting terminology and is specific enough.
+    - Previous conversation provides sufficient context.
+    - The user explicitly states they cannot provide more clarity for a reasonably understandable query.
+- **When in doubt, proceed with research** rather than asking for more context.
 
-## Request Context Only When:
-- NO Essential Elements are present AND the query is too vague for effective
-  research
-- The query could apply to multiple different standards without clarification
-- Critical ambiguity exists that would lead to searching the wrong databases
-- The query is so broad that it would require searching all databases
-  ineffectively
+## Request Context Only When (`request_essential_context`):
+- **Scope is 'research'** AND:
+    - NO Essential Elements are present AND the query is too vague for effective research.
+    - Critical ambiguity exists that would lead to searching the wrong databases or standards.
+- **NEVER request context if scope is 'metadata'** unless the core request itself is unclear (e.g., "show me stuff").
+- **AVOID requesting context if the user explicitly states they cannot provide more clarity**, unless the query is completely unusable even with assumptions.
 
 IMPORTANT GUIDANCE:
-- STRONGLY PREFER proceeding to research when any Essential Element is present
-- Only request context when truly essential information is missing that would
-  prevent effective research
-- When in doubt, proceed with research rather than asking for more context
-- For standards-based questions, proceed with research even without industry
-  context
+- **PRIORITIZE proceeding to `create_research_statement`**, especially for 'metadata' scope or when the user resists clarification.
+- Only request context for 'research' scope when absolutely necessary to avoid completely ineffective or incorrect research.
 
 # CLARIFICATION EXAMPLES
 
@@ -138,6 +156,12 @@ IMPORTANT GUIDANCE:
 
 5. "How should we account for software development costs?"
    (Contains specific accounting topic with professional terminology)
+   
+6. "Tell me about revenue recognition, no more clarification"
+   (Contains override instruction to skip clarification - MUST proceed immediately)
+
+7. "What's the definition of a lease? just search, no clarification needed"
+   (Contains override instruction to skip clarification - MUST proceed immediately)
 
 ## Examples Where Context is INSUFFICIENT (REQUEST_ESSENTIAL_CONTEXT):
 1. "What's the accounting treatment for this transaction?"
@@ -156,6 +180,16 @@ IMPORTANT GUIDANCE:
 
 5. "What's the proper disclosure for this?"
    (No indication of disclosure type or transaction type)
+
+## Examples of Override Instructions (ALWAYS CREATE_RESEARCH_STATEMENT regardless of context):
+1. "What's the accounting treatment? just search, no clarification"
+   (Would normally be insufficient, but override instruction REQUIRES proceeding without clarification)
+
+2. "Tell me about IFRS, no more clarification needed"
+   (Override instruction present - MUST proceed without clarification)
+
+3. "Is this allowed? Skip clarification, just search"
+   (Override instruction present - MUST proceed without clarification)
 
 # CONTINUATION DETECTION
 Also identify if the user is requesting continuation of previous research by:
@@ -193,12 +227,10 @@ reflects this and includes necessary context about prior steps
   Decision matches criteria? Continuation flag correct?
 
 # ERROR HANDLING SUMMARY
-- General: Handle unexpected input, ambiguity (choose likely, state
-  assumption), missing info (assume reasonably, state assumption), limitations
-  (acknowledge). Use confidence signaling.
-- Clarifier Specific: Unclear need -> clarify topic. Ambiguous interpretation
-  -> ask for confirmation. Too broad -> ask for specific aspects. Ambiguous
-  continuation -> assume yes if context just provided.
+- MOST IMPORTANT: If user includes any phrases like "no more clarification", "just search", "no clarification", etc., ALWAYS CREATE_RESEARCH_STATEMENT regardless of all other factors. This rule overrides all other rules.
+- General: Handle unexpected input, ambiguity (choose likely, state assumption), missing info (assume reasonably, state assumption), limitations (acknowledge). Use confidence signaling.  
+- Clarifier Specific: Unclear need -> clarify topic. Ambiguous interpretation -> ask for confirmation. Too broad -> ask for specific aspects. Ambiguous continuation -> assume yes if context just provided.
+- When in doubt about whether to clarify, prefer to proceed with research rather than asking questions.
 """
 
 # Generate system prompt with context from global_prompts
@@ -222,7 +254,7 @@ TOOL_DEFINITIONS = [
                 "properties": {
                     "action": {
                         "type": "string",
-                        "description": "The chosen action based on conversation analysis",
+                        "description": "The chosen action based on conversation analysis.",
                         "enum": [
                             "request_essential_context",
                             "create_research_statement",
@@ -232,18 +264,26 @@ TOOL_DEFINITIONS = [
                         "type": "string",
                         "description": (
                             "Either a list of context questions (numbered) or "
-                            "a research statement"
+                            "a research statement."
                         ),
+                    },
+                    "scope": {
+                        "type": "string",
+                        "description": "The determined scope of the user's request ('metadata' for catalog lookup, 'research' for content analysis). Required if action is 'create_research_statement'.",
+                        "enum": ["metadata", "research"],
                     },
                     "is_continuation": {
                         "type": "boolean",
                         "description": (
                             "Whether the user is requesting continuation of "
-                            "previous research"
+                            "previous research."
                         ),
                     },
                 },
-                "required": ["action", "output"],
+                "required": [
+                    "action",
+                    "output",
+                ],  # Scope is conditionally required, handled in clarifier.py
             },
         },
     }

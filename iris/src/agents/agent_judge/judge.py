@@ -130,6 +130,7 @@ def evaluate_research_progress(
         logger.info(
             f"Completed queries: {len(completed_queries)}, Remaining queries: {len(remaining_queries)}"
         )
+        logger.info("Initiating Judge API call") # Added contextual log
 
         # Make the API call with tool calling
         response = call_llm(

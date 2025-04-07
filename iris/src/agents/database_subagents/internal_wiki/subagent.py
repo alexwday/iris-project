@@ -1,327 +1,257 @@
 # internal_wiki/subagent.py
 """
-Internal Wiki Subagent
+Internal Wiki Subagent (Async Version)
 
-This module handles queries to the Internal Wiki database, including catalog retrieval,
-document selection, content retrieval, and response synthesis.
+This module handles queries to the Internal Wiki database asynchronously,
+including catalog retrieval, document selection, content retrieval,
+and response synthesis (generating detailed research and status summary using tool calls).
 
 Functions:
-    query_database: Query the Internal Wiki database
+    query_database_sync: Synchronously query the Internal Wiki database
 """
 
 import json
 import logging
 import re
 import time
-from typing import Any, Dict, Generator, List, Optional, Union, cast
+from typing import Any, Dict, List, Optional, Union, cast
+
+# Define response types consistent with database_router
+MetadataResponse = List[Dict[str, Any]]
+# ResearchResponse is now a dictionary containing detailed research and status
+ResearchResponse = Dict[str, str]
+DatabaseResponse = Union[MetadataResponse, ResearchResponse]
 
 from ....chat_model.model_settings import ENVIRONMENT, get_model_config
 from ....initial_setup.db_config import connect_to_db
 from ....llm_connectors.rbc_openai import call_llm
 from .catalog_selection_prompt import get_catalog_selection_prompt
-from .content_synthesis_prompt import get_content_synthesis_prompt
+from .content_synthesis_prompt import (
+    get_content_synthesis_prompt,
+)  # Will need simplification
 
 # Get module logger
 logger = logging.getLogger(__name__)
 
 
+# Formatting functions remain synchronous as they are CPU-bound
 def format_catalog_for_llm(catalog_records: List[Dict[str, Any]]) -> str:
     """
     Format the catalog records into a string that is optimized for LLM comprehension.
-
-    Args:
-        catalog_records (List[Dict[str, Any]]): List of catalog records from the database
-
-    Returns:
-        str: Formatted catalog text
     """
     formatted_catalog = ""
-
     for record in catalog_records:
         doc_id = record.get("id", "unknown")
         doc_name = record.get("document_name", "Untitled")
         doc_desc = record.get("document_description", "No description available")
-
         formatted_catalog += f"Document ID: {doc_id}\n"
         formatted_catalog += f"Document Name: {doc_name}\n"
         formatted_catalog += f"Document Description: {doc_desc}\n\n"
-
     return formatted_catalog.strip()
 
 
 def format_documents_for_llm(documents: List[Dict[str, Any]]) -> str:
     """
     Format retrieved documents into a string that is optimized for LLM analysis.
-
-    Args:
-        documents (List[Dict[str, Any]]): List of document records from the database
-
-    Returns:
-        str: Formatted documents text
     """
     formatted_docs = ""
-
     for doc in documents:
         doc_name = doc.get("document_name", "Untitled")
         formatted_docs += f"# {doc_name}\n\n"
-
-        # Process each section
         sections = doc.get("sections", [])
         for section in sections:
             section_name = section.get("section_name", "Untitled Section")
             section_content = section.get("section_content", "No content available")
-
             formatted_docs += f"## {section_name}\n\n"
             formatted_docs += f"{section_content}\n\n"
-
         formatted_docs += "---\n\n"
-
     return formatted_docs.strip()
 
 
-def fetch_wiki_catalog(query: str) -> List[Dict[str, Any]]:
+# Database interaction functions (now synchronous)
+def fetch_wiki_catalog() -> List[Dict[str, Any]]:
     """
-    Fetch and filter the internal wiki catalog from the database.
-
-    Args:
-        query (str): The search query to help filter relevant documents
-
-    Returns:
-        List[Dict[str, Any]]: List of catalog records
+    Fetch the full internal wiki catalog from the database synchronously.
     """
-    logger.info(
-        f"Fetching wiki catalog with query: {query} (environment: {ENVIRONMENT})"
-    )
-
-    # Connect to database using the environment from model_settings
+    logger.info(f"Fetching full wiki catalog (environment: {ENVIRONMENT})")
     conn = connect_to_db(ENVIRONMENT)
     catalog_records: List[Dict[str, Any]] = []
-
     if not conn:
         logger.error("Failed to connect to database")
         return catalog_records
-
     try:
-        # Create SQL query to get catalog entries for internal_wiki
-        # Note: In a production environment, you might want to add more sophisticated
-        # text search capabilities like full-text search or fuzzy matching
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT id, document_name, document_description 
-                FROM apg_catalog 
+                SELECT id, document_name, document_description
+                FROM apg_catalog
                 WHERE document_source = 'internal_wiki'
+                ORDER BY document_name
             """
             )
-
             for row in cur.fetchall():
                 catalog_records.append(
                     {
-                        "id": str(row[0]),  # Convert ID to string for consistency
+                        "id": str(row[0]),
                         "document_name": row[1],
                         "document_description": row[2],
                     }
                 )
-
-        logger.info(f"Retrieved {len(catalog_records)} catalog entries from database")
+        logger.info(
+            f"Retrieved {len(catalog_records)} catalog entries from database"
+        )
     except Exception as e:
         logger.error(f"Error fetching catalog from database: {str(e)}")
     finally:
-        conn.close()
-
+        if conn:
+            conn.close()
     return catalog_records
 
 
 def fetch_document_content(doc_ids: List[str]) -> List[Dict[str, Any]]:
     """
-    Fetch the content of specified documents from the database.
-
-    Args:
-        doc_ids (List[str]): List of document IDs to retrieve
-
-    Returns:
-        List[Dict[str, Any]]: List of document records with content
+    Fetch the content of specified documents from the database synchronously.
     """
     logger.info(f"Fetching content for documents: {doc_ids}")
-
-    # Use document IDs directly without conversion
     if not doc_ids:
         logger.warning("No document IDs to fetch")
         return []
-
-    # Connect to database using the environment from model_settings
     conn = connect_to_db(ENVIRONMENT)
     result: List[Dict[str, Any]] = []
-
     if not conn:
         logger.error("Failed to connect to database")
         return result
-
     try:
-        # First, get the document names for all requested IDs from the catalog
         doc_names = {}
         with conn.cursor() as cur:
             placeholders = ",".join(["%s"] * len(doc_ids))
             cur.execute(
                 f"""
-                SELECT id, document_name 
-                FROM apg_catalog 
+                SELECT id, document_name
+                FROM apg_catalog
                 WHERE id::text IN ({placeholders})
                 AND document_source = 'internal_wiki'
             """,
                 doc_ids,
             )
-
             for row in cur.fetchall():
                 doc_names[row[0]] = row[1]
-                logger.info(f"Found document: ID={row[0]}, Name={row[1]}")
+            logger.info(f"Found {len(doc_names)} documents for IDs: {doc_ids}")
 
-            if not doc_names:
-                logger.warning(f"No documents found for IDs: {doc_ids}")
-
-        # Then, for each document, get its content sections
         for doc_id, doc_name in doc_names.items():
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    SELECT section_id, section_name, section_content 
-                    FROM apg_content 
+                    SELECT section_id, section_name, section_content
+                    FROM apg_content
                     WHERE document_source = 'internal_wiki'
                     AND document_name = %s
                     ORDER BY section_id
                 """,
                     (doc_name,),
                 )
-
                 sections = []
                 for row in cur.fetchall():
                     sections.append(
                         {
-                            "section_name": row[1] if row[1] else f"Section {row[0]}",
+                            "section_name": (
+                                row[1] if row[1] else f"Section {row[0]}"
+                            ),
                             "section_content": row[2],
                         }
                     )
-
                 if sections:
                     result.append({"document_name": doc_name, "sections": sections})
-
         logger.info(f"Retrieved content for {len(result)} documents from database")
     except Exception as e:
         logger.error(f"Error fetching document content from database: {str(e)}")
     finally:
-        conn.close()
-
+        if conn:
+            conn.close()
     return result
 
 
+# LLM interaction helper (Updated for Tool Calling, now synchronous)
 def get_completion(
     capability: str,
     prompt: str,
     max_tokens: int = 1000,
     temperature: float = 0.7,
     token: Optional[str] = None,
-    stream: bool = False,
     database_name: Optional[str] = None,
-) -> Union[str, Generator[str, None, None]]:
+    **kwargs: Any,  # Accept additional kwargs for tools, tool_choice etc.
+) -> Any:  # Returns the raw OpenAI response object or content string or error string
     """
-    Helper function to get a completion from the LLM, either as full response or streaming chunks.
-
-    Args:
-        capability (str): Model capability ("small" or "large")
-        prompt (str): The prompt to send to the model
-        max_tokens (int, optional): Maximum tokens for completion. Defaults to 1000.
-        temperature (float, optional): Temperature parameter. Defaults to 0.7.
-        token (str, optional): OAuth token for API access. Defaults to None.
-        stream (bool, optional): Whether to stream the response. Defaults to False.
-        database_name (str, optional): Identifier for database-specific tracking. Defaults to None.
-
-    Returns:
-        Union[str, Generator[str, None, None]]: The model's response as string or generator of chunks
+    Helper function to get a completion from the LLM synchronously.
+    Handles standard completions and tool calls.
     """
-    # Type declaration that ensures mypy understands return type correctly
-    response_value: Union[str, Generator[str, None, None]]
-    # Get the model configuration based on capability and environment
-    model_config = get_model_config(capability)
-    model_name = model_config["name"]
-    prompt_cost = model_config["prompt_token_cost"]
-    completion_cost = model_config["completion_token_cost"]
+    try:
+        model_config = get_model_config(capability)
+        model_name = model_config["name"]
+        prompt_cost = model_config["prompt_token_cost"]
+        completion_cost = model_config["completion_token_cost"]
+    except Exception as config_err:
+        logger.error(
+            f"Failed to get model configuration for capability '{capability}': {config_err}"
+        )
+        return f"Error: Configuration error for model capability '{capability}'"
 
-    # Call the OpenAI API
     messages = [
         {"role": "system", "content": "You are a helpful assistant."},
         {"role": "user", "content": prompt},
     ]
 
-    # If streaming is requested, return chunks as they come
-    if stream:
-        # Define a generator to yield chunks
-        def response_generator():
-            from ....llm_connectors.rbc_openai import log_usage_statistics
+    call_params = {
+        "oauth_token": token or "placeholder_token",
+        "prompt_token_cost": prompt_cost,
+        "completion_token_cost": completion_cost,
+        "model": model_name,
+        "messages": messages,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+        "database_name": database_name,
+        **kwargs,
+    }
 
-            response = call_llm(
-                oauth_token=token or "placeholder_token",
-                prompt_token_cost=prompt_cost,
-                completion_token_cost=completion_cost,
-                model=model_name,
-                messages=messages,
-                max_tokens=max_tokens,
-                temperature=temperature,
-                stream=True,  # Enable streaming
-                database_name=database_name,  # Pass database name for tracking
-            )
-
-            # Iterate through streaming response chunks
-            for chunk in response:
-                # Only log usage if the usage attribute exists in the chunk (usually the last one)
-                if hasattr(chunk, "usage") and chunk.usage:
-                    log_usage_statistics(
-                        chunk, prompt_cost, completion_cost, database_name=database_name
-                    )
-
-                # Extract content from delta
-                if hasattr(chunk, "choices") and chunk.choices:
-                    delta = chunk.choices[0].delta
-                    if hasattr(delta, "content") and delta.content:
-                        yield delta.content
-
-            # No need for post-stream usage calculation here, log_usage_statistics handles it
-
-        response_value = response_generator()
-        return response_value
-
-    # For non-streaming mode, return the full response
+    is_tool_call = "tools" in kwargs and kwargs["tools"]
+    if is_tool_call:
+        call_params["stream"] = False
+        logger.info("Forcing non-streaming mode for tool call.")
     else:
-        response = call_llm(
-            oauth_token=token or "placeholder_token",
-            prompt_token_cost=prompt_cost,
-            completion_token_cost=completion_cost,
-            model=model_name,
-            messages=messages,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            stream=False,
-            database_name=database_name,  # Pass database name for tracking
-        )
+        call_params.setdefault("stream", False)
 
-        # Extract the text content from the response with error handling
+    try:
+        # Direct synchronous call
+        response = call_llm(**call_params)
+    except Exception as llm_err:
+        logger.error(f"call_llm failed: {llm_err}", exc_info=True)
+        return f"Error: LLM call failed ({type(llm_err).__name__})"
+
+    if is_tool_call:
+        logger.debug("Returning raw response object for tool call.")
+        if (
+            not response
+            or not hasattr(response, "choices")
+            or not response.choices
+            or not hasattr(response.choices[0], "message")
+            or not hasattr(response.choices[0].message, "tool_calls")
+        ):
+            logger.error("Invalid response structure received for tool call.")
+            return "Error: Invalid response structure for tool call."
+        return response
+    else:
         response_value = ""
         if response and hasattr(response, "choices") and response.choices:
             message = response.choices[0].message
-            if message and hasattr(message, "content"):
-                response_value = message.content.strip() if message.content else ""
+            if message and hasattr(message, "content") and message.content is not None:
+                response_value = message.content.strip()
             else:
-                logger.warning(
-                    "LLM response message or content attribute missing in non-streaming call."
-                )
+                logger.warning("LLM response message content was missing or None.")
+                response_value = ""
         else:
-            logger.error(
-                "LLM response object or choices attribute missing/empty in non-streaming call."
-            )
-            # Optionally raise an error or return a default message
-            # raise ValueError("Failed to get valid response from LLM")
+            logger.error("LLM response object or choices attribute missing/empty.")
             response_value = "Error: Could not retrieve response content."
-
-        # Usage is logged by call_llm -> log_usage_statistics for non-streaming
+        logger.debug("Returning extracted content string for standard completion.")
         return response_value
 
 
@@ -332,209 +262,303 @@ def select_relevant_documents(
     database_name: str = "internal_wiki",
 ) -> List[str]:
     """
-    Use an LLM to select the most relevant documents from the catalog based on the query.
-
-    Args:
-        query (str): The search query
-        catalog (List[Dict[str, Any]]): List of catalog records
-        token (str, optional): Authentication token for API access
-
-    Returns:
-        List[str]: List of selected document IDs
+    Use an LLM to select the most relevant documents from the catalog based on the query (synchronous).
     """
     logger.info("Selecting relevant documents from catalog")
-
-    # Format the catalog for the LLM
     formatted_catalog = format_catalog_for_llm(catalog)
+    selection_prompt = get_catalog_selection_prompt(
+        query, formatted_catalog
+    )  # Assumes this prompt asks for JSON list
 
-    # Create the prompt for document selection
-    selection_prompt = get_catalog_selection_prompt(query, formatted_catalog)
-
-    # Call the LLM to select relevant documents - use non-streaming mode for this step
     try:
-        # For document selection we always use non-streaming mode (stream=False)
-        # to get a complete response for JSON parsing
-        response = get_completion(
+        logger.info(f"Initiating Wiki Document Selection API call (DB: {database_name})") # Added contextual log
+        # Direct synchronous call
+        response_str = get_completion(
             capability="small",
             prompt=selection_prompt,
             max_tokens=200,
             token=token,
-            stream=False,  # Explicitly use non-streaming
-            database_name=database_name,  # Pass database name
+            database_name=database_name,
         )
 
-        # Cast response to string for mypy - response is now guaranteed to be string or error message
-        response_str = cast(str, response)
+        # Check if get_completion returned an error string
+        if isinstance(response_str, str) and response_str.startswith("Error:"):
+            logger.error(
+                f"get_completion failed during document selection: {response_str}"
+            )
+            return []
 
-        # Parse the response to extract document IDs
         try:
             selected_ids = json.loads(response_str)
-            logger.info(f"Selected document IDs: {selected_ids}")
-            return selected_ids
+            if isinstance(selected_ids, list) and all(
+                isinstance(i, str) for i in selected_ids
+            ):
+                logger.info(f"LLM selected document IDs: {selected_ids}")
+                return selected_ids
+            else:
+                logger.error(
+                    f"LLM response was valid JSON but not a list of strings: {response_str}"
+                )
+                return []
         except json.JSONDecodeError:
             logger.error(
                 "Failed to parse LLM response as JSON, attempting fallback extraction"
             )
-            # Fallback: Try to extract IDs using string manipulation
-            import re
-
-            matches = re.findall(r'"([^"]+)"', response_str)
-            if matches:
+            # More comprehensive regex to extract document IDs
+            # Look for digits or string IDs in JSON-like arrays
+            matches = re.findall(r'["\'](.*?)["\']', response_str)
+            # Accept any ID, not just digits, since IDs might be strings
+            valid_ids = [m.strip() for m in matches if m.strip()]
+            if valid_ids:
                 logger.warning(
-                    f"Extracted document IDs using fallback method: {matches}"
+                    f"Extracted document IDs using fallback regex: {valid_ids}"
                 )
-                return matches
-            logger.error("Could not extract document IDs from response")
+                return valid_ids
+            logger.error("Could not extract document IDs from response using fallback.")
             return []
-
     except Exception as e:
-        logger.error(f"Error in document selection: {str(e)}")
+        logger.error(f"Error during LLM document selection: {str(e)}")
         return []
 
 
-def synthesize_response(
+# Define the tool schema for research synthesis
+SYNTHESIS_TOOL_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "synthesize_research_findings",
+        "description": "Synthesizes research findings from provided documents and generates a status summary.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "status_summary": {
+                    "type": "string",
+                    "description": "Concise status summary (1 sentence) indicating finding relevance (e.g., '✅ Found direct answer.', '📄 No relevant info found.').",
+                },
+                "detailed_research": {
+                    "type": "string",
+                    "description": "Detailed, structured markdown report synthesizing information from documents, including citations (document and section names).",
+                },
+            },
+            "required": ["status_summary", "detailed_research"],
+        },
+    },
+}
+
+
+# Updated function using Tool Calling (now synchronous)
+def synthesize_response_and_status(
     query: str,
     documents: List[Dict[str, Any]],
     token: Optional[str] = None,
-    stream: bool = False,
     database_name: str = "internal_wiki",
-) -> Union[str, Generator[str, None, None]]:
+) -> ResearchResponse:
     """
-    Use an LLM to synthesize a response from the document content.
-
-    Args:
-        query (str): The search query
-        documents (List[Dict[str, Any]]): List of document records with content
-        token (str, optional): Authentication token for API access
-        stream (bool, optional): Whether to stream the response. Defaults to False.
-
-    Returns:
-        Union[str, Generator[str, None, None]]: Either full response or generator of response chunks
+    Use an LLM tool call to synthesize a detailed research response AND status summary (synchronous).
     """
-    logger.info("Synthesizing response from document content")
+    logger.info(
+        f"Synthesizing response and status for {database_name} using tool call."
+    )
+    default_error_status = f"❌ Error processing {database_name} query."
+    default_no_info_status = f"📄 No relevant information found in {database_name}."
+    default_research = f"No detailed research generated for {database_name} due to missing documents or error."
+    error_result = {
+        "detailed_research": default_research,
+        "status_summary": default_error_status,
+    }
 
     if not documents:
-        error_msg = "No relevant information found in the internal wiki. Please try refining your query or check other databases."
-        if stream:
-            # For streaming mode, return a generator that yields the error message
-            def error_generator():
-                yield error_msg
+        logger.warning(f"No documents provided for {database_name} synthesis.")
+        return {
+            "detailed_research": default_research,
+            "status_summary": default_no_info_status,
+        }
 
-            return error_generator()
-        else:
-            return error_msg
-
-    # Format the documents for the LLM
     formatted_documents = format_documents_for_llm(documents)
-
-    # Create the prompt for response synthesis
     synthesis_prompt = get_content_synthesis_prompt(query, formatted_documents)
 
-    # Call the LLM to synthesize a response
     try:
-        return get_completion(
+        logger.info(f"Initiating Wiki Synthesis API call (DB: {database_name})") # Added contextual log
+        # Direct synchronous call
+        response_obj = get_completion(
             capability="large",
             prompt=synthesis_prompt,
-            max_tokens=1500,
-            temperature=0.3,  # Lower temperature for more focused synthesis
+            max_tokens=2500,
+            temperature=0.2,
             token=token,
-            stream=stream,  # Pass through the stream parameter
-            database_name=database_name,  # Pass database name
+            database_name=database_name,
+            tools=[SYNTHESIS_TOOL_SCHEMA],
+            tool_choice={
+                "type": "function",
+                "function": {"name": SYNTHESIS_TOOL_SCHEMA["function"]["name"]},
+            },
         )
+
+        if isinstance(response_obj, str) and response_obj.startswith("Error:"):
+            logger.error(
+                f"get_completion failed for {database_name} synthesis: {response_obj}"
+            )
+            error_result["detailed_research"] = response_obj
+            return error_result
+
+        # Process Tool Call Response
+        if (
+            hasattr(response_obj, "choices")
+            and response_obj.choices
+            and hasattr(response_obj.choices[0], "message")
+            and response_obj.choices[0].message
+            and hasattr(response_obj.choices[0].message, "tool_calls")
+            and response_obj.choices[0].message.tool_calls
+        ):
+
+            tool_call = response_obj.choices[0].message.tool_calls[0]
+            if tool_call.function.name == SYNTHESIS_TOOL_SCHEMA["function"]["name"]:
+                arguments_str = tool_call.function.arguments
+                logger.debug(f"Received tool arguments string: {arguments_str}")
+                try:
+                    arguments = json.loads(arguments_str)
+                    if (
+                        "status_summary" in arguments
+                        and "detailed_research" in arguments
+                    ):
+                        logger.info(
+                            f"Successfully parsed synthesis tool call for {database_name}."
+                        )
+                        # Ensure values are strings, default if not (though schema should enforce)
+                        status = arguments.get("status_summary", default_error_status)
+                        research = arguments.get("detailed_research", default_research)
+                        if not isinstance(status, str):
+                            status = default_error_status
+                        if not isinstance(research, str):
+                            research = default_research
+                        return {"status_summary": status, "detailed_research": research}
+                    else:
+                        logger.error(
+                            f"Missing required keys in parsed tool arguments for {database_name}: {arguments}"
+                        )
+                        error_result["detailed_research"] = (
+                            "Error: Tool call arguments missing required keys."
+                        )
+                        return error_result
+                except json.JSONDecodeError as json_err:
+                    logger.error(
+                        f"Failed to parse tool arguments JSON for {database_name}: {json_err}. Arguments: {arguments_str}"
+                    )
+                    error_result["detailed_research"] = (
+                        f"Error: Failed to parse tool arguments JSON - {json_err}"
+                    )
+                    return error_result
+            else:
+                logger.error(
+                    f"Unexpected tool called for {database_name}: {tool_call.function.name}"
+                )
+                error_result["detailed_research"] = (
+                    f"Error: Unexpected tool called: {tool_call.function.name}"
+                )
+                return error_result
+        else:
+            logger.error(
+                f"No tool call received from LLM for {database_name} synthesis, despite being requested."
+            )
+            content = ""
+            if (
+                hasattr(response_obj, "choices")
+                and response_obj.choices
+                and hasattr(response_obj.choices[0], "message")
+                and response_obj.choices[0].message
+                and hasattr(response_obj.choices[0].message, "content")
+                and response_obj.choices[0].message.content
+            ):
+                content = response_obj.choices[0].message.content
+                logger.warning(
+                    f"LLM returned content instead of tool call: {content[:200]}..."
+                )
+                error_result["detailed_research"] = (
+                    f"Error: LLM returned text instead of tool call. Content: {content[:200]}..."
+                )
+            else:
+                error_result["detailed_research"] = (
+                    "Error: No tool call or content received from LLM."
+                )
+            return error_result
 
     except Exception as e:
-        error_msg = (
-            f"Error synthesizing response from internal wiki documents: {str(e)}"
+        logger.error(
+            f"Exception during synthesis tool call for {database_name}: {str(e)}",
+            exc_info=True,
         )
-        logger.error(error_msg)
-
-        if stream:
-            # For streaming mode, return a generator that yields the error message
-            def error_generator():
-                yield error_msg
-
-            return error_generator()
-        else:
-            return error_msg
+        error_result["detailed_research"] = f"Error during synthesis: {str(e)}"
+        return error_result
 
 
-def query_database(
-    query: str, token: Optional[str] = None
-) -> Union[str, Generator[str, None, None]]:
+def query_database_sync(
+    query: str, scope: str, token: Optional[str] = None
+) -> DatabaseResponse:
     """
-    Query the Internal Wiki database.
-
-    This function implements the full pipeline for querying the internal wiki:
-    1. Fetch and filter the wiki catalog
-    2. Select relevant documents using an LLM
-    3. Fetch the content of selected documents
-    4. Synthesize a response from the document content
-
-    Args:
-        query (str): Search query for the database
-        token (str, optional): Authentication token for API access
-
-    Returns:
-        Union[str, Generator[str, None, None]]: Query results from the wiki database,
-        returned as a streaming generator for integration with model.py's streaming output
+    Synchronously query the Internal Wiki database based on the specified scope.
     """
-    logger.info(f"Querying Internal Wiki database: {query}")
+    logger.info(
+        f"Querying Internal Wiki database (sync): '{query}' with scope: {scope}"
+    )
+    database_name = "internal_wiki"
+    default_error_status = "❌ Error during query processing."
 
-    # This outer function always returns a generator for streaming
-    # model.py expectation is to get chunks it can yield
-    # No need for local token tracking imports or calculations here anymore
-    def response_generator():
-        try:
-            # Get model configurations for token cost tracking
-            from ....chat_model.model_settings import get_model_config
+    try:
+        # Direct synchronous calls
+        catalog = fetch_wiki_catalog()
+        logger.info(f"Retrieved {len(catalog)} total wiki catalog entries")
+        if not catalog:
+            if scope == "metadata":
+                return []
+            else:
+                return {
+                    "detailed_research": "No documents found in the Internal Wiki database catalog.",
+                    "status_summary": "📄 No documents found in catalog.",
+                }
 
-            model_config = get_model_config("large")  # Use large model config for costs
-            prompt_cost = model_config["prompt_token_cost"]
-            completion_cost = model_config["completion_token_cost"]
+        # Select documents
+        doc_ids = select_relevant_documents(
+            query, catalog, token, database_name=database_name
+        )
+        logger.info(
+            f"LLM selected {len(doc_ids)} relevant wiki document IDs: {doc_ids}"
+        )
+        if not doc_ids:
+            if scope == "metadata":
+                return []
+            else:
+                return {
+                    "detailed_research": "LLM did not select any relevant documents from the catalog based on the query.",
+                    "status_summary": "📄 No relevant documents selected by LLM.",
+                }
 
-            # Start without a header, let the content speak for itself
-            # No header to yield here
-
-            # Step 1: Fetch and filter the catalog
-            catalog = fetch_wiki_catalog(query)
-            logger.info(f"Retrieved {len(catalog)} catalog entries")
-
-            if not catalog:
-                yield "No documents found in the Internal Wiki database. Please try a different query or another database."
-                return
-
-            # Step 2: Select relevant documents using LLM (non-streaming for tool calls)
-            # Pass database name for tracking
-            doc_ids = select_relevant_documents(
-                query, catalog, token, database_name="internal_wiki"
+        # Process based on scope
+        if scope == "metadata":
+            selected_items = [item for item in catalog if item.get("id") in doc_ids]
+            logger.info(
+                f"Returning {len(selected_items)} selected wiki metadata items."
             )
-            logger.info(f"Selected {len(doc_ids)} relevant documents")
-
-            if not doc_ids:
-                yield "No relevant documents found in the Internal Wiki database. Please try refining your query or check other databases."
-                return
-
-            # Step 3: Fetch the content of selected documents
+            return selected_items
+        elif scope == "research":
+            # Fetch content and synthesize
             documents = fetch_document_content(doc_ids)
-            logger.info(f"Retrieved content for {len(documents)} documents")
-
-            # Step 4: Synthesize a response from the document content (streaming)
-            # Pass database name for tracking
-            response_stream = synthesize_response(
-                query, documents, token, stream=True, database_name="internal_wiki"
+            logger.info(
+                f"Retrieved content for {len(documents)} wiki documents for research."
             )
+            research_result = synthesize_response_and_status(
+                query, documents, token, database_name=database_name
+            )
+            return research_result
+        else:
+            logger.error(f"Invalid scope provided to internal_wiki subagent: {scope}")
+            raise ValueError(f"Invalid scope: {scope}")
 
-            # Pass through all chunks from the synthesize_response generator
-            # Usage is handled within get_completion -> log_usage_statistics
-            for chunk in response_stream:
-                yield chunk
-
-            # No need for post-stream usage calculation here
-
-        except Exception as e:
-            error_msg = f"Error querying Internal Wiki database: {str(e)}"
-            logger.error(error_msg)
-            yield error_msg
-
-    # Return the generator
-    return response_generator()
+    except Exception as e:
+        error_msg = f"Error querying Internal Wiki database (scope: {scope}): {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        if scope == "metadata":
+            return []
+        else:
+            return {
+                "detailed_research": f"**Error processing request for Internal Wiki:** {str(e)}",
+                "status_summary": default_error_status,
+            }

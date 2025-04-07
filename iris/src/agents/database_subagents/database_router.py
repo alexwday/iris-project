@@ -2,29 +2,38 @@
 """
 Database Router Module
 
-This module handles routing database queries to the appropriate subagent modules.
-It serves as a central point for all database query routing.
+This module handles routing database queries to the appropriate
+subagent modules. It serves as a central point for all database query routing.
 
 Functions:
-    route_database_query: Routes a database query to the appropriate subagent
+    route_query: Asynchronously routes a database query to the appropriate subagent
+    route_query_sync: Synchronously routes a database query to the appropriate subagent
 
 Dependencies:
+    - asyncio (for async version)
     - logging
     - database subagent modules
     - typing (for type hints)
 """
 
+import asyncio
 import importlib
 import inspect
 import logging
-from typing import Any, Dict, Generator, Optional, TypeVar, Union, cast
+from typing import Any, Dict, Generator, List, Optional, TypeVar, Union, cast
 
 from ...chat_model.model_settings import ENVIRONMENT
 from ...global_prompts.database_statement import get_available_databases
-from ...llm_connectors.rbc_openai import get_token_usage, reset_token_usage
 
-# Define a response type for database queries
-DatabaseResponse = Union[str, Generator[str, None, None]]
+# Removed old token usage imports
+# from ...llm_connectors.rbc_openai import get_token_usage, reset_token_usage
+
+# Define response types for database queries (ResearchResponse is now Dict)
+MetadataResponse = List[Dict[str, Any]]  # List of catalog items
+ResearchResponse = Dict[
+    str, str
+]  # Dictionary with detailed_research and status_summary
+DatabaseResponse = Union[MetadataResponse, ResearchResponse]  # Combined type
 T = TypeVar("T")
 
 # Get available databases from the central configuration
@@ -33,118 +42,91 @@ AVAILABLE_DATABASES = get_available_databases()
 # Get module logger
 logger = logging.getLogger(__name__)
 
-# Global variable for database-specific token usage tracking
-_database_token_usage: Dict[str, Dict[str, Any]] = {}
+# Global variable for database-specific token usage tracking (REMOVED - handled centrally)
+# _database_token_usage: Dict[str, Dict[str, Any]] = {}
+
+# Removed old token tracking functions
+# def get_database_token_usage() -> Dict[str, Dict[str, Any]]: ...
+# def reset_database_token_usage(database=None): ...
+# def update_database_token_usage(database: str, token_diff: Dict[str, Any]): ...
 
 
-def get_database_token_usage() -> Dict[str, Dict[str, Any]]:
-    """
-    Get the current database token usage statistics.
-
-    Returns:
-        Dict[str, Dict[str, Any]]: Token usage statistics per database
-    """
-    global _database_token_usage
-    return _database_token_usage.copy()
-
-
-def reset_database_token_usage(database=None):
-    """
-    Reset the database token usage statistics.
-
-    Args:
-        database (str, optional): Database identifier to reset.
-            If None, resets all databases. Defaults to None.
-    """
-    global _database_token_usage
-    if database:
-        if database in _database_token_usage:
-            _database_token_usage[database] = {
-                "prompt_tokens": 0,
-                "completion_tokens": 0,
-                "total_tokens": 0,
-                "cost": 0.0,
-            }
-    else:
-        _database_token_usage = {}
-
-
-def update_database_token_usage(database: str, token_diff: Dict[str, Any]):
-    """
-    Update token usage for a specific database.
-
-    Args:
-        database (str): Database identifier
-        token_diff (Dict[str, Any]): Token usage difference to add
-    """
-    global _database_token_usage
-    if database not in _database_token_usage:
-        _database_token_usage[database] = {
-            "prompt_tokens": 0,
-            "completion_tokens": 0,
-            "total_tokens": 0,
-            "cost": 0.0,
-        }
-
-    _database_token_usage[database]["prompt_tokens"] += token_diff["prompt_tokens"]
-    _database_token_usage[database]["completion_tokens"] += token_diff[
-        "completion_tokens"
-    ]
-    _database_token_usage[database]["total_tokens"] += token_diff["total_tokens"]
-    _database_token_usage[database]["cost"] += token_diff["cost"]
-
-
-def route_database_query(
-    database: str, query: str, token: Optional[str] = None
+def route_query_sync(
+    database: str, query: str, scope: str, token: Optional[str] = None
 ) -> DatabaseResponse:
     """
-    Routes a database query to the appropriate subagent module.
+    Synchronously routes a database query to the appropriate subagent module.
 
     Args:
-        database (str): The database identifier
-        query (str): The search query to execute
-        token (str, optional): Authentication token for API access
+        database (str): The database identifier.
+        query (str): The search query to execute.
+        scope (str): The scope of the query ('metadata' or 'research').
+        token (str, optional): Authentication token for API access.
 
     Returns:
-        DatabaseResponse: Query results from the selected database
-        either as a full string or a streaming generator that yields chunks
+        DatabaseResponse: Query results, either a List[Dict] for 'metadata' scope
+                          or a Dict[str, str] for 'research' scope.
 
     Raises:
-        ValueError: If the database is not recognized
+        ValueError: If the database is not recognized or subagent is invalid.
+        AttributeError: If the subagent module lacks 'query_database_sync'.
     """
-    logger.info(f"Routing query to database: {database}")
+    logger.info(f"Routing query (sync) to database: {database} with scope: {scope}")
 
-    # Validate database exists
     if database not in AVAILABLE_DATABASES:
         error_msg = f"Unknown database: {database}"
         logger.error(error_msg)
-        raise ValueError(error_msg)
-
-    # Token usage is now handled centrally by log_usage_statistics in rbc_openai.py
-    # No need for before/after comparison here.
+        # Return appropriate error type based on expected scope return type
+        if scope == "metadata":
+            return []
+        else:  # research scope
+            return {
+                "detailed_research": f"Error: {error_msg}",
+                "status_summary": f"❌ Error: Unknown database '{database}'.",
+            }
 
     try:
-        # Dynamically import the subagent module
         module_path = f".{database}.subagent"
-
-        # Import the specific database module
         subagent_module = importlib.import_module(
             module_path, package="iris.src.agents.database_subagents"
         )
         logger.debug(f"Successfully imported module: {module_path}")
 
-        # Call the query_database function from the module
-        result = subagent_module.query_database(query, token)
+        if not hasattr(subagent_module, "query_database_sync"):
+            error_msg = f"Subagent module for '{database}' missing 'query_database_sync' function."
+            logger.error(error_msg) # Log the error
+            # Raise attribute error as it's a code structure issue and sync is expected
+            raise AttributeError(error_msg)
 
-        # Token usage is now handled centrally by log_usage_statistics in rbc_openai.py
-        # which is called by the subagent's get_completion helper.
+        # Use the synchronous version directly
+        query_func = subagent_module.query_database_sync
+        logger.debug(f"Calling query_database_sync for {database}")
+        result: DatabaseResponse = query_func(query, scope, token)
 
-        # Always return the result directly
-        # The model.py file now handles all types of results appropriately
+        # Return the result (List[Dict] for metadata, Dict[str, str] for research)
         return result
 
+    except (ImportError, AttributeError) as e:
+        # Handle errors related to module loading or function signature
+        error_msg = f"Error loading/calling subagent for {database}: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        if scope == "metadata":
+            return []
+        else:  # research scope
+            return {
+                "detailed_research": f"Error: {error_msg}",
+                "status_summary": f"❌ Error: Could not execute query for '{database}' due to internal configuration.",
+            }
     except Exception as e:
-        # Log the error and re-raise
-        # Token usage during the failed call should have been logged by log_usage_statistics if possible
-        logger.error(f"Error routing database query to {database}: {str(e)}")
-        raise
+        # Catch other potential exceptions during subagent execution
+        error_msg = (
+            f"Error during query execution for {database} (scope: {scope}): {str(e)}"
+        )
+        logger.error(error_msg, exc_info=True)
+        if scope == "metadata":
+            return []
+        else:  # research scope
+            return {
+                "detailed_research": f"Error: {error_msg}",
+                "status_summary": f"❌ Error: Failed during query execution for '{database}'.",
+            }
