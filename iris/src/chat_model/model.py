@@ -478,17 +478,18 @@ def _model_generator(conversation: Optional[Dict[str, Any]] = None,
                     yield "---\n# 📋 Research Plan\n\n"
                     yield f"## Research Statement\n{research_statement}\n\n"
 
-                db_names_in_plan = [
+                # Get unique database names using a set to avoid duplicates
+                unique_db_names_in_plan = list(set([
                     available_databases.get(q["database"], {}).get("name", q["database"])
                     for q in query_plan["queries"]
-                ]
-                if db_names_in_plan:
-                     if len(db_names_in_plan) == 1: names_str = db_names_in_plan[0]
-                     elif len(db_names_in_plan) == 2: names_str = f"{db_names_in_plan[0]} and {db_names_in_plan[1]}"
-                     else: names_str = ", ".join(db_names_in_plan[:-1]) + f", and {db_names_in_plan[-1]}"
-                     yield f"Searching the following databases: {names_str}.\n\n---\n"
+                ]))
+                if unique_db_names_in_plan:
+                    if len(unique_db_names_in_plan) == 1: names_str = unique_db_names_in_plan[0]
+                    elif len(unique_db_names_in_plan) == 2: names_str = f"{unique_db_names_in_plan[0]} and {unique_db_names_in_plan[1]}"
+                    else: names_str = ", ".join(unique_db_names_in_plan[:-1]) + f", and {unique_db_names_in_plan[-1]}"
+                    yield f"Searching the following databases: {names_str}.\n\n---\n"
                 else:
-                     yield "No databases selected for search.\n\n---\n"
+                    yield "No databases selected for search.\n\n---\n"
                 logger.info("Displayed simplified research plan.")
                 # --- End Plan Display ---
 
@@ -690,19 +691,57 @@ def _model_generator(conversation: Optional[Dict[str, Any]] = None,
                     logger.info(f"Completed process for scope '{scope}'")
 
                 elif scope == "metadata":
-                    yield f"\n\nCompleted metadata search across {len(query_plan['queries'])} databases. Found {total_metadata_items} relevant items:\n"
+                    # Track unique items for accurate counting
+                    seen_documents = {}
+                    unique_item_count = 0
+                    
+                    # First pass to count unique items
+                    for db_name, items_list in metadata_results_by_db.items():
+                        if db_name not in seen_documents:
+                            seen_documents[db_name] = set()
+                        
+                        for item in items_list:
+                            # Count error items
+                            if isinstance(item, dict) and "error" in item:
+                                unique_item_count += 1
+                            else:
+                                doc_name = item.get('document_name', 'Unknown Document')
+                                # Only count if we haven't seen this document before for this database
+                                if doc_name not in seen_documents[db_name]:
+                                    seen_documents[db_name].add(doc_name)
+                                    unique_item_count += 1
+                    
+                    yield f"\n\nCompleted metadata search across {len(query_plan['queries'])} databases. Found {unique_item_count} unique relevant items:\n"
+                    
+                    # Reset tracking for display pass
+                    seen_documents = {}
+                    
                     for db_name, items_list in metadata_results_by_db.items():
                         db_display_name = available_databases.get(db_name, {}).get("name", db_name)
                         yield f"\n**{db_display_name}:**\n"
+                        
                         if items_list:
+                            # Initialize tracking for this database if not already done
+                            if db_name not in seen_documents:
+                                seen_documents[db_name] = set()
+                                
+                            displayed_items = 0
                             for item in items_list:
                                 # Check if item is an error marker
                                 if isinstance(item, dict) and "error" in item:
                                     yield f"- Error processing query for this database: {item['error']}\n"
+                                    displayed_items += 1
                                 else:
                                     doc_name = item.get('document_name', 'Unknown Document')
-                                    doc_desc = item.get('document_description', 'No description available')
-                                    yield f"- **{doc_name}:** {doc_desc}\n"
+                                    # Only display if we haven't seen this document before for this database
+                                    if doc_name not in seen_documents[db_name]:
+                                        seen_documents[db_name].add(doc_name)
+                                        doc_desc = item.get('document_description', 'No description available')
+                                        yield f"- **{doc_name}:** {doc_desc}\n"
+                                        displayed_items += 1
+                                        
+                            if displayed_items == 0:
+                                yield "- No unique items found.\n"
                         else:
                             yield "- No relevant items found.\n"
                     yield "\n---" # Add a separator at the end
