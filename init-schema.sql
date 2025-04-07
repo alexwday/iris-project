@@ -12,7 +12,8 @@ CREATE TABLE apg_catalog (
     document_name VARCHAR(255) NOT NULL,          -- Formatted document name (e.g., 'IFRS 9 - Financial Instruments')
     
     -- SCOPE fields
-    document_description TEXT,                    -- AI-generated description of document usage/scope
+    document_description TEXT,                    -- Original AI-generated description of document usage/scope
+    document_usage TEXT,                          -- New field for LLM selection/usage
     
     -- REFRESH metadata fields
     date_created TIMESTAMP WITH TIME ZONE,        -- Original document creation date
@@ -20,7 +21,8 @@ CREATE TABLE apg_catalog (
     file_name VARCHAR(255),                       -- Full filename with extension (e.g., 'IFRS9_Financial_Instruments.pdf')
     file_type VARCHAR(50),                        -- File extension/type (e.g., '.pdf', '.docx', '.xlsx')
     file_size BIGINT,                             -- Size of the file in bytes
-    file_path VARCHAR(1000)                       -- Full system path to the original file
+    file_path VARCHAR(1000),                      -- Full system path to the original file
+    file_link VARCHAR(1000)                       -- URL or NAS path to the file
 );
 
 -- 2. apg_content Table
