@@ -1,5 +1,8 @@
 # IRIS Project
 
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+
 ## Overview
 
 IRIS (Intelligent Retrieval & Interaction System) is an AI agent-based system designed to answer user queries by interacting with various internal and external financial data sources. It follows a structured pipeline:
@@ -23,7 +26,6 @@ IRIS (Intelligent Retrieval & Interaction System) is an AI agent-based system de
 ```
 iris-project/
 ├── .gitignore          # Git ignore rules
-├── CLAUDE.md           # Instructions/notes for Claude
 ├── init-schema.sql     # Database initialization schema
 ├── README.md           # This file
 ├── setup.py            # Project installation script
@@ -36,7 +38,6 @@ iris-project/
 │       ├── initial_setup/    # Configuration, DB, logging, OAuth, SSL setup
 │       ├── llm_connectors/ # Connectors to specific LLMs
 │       └── utils/      # Utility functions
-├── iris.egg-info/      # Build metadata (generated)
 ├── notebooks/          # Jupyter notebooks for testing (e.g., test_notebook.ipynb)
 └── scripts/            # Utility and maintenance scripts (DB checks, data insertion, direct queries)
 ```
@@ -125,7 +126,16 @@ You can also use the scripts for specific tasks:
     python scripts/insert_local_test_data.py
     ```
 
-## Code Quality
+## Development
+
+### Code Style
+
+This project uses:
+- [Black](https://black.readthedocs.io/en/stable/) for code formatting
+- [MyPy](https://mypy.readthedocs.io/en/stable/) for static type checking
+- [Pytest](https://docs.pytest.org/en/stable/) for testing
+
+### Quality Checks
 
 Ensure code quality by running the following checks from the project root:
 
@@ -142,6 +152,47 @@ Ensure code quality by running the following checks from the project root:
     pytest
     ```
 
+## Documentation
+
+Every module, class, and function should be documented with Google-style docstrings. Type hints should be used for all function parameters and return values.
+
+Example:
+```python
+def function_name(param1: str, param2: int) -> bool:
+    """Short description of function purpose.
+    
+    Longer description explaining details if needed.
+    
+    Args:
+        param1: Description of first parameter.
+        param2: Description of second parameter.
+        
+    Returns:
+        Description of the return value.
+        
+    Raises:
+        ExceptionType: When and why this exception occurs.
+    """
+    ...
+```
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Database Connection Problems**
+   - Ensure PostgreSQL is running
+   - Verify database name and credentials
+   - Check permission issues with: `python scripts/check_db.py`
+
+2. **Missing Dependencies**
+   - Reinstall with: `pip install -e ".[dev]"`
+   - Ensure your virtual environment is activated
+
+3. **Jupyter Notebook Issues**
+   - Make sure you're running the notebook from within the virtual environment
+   - Verify kernel selection in the notebook
+
 ## Contributing
 
 When contributing to this project, please follow the existing code style guidelines and add appropriate tests for new features.
@@ -153,3 +204,12 @@ When contributing to this project, please follow the existing code style guideli
 5. Commit your changes
 6. Push to your branch
 7. Create a Pull Request
+
+## License
+
+This project is proprietary and confidential. All rights reserved.
+
+## Acknowledgments
+
+* This project uses OpenAI's API for language model capabilities
+* Database integration is handled through PostgreSQL
