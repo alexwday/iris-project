@@ -21,7 +21,7 @@ from ...global_prompts.prompt_utils import get_full_system_prompt
 logger = logging.getLogger(__name__)
 
 # Model capability - used to get specific model based on environment
-MODEL_CAPABILITY = "small"
+MODEL_CAPABILITY = "large" # Changed from "small" to potentially improve handling of complex instructions
 
 # Model settings
 MAX_TOKENS = 4096

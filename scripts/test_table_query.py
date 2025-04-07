@@ -29,7 +29,7 @@ def query_all_sources():
         # Connect to database
         print(f"Connecting to {db_params['dbname']} at {db_params['host']}:{db_params['port']}...")
         conn = psycopg2.connect(**db_params)
-        print("Connected successfully\! 🎉")
+        print("Connected successfully! 🎉") # Removed invalid escape sequence
 
         # Create a cursor
         cursor = conn.cursor()
