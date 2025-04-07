@@ -271,8 +271,9 @@ def _model_generator(conversation: Optional[Dict[str, Any]] = None,
             process_monitor.end_stage("oauth_setup")
             process_monitor.add_stage_details("oauth_setup", token_length=len(token) if token else 0)
 
-        if not conversation or 'messages' not in conversation or not conversation['messages']:
-            logger.warning("No conversation provided or conversation is empty.")
+        # Check if conversation exists
+        if not conversation:
+            logger.warning("No conversation provided.")
             yield "Model initialized, but no conversation provided to process."
             return
 
@@ -280,9 +281,25 @@ def _model_generator(conversation: Optional[Dict[str, Any]] = None,
         if debug_mode:
             process_monitor.start_stage("conversation_processing")
             
-        logger.info("Processing input conversation...")
-        processed_conversation = process_conversation(conversation)
-        logger.info(f"Conversation processed: {len(processed_conversation['messages'])} messages")
+        # Process the conversation (handles both dict with 'messages' and direct list formats)
+        try:
+            logger.info("Processing input conversation...")
+            processed_conversation = process_conversation(conversation)
+            logger.info(f"Conversation processed: {len(processed_conversation['messages'])} messages")
+        except ValueError as e:
+            logger.warning(f"Invalid conversation format: {str(e)}")
+            yield f"Model initialized, but conversation format is invalid: {str(e)}"
+            return
+        except Exception as e:
+            logger.error(f"Error processing conversation: {str(e)}")
+            yield f"Error processing conversation: {str(e)}"
+            return
+
+        # Check if processed conversation has messages
+        if not processed_conversation['messages']:
+            logger.warning("Processed conversation is empty.")
+            yield "Model initialized, but processed conversation is empty."
+            return
         
         # End conversation processing stage
         if debug_mode:
