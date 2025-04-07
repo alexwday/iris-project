@@ -105,3 +105,6 @@ ENV/
 
 # Sensitive files
 iris/src/initial_setup/oauth/local_auth_settings.py
+
+# Claude instructions
+CLAUDE.md
