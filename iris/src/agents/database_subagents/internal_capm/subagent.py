@@ -27,7 +27,7 @@ from ....initial_setup.db_config import connect_to_db
 from ....llm_connectors.rbc_openai import call_llm
 from .catalog_selection_prompt import get_catalog_selection_prompt
 from .section_selection_prompt import get_section_selection_prompt
-from .description_condensation_prompt import get_description_condensation_prompt
+# Removed: from .description_condensation_prompt import get_description_condensation_prompt
 from .content_synthesis_prompt import (
     get_content_synthesis_prompt,
     get_individual_file_synthesis_prompt,
@@ -65,51 +65,7 @@ SYNTHESIS_TOOL_SCHEMA = {
 
 
 # Formatting functions
-def generate_condensed_description(
-    original_description: str,
-    token: Optional[str] = None,
-    database_name: str = "internal_capm",
-) -> str:
-    """
-    Use an LLM to generate a condensed, plain-text description from a detailed markdown description.
-
-    Args:
-        original_description: The original detailed description with markdown
-        token: Optional authentication token
-        database_name: Database name for logging
-
-    Returns:
-        Condensed plain-text description
-    """
-    logger.info("Generating condensed description for CAPM document")
-    condensation_prompt = get_description_condensation_prompt(original_description)
-
-    try:
-        logger.info(
-            f"Initiating CAPM Description Condensation API call (DB: {database_name})"
-        )
-        # Direct synchronous call
-        response_str = get_completion(
-            capability="small",
-            prompt=condensation_prompt,
-            max_tokens=150,  # Enough for a 50-100 word description
-            temperature=0.3,  # Lower temperature for more consistent output
-            token=token,
-            database_name=database_name,
-        )
-
-        # Check if get_completion returned an error string
-        if isinstance(response_str, str) and response_str.startswith("Error:"):
-            logger.error(
-                f"get_completion failed during description condensation: {response_str}"
-            )
-            return "No description available"
-
-        # Return the condensed description
-        return response_str.strip()
-    except Exception as e:
-        logger.error(f"Error during LLM CAPM description condensation: {str(e)}")
-        return "No description available"
+# Removed generate_condensed_description function
 
 
 def format_catalog_for_llm(catalog_records: List[Dict[str, Any]]) -> str:
@@ -946,17 +902,10 @@ def query_database_sync(
             # Get selected items from catalog
             selected_items = [item for item in catalog if item.get("id") in doc_ids]
 
-            # Generate condensed descriptions for each selected item
-            for item in selected_items:
-                original_description = item.get("document_description", "")
-                condensed_description = generate_condensed_description(
-                    original_description, token, database_name
-                )
-                # Add the condensed description to the item
-                item["condensed_description"] = condensed_description
+            # Removed generation of condensed descriptions
 
             logger.info(
-                f"Returning {len(selected_items)} selected CAPM metadata items with condensed descriptions."
+                f"Returning {len(selected_items)} selected CAPM metadata items."
             )
             return selected_items
         elif scope == "research":
