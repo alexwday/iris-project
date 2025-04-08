@@ -493,7 +493,17 @@ def select_relevant_sections(
             return {}
 
         try:
-            selected_sections = json.loads(response_str)
+            # Attempt to extract JSON block using regex
+            json_match = re.search(r'\{.*\}', response_str, re.DOTALL)
+            if json_match:
+                json_str = json_match.group(0)
+                selected_sections = json.loads(json_str) # Parse the extracted string
+            else:
+                # Log if no JSON block found
+                logger.error(f"Could not find JSON block in LLM response for section selection. Response: {response_str}")
+                return {}
+
+            # Validate the parsed structure
             if isinstance(selected_sections, dict) and all(
                 isinstance(doc, str)
                 and isinstance(sections, list)
@@ -503,16 +513,17 @@ def select_relevant_sections(
                 logger.info(f"LLM selected CAPM sections: {selected_sections}")
                 return selected_sections
             else:
+                # Log the original response if structure is wrong after successful parse
                 logger.error(
                     f"LLM response for CAPM section selection was valid JSON but not in expected format: {response_str}"
                 )
                 return {}
-        except json.JSONDecodeError:
-            logger.error("Failed to parse CAPM section selection LLM response as JSON")
-            # No fallback for section selection as it's more complex
+        except json.JSONDecodeError as e:
+             # Log the raw response string that failed parsing
+            logger.error(f"Failed to parse CAPM section selection LLM response as JSON. Error: {e}. Raw Response: {response_str}")
             return {}
     except Exception as e:
-        logger.error(f"Error during LLM CAPM section selection: {str(e)}")
+        logger.error(f"Error during LLM CAPM section selection: {str(e)}", exc_info=True) # Added exc_info for more detail
         return {}
 
 
