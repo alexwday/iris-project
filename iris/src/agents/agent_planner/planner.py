@@ -32,6 +32,9 @@ from .planner_settings import (
 # Get module logger (no configuration here - using centralized config)
 logger = logging.getLogger(__name__)
 
+# Extract the new tool name from settings for clarity
+PLANNER_TOOL_NAME = TOOL_DEFINITIONS[0]["function"]["name"]
+
 # Get model configuration based on capability
 model_config = get_model_config(MODEL_CAPABILITY)
 MODEL_NAME = model_config["name"]
@@ -45,9 +48,9 @@ class PlannerError(Exception):
     pass
 
 
-def create_query_plan(research_statement, token, is_continuation=False):
+def create_database_selection_plan(research_statement, token, is_continuation=False):
     """
-    Create a plan of database queries based on a research statement.
+    Create a plan of selected databases based on a research statement.
 
     Args:
         research_statement (str): The research statement from the clarifier
@@ -57,11 +60,11 @@ def create_query_plan(research_statement, token, is_continuation=False):
         is_continuation (bool, optional): Whether this is a continuation of previous research
 
     Returns:
-        dict: Query plan with keys:
-            - queries: List of query objects, each with database and query
+        dict: Database selection plan with keys:
+            - databases: List of selected database names (strings)
 
     Raises:
-        PlannerError: If there is an error in creating the query plan
+        PlannerError: If there is an error in creating the database selection plan
     """
     try:
         # Prepare system message with planner prompt
@@ -77,11 +80,11 @@ def create_query_plan(research_statement, token, is_continuation=False):
         # Prepare messages for the API call
         messages = [system_message, research_message]
 
-        # Database information is included in the SYSTEM_PROMPT via get_full_system_prompt
+        # Database information is included in the SYSTEM_PROMPT
 
-        logger.info(f"Creating query plan using model: {MODEL_NAME}")
+        logger.info(f"Creating database selection plan using model: {MODEL_NAME}")
         logger.info(f"Is continuation: {is_continuation}")
-        logger.info("Initiating Planner API call")  # Added contextual log
+        logger.info("Initiating Planner API call for database selection")
 
         # Make the API call with tool calling
         response = call_llm(
@@ -91,7 +94,7 @@ def create_query_plan(research_statement, token, is_continuation=False):
             max_tokens=MAX_TOKENS,
             temperature=TEMPERATURE,
             tools=TOOL_DEFINITIONS,
-            tool_choice={"type": "function", "function": {"name": "submit_query_plan"}},
+            tool_choice={"type": "function", "function": {"name": PLANNER_TOOL_NAME}}, # Use new tool name
             stream=False,
             prompt_token_cost=PROMPT_TOKEN_COST,
             completion_token_cost=COMPLETION_TOKEN_COST,
@@ -109,7 +112,7 @@ def create_query_plan(research_statement, token, is_continuation=False):
         tool_call = response.choices[0].message.tool_calls[0]
 
         # Verify that the correct function was called
-        if tool_call.function.name != "submit_query_plan":
+        if tool_call.function.name != PLANNER_TOOL_NAME:
             raise PlannerError(f"Unexpected function call: {tool_call.function.name}")
 
         # Parse the arguments
@@ -120,28 +123,28 @@ def create_query_plan(research_statement, token, is_continuation=False):
                 f"Invalid JSON in tool arguments: {tool_call.function.arguments}"
             )
 
-        # Extract query plan fields
-        queries = arguments.get("queries", [])
+        # Extract selected databases
+        selected_databases = arguments.get("databases", [])
 
-        if not queries:
-            raise PlannerError("Missing or empty 'queries' in tool arguments")
+        if not selected_databases:
+            raise PlannerError("Missing or empty 'databases' in tool arguments")
 
-        # Validate individual queries
-        for i, query in enumerate(queries):
-            if "database" not in query:
-                raise PlannerError(f"Query {i+1} missing 'database' field")
-            if query["database"] not in AVAILABLE_DATABASES:
+        # Validate selected databases
+        validated_databases = []
+        for i, db_name in enumerate(selected_databases):
+            if not isinstance(db_name, str):
+                 raise PlannerError(f"Database entry {i+1} is not a string: {db_name}")
+            if db_name not in AVAILABLE_DATABASES:
                 raise PlannerError(
-                    f"Query {i+1} references unknown database: {query['database']}"
+                    f"Selected database {i+1} is unknown: {db_name}"
                 )
-            if "query" not in query:
-                raise PlannerError(f"Query {i+1} missing 'query' field")
+            validated_databases.append(db_name)
 
-        # Log the query plan
-        logger.info(f"Query plan created with {len(queries)} queries")
+        # Log the database selection plan
+        logger.info(f"Database selection plan created with {len(validated_databases)} databases: {validated_databases}")
 
-        return {"queries": queries}
+        return {"databases": validated_databases}
 
     except Exception as e:
-        logger.error(f"Error creating query plan: {str(e)}")
-        raise PlannerError(f"Failed to create query plan: {str(e)}")
+        logger.error(f"Error creating database selection plan: {str(e)}")
+        raise PlannerError(f"Failed to create database selection plan: {str(e)}")

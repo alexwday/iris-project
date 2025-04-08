@@ -275,7 +275,8 @@ def _model_generator(
     from ..agents.agent_direct_response.response_from_conversation import (
         response_from_conversation,
     )
-    from ..agents.agent_planner.planner import create_query_plan
+    # Renamed planner function
+    from ..agents.agent_planner.planner import create_database_selection_plan
     from ..agents.agent_router.router import get_routing_decision
 
     # TODO: Ensure generate_streaming_summary becomes async or is properly wrapped
@@ -512,12 +513,14 @@ def _model_generator(
                 if debug_mode:
                     process_monitor.start_stage("planner")
 
-                logger.info("Creating database query plan...")
-                query_plan = create_query_plan(
+                logger.info("Creating database selection plan...")
+                # Call the renamed planner function
+                db_selection_plan = create_database_selection_plan(
                     research_statement, token, is_continuation
                 )
+                selected_databases = db_selection_plan.get("databases", [])
                 logger.info(
-                    f"Query plan created with {len(query_plan['queries'])} queries"
+                    f"Database selection plan created with {len(selected_databases)} databases: {selected_databases}"
                 )
 
                 # Get token usage for planner
@@ -537,11 +540,9 @@ def _model_generator(
                     )
                     process_monitor.add_stage_details(
                         "planner",
-                        query_count=len(query_plan.get("queries", [])),
-                        databases=[
-                            q.get("database") for q in query_plan.get("queries", [])
-                        ],
-                        decision=query_plan,
+                        database_count=len(selected_databases), # Use new variable
+                        selected_databases=selected_databases, # Log selected DBs
+                        decision=db_selection_plan, # Log the new plan format
                     )
 
                 # --- Legacy Debug: Record Planner Decision ---
@@ -552,7 +553,7 @@ def _model_generator(
                     debug_data["decisions"].append(
                         {
                             "stage": "planner",
-                            "decision": query_plan,
+                            "decision": db_selection_plan, # Log the new plan format
                             "timestamp": datetime.now().isoformat(),
                             "token_usage": planner_token_usage.copy(),
                         }
@@ -560,7 +561,7 @@ def _model_generator(
                     reset_token_usage()
                 # --- End Debug ---
 
-                # --- Display Updated Research/Search Plan ---
+                # --- Display Updated Database Selection Plan ---
                 available_databases = get_available_databases()
                 if scope == "metadata":
                     yield "---\n# 🔍 File Search Plan\n\n"
@@ -569,41 +570,38 @@ def _model_generator(
                     yield "---\n# 📋 Research Plan\n\n"
                     yield f"## Research Statement\n{research_statement}\n\n"
 
-                # Get unique database names using a set to avoid duplicates
-                unique_db_names_in_plan = list(
-                    set(
-                        [
-                            available_databases.get(q["database"], {}).get(
-                                "name", q["database"]
-                            )
-                            for q in query_plan["queries"]
-                        ]
-                    )
-                )
-                if unique_db_names_in_plan:
-                    if len(unique_db_names_in_plan) == 1:
-                        names_str = unique_db_names_in_plan[0]
-                    elif len(unique_db_names_in_plan) == 2:
-                        names_str = f"{unique_db_names_in_plan[0]} and {unique_db_names_in_plan[1]}"
+                # Get display names for selected databases
+                selected_db_display_names = [
+                    available_databases.get(db_name, {}).get("name", db_name)
+                    for db_name in selected_databases # Use new variable
+                ]
+
+                if selected_db_display_names:
+                    if len(selected_db_display_names) == 1:
+                        names_str = selected_db_display_names[0]
+                    elif len(selected_db_display_names) == 2:
+                        names_str = f"{selected_db_display_names[0]} and {selected_db_display_names[1]}"
                     else:
                         names_str = (
-                            ", ".join(unique_db_names_in_plan[:-1])
-                            + f", and {unique_db_names_in_plan[-1]}"
+                            ", ".join(selected_db_display_names[:-1])
+                            + f", and {selected_db_display_names[-1]}"
                         )
-                    yield f"Searching the following databases: {names_str}.\n\n---\n"
+                    # Update message to reflect new process
+                    yield f"Searching the following databases using the full research statement: {names_str}.\n\n---\n"
                 else:
                     yield "No databases selected for search.\n\n---\n"
-                logger.info("Displayed simplified research plan.")
+                logger.info("Displayed database selection plan.")
                 # --- End Plan Display ---
 
                 # --- Parallel Query Execution ---
-                tasks_with_details = []  # Store tasks along with their details
-                if not query_plan["queries"]:
-                    logger.warning("Query plan is empty, skipping database search.")
+                # tasks_with_details = [] # No longer needed?
+                if not selected_databases: # Use new variable
+                    logger.warning("Database selection plan is empty, skipping database search.")
                 else:
                     # --- Concurrent Query Execution using ThreadPoolExecutor ---
                     logger.info(
-                        f"Starting {len(query_plan['queries'])} database queries concurrently..."
+                        # Use new variable and updated message
+                        f"Starting {len(selected_databases)} database queries concurrently using the full research statement..."
                     )
                     aggregated_detailed_research = {}
                     metadata_results_by_db: Dict[str, List[Dict[str, Any]]] = {}
@@ -617,9 +615,10 @@ def _model_generator(
                     }
 
                     with concurrent.futures.ThreadPoolExecutor() as executor:
-                        for i, query_dict in enumerate(query_plan["queries"]):
-                            db_name = query_dict["database"]
-                            query_text = query_dict["query"]
+                        # Iterate through selected database names
+                        for i, db_name in enumerate(selected_databases):
+                            # query_text is now the full research_statement
+                            query_text = research_statement
                             db_display_name = available_databases.get(db_name, {}).get(
                                 "name", db_name
                             )
@@ -631,12 +630,12 @@ def _model_generator(
                             future = executor.submit(
                                 _execute_query_worker,
                                 db_name,
-                                query_text,
+                                query_text, # Pass full research statement
                                 scope,
                                 token,
                                 db_display_name,
                                 i,
-                                len(query_plan["queries"]),
+                                len(selected_databases), # Use count of selected DBs
                                 debug_mode,
                             )
                             futures.append(future)
@@ -660,7 +659,8 @@ def _model_generator(
 
                             # Extract data from the worker's return dictionary
                             db_name = result_data["db_name"]
-                            query_text = result_data["query_text"]
+                            # query_text is no longer needed here for status, as it's the research_statement
+                            # query_text = result_data["query_text"]
                             db_display_name = result_data["db_display_name"]
                             task_exception = result_data["exception"]
                             result = result_data["result"]
@@ -771,8 +771,8 @@ def _model_generator(
                                         )
                             # No final 'else' needed as status_summary is initialized above
 
-                            # Yield the status block regardless of success/failure
-                            status_block = f"\n\n---\n**Database:** {db_display_name}\n**Query:** `{query_text}`\n**Status:** {status_summary}\n---"
+                            # Yield the status block regardless of success/failure (Removed Query Text)
+                            status_block = f"\n\n---\n**Database:** {db_display_name}\n**Status:** {status_summary}\n---"
                             yield status_block
                             # --- End Yield and Aggregation ---
 
@@ -789,7 +789,8 @@ def _model_generator(
                             {
                                 "stage": "database_queries_all_completed",
                                 "decision": {
-                                    "total_queries": len(query_plan["queries"])
+                                    # Use new variable for total count
+                                    "total_databases_queried": len(selected_databases)
                                 },
                                 "timestamp": datetime.now().isoformat(),
                                 "token_usage": db_stage_token_usage.copy(),  # Log total usage for this stage
@@ -799,8 +800,8 @@ def _model_generator(
 
                     # Ensure all planned DBs have an entry in the metadata results dict if scope is metadata, even if empty or errored
                     if scope == "metadata":
-                        for query_dict in query_plan["queries"]:
-                            db_name = query_dict["database"]
+                        # Iterate through selected databases instead of query_plan
+                        for db_name in selected_databases:
                             if db_name not in metadata_results_by_db:
                                 metadata_results_by_db[db_name] = (
                                     []
@@ -848,7 +849,8 @@ def _model_generator(
                                 aggregated_detailed_research,
                                 scope,
                                 token,
-                                original_query_plan=query_plan,
+                                # Pass selected_databases instead of query_plan if needed by summarizer
+                                # original_query_plan=query_plan, # Assuming summarizer doesn't need the old plan format
                             )
                             for summary_chunk in summary_stream:
                                 yield summary_chunk
@@ -906,7 +908,8 @@ def _model_generator(
                         # --- End Debug ---
                         yield "\n\n---"
 
-                    completion_message = f"\nCompleted processing {len(query_plan['queries'])} database queries for scope '{scope}'.\n"
+                    # Update completion message to use selected_databases count
+                    completion_message = f"\nCompleted processing {len(selected_databases)} database queries for scope '{scope}'.\n"
                     yield completion_message
                     logger.info(f"Completed process for scope '{scope}'")
 
@@ -931,7 +934,8 @@ def _model_generator(
                                     seen_documents[db_name].add(doc_name)
                                     unique_item_count += 1
 
-                    yield f"\n\nCompleted metadata search across {len(query_plan['queries'])} databases. Found {unique_item_count} unique relevant items:\n"
+                    # Update completion message to use selected_databases count
+                    yield f"\n\nCompleted metadata search across {len(selected_databases)} databases. Found {unique_item_count} unique relevant items:\n"
 
                     # Reset tracking for display pass
                     seen_documents = {}
