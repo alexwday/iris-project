@@ -91,6 +91,7 @@ When determining necessary context, consider:
   guidance"), prioritize those databases
 - Analyze whether the query already contains sufficient context to proceed
   with research
+- **Remember the general system preference for internal databases** (as detailed in the CONTEXT section) when assessing relevance and formulating the research statement. This helps guide the Planner.
 </DATABASE_AWARE_ASSESSMENT>
 
 <DECISION_CRITERIA>
