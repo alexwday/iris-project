@@ -669,18 +669,14 @@ def synthesize_response_and_status(
 ) -> ResearchResponse:
     """
     Use an LLM tool call to synthesize a detailed research response AND status summary for CAPM.
-    If the content exceeds token limits, process each document individually.
+    Processes each document individually in separate, staggered LLM calls.
     """
     logger.info(
-        f"Synthesizing response and status for {database_name} using tool call."
+        f"Synthesizing response and status for {database_name} by processing documents individually."
     )
     default_error_status = f"❌ Error processing {database_name} query."
     default_no_info_status = f"📄 No relevant information found in {database_name}."
     default_research = f"No detailed research generated for {database_name} due to missing documents or error."
-    error_result = {
-        "detailed_research": default_research,
-        "status_summary": default_error_status,
-    }
 
     if not documents:
         logger.warning(f"No documents provided for {database_name} synthesis.")
@@ -689,155 +685,53 @@ def synthesize_response_and_status(
             "status_summary": default_no_info_status,
         }
 
-    # Estimate token size to determine if we need to process documents individually
-    estimated_tokens = estimate_token_size(documents)
-    logger.info(f"Estimated token size for CAPM documents: {estimated_tokens}")
+    individual_results = []
+    success_count = 0
+    error_count = 0
 
-    if estimated_tokens >= 100000:
-        logger.info(
-            f"Content exceeds 100k tokens, processing each document individually"
+    for i, document in enumerate(documents):
+        doc_name = document.get("document_name", "Untitled")
+        logger.info(f"Processing document {i+1}/{len(documents)}: {doc_name}")
+
+        # Stagger calls
+        if i > 0:
+            logger.debug(f"Sleeping for 1 second before processing next document.")
+            time.sleep(1)
+
+        doc_result = synthesize_individual_document(
+            query, document, token, database_name
         )
 
-        # Process each document individually
-        individual_results = []
-        for document in documents:
-            doc_name = document.get("document_name", "Untitled")
-            logger.info(f"Processing document individually: {doc_name}")
-            doc_result = synthesize_individual_document(
-                query, document, token, database_name
-            )
-            individual_results.append(f"# {doc_name}\n\n{doc_result}\n\n---\n\n")
+        if isinstance(doc_result, str) and doc_result.startswith("Error:"):
+            logger.error(f"Error synthesizing document {doc_name}: {doc_result}")
+            individual_results.append((doc_name, doc_result))
+            error_count += 1
+        else:
+            logger.info(f"Successfully synthesized document {doc_name}")
+            individual_results.append((doc_name, doc_result))
+            success_count += 1
 
-        # Combine individual results
-        combined_research = "".join(individual_results)
+    # Combine individual results with formatting
+    combined_research = ""
+    for doc_name, result in individual_results:
+        combined_research += f"## {doc_name}\n\n"
+        combined_research += f"{result}\n\n"
+        combined_research += "---\n\n"
 
-        return {
-            "detailed_research": combined_research,
-            "status_summary": "✅ Found information from multiple large documents (processed individually).",
-        }
-    else:
-        # Process all documents together
-        formatted_documents = format_documents_for_llm(documents)
-        synthesis_prompt = get_content_synthesis_prompt(query, formatted_documents)
+    # Generate final status summary
+    if success_count > 0 and error_count == 0:
+        status_summary = f"✅ Found information from {success_count} document(s)."
+    elif success_count > 0 and error_count > 0:
+        status_summary = f"⚠️ Found information from {success_count} document(s), but encountered errors processing {error_count} other(s)."
+    elif success_count == 0 and error_count > 0:
+        status_summary = f"❌ Errors encountered while processing {error_count} document(s)."
+    else: # success_count == 0 and error_count == 0 (shouldn't happen if documents list is not empty, but handle defensively)
+        status_summary = default_no_info_status
 
-        try:
-            logger.info(f"Initiating CAPM Synthesis API call (DB: {database_name})")
-            # Direct synchronous call
-            response_obj = get_completion(
-                capability="large",
-                prompt=synthesis_prompt,
-                max_tokens=2500,
-                temperature=0.2,
-                token=token,
-                database_name=database_name,
-                tools=[SYNTHESIS_TOOL_SCHEMA],
-                tool_choice={
-                    "type": "function",
-                    "function": {"name": SYNTHESIS_TOOL_SCHEMA["function"]["name"]},
-                },
-            )
-
-            if isinstance(response_obj, str) and response_obj.startswith("Error:"):
-                logger.error(
-                    f"get_completion failed for {database_name} synthesis: {response_obj}"
-                )
-                error_result["detailed_research"] = response_obj
-                return error_result
-
-            # Process Tool Call Response
-            if (
-                hasattr(response_obj, "choices")
-                and response_obj.choices
-                and hasattr(response_obj.choices[0], "message")
-                and response_obj.choices[0].message
-                and hasattr(response_obj.choices[0].message, "tool_calls")
-                and response_obj.choices[0].message.tool_calls
-            ):
-
-                tool_call = response_obj.choices[0].message.tool_calls[0]
-                if tool_call.function.name == SYNTHESIS_TOOL_SCHEMA["function"]["name"]:
-                    arguments_str = tool_call.function.arguments
-                    logger.debug(f"Received tool arguments string: {arguments_str}")
-                    try:
-                        arguments = json.loads(arguments_str)
-                        if (
-                            "status_summary" in arguments
-                            and "detailed_research" in arguments
-                        ):
-                            logger.info(
-                                f"Successfully parsed synthesis tool call for {database_name}."
-                            )
-                            status = arguments.get(
-                                "status_summary", default_error_status
-                            )
-                            research = arguments.get(
-                                "detailed_research", default_research
-                            )
-                            if not isinstance(status, str):
-                                status = default_error_status
-                            if not isinstance(research, str):
-                                research = default_research
-                            return {
-                                "status_summary": status,
-                                "detailed_research": research,
-                            }
-                        else:
-                            logger.error(
-                                f"Missing required keys in parsed tool arguments for {database_name}: {arguments}"
-                            )
-                            error_result["detailed_research"] = (
-                                "Error: Tool call arguments missing required keys."
-                            )
-                            return error_result
-                    except json.JSONDecodeError as json_err:
-                        logger.error(
-                            f"Failed to parse tool arguments JSON for {database_name}: {json_err}. Arguments: {arguments_str}"
-                        )
-                        error_result["detailed_research"] = (
-                            f"Error: Failed to parse tool arguments JSON - {json_err}"
-                        )
-                        return error_result
-                else:
-                    logger.error(
-                        f"Unexpected tool called for {database_name}: {tool_call.function.name}"
-                    )
-                    error_result["detailed_research"] = (
-                        f"Error: Unexpected tool called: {tool_call.function.name}"
-                    )
-                    return error_result
-            else:
-                logger.error(
-                    f"No tool call received from LLM for {database_name} synthesis, despite being requested."
-                )
-                content = ""
-                if (
-                    hasattr(response_obj, "choices")
-                    and response_obj.choices
-                    and hasattr(response_obj.choices[0], "message")
-                    and response_obj.choices[0].message
-                    and hasattr(response_obj.choices[0].message, "content")
-                    and response_obj.choices[0].message.content
-                ):
-                    content = response_obj.choices[0].message.content
-                    logger.warning(
-                        f"LLM returned content instead of tool call: {content[:200]}..."
-                    )
-                    error_result["detailed_research"] = (
-                        f"Error: LLM returned text instead of tool call. Content: {content[:200]}..."
-                    )
-                else:
-                    error_result["detailed_research"] = (
-                        "Error: No tool call or content received from LLM."
-                    )
-                return error_result
-
-        except Exception as e:
-            logger.error(
-                f"Exception during synthesis tool call for {database_name}: {str(e)}",
-                exc_info=True,
-            )
-            error_result["detailed_research"] = f"Error during synthesis: {str(e)}"
-            return error_result
+    return {
+        "detailed_research": combined_research.strip(),
+        "status_summary": status_summary,
+    }
 
 
 def query_database_sync(
