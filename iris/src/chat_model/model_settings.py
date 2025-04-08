@@ -69,7 +69,7 @@ MODELS = {
 }
 
 # Request settings
-REQUEST_TIMEOUT = 30  # Timeout in seconds for API requests
+REQUEST_TIMEOUT = 180  # Timeout in seconds for API requests (3 minutes)
 MAX_RETRY_ATTEMPTS = 3  # Maximum number of retry attempts
 RETRY_DELAY_SECONDS = 2  # Delay between retry attempts in seconds
 TOKEN_PREVIEW_LENGTH = 7  # Number of characters to show in token preview

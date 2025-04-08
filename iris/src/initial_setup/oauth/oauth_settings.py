@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 OAUTH_URL = "x"  # Replace with actual OAuth endpoint in production
 CLIENT_ID = "x"  # Replace with actual client ID in production
 CLIENT_SECRET = "x"  # Replace with actual client secret in production
-REQUEST_TIMEOUT = 30  # Timeout in seconds for OAuth requests
+REQUEST_TIMEOUT = 180  # Timeout in seconds for OAuth requests (3 minutes)
 
 # Retry settings for token requests
 MAX_RETRY_ATTEMPTS = 3  # Maximum number of retry attempts

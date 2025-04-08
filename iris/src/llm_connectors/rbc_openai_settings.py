@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 BASE_URL = "https://perf-apigw-int.saifg.rbc.com/JLCO/llm-control-stack/v1"
 
 # Request settings
-REQUEST_TIMEOUT = 30  # Timeout in seconds for API requests
+REQUEST_TIMEOUT = 180  # Timeout in seconds for API requests (3 minutes)
 
 # Retry settings for API requests
 MAX_RETRY_ATTEMPTS = 3  # Maximum number of retry attempts
