@@ -623,6 +623,10 @@ def _model_generator(
                             db_display_name = available_databases.get(db_name, {}).get(
                                 "name", db_name
                             )
+                            # Introduce a 1-second delay between starting each query (except the first)
+                            if i > 0:
+                                logger.debug(f"Waiting 1 second before submitting query {i+1}...")
+                                time.sleep(1)
                             # Submit the worker function to the executor
                             future = executor.submit(
                                 _execute_query_worker,
