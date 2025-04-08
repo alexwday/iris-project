@@ -133,7 +133,7 @@ def generate_streaming_summary(
             logger.info(
                 f"Summarizing detailed research from {len(aggregated_detailed_research)} databases."
             )
-            logger.info("Initiating Summarizer stream API call") # Added contextual log
+            logger.info("Initiating Summarizer stream API call")  # Added contextual log
 
             # --- Synchronous LLM Call ---
             # Directly call the synchronous call_llm function

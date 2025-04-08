@@ -141,8 +141,9 @@ def log_usage_statistics(
     # The code attempting to call update_database_token_usage has been removed.
     # Global tracking above still works.
     if database_name:
-         logger.debug(f"Database name '{database_name}' provided, but specific tracking is disabled.")
-
+        logger.debug(
+            f"Database name '{database_name}' provided, but specific tracking is disabled."
+        )
 
     return {
         "completion_tokens": completion_tokens,
@@ -225,7 +226,6 @@ def call_llm(
         # (Though generally harmless, explicit removal might prevent future API conflicts)
         params.pop("stream_options", None)
 
-
     # Log key parameters
     model = params.get("model", "unknown")
     has_tools = "tools" in params
@@ -258,7 +258,9 @@ def call_llm(
             api_response = client.chat.completions.create(**params)
 
             elapsed_time = time.time() - attempt_start
-            logger.info(f"Received {'initial stream chunk' if is_streaming else 'response'} in {elapsed_time:.2f} seconds")
+            logger.info(
+                f"Received {'initial stream chunk' if is_streaming else 'response'} in {elapsed_time:.2f} seconds"
+            )
 
             # Handle streaming vs non-streaming response and logging
             if is_streaming:
@@ -278,7 +280,7 @@ def call_llm(
                         completion_token_cost,
                         database_name=database_name,
                     )
-                return api_response # Return the complete response object
+                return api_response  # Return the complete response object
 
         except Exception as e:
             last_exception = e
@@ -310,20 +312,22 @@ def _stream_wrapper(
     try:
         for chunk in stream:
             yield chunk
-            last_chunk = chunk # Keep track of the last chunk
+            last_chunk = chunk  # Keep track of the last chunk
     finally:
         # After the stream is exhausted (or loop breaks), check the last chunk for usage
         if last_chunk and hasattr(last_chunk, "usage") and last_chunk.usage:
             logger.info("Stream finished. Logging usage from final chunk.")
             log_usage_statistics(
-                response=None, # Pass None as response, we use usage_data
+                response=None,  # Pass None as response, we use usage_data
                 prompt_token_cost=prompt_token_cost,
                 completion_token_cost=completion_token_cost,
                 database_name=database_name,
-                usage_data=last_chunk.usage, # Pass the usage data directly
+                usage_data=last_chunk.usage,  # Pass the usage data directly
             )
         else:
-            logger.warning("Stream finished, but no usage data found in the final chunk.")
+            logger.warning(
+                "Stream finished, but no usage data found in the final chunk."
+            )
 
 
 def get_token_usage() -> Dict[str, Any]:

@@ -7,7 +7,9 @@ the most relevant sections from CAPM documents based on section summaries.
 """
 
 
-def get_section_selection_prompt(user_query: str, formatted_sections_and_summaries: str) -> str:
+def get_section_selection_prompt(
+    user_query: str, formatted_sections_and_summaries: str
+) -> str:
     """
     Generate a prompt for selecting relevant sections from CAPM documents.
 

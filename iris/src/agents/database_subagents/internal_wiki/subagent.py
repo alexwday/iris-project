@@ -97,9 +97,7 @@ def fetch_wiki_catalog() -> List[Dict[str, Any]]:
                         "document_description": row[2],
                     }
                 )
-        logger.info(
-            f"Retrieved {len(catalog_records)} catalog entries from database"
-        )
+        logger.info(f"Retrieved {len(catalog_records)} catalog entries from database")
     except Exception as e:
         logger.error(f"Error fetching catalog from database: {str(e)}")
     finally:
@@ -154,9 +152,7 @@ def fetch_document_content(doc_ids: List[str]) -> List[Dict[str, Any]]:
                 for row in cur.fetchall():
                     sections.append(
                         {
-                            "section_name": (
-                                row[1] if row[1] else f"Section {row[0]}"
-                            ),
+                            "section_name": (row[1] if row[1] else f"Section {row[0]}"),
                             "section_content": row[2],
                         }
                     )
@@ -271,7 +267,9 @@ def select_relevant_documents(
     )  # Assumes this prompt asks for JSON list
 
     try:
-        logger.info(f"Initiating Wiki Document Selection API call (DB: {database_name})") # Added contextual log
+        logger.info(
+            f"Initiating Wiki Document Selection API call (DB: {database_name})"
+        )  # Added contextual log
         # Direct synchronous call
         response_str = get_completion(
             capability="small",
@@ -377,7 +375,9 @@ def synthesize_response_and_status(
     synthesis_prompt = get_content_synthesis_prompt(query, formatted_documents)
 
     try:
-        logger.info(f"Initiating Wiki Synthesis API call (DB: {database_name})") # Added contextual log
+        logger.info(
+            f"Initiating Wiki Synthesis API call (DB: {database_name})"
+        )  # Added contextual log
         # Direct synchronous call
         response_obj = get_completion(
             capability="large",

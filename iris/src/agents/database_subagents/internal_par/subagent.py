@@ -154,17 +154,13 @@ def fetch_document_content(doc_ids: List[str]) -> List[Dict[str, Any]]:
                 for row in cur.fetchall():
                     sections.append(
                         {
-                            "section_name": (
-                                row[1] if row[1] else f"Section {row[0]}"
-                            ),
+                            "section_name": (row[1] if row[1] else f"Section {row[0]}"),
                             "section_content": row[2],
                         }
                     )
                 if sections:
                     result.append({"document_name": doc_name, "sections": sections})
-        logger.info(
-            f"Retrieved PAR content for {len(result)} documents from database"
-        )
+        logger.info(f"Retrieved PAR content for {len(result)} documents from database")
     except Exception as e:
         logger.error(f"Error fetching PAR document content from database: {str(e)}")
     finally:
@@ -273,7 +269,9 @@ def select_relevant_documents(
     )  # Assumes this prompt asks for JSON list
 
     try:
-        logger.info(f"Initiating PAR Document Selection API call (DB: {database_name})") # Added contextual log
+        logger.info(
+            f"Initiating PAR Document Selection API call (DB: {database_name})"
+        )  # Added contextual log
         # Direct synchronous call
         response_str = get_completion(
             capability="small",
@@ -380,7 +378,9 @@ def synthesize_response_and_status(
     synthesis_prompt = get_content_synthesis_prompt(query, formatted_documents)
 
     try:
-        logger.info(f"Initiating PAR Synthesis API call (DB: {database_name})") # Added contextual log
+        logger.info(
+            f"Initiating PAR Synthesis API call (DB: {database_name})"
+        )  # Added contextual log
         # Direct synchronous call
         response_obj = get_completion(
             capability="large",

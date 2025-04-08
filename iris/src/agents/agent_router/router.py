@@ -70,7 +70,7 @@ def get_routing_decision(conversation, token):
             messages.extend(conversation["messages"])
 
         logger.info(f"Getting routing decision using model: {MODEL_NAME}")
-        logger.info("Initiating Router API call") # Added contextual log
+        logger.info("Initiating Router API call")  # Added contextual log
 
         # Make the API call with tool calling
         response = call_llm(

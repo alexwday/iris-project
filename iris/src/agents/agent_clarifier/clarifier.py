@@ -73,7 +73,7 @@ def clarify_research_needs(conversation, token):
             messages.extend(conversation["messages"])
 
         logger.info(f"Clarifying research needs using model: {MODEL_NAME}")
-        logger.info("Initiating Clarifier API call") # Added contextual log
+        logger.info("Initiating Clarifier API call")  # Added contextual log
 
         # Make the API call with tool calling
         response = call_llm(
@@ -142,7 +142,7 @@ def clarify_research_needs(conversation, token):
             logger.warning(
                 f"Scope '{scope}' provided but action is '{action}'. Scope will be ignored."
             )
-            scope = None # Ensure scope is None if not applicable
+            scope = None  # Ensure scope is None if not applicable
 
         # Log the clarifier decision
         logger.info(f"Clarifier decision: {action}")

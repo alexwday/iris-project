@@ -154,9 +154,7 @@ def fetch_document_content(doc_ids: List[str]) -> List[Dict[str, Any]]:
                 for row in cur.fetchall():
                     sections.append(
                         {
-                            "section_name": (
-                                row[1] if row[1] else f"Section {row[0]}"
-                            ),
+                            "section_name": (row[1] if row[1] else f"Section {row[0]}"),
                             "section_content": row[2],
                         }
                     )
@@ -273,7 +271,9 @@ def select_relevant_documents(
     )  # Assumes this prompt asks for JSON list
 
     try:
-        logger.info(f"Initiating Memo Document Selection API call (DB: {database_name})") # Added contextual log
+        logger.info(
+            f"Initiating Memo Document Selection API call (DB: {database_name})"
+        )  # Added contextual log
         # Direct synchronous call
         response_str = get_completion(
             capability="small",
@@ -379,7 +379,9 @@ def synthesize_response_and_status(
     synthesis_prompt = get_content_synthesis_prompt(query, formatted_documents)
 
     try:
-        logger.info(f"Initiating Memo Synthesis API call (DB: {database_name})") # Added contextual log
+        logger.info(
+            f"Initiating Memo Synthesis API call (DB: {database_name})"
+        )  # Added contextual log
         # Direct synchronous call
         response_obj = get_completion(
             capability="large",
@@ -497,13 +499,17 @@ def query_database_sync(
     """
     Synchronously query the Internal Memo database based on the specified scope.
     """
-    logger.info(f"Querying Internal Memo database (sync): '{query}' with scope: {scope}")
+    logger.info(
+        f"Querying Internal Memo database (sync): '{query}' with scope: {scope}"
+    )
     database_name = "internal_memo"
     default_error_status = "❌ Error during query processing."
 
     try:
         # Direct synchronous calls
-        catalog = fetch_memos_catalog() # Function name kept for consistency, queries 'internal_memo'
+        catalog = (
+            fetch_memos_catalog()
+        )  # Function name kept for consistency, queries 'internal_memo'
         logger.info(f"Retrieved {len(catalog)} total Memo catalog entries")
         if not catalog:
             if scope == "metadata":
@@ -515,10 +521,12 @@ def query_database_sync(
                 }
 
         # Select documents
-        doc_ids = select_relevant_documents( # Function name kept for consistency, uses 'internal_memo' db name
+        doc_ids = select_relevant_documents(  # Function name kept for consistency, uses 'internal_memo' db name
             query, catalog, token, database_name=database_name
         )
-        logger.info(f"LLM selected {len(doc_ids)} relevant Memo document IDs: {doc_ids}")
+        logger.info(
+            f"LLM selected {len(doc_ids)} relevant Memo document IDs: {doc_ids}"
+        )
         if not doc_ids:
             if scope == "metadata":
                 return []
@@ -531,15 +539,19 @@ def query_database_sync(
         # Process based on scope
         if scope == "metadata":
             selected_items = [item for item in catalog if item.get("id") in doc_ids]
-            logger.info(f"Returning {len(selected_items)} selected Memo metadata items.")
+            logger.info(
+                f"Returning {len(selected_items)} selected Memo metadata items."
+            )
             return selected_items
         elif scope == "research":
             # Fetch content and synthesize
-            documents = fetch_document_content(doc_ids) # Function name kept for consistency, queries 'internal_memo'
+            documents = fetch_document_content(
+                doc_ids
+            )  # Function name kept for consistency, queries 'internal_memo'
             logger.info(
                 f"Retrieved content for {len(documents)} Memo documents for research."
             )
-            research_result = synthesize_response_and_status( # Function name kept for consistency, uses 'internal_memo' db name
+            research_result = synthesize_response_and_status(  # Function name kept for consistency, uses 'internal_memo' db name
                 query, documents, token, database_name=database_name
             )
             return research_result

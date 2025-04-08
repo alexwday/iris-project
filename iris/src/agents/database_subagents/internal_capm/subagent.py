@@ -72,12 +72,12 @@ def generate_condensed_description(
 ) -> str:
     """
     Use an LLM to generate a condensed, plain-text description from a detailed markdown description.
-    
+
     Args:
         original_description: The original detailed description with markdown
         token: Optional authentication token
         database_name: Database name for logging
-        
+
     Returns:
         Condensed plain-text description
     """
@@ -85,7 +85,9 @@ def generate_condensed_description(
     condensation_prompt = get_description_condensation_prompt(original_description)
 
     try:
-        logger.info(f"Initiating CAPM Description Condensation API call (DB: {database_name})")
+        logger.info(
+            f"Initiating CAPM Description Condensation API call (DB: {database_name})"
+        )
         # Direct synchronous call
         response_str = get_completion(
             capability="small",
@@ -267,10 +269,10 @@ def fetch_document_sections_and_summaries(doc_ids: List[str]) -> List[Dict[str, 
                     sections.append(
                         {
                             "section_id": row[0],
-                            "section_name": (
-                                row[1] if row[1] else f"Section {row[0]}"
+                            "section_name": (row[1] if row[1] else f"Section {row[0]}"),
+                            "section_summary": (
+                                row[2] if row[2] else "No summary available"
                             ),
-                            "section_summary": row[2] if row[2] else "No summary available",
                         }
                     )
                 if sections:
@@ -279,20 +281,24 @@ def fetch_document_sections_and_summaries(doc_ids: List[str]) -> List[Dict[str, 
             f"Retrieved CAPM sections and summaries for {len(result)} documents from database"
         )
     except Exception as e:
-        logger.error(f"Error fetching CAPM sections and summaries from database: {str(e)}")
+        logger.error(
+            f"Error fetching CAPM sections and summaries from database: {str(e)}"
+        )
     finally:
         if conn:
             conn.close()
     return result
 
 
-def fetch_section_content(section_selections: Dict[str, List[str]]) -> List[Dict[str, Any]]:
+def fetch_section_content(
+    section_selections: Dict[str, List[str]],
+) -> List[Dict[str, Any]]:
     """
     Fetch the full content of specified sections from CAPM documents.
-    
+
     Args:
         section_selections: Dictionary mapping document names to lists of section names
-        
+
     Returns:
         List of documents with their selected sections and content
     """
@@ -324,17 +330,13 @@ def fetch_section_content(section_selections: Dict[str, List[str]]) -> List[Dict
                 for row in cur.fetchall():
                     sections.append(
                         {
-                            "section_name": (
-                                row[1] if row[1] else f"Section {row[0]}"
-                            ),
+                            "section_name": (row[1] if row[1] else f"Section {row[0]}"),
                             "section_content": row[2],
                         }
                     )
                 if sections:
                     result.append({"document_name": doc_name, "sections": sections})
-        logger.info(
-            f"Retrieved CAPM content for {len(result)} documents from database"
-        )
+        logger.info(f"Retrieved CAPM content for {len(result)} documents from database")
     except Exception as e:
         logger.error(f"Error fetching CAPM section content from database: {str(e)}")
     finally:
@@ -438,12 +440,12 @@ def select_relevant_documents(
     """
     logger.info("Selecting relevant CAPM documents from catalog")
     formatted_catalog = format_catalog_for_llm(catalog)
-    selection_prompt = get_catalog_selection_prompt(
-        query, formatted_catalog
-    )
+    selection_prompt = get_catalog_selection_prompt(query, formatted_catalog)
 
     try:
-        logger.info(f"Initiating CAPM Document Selection API call (DB: {database_name})")
+        logger.info(
+            f"Initiating CAPM Document Selection API call (DB: {database_name})"
+        )
         # Direct synchronous call
         response_str = get_completion(
             capability="small",
@@ -502,21 +504,19 @@ def select_relevant_sections(
 ) -> Dict[str, List[str]]:
     """
     Use an LLM to select the most relevant sections from CAPM documents based on summaries.
-    
+
     Args:
         query: The user query
         documents_with_summaries: List of documents with their sections and summaries
         token: Optional authentication token
         database_name: Database name for logging
-        
+
     Returns:
         Dictionary mapping document names to lists of selected section names
     """
     logger.info("Selecting relevant CAPM sections based on summaries")
     formatted_sections = format_sections_and_summaries_for_llm(documents_with_summaries)
-    selection_prompt = get_section_selection_prompt(
-        query, formatted_sections
-    )
+    selection_prompt = get_section_selection_prompt(query, formatted_sections)
 
     try:
         logger.info(f"Initiating CAPM Section Selection API call (DB: {database_name})")
@@ -539,7 +539,9 @@ def select_relevant_sections(
         try:
             selected_sections = json.loads(response_str)
             if isinstance(selected_sections, dict) and all(
-                isinstance(doc, str) and isinstance(sections, list) and all(isinstance(s, str) for s in sections)
+                isinstance(doc, str)
+                and isinstance(sections, list)
+                and all(isinstance(s, str) for s in sections)
                 for doc, sections in selected_sections.items()
             ):
                 logger.info(f"LLM selected CAPM sections: {selected_sections}")
@@ -550,9 +552,7 @@ def select_relevant_sections(
                 )
                 return {}
         except json.JSONDecodeError:
-            logger.error(
-                "Failed to parse CAPM section selection LLM response as JSON"
-            )
+            logger.error("Failed to parse CAPM section selection LLM response as JSON")
             # No fallback for section selection as it's more complex
             return {}
     except Exception as e:
@@ -564,10 +564,10 @@ def estimate_token_size(documents: List[Dict[str, Any]]) -> int:
     """
     Estimate the token size of the document content.
     This is used to determine if we need to process documents individually.
-    
+
     Args:
         documents: List of documents with their sections and content
-        
+
     Returns:
         Estimated token count
     """
@@ -577,7 +577,7 @@ def estimate_token_size(documents: List[Dict[str, Any]]) -> int:
         for section in sections:
             content = section.get("section_content", "")
             total_chars += len(content)
-    
+
     # Approximate token count based on characters
     return int(total_chars * TOKENS_PER_CHAR)
 
@@ -591,22 +591,26 @@ def synthesize_individual_document(
     """
     Use an LLM to synthesize a response from a single CAPM document.
     Used when total content exceeds token limits.
-    
+
     Args:
         query: The user query
         document: A single document with its sections and content
         token: Optional authentication token
         database_name: Database name for logging
-        
+
     Returns:
         Synthesized response for the document
     """
-    logger.info(f"Synthesizing response for individual CAPM document: {document.get('document_name')}")
+    logger.info(
+        f"Synthesizing response for individual CAPM document: {document.get('document_name')}"
+    )
     formatted_document = format_single_document_for_llm(document)
     synthesis_prompt = get_individual_file_synthesis_prompt(query, formatted_document)
 
     try:
-        logger.info(f"Initiating Individual CAPM Document Synthesis API call (DB: {database_name})")
+        logger.info(
+            f"Initiating Individual CAPM Document Synthesis API call (DB: {database_name})"
+        )
         # Direct synchronous call
         response_obj = get_completion(
             capability="large",
@@ -618,7 +622,9 @@ def synthesize_individual_document(
             tools=[INDIVIDUAL_DOCUMENT_TOOL_SCHEMA],
             tool_choice={
                 "type": "function",
-                "function": {"name": INDIVIDUAL_DOCUMENT_TOOL_SCHEMA["function"]["name"]},
+                "function": {
+                    "name": INDIVIDUAL_DOCUMENT_TOOL_SCHEMA["function"]["name"]
+                },
             },
         )
 
@@ -639,7 +645,10 @@ def synthesize_individual_document(
         ):
 
             tool_call = response_obj.choices[0].message.tool_calls[0]
-            if tool_call.function.name == INDIVIDUAL_DOCUMENT_TOOL_SCHEMA["function"]["name"]:
+            if (
+                tool_call.function.name
+                == INDIVIDUAL_DOCUMENT_TOOL_SCHEMA["function"]["name"]
+            ):
                 arguments_str = tool_call.function.arguments
                 logger.debug(f"Received tool arguments string: {arguments_str}")
                 try:
@@ -727,21 +736,25 @@ def synthesize_response_and_status(
     # Estimate token size to determine if we need to process documents individually
     estimated_tokens = estimate_token_size(documents)
     logger.info(f"Estimated token size for CAPM documents: {estimated_tokens}")
-    
+
     if estimated_tokens >= 100000:
-        logger.info(f"Content exceeds 100k tokens, processing each document individually")
-        
+        logger.info(
+            f"Content exceeds 100k tokens, processing each document individually"
+        )
+
         # Process each document individually
         individual_results = []
         for document in documents:
             doc_name = document.get("document_name", "Untitled")
             logger.info(f"Processing document individually: {doc_name}")
-            doc_result = synthesize_individual_document(query, document, token, database_name)
+            doc_result = synthesize_individual_document(
+                query, document, token, database_name
+            )
             individual_results.append(f"# {doc_name}\n\n{doc_result}\n\n---\n\n")
-        
+
         # Combine individual results
         combined_research = "".join(individual_results)
-        
+
         return {
             "detailed_research": combined_research,
             "status_summary": "✅ Found information from multiple large documents (processed individually).",
@@ -798,13 +811,20 @@ def synthesize_response_and_status(
                             logger.info(
                                 f"Successfully parsed synthesis tool call for {database_name}."
                             )
-                            status = arguments.get("status_summary", default_error_status)
-                            research = arguments.get("detailed_research", default_research)
+                            status = arguments.get(
+                                "status_summary", default_error_status
+                            )
+                            research = arguments.get(
+                                "detailed_research", default_research
+                            )
                             if not isinstance(status, str):
                                 status = default_error_status
                             if not isinstance(research, str):
                                 research = default_research
-                            return {"status_summary": status, "detailed_research": research}
+                            return {
+                                "status_summary": status,
+                                "detailed_research": research,
+                            }
                         else:
                             logger.error(
                                 f"Missing required keys in parsed tool arguments for {database_name}: {arguments}"
@@ -869,7 +889,7 @@ def query_database_sync(
 ) -> DatabaseResponse:
     """
     Synchronously query the Internal CAPM database based on the specified scope.
-    
+
     This function implements the CAPM-specific query flow, which includes:
     1. Fetching the catalog
     2. Selecting relevant documents
@@ -878,12 +898,12 @@ def query_database_sync(
        b. Selecting relevant sections based on summaries
        c. Fetching full content for selected sections
        d. Synthesizing response (with token size handling)
-    
+
     Args:
         query (str): The search query to execute.
         scope (str): The scope of the query ('metadata' or 'research').
         token (str, optional): Authentication token for API access.
-        
+
     Returns:
         DatabaseResponse: Query results, either a List[Dict] for 'metadata' scope
                           or a Dict[str, str] for 'research' scope.
@@ -909,7 +929,9 @@ def query_database_sync(
         doc_ids = select_relevant_documents(
             query, catalog, token, database_name=database_name
         )
-        logger.info(f"LLM selected {len(doc_ids)} relevant CAPM document IDs: {doc_ids}")
+        logger.info(
+            f"LLM selected {len(doc_ids)} relevant CAPM document IDs: {doc_ids}"
+        )
         if not doc_ids:
             if scope == "metadata":
                 return []
@@ -923,7 +945,7 @@ def query_database_sync(
         if scope == "metadata":
             # Get selected items from catalog
             selected_items = [item for item in catalog if item.get("id") in doc_ids]
-            
+
             # Generate condensed descriptions for each selected item
             for item in selected_items:
                 original_description = item.get("document_description", "")
@@ -932,8 +954,10 @@ def query_database_sync(
                 )
                 # Add the condensed description to the item
                 item["condensed_description"] = condensed_description
-                
-            logger.info(f"Returning {len(selected_items)} selected CAPM metadata items with condensed descriptions.")
+
+            logger.info(
+                f"Returning {len(selected_items)} selected CAPM metadata items with condensed descriptions."
+            )
             return selected_items
         elif scope == "research":
             # Fetch sections and summaries
@@ -946,18 +970,20 @@ def query_database_sync(
                     "detailed_research": "Could not retrieve sections and summaries for the selected CAPM documents.",
                     "status_summary": "❌ Error retrieving document sections.",
                 }
-            
+
             # Select relevant sections based on summaries
             section_selections = select_relevant_sections(
                 query, documents_with_summaries, token, database_name=database_name
             )
-            logger.info(f"LLM selected sections from {len(section_selections)} CAPM documents.")
+            logger.info(
+                f"LLM selected sections from {len(section_selections)} CAPM documents."
+            )
             if not section_selections:
                 return {
                     "detailed_research": "LLM did not select any relevant sections from the CAPM documents based on the query.",
                     "status_summary": "📄 No relevant sections selected by LLM.",
                 }
-            
+
             # Fetch full content for selected sections
             documents_with_content = fetch_section_content(section_selections)
             logger.info(
@@ -968,7 +994,7 @@ def query_database_sync(
                     "detailed_research": "Could not retrieve content for the selected CAPM sections.",
                     "status_summary": "❌ Error retrieving section content.",
                 }
-            
+
             # Synthesize response
             research_result = synthesize_response_and_status(
                 query, documents_with_content, token, database_name=database_name

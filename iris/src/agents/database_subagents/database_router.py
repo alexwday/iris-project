@@ -94,7 +94,7 @@ def route_query_sync(
 
         if not hasattr(subagent_module, "query_database_sync"):
             error_msg = f"Subagent module for '{database}' missing 'query_database_sync' function."
-            logger.error(error_msg) # Log the error
+            logger.error(error_msg)  # Log the error
             # Raise attribute error as it's a code structure issue and sync is expected
             raise AttributeError(error_msg)
 

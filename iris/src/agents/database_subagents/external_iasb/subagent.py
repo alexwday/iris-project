@@ -39,7 +39,9 @@ def query_database_sync(
         DatabaseResponse: Empty list [] for 'metadata', or a placeholder
                           Dict[str, str] for 'research'.
     """
-    logger.warning(f"Querying External IASB STUB: '{query}' with scope: {scope}. Returning placeholder data.")
+    logger.warning(
+        f"Querying External IASB STUB: '{query}' with scope: {scope}. Returning placeholder data."
+    )
     database_name = "external_iasb"
 
     # Removed asyncio.sleep for synchronous stub
@@ -55,13 +57,15 @@ def query_database_sync(
         logger.info(f"Returning placeholder research dict for {database_name} stub.")
         return {
             "detailed_research": placeholder_research,
-            "status_summary": placeholder_status
+            "status_summary": placeholder_status,
         }
     else:
         # Handle invalid scope
-        logger.error(f"Invalid scope provided to {database_name} subagent stub: {scope}")
+        logger.error(
+            f"Invalid scope provided to {database_name} subagent stub: {scope}"
+        )
         # Return research-style error dict as a fallback
         return {
-             "detailed_research": f"Error: Invalid scope '{scope}' provided to {database_name} stub.",
-             "status_summary": f"❌ Error: Invalid scope '{scope}'."
+            "detailed_research": f"Error: Invalid scope '{scope}' provided to {database_name} stub.",
+            "status_summary": f"❌ Error: Invalid scope '{scope}'.",
         }

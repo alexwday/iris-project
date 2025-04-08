@@ -91,27 +91,49 @@ AVAILABLE_DATABASES = {
 def get_database_statement() -> str:
     """
     Returns a formatted statement about available databases for use in agent prompts.
+    Uses XML-style delimiters for better sectioning.
 
     Returns:
         str: Formatted statement describing available databases
     """
-    statement = """
-# AVAILABLE DATABASES
-
+    statement = """<AVAILABLE_DATABASES>
 The following databases are available for research:
 
 """
 
-    # Add each database with concise description and usage guidance
-    for db_name, db_info in AVAILABLE_DATABASES.items():
-        statement += f"### {db_info['name']} (`{db_name}`)\n"  # Use H3 for compactness
-        statement += f"Desc: {db_info['description']}\n"
-        statement += f"Content: {db_info['content_type']}\n"  # Keep Content Type
-        statement += f"Search: {db_info['query_type']}\n"  # Keep Query Type
-        statement += f"Use: {db_info['use_when']}\n\n"  # Keep Use When guidance
+    # Group databases by type for better organization
+    internal_dbs = {k: v for k, v in AVAILABLE_DATABASES.items() if k.startswith("internal_")}
+    external_dbs = {k: v for k, v in AVAILABLE_DATABASES.items() if k.startswith("external_")}
+    
+    # Add internal databases section
+    statement += "<INTERNAL_DATABASES>\n"
+    for db_name, db_info in internal_dbs.items():
+        statement += f"""<DATABASE id="{db_name}">
+  <NAME>{db_info['name']}</NAME>
+  <DESCRIPTION>{db_info['description']}</DESCRIPTION>
+  <CONTENT_TYPE>{db_info['content_type']}</CONTENT_TYPE>
+  <QUERY_TYPE>{db_info['query_type']}</QUERY_TYPE>
+  <USAGE>{db_info['use_when']}</USAGE>
+</DATABASE>
 
-    # Remove trailing newlines
-    statement = statement.strip()
+"""
+    statement += "</INTERNAL_DATABASES>\n\n"
+    
+    # Add external databases section
+    statement += "<EXTERNAL_DATABASES>\n"
+    for db_name, db_info in external_dbs.items():
+        statement += f"""<DATABASE id="{db_name}">
+  <NAME>{db_info['name']}</NAME>
+  <DESCRIPTION>{db_info['description']}</DESCRIPTION>
+  <CONTENT_TYPE>{db_info['content_type']}</CONTENT_TYPE>
+  <QUERY_TYPE>{db_info['query_type']}</QUERY_TYPE>
+  <USAGE>{db_info['use_when']}</USAGE>
+</DATABASE>
+
+"""
+    statement += "</EXTERNAL_DATABASES>\n"
+    statement += "</AVAILABLE_DATABASES>"
+    
     return statement
 
 

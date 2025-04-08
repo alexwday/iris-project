@@ -81,7 +81,7 @@ def create_query_plan(research_statement, token, is_continuation=False):
 
         logger.info(f"Creating query plan using model: {MODEL_NAME}")
         logger.info(f"Is continuation: {is_continuation}")
-        logger.info("Initiating Planner API call") # Added contextual log
+        logger.info("Initiating Planner API call")  # Added contextual log
 
         # Make the API call with tool calling
         response = call_llm(

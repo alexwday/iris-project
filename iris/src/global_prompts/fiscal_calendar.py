@@ -118,6 +118,7 @@ def get_quarter_range_str(fiscal_quarter: int) -> str:
 def get_fiscal_statement() -> str:
     """
     Generate a natural language statement about the current fiscal period.
+    Uses XML-style delimiters for better sectioning.
 
     Returns:
         str: Formatted fiscal statement
@@ -128,10 +129,16 @@ def get_fiscal_statement() -> str:
         fiscal_year, fiscal_quarter = get_fiscal_period()
         current_quarter_range = get_quarter_range_str(fiscal_quarter)
 
-        statement = f"""Today's date is {formatted_date}. We are currently operating in Fiscal Year {fiscal_year} (FY{fiscal_year}), Quarter {fiscal_quarter} (Q{fiscal_quarter}), which spans {current_quarter_range}. Our fiscal year runs from November 1st through October 31st."""
+        statement = f"""<FISCAL_CONTEXT>
+<CURRENT_DATE>{formatted_date}</CURRENT_DATE>
+<FISCAL_YEAR>{fiscal_year} (FY{fiscal_year})</FISCAL_YEAR>
+<FISCAL_QUARTER>{fiscal_quarter} (Q{fiscal_quarter})</FISCAL_QUARTER>
+<QUARTER_RANGE>{current_quarter_range}</QUARTER_RANGE>
+<FISCAL_YEAR_DEFINITION>Our fiscal year runs from November 1st through October 31st.</FISCAL_YEAR_DEFINITION>
+</FISCAL_CONTEXT>"""
 
         return statement
     except Exception as e:
         logger.error(f"Error generating fiscal statement: {str(e)}")
         # Fallback statement in case of errors
-        return "We operate on a fiscal year that runs from November 1st through October 31st."
+        return "<FISCAL_CONTEXT>We operate on a fiscal year that runs from November 1st through October 31st.</FISCAL_CONTEXT>"
