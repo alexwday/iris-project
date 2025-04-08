@@ -119,14 +119,14 @@ When sufficient information exists:
 - Formulate a clear, specific research statement summarizing the core
   research need.
 - **Crucially, include:**
-  - Applicable standards, time periods, and essential context identified.
-  - Any industry-specific context if available and relevant.
+  - **Key Accounting Context:** Explicitly state any specific accounting types (e.g., 'asset', 'liability', 'equity'), standards (e.g., 'IFRS 15', 'US GAAP ASC 606'), or specific topics (e.g., 'revenue recognition', 'lease accounting') mentioned by the user or clearly implied by the context. **Prioritize including these terms if present.**
+  - Other essential context identified (e.g., time periods, industry).
   - **Explicitly mention any databases the user requested** (e.g., "User
     requested search focus on IASB guidance").
   - **If this is a continuation:** Briefly summarize previous findings/gaps
     and list any remaining planned queries from the prior step to guide the
     Planner.
-- Structure the statement to clearly guide the Planner's query development. This statement is the *only* context the Planner receives.
+- Structure the statement to clearly guide the Planner's query development, ensuring these key accounting terms are prominent. This statement is the *only* context the Planner receives.
 - **For Follow-up Research:** If identified as a follow-up based on the previous assistant message's list, create a highly specific research statement targeting the requested item(s) identified in step 6 (e.g., "Analyze 'Document Name' [ID: `doc_id`] based on the previous metadata search results."). Include both name and ID if possible.
 </CREATE_RESEARCH_STATEMENT_PATH>
 </DECISION_CRITERIA>
@@ -158,13 +158,11 @@ The following elements contribute to context sufficiency (primarily for **scope 
 
 <ESSENTIAL_ELEMENTS>
 At least ONE required for 'research' scope:
-- Specific accounting standard mentioned (e.g., "IFRS 15", "IAS 38")
-- Specific accounting topic clearly identified (e.g., "revenue recognition",
-  "lease accounting")
-- Specific policy area referenced (e.g., "hedge accounting policy",
-  "impairment testing")
-- Database preference indicated (e.g., "check IASB guidance",
-  "look in the policy manual")
+- Specific accounting standard mentioned (e.g., "IFRS 15", "IAS 38", "US GAAP ASC 842")
+- Specific accounting topic clearly identified (e.g., "revenue recognition", "lease accounting", "impairment")
+- **Specific accounting type clearly identified (e.g., "asset", "liability", "equity", "financial instrument")**
+- Specific policy area referenced (e.g., "hedge accounting policy", "impairment testing")
+- Database preference indicated (e.g., "check IASB guidance", "look in the policy manual")
 </ESSENTIAL_ELEMENTS>
 
 <SUPPORTING_ELEMENTS>

@@ -107,21 +107,23 @@ def get_content_synthesis_prompt(user_query: str, formatted_documents: str) -> s
         "</INPUT_DOCUMENTS>",
 
         "<INSTRUCTIONS>",
-        "1. **Analyze Relevance:** Carefully read the user query and the provided CAPM document section content. Determine how well the content addresses the query.",
-        "2. **Generate Status Summary Flag:** Based on your analysis, provide ONLY the single-line status summary flag indicating relevance and completeness. Choose ONE:",
-        "   * `✅ Found information directly addressing the query.`",
-        "   * `ℹ️ Found related contextual information, but not a direct answer.`",
-        "   * `📄 Documents sections found, but they do not contain relevant information for this query.`",
-        "   * `⚠️ Conflicting information found across document sections.` (Explain conflicts in the detailed report)",
-        "   * `❓ Query is ambiguous based on document section content.` (Explain ambiguity in the detailed report)",
-        "3. **Generate Detailed Research Report:** Extract key facts and direct quotes relevant to the query using *only* information from the provided document sections. Format this as a structured list (e.g., bullet points) optimized for the Summarizer Agent.",
-        "   * Present information concisely. Use bullet points for key facts or directly quote relevant sentences/paragraphs.",
-        "   * **CRITICAL: Cite specific documents AND section names/numbers accurately *inline* within the report body, immediately following the information they support. Example: `- The policy states X is required. (Source: CAPM Policy 123 - Revenue Recognition, Section: 4.2 Scope)` Use the most specific section identifier available (name or number).**",
-        "   * If information is conflicting, present the conflicting points clearly with their respective citations.",
-        "   * If relevant information is missing from the provided sections, state that clearly (e.g., `- No information found regarding [specific topic] in the provided sections.`).",
-        "   * Do NOT add introductory/concluding sentences or narrative prose. Focus on direct information transfer.",
+        "1. **Identify Key Context in Query:** First, identify any specific key accounting context mentioned in the User Query (e.g., 'asset', 'liability', 'equity', 'IFRS', 'US GAAP', specific standard numbers). This context is CRITICAL for filtering.",
+        "2. **Analyze Relevance within Context:** Carefully read the user query and the provided CAPM document section content. Determine how well the content addresses the query **specifically within the identified key accounting context.**",
+        "3. **Generate Status Summary Flag:** Based on your context-aware analysis, provide ONLY the single-line status summary flag indicating relevance and completeness. Choose ONE:",
+        "   * `✅ Found information directly addressing the query within the specified context.`",
+        "   * `ℹ️ Found related contextual information, but not a direct answer for the specified context.`",
+        "   * `📄 Document sections found, but they do not contain relevant information for the specified context.`",
+        "   * `⚠️ Conflicting information found across document sections regarding the specified context.` (Explain conflicts in the detailed report)",
+        "   * `❓ Query is ambiguous based on document section content regarding the specified context.` (Explain ambiguity in the detailed report)",
+        "4. **Generate Focused Detailed Research Report:** Extract key facts and direct quotes relevant to the query **AND strictly pertaining to the identified key accounting context** using *only* information from the provided document sections. Format this as a structured list (e.g., bullet points) optimized for the Summarizer Agent.",
+        "   * **CRITICAL FILTERING:** If the query specifies 'assets', ONLY extract information about assets, even if the section also discusses liabilities. If the query specifies 'IFRS', ONLY extract IFRS-related information. Actively ignore and filter out information related to other contexts not mentioned in the query.",
+        "   * Present information concisely. Use bullet points for key facts or directly quote relevant sentences/paragraphs that match the query's context.",
+        "   * **CRITICAL CITATION: Cite specific documents AND section names/numbers accurately *inline* within the report body, immediately following the information they support. Example: `- The policy states X is required for assets. (Source: CAPM Policy 123 - Revenue Recognition, Section: 4.2 Scope)` Use the most specific section identifier available (name or number).**",
+        "   * If information is conflicting within the specified context, present the conflicting points clearly with their respective citations.",
+        "   * If relevant information for the specified context is missing from the provided sections, state that clearly (e.g., `- No information found regarding asset treatment under IFRS 15 in the provided sections.`).",
+        "   * Do NOT add introductory/concluding sentences or narrative prose. Focus on direct, context-filtered information transfer.",
         "   * Adhere strictly to the <RESTRICTIONS_AND_GUIDELINES> provided in the <CONTEXT>.",
-        "4. **Format Output:** Prepare the Status Summary Flag and the Detailed Research Report (as a single markdown string with bullet points/quotes and citations) for the tool call.",
+        "5. **Format Output:** Prepare the Status Summary Flag and the context-filtered Detailed Research Report (as a single markdown string with bullet points/quotes and citations) for the tool call.",
         "</INSTRUCTIONS>",
 
         "<OUTPUT_SPECIFICATION>",
@@ -168,10 +170,11 @@ Your goal is to extract and summarize the most relevant information from this do
 </document_section>
 
 ## Instructions
-1.  **Analyze Relevance:** Carefully read the user query and the provided CAPM document section content. Determine how well the section addresses the query.
-2.  **Extract Key Information:** Extract key facts and direct quotes relevant to the query using *only* information from the provided document section. Format this as a structured list (e.g., bullet points) optimized for later aggregation.
-3.  **Cite Accurately:** **CRITICAL: Cite the specific document AND section name/number accurately *inline*, immediately following the information it supports. Example: `- The policy states Y is allowed. (Source: CAPM Policy 456 - Expense Reporting, Section: 3.1 Allowable Expenses)` Use the most specific section identifier available (name or number).**
-4.  **Output Requirements:** You MUST call the `summarize_individual_document` tool. Provide the extracted information (as a markdown string with bullet points/quotes and inline citations) as the `document_summary` argument. Do not include any other text in your response. If the document section does not contain relevant information, state that clearly (e.g., `- No relevant information found in this section regarding the query.`).
+1.  **Identify Key Context in Query:** First, identify any specific key accounting context mentioned in the User Query (e.g., 'asset', 'liability', 'equity', 'IFRS', 'US GAAP', specific standard numbers). This context is CRITICAL for filtering.
+2.  **Analyze Relevance within Context:** Carefully read the user query and the provided CAPM document section content. Determine how well the section addresses the query **specifically within the identified key accounting context.**
+3.  **Extract Key Information (Filtered):** Extract key facts and direct quotes relevant to the query **AND strictly pertaining to the identified key accounting context** using *only* information from the provided document section. Format this as a structured list (e.g., bullet points) optimized for later aggregation. **Actively ignore and filter out information related to other contexts not mentioned in the query.**
+4.  **Cite Accurately:** **CRITICAL: Cite the specific document AND section name/number accurately *inline*, immediately following the information it supports. Example: `- The policy states Y is allowed for liabilities. (Source: CAPM Policy 456 - Expense Reporting, Section: 3.1 Allowable Expenses)` Use the most specific section identifier available (name or number).**
+5.  **Output Requirements:** You MUST call the `summarize_individual_document` tool. Provide the context-filtered extracted information (as a markdown string with bullet points/quotes and inline citations) as the `document_summary` argument. Do not include any other text in your response. If the document section does not contain relevant information for the specified context, state that clearly (e.g., `- No relevant information found in this section regarding asset treatment under US GAAP.`).
 """
     return prompt
 
