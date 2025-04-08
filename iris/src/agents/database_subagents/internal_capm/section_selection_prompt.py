@@ -29,7 +29,7 @@ Your task is to select only the most relevant sections based on their summaries 
 {user_query}
 
 ## Document Sections and Summaries
-The following contains document names, section names, and section summaries (but not the full content):
+The following contains document names, section IDs, section names, and section summaries (but not the full content):
 
 {formatted_sections_and_summaries}
 
@@ -42,12 +42,13 @@ The following contains document names, section names, and section summaries (but
 6. If multiple sections seem relevant after applying the above criteria, prioritize those whose summaries indicate they contain the most substantive or core information related to the query's specific context.
 
 # OUTPUT
-You must respond with ONLY a JSON object containing the document names and their relevant section names.
+You must respond with ONLY a JSON object containing the document names and their relevant **section IDs**.
 Format your response as follows:
 {{
-  "document_name1": ["Section Name 1", "Section Name 2"],
-  "document_name2": ["Section Name 1"]
+  "document_name1": ["section_id_A", "section_id_B"],
+  "document_name2": ["section_id_C"]
 }}
+**Important:** Ensure the section IDs in the list are the exact IDs as provided in the input (typically numbers, return them as strings in the JSON).
 
 If no sections seem relevant, return an empty object: {{}}
 """
