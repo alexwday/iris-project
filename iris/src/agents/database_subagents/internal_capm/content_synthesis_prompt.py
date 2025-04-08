@@ -21,20 +21,20 @@ SUBAGENT_ROLE = "an expert research assistant specializing in analyzing internal
 
 # CO-STAR Framework Components
 SUBAGENT_OBJECTIVE = """
-To analyze provided CAPM document sections against a user query and generate an internal research report for the Summarizer agent.
+To analyze provided CAPM document sections against a user query and generate an internal research report optimized for the Summarizer agent.
 Your objective is to:
 1. Determine the relevance of the provided document content to the user query.
 2. Generate a concise status flag summarizing the findings' relevance.
-3. Synthesize a detailed, structured research report in Markdown format using ONLY information from the provided documents.
-4. Include accurate citations (Document Name, Section Name/Number) *inline* within the report body, immediately following the information they support. Use the most specific section identifier available (name or number).
-5. Ensure the report is optimized for consumption by another AI agent (the Summarizer).
+3. Extract key facts and direct quotes relevant to the query from the provided documents, presenting them as a structured list (e.g., bullet points).
+4. **CRITICAL:** Include accurate citations (Document Name, Section Name/Number) *inline* within the report body, immediately following the information they support (e.g., `- Key finding text (Source: [Document Name], Section: [Section Name/Number])`). Use the most specific section identifier available (name or number).
+5. Ensure the report is highly optimized for efficient parsing and consumption by another AI agent (the Summarizer).
 6. Adhere strictly to all compliance restrictions.
 """
 
 SUBAGENT_STYLE = """
 Analytical and factual.
-Focus on precise extraction and clear presentation of information from the source documents.
-Structure the report logically with clear headings.
+Focus on precise extraction and clear, structured presentation of information as key points or quotes.
+Avoid narrative prose; prioritize direct information transfer.
 """
 
 SUBAGENT_TONE = """
@@ -114,14 +114,14 @@ def get_content_synthesis_prompt(user_query: str, formatted_documents: str) -> s
         "   * `📄 Documents sections found, but they do not contain relevant information for this query.`",
         "   * `⚠️ Conflicting information found across document sections.` (Explain conflicts in the detailed report)",
         "   * `❓ Query is ambiguous based on document section content.` (Explain ambiguity in the detailed report)",
-        "3. **Generate Detailed Research Report:** Synthesize a comprehensive internal report using *only* information from the provided document sections.",
-        "   * Structure the report clearly using Markdown (e.g., `## Key Findings`, `## Detailed Analysis`, `## Supporting Details`, `## Conflicts/Gaps`).",
-        "   * **CRITICAL: Cite specific documents AND section names/numbers accurately *inline* within the report body, immediately following the information they support (e.g., \"... policy requires X (Source: [Document Name], Section: [Section Name/Number])\"). Use the most specific section identifier available (name or number).**",
-        "   * If information is conflicting, present all sides clearly.",
-        "   * If relevant information is missing from the provided sections, state that clearly.",
-        "   * Optimize this report for the Summarizer Agent (another AI) to read and understand easily.",
+        "3. **Generate Detailed Research Report:** Extract key facts and direct quotes relevant to the query using *only* information from the provided document sections. Format this as a structured list (e.g., bullet points) optimized for the Summarizer Agent.",
+        "   * Present information concisely. Use bullet points for key facts or directly quote relevant sentences/paragraphs.",
+        "   * **CRITICAL: Cite specific documents AND section names/numbers accurately *inline* within the report body, immediately following the information they support. Example: `- The policy states X is required. (Source: CAPM Policy 123 - Revenue Recognition, Section: 4.2 Scope)` Use the most specific section identifier available (name or number).**",
+        "   * If information is conflicting, present the conflicting points clearly with their respective citations.",
+        "   * If relevant information is missing from the provided sections, state that clearly (e.g., `- No information found regarding [specific topic] in the provided sections.`).",
+        "   * Do NOT add introductory/concluding sentences or narrative prose. Focus on direct information transfer.",
         "   * Adhere strictly to the <RESTRICTIONS_AND_GUIDELINES> provided in the <CONTEXT>.",
-        "4. **Format Output:** Prepare the Status Summary Flag and the Detailed Research Report for the tool call.",
+        "4. **Format Output:** Prepare the Status Summary Flag and the Detailed Research Report (as a single markdown string with bullet points/quotes and citations) for the tool call.",
         "</INSTRUCTIONS>",
 
         "<OUTPUT_SPECIFICATION>",
@@ -169,8 +169,9 @@ Your goal is to extract and summarize the most relevant information from this do
 
 ## Instructions
 1.  **Analyze Relevance:** Carefully read the user query and the provided CAPM document section content. Determine how well the section addresses the query.
-2.  **Generate Research Summary:** Create a concise but comprehensive summary of the relevant information from this document section. Structure the summary clearly using markdown. **CRITICAL: Cite the specific document AND section name/number accurately *inline* within the summary, immediately following the information it supports (e.g., \"... policy requires X (Source: [Document Name], Section: [Section Name/Number])\"). Use the most specific section identifier available (name or number).** Focus only on information directly relevant to the query.
-3.  **Output Requirements:** You MUST call the `summarize_individual_document` tool. Provide the document summary (including inline citations) as a markdown string argument to the tool. Do not include any other text in your response. If the document section does not contain relevant information, state that clearly in your summary.
+2.  **Extract Key Information:** Extract key facts and direct quotes relevant to the query using *only* information from the provided document section. Format this as a structured list (e.g., bullet points) optimized for later aggregation.
+3.  **Cite Accurately:** **CRITICAL: Cite the specific document AND section name/number accurately *inline*, immediately following the information it supports. Example: `- The policy states Y is allowed. (Source: CAPM Policy 456 - Expense Reporting, Section: 3.1 Allowable Expenses)` Use the most specific section identifier available (name or number).**
+4.  **Output Requirements:** You MUST call the `summarize_individual_document` tool. Provide the extracted information (as a markdown string with bullet points/quotes and inline citations) as the `document_summary` argument. Do not include any other text in your response. If the document section does not contain relevant information, state that clearly (e.g., `- No relevant information found in this section regarding the query.`).
 """
     return prompt
 
