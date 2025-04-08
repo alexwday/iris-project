@@ -214,7 +214,7 @@ def construct_system_prompt():
     # Get all the required statements
     project_statement = get_project_statement()
     fiscal_statement = get_fiscal_statement()
-    database_statement = get_database_statement()
+    # database_statement = get_database_statement() # Removed database statement
     restrictions_statement = get_restrictions_statement()
 
     # Combine into a formatted system prompt using CO-STAR framework
@@ -222,7 +222,7 @@ def construct_system_prompt():
         "<CONTEXT>",
         project_statement,
         fiscal_statement,
-        database_statement,
+        # database_statement, # Removed database statement
         restrictions_statement,
         "</CONTEXT>",
         
