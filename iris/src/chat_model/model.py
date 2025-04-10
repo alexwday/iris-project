@@ -772,7 +772,8 @@ def _model_generator(
                             # No final 'else' needed as status_summary is initialized above
 
                             # Yield the status block regardless of success/failure (Removed Query Text)
-                            status_block = f"\n\n---\n**Database:** {db_display_name}\n**Status:** {status_summary}\n---"
+                            # Removed leading \n\n---\n to prevent double rule after plan
+                            status_block = f"**Database:** {db_display_name}\n**Status:** {status_summary}\n---"
                             yield status_block
                             # --- End Yield and Aggregation ---
 
@@ -811,6 +812,8 @@ def _model_generator(
                 # --- Final Summarization / Metadata Return ---
                 if scope == "research":
                     if aggregated_detailed_research:
+                        # Added --- separator before summary
+                        yield "\n\n---\n"
                         yield "\n\n## 📊 Research Summary\n"
                         # Start summary stage
                         if debug_mode:
