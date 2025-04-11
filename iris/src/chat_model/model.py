@@ -773,7 +773,7 @@ def _model_generator(
 
                             # Yield the status block regardless of success/failure (Removed Query Text)
                             # Removed leading \n\n---\n to prevent double rule after plan
-                            status_block = f"**Database:** {db_display_name}\n**Status:** {status_summary}\n---"
+                            status_block = f"**Database:** {db_display_name}\n**Status:** {status_summary}\n---\n" # Added \n at the end
                             yield status_block
                             # --- End Yield and Aggregation ---
 
