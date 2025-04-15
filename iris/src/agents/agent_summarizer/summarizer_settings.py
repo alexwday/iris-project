@@ -117,6 +117,7 @@ SUMMARIZER_SPECIFIC_GUARDRAILS = """
 6. For 'research' scope: Focus on synthesizing the provided internal reports into a user-facing answer.
 7. **Integrate Citations:** Accurately incorporate citations (e.g., "Source: [Document Name], Section: [Section Name]") provided in the internal research reports into the final response.
 8. Highlight limitations in the research when they exist based on the internal reports.
+9. **Strict Adherence to Data Sourcing:** Remember to strictly follow the `<CRITICAL_DATA_SOURCING>` rules defined in the global `<RESTRICTIONS_AND_GUIDELINES>`. Your response MUST be derived *exclusively* from the text provided in the `aggregated_results`. Do NOT introduce any facts, concepts, standard names/numbers, definitions, or interpretations not explicitly present *within* the input reports.
 </SUMMARIZER_GUARDRAILS>
 """
 
@@ -225,26 +226,20 @@ def construct_system_prompt():
         # database_statement, # Removed database statement
         restrictions_statement,
         "</CONTEXT>",
-        
         "<OBJECTIVE>",
         SUMMARIZER_OBJECTIVE,
         "</OBJECTIVE>",
-        
         "<STYLE>",
         SUMMARIZER_STYLE,
         "</STYLE>",
-        
         "<TONE>",
         SUMMARIZER_TONE,
         "</TONE>",
-        
         "<AUDIENCE>",
         SUMMARIZER_AUDIENCE,
         "</AUDIENCE>",
-        
         f"You are {SUMMARIZER_ROLE}.",
-        SUMMARIZER_TASK, # Existing task definition
-
+        SUMMARIZER_TASK,  # Existing task definition
         # --- INSERT EXAMPLES HERE ---
         """<CITATION_INTEGRATION_EXAMPLES>
 Here's how to integrate citations from the internal research reports (provided as input below, structured using basic Markdown) into your final synthesized answer:
@@ -319,7 +314,6 @@ Regarding the capitalization of internally developed software costs, the interna
 </CITATION_INTEGRATION_EXAMPLES>
 """,
         # --- END EXAMPLES ---
-
         PATTERN_RECOGNITION_INSTRUCTIONS,
         CONFIDENCE_SIGNALING,
         SUMMARIZER_SPECIFIC_GUARDRAILS,

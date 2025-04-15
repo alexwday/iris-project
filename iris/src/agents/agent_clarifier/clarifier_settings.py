@@ -323,23 +323,18 @@ def construct_system_prompt():
         database_statement,
         restrictions_statement,
         "</CONTEXT>",
-        
         "<OBJECTIVE>",
         CLARIFIER_OBJECTIVE,
         "</OBJECTIVE>",
-        
         "<STYLE>",
         CLARIFIER_STYLE,
         "</STYLE>",
-        
         "<TONE>",
         CLARIFIER_TONE,
         "</TONE>",
-        
         "<AUDIENCE>",
         CLARIFIER_AUDIENCE,
         "</AUDIENCE>",
-        
         f"You are {CLARIFIER_ROLE}.",
         CLARIFIER_TASK,
     ]

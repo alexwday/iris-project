@@ -72,7 +72,6 @@ def get_content_synthesis_prompt(user_query: str, formatted_documents: str) -> s
 
     prompt_parts = [
         f"You are {SUBAGENT_ROLE}.",
-
         "<CONTEXT>",
         "You are analyzing sections from the internal CAPM (Central Accounting Policy Manual).",
         "Below is essential context about the project, available data, current fiscal period, and restrictions:",
@@ -81,31 +80,24 @@ def get_content_synthesis_prompt(user_query: str, formatted_documents: str) -> s
         fiscal_statement,
         restrictions_statement,
         "</CONTEXT>",
-
         "<OBJECTIVE>",
         SUBAGENT_OBJECTIVE,
         "</OBJECTIVE>",
-
         "<STYLE>",
         SUBAGENT_STYLE,
         "</STYLE>",
-
         "<TONE>",
         SUBAGENT_TONE,
         "</TONE>",
-
         "<AUDIENCE>",
         SUBAGENT_AUDIENCE,
         "</AUDIENCE>",
-
         "<TASK>",
         "Your goal is to provide BOTH a concise status summary flag AND a detailed, structured internal research report based *only* on the provided document sections, formatted for the Summarizer Agent.",
-
         "<INPUT_DOCUMENTS>",
         f"<USER_QUERY>{user_query}</USER_QUERY>",
         f"<DOCUMENT_SECTIONS>{formatted_documents}</DOCUMENT_SECTIONS>",
         "</INPUT_DOCUMENTS>",
-
         "<INSTRUCTIONS>",
         "1. **Identify Key Context in Query:** First, identify any specific key accounting context mentioned in the User Query (e.g., 'asset', 'liability', 'equity', 'IFRS', 'US GAAP', specific standard numbers). This context is CRITICAL for filtering.",
         "2. **Analyze Relevance within Context:** Carefully read the user query and the provided CAPM document section content. Determine how well the content addresses the query **specifically within the identified key accounting context.**",
@@ -115,6 +107,7 @@ def get_content_synthesis_prompt(user_query: str, formatted_documents: str) -> s
         "   * `📄 Document sections found, but they do not contain relevant information for the specified context.`",
         "   * `⚠️ Conflicting information found across document sections regarding the specified context.` (Explain conflicts in the detailed report)",
         "   * `❓ Query is ambiguous based on document section content regarding the specified context.` (Explain ambiguity in the detailed report)",
+        "   **Strict Adherence to Data Sourcing:** Remember to strictly follow the `<CRITICAL_DATA_SOURCING>` rules defined in the global `<RESTRICTIONS_AND_GUIDELINES>`. Your report MUST be derived *exclusively* from the text within the `<DOCUMENT_SECTIONS>`. Do NOT introduce any facts, concepts, standard names/numbers, definitions, interpretations, or any external knowledge not explicitly present *within* the provided sections.",
         "4. **Generate Focused Detailed Research Report:** Extract key facts and direct quotes relevant to the query **AND strictly pertaining to the identified key accounting context** using *only* information from the provided document sections. Format this as a structured list (e.g., bullet points) optimized for the Summarizer Agent.",
         "   * **CRITICAL FILTERING:** If the query specifies 'assets', ONLY extract information about assets, even if the section also discusses liabilities. If the query specifies 'IFRS', ONLY extract IFRS-related information. Actively ignore and filter out information related to other contexts not mentioned in the query.",
         "   * Present information concisely. Use bullet points for key facts or directly quote relevant sentences/paragraphs that match the query's context.",
@@ -125,13 +118,12 @@ def get_content_synthesis_prompt(user_query: str, formatted_documents: str) -> s
         "   * Adhere strictly to the <RESTRICTIONS_AND_GUIDELINES> provided in the <CONTEXT>.",
         "5. **Format Output:** Prepare the Status Summary Flag and the context-filtered Detailed Research Report (as a single markdown string with bullet points/quotes and citations) for the tool call.",
         "</INSTRUCTIONS>",
-
         "<OUTPUT_SPECIFICATION>",
         "You MUST call the `synthesize_research_findings` tool.",
         "Provide the generated status summary flag (as a single string) and the full detailed research report (as a markdown string) as arguments.",
         "Do not include any other text, preamble, or explanation in your response outside the tool call.",
         "If no relevant document sections were provided or found, the status summary flag should reflect that (`📄`), and the detailed research report argument should state that no analysis is possible based on the provided sections.",
-        SUBAGENT_RESPONSE_FORMAT, # Reinforce the expected output format
+        SUBAGENT_RESPONSE_FORMAT,  # Reinforce the expected output format
         "</OUTPUT_SPECIFICATION>",
         "</TASK>",
     ]
@@ -140,6 +132,7 @@ def get_content_synthesis_prompt(user_query: str, formatted_documents: str) -> s
 
 
 # --- Keep the individual file synthesis prompt and schema as is for now ---
+
 
 def get_individual_file_synthesis_prompt(
     user_query: str, formatted_document: str

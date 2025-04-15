@@ -27,6 +27,7 @@ from ....initial_setup.db_config import connect_to_db
 from ....llm_connectors.rbc_openai import call_llm
 from .catalog_selection_prompt import get_catalog_selection_prompt
 from .section_selection_prompt import get_section_selection_prompt
+
 # Removed: from .description_condensation_prompt import get_description_condensation_prompt
 from .content_synthesis_prompt import (
     get_content_synthesis_prompt,
@@ -94,7 +95,7 @@ def format_sections_and_summaries_for_llm(documents: List[Dict[str, Any]]) -> st
         formatted_docs += f"# {doc_name}\n\n"
         sections = doc.get("sections", [])
         for section in sections:
-            section_id = section.get("section_id", "unknown") # Get section_id
+            section_id = section.get("section_id", "unknown")  # Get section_id
             section_name = section.get("section_name", "Untitled Section")
             section_summary = section.get("section_summary", "No summary available")
             # Include section_id in the formatted output
@@ -249,7 +250,7 @@ def fetch_document_sections_and_summaries(doc_ids: List[str]) -> List[Dict[str, 
 
 
 def fetch_section_content(
-    section_id_selections: Dict[str, List[str]], # Renamed parameter
+    section_id_selections: Dict[str, List[str]],  # Renamed parameter
 ) -> List[Dict[str, Any]]:
     """
     Fetch the full content of specified sections from CAPM documents using section IDs.
@@ -260,7 +261,9 @@ def fetch_section_content(
     Returns:
         List of documents with their selected sections (including name and content)
     """
-    logger.info(f"Fetching CAPM content for selected section IDs: {section_id_selections}")
+    logger.info(
+        f"Fetching CAPM content for selected section IDs: {section_id_selections}"
+    )
     if not section_id_selections:
         logger.warning("No CAPM section IDs provided to fetch content")
         return []
@@ -271,9 +274,13 @@ def fetch_section_content(
         return result
     try:
         for doc_name, section_ids in section_id_selections.items():
-            logger.debug(f"Querying content for doc: '{doc_name}', section IDs: {section_ids}") # Log query details
+            logger.debug(
+                f"Querying content for doc: '{doc_name}', section IDs: {section_ids}"
+            )  # Log query details
             if not section_ids:
-                logger.warning(f"Skipping document '{doc_name}' as no section IDs were selected.")
+                logger.warning(
+                    f"Skipping document '{doc_name}' as no section IDs were selected."
+                )
                 continue
 
             # Ensure section IDs are appropriate for the query (e.g., integers if the column is integer)
@@ -283,13 +290,16 @@ def fetch_section_content(
                 int_section_ids = [int(sid) for sid in section_ids]
                 placeholders = ",".join(["%s"] * len(int_section_ids))
                 query_params = [doc_name] + int_section_ids
-                id_column_name = "section_id" # Use the correct column name
+                id_column_name = "section_id"  # Use the correct column name
             except ValueError:
-                 logger.error(f"Could not convert all section IDs to integers for doc '{doc_name}': {section_ids}. Check LLM output format.", exc_info=True)
-                 continue # Skip this document if IDs are not valid integers
+                logger.error(
+                    f"Could not convert all section IDs to integers for doc '{doc_name}': {section_ids}. Check LLM output format.",
+                    exc_info=True,
+                )
+                continue  # Skip this document if IDs are not valid integers
 
             with conn.cursor() as cur:
-                try: # Add try/except around DB execution
+                try:  # Add try/except around DB execution
                     sql_query = f"""
                         SELECT section_id, section_name, section_content
                         FROM apg_content
@@ -300,29 +310,44 @@ def fetch_section_content(
                     """
                     cur.execute(sql_query, query_params)
                     rows = cur.fetchall()
-                    logger.debug(f"Found {len(rows)} sections in DB for doc: '{doc_name}' with IDs: {int_section_ids}") # Log result count
+                    logger.debug(
+                        f"Found {len(rows)} sections in DB for doc: '{doc_name}' with IDs: {int_section_ids}"
+                    )  # Log result count
                     sections = []
                     for row in rows:
                         sections.append(
                             {
-                            # Keep section_name in the output for synthesis context
-                            "section_name": (row[1] if row[1] else f"Section {row[0]}"),
-                            "section_content": row[2],
+                                # Keep section_name in the output for synthesis context
+                                "section_name": (
+                                    row[1] if row[1] else f"Section {row[0]}"
+                                ),
+                                "section_content": row[2],
                             }
                         )
                     if sections:
                         result.append({"document_name": doc_name, "sections": sections})
-                    elif rows is None: # Check if fetchall returned None (might indicate error)
-                         logger.error(f"Database query returned None for doc: '{doc_name}' with IDs {int_section_ids}")
+                    elif (
+                        rows is None
+                    ):  # Check if fetchall returned None (might indicate error)
+                        logger.error(
+                            f"Database query returned None for doc: '{doc_name}' with IDs {int_section_ids}"
+                        )
                     # else: sections is empty and rows is not None (means query ran but found 0 matching rows)
-                         # logger.debug(f"Query executed successfully but found 0 matching sections for doc: '{doc_name}' with IDs {int_section_ids}") # Optional
+                    # logger.debug(f"Query executed successfully but found 0 matching sections for doc: '{doc_name}' with IDs {int_section_ids}") # Optional
 
                 except Exception as db_exec_err:
-                     logger.error(f"Database error executing query for doc '{doc_name}' with IDs {int_section_ids}: {db_exec_err}", exc_info=True)
+                    logger.error(
+                        f"Database error executing query for doc '{doc_name}' with IDs {int_section_ids}: {db_exec_err}",
+                        exc_info=True,
+                    )
 
-        logger.info(f"Retrieved CAPM content for {len(result)} documents from database") # This log remains correct
+        logger.info(
+            f"Retrieved CAPM content for {len(result)} documents from database"
+        )  # This log remains correct
     except Exception as e:
-        logger.error(f"Error during CAPM section content fetching loop: {str(e)}", exc_info=True)
+        logger.error(
+            f"Error during CAPM section content fetching loop: {str(e)}", exc_info=True
+        )
     finally:
         if conn:
             conn.close()
@@ -522,26 +547,30 @@ def select_relevant_sections(
 
         try:
             # Attempt to extract JSON block using regex
-            json_match = re.search(r'\{.*\}', response_str, re.DOTALL)
+            json_match = re.search(r"\{.*\}", response_str, re.DOTALL)
             if json_match:
                 json_str = json_match.group(0)
-                selected_sections = json.loads(json_str) # Parse the extracted string
+                selected_sections = json.loads(json_str)  # Parse the extracted string
             else:
                 # Log if no JSON block found
-                logger.error(f"Could not find JSON block in LLM response for section selection. Response: {response_str}")
+                logger.error(
+                    f"Could not find JSON block in LLM response for section selection. Response: {response_str}"
+                )
                 return {}
 
             # Validate the parsed structure (expecting dict[str, list[str]] where list contains section IDs)
             if isinstance(selected_sections, dict) and all(
                 isinstance(doc_name, str)
                 and isinstance(section_ids, list)
-                and all(isinstance(sid, str) for sid in section_ids) # Ensure IDs are strings
+                and all(
+                    isinstance(sid, str) for sid in section_ids
+                )  # Ensure IDs are strings
                 for doc_name, section_ids in selected_sections.items()
             ):
                 logger.info(f"LLM selected CAPM section IDs: {selected_sections}")
                 # Cast section IDs to the expected type if necessary, though string is fine for DB query
                 # For now, directly return the dict[str, list[str]]
-                return selected_sections # Return the dictionary mapping doc names to lists of section IDs
+                return selected_sections  # Return the dictionary mapping doc names to lists of section IDs
             else:
                 # Log the original response if structure is wrong after successful parse
                 logger.error(
@@ -549,11 +578,15 @@ def select_relevant_sections(
                 )
                 return {}
         except json.JSONDecodeError as e:
-             # Log the raw response string that failed parsing
-            logger.error(f"Failed to parse CAPM section selection LLM response as JSON. Error: {e}. Raw Response: {response_str}")
+            # Log the raw response string that failed parsing
+            logger.error(
+                f"Failed to parse CAPM section selection LLM response as JSON. Error: {e}. Raw Response: {response_str}"
+            )
             return {}
     except Exception as e:
-        logger.error(f"Error during LLM CAPM section selection: {str(e)}", exc_info=True) # Added exc_info for more detail
+        logger.error(
+            f"Error during LLM CAPM section selection: {str(e)}", exc_info=True
+        )  # Added exc_info for more detail
         return {}
 
 
@@ -765,8 +798,10 @@ def synthesize_response_and_status(
     elif success_count > 0 and error_count > 0:
         status_summary = f"⚠️ Found information from {success_count} document(s), but encountered errors processing {error_count} other(s)."
     elif success_count == 0 and error_count > 0:
-        status_summary = f"❌ Errors encountered while processing {error_count} document(s)."
-    else: # success_count == 0 and error_count == 0 (shouldn't happen if documents list is not empty, but handle defensively)
+        status_summary = (
+            f"❌ Errors encountered while processing {error_count} document(s)."
+        )
+    else:  # success_count == 0 and error_count == 0 (shouldn't happen if documents list is not empty, but handle defensively)
         status_summary = default_no_info_status
 
     return {
@@ -861,7 +896,9 @@ def query_database_sync(
             )
             # Removed redundant/confusing log line here
             if not section_selections:
-                logger.warning("LLM did not select any relevant sections.") # Added more specific warning
+                logger.warning(
+                    "LLM did not select any relevant sections."
+                )  # Added more specific warning
                 return {
                     "detailed_research": "LLM did not select any relevant sections from the CAPM documents based on the query.",
                     "status_summary": "📄 No relevant sections selected by LLM.",

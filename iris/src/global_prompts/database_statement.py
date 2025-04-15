@@ -102,9 +102,13 @@ The following databases are available for research:
 """
 
     # Group databases by type for better organization
-    internal_dbs = {k: v for k, v in AVAILABLE_DATABASES.items() if k.startswith("internal_")}
-    external_dbs = {k: v for k, v in AVAILABLE_DATABASES.items() if k.startswith("external_")}
-    
+    internal_dbs = {
+        k: v for k, v in AVAILABLE_DATABASES.items() if k.startswith("internal_")
+    }
+    external_dbs = {
+        k: v for k, v in AVAILABLE_DATABASES.items() if k.startswith("external_")
+    }
+
     # Add internal databases section
     statement += "<INTERNAL_DATABASES>\n"
     for db_name, db_info in internal_dbs.items():
@@ -118,7 +122,7 @@ The following databases are available for research:
 
 """
     statement += "</INTERNAL_DATABASES>\n\n"
-    
+
     # Add external databases section
     statement += "<EXTERNAL_DATABASES>\n"
     for db_name, db_info in external_dbs.items():
@@ -133,7 +137,7 @@ The following databases are available for research:
 """
     statement += "</EXTERNAL_DATABASES>\n"
     statement += "</AVAILABLE_DATABASES>"
-    
+
     return statement
 
 

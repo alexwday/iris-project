@@ -275,6 +275,7 @@ def _model_generator(
     from ..agents.agent_direct_response.response_from_conversation import (
         response_from_conversation,
     )
+
     # Renamed planner function
     from ..agents.agent_planner.planner import create_database_selection_plan
     from ..agents.agent_router.router import get_routing_decision
@@ -540,9 +541,9 @@ def _model_generator(
                     )
                     process_monitor.add_stage_details(
                         "planner",
-                        database_count=len(selected_databases), # Use new variable
-                        selected_databases=selected_databases, # Log selected DBs
-                        decision=db_selection_plan, # Log the new plan format
+                        database_count=len(selected_databases),  # Use new variable
+                        selected_databases=selected_databases,  # Log selected DBs
+                        decision=db_selection_plan,  # Log the new plan format
                     )
 
                 # --- Legacy Debug: Record Planner Decision ---
@@ -553,7 +554,7 @@ def _model_generator(
                     debug_data["decisions"].append(
                         {
                             "stage": "planner",
-                            "decision": db_selection_plan, # Log the new plan format
+                            "decision": db_selection_plan,  # Log the new plan format
                             "timestamp": datetime.now().isoformat(),
                             "token_usage": planner_token_usage.copy(),
                         }
@@ -573,7 +574,7 @@ def _model_generator(
                 # Get display names for selected databases
                 selected_db_display_names = [
                     available_databases.get(db_name, {}).get("name", db_name)
-                    for db_name in selected_databases # Use new variable
+                    for db_name in selected_databases  # Use new variable
                 ]
 
                 if selected_db_display_names:
@@ -595,8 +596,10 @@ def _model_generator(
 
                 # --- Parallel Query Execution ---
                 # tasks_with_details = [] # No longer needed?
-                if not selected_databases: # Use new variable
-                    logger.warning("Database selection plan is empty, skipping database search.")
+                if not selected_databases:  # Use new variable
+                    logger.warning(
+                        "Database selection plan is empty, skipping database search."
+                    )
                 else:
                     # --- Concurrent Query Execution using ThreadPoolExecutor ---
                     logger.info(
@@ -624,18 +627,20 @@ def _model_generator(
                             )
                             # Introduce a 1-second delay between starting each query (except the first)
                             if i > 0:
-                                logger.debug(f"Waiting 1 second before submitting query {i+1}...")
+                                logger.debug(
+                                    f"Waiting 1 second before submitting query {i+1}..."
+                                )
                                 time.sleep(1)
                             # Submit the worker function to the executor
                             future = executor.submit(
                                 _execute_query_worker,
                                 db_name,
-                                query_text, # Pass full research statement
+                                query_text,  # Pass full research statement
                                 scope,
                                 token,
                                 db_display_name,
                                 i,
-                                len(selected_databases), # Use count of selected DBs
+                                len(selected_databases),  # Use count of selected DBs
                                 debug_mode,
                             )
                             futures.append(future)
@@ -773,7 +778,7 @@ def _model_generator(
 
                             # Yield the status block regardless of success/failure (Removed Query Text)
                             # Removed leading \n\n---\n to prevent double rule after plan
-                            status_block = f"**Database:** {db_display_name}\n**Status:** {status_summary}\n---\n" # Added \n at the end
+                            status_block = f"**Database:** {db_display_name}\n**Status:** {status_summary}\n---\n"  # Added \n at the end
                             yield status_block
                             # --- End Yield and Aggregation ---
 

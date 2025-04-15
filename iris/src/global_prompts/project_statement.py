@@ -22,8 +22,9 @@ def get_project_statement() -> str:
     """
     try:
         from datetime import datetime
+
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        
+
         statement = f"""<PROJECT_CONTEXT timestamp="{current_time}">
 This project serves RBC's Accounting Policy Group by implementing an intelligent research and response system for accounting policy inquiries. The system combines comprehensive internal and external accounting policy documentation with an autonomous agent-based RAG (Retrieval-Augmented Generation) process. Users can engage in natural conversations about accounting policies, and the system will independently research and generate responses as needed.
 

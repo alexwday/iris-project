@@ -154,23 +154,18 @@ def construct_system_prompt():
         database_statement,
         restrictions_statement,
         "</CONTEXT>",
-        
         "<OBJECTIVE>",
         PLANNER_OBJECTIVE,
         "</OBJECTIVE>",
-        
         "<STYLE>",
         PLANNER_STYLE,
         "</STYLE>",
-        
         "<TONE>",
         PLANNER_TONE,
         "</TONE>",
-        
         "<AUDIENCE>",
         PLANNER_AUDIENCE,
         "</AUDIENCE>",
-        
         f"You are {PLANNER_ROLE}.",
         PLANNER_TASK,
     ]
@@ -187,21 +182,23 @@ TOOL_DEFINITIONS = [
     {
         "type": "function",
         "function": {
-            "name": "submit_database_selection_plan", # Renamed tool
+            "name": "submit_database_selection_plan",  # Renamed tool
             "description": "Submit a plan of selected databases based on the research statement.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "databases": { # Renamed parameter
+                    "databases": {  # Renamed parameter
                         "type": "array",
                         "description": "The list of database names to query using the full research statement.",
                         "items": {
                             "type": "string",
                             "description": "The name of the database to query.",
-                            "enum": list(AVAILABLE_DATABASES.keys()), # Use enum for validation
+                            "enum": list(
+                                AVAILABLE_DATABASES.keys()
+                            ),  # Use enum for validation
                         },
                         "minItems": 1,
-                        "maxItems": 5
+                        "maxItems": 5,
                     }
                 },
                 "required": ["databases"],

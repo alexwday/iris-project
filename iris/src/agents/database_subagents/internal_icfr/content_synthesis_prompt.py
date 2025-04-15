@@ -72,7 +72,6 @@ def get_content_synthesis_prompt(user_query: str, formatted_documents: str) -> s
 
     prompt_parts = [
         f"You are {SUBAGENT_ROLE}.",
-
         "<CONTEXT>",
         "You are analyzing sections from the internal ICFR (Internal Control over Financial Reporting) documents.",
         "Below is essential context about the project, available data, current fiscal period, and restrictions:",
@@ -81,31 +80,24 @@ def get_content_synthesis_prompt(user_query: str, formatted_documents: str) -> s
         fiscal_statement,
         restrictions_statement,
         "</CONTEXT>",
-
         "<OBJECTIVE>",
         SUBAGENT_OBJECTIVE,
         "</OBJECTIVE>",
-
         "<STYLE>",
         SUBAGENT_STYLE,
         "</STYLE>",
-
         "<TONE>",
         SUBAGENT_TONE,
         "</TONE>",
-
         "<AUDIENCE>",
         SUBAGENT_AUDIENCE,
         "</AUDIENCE>",
-
         "<TASK>",
         "Your goal is to provide BOTH a concise status summary flag AND a detailed, structured internal research report based *only* on the provided document sections, formatted for the Summarizer Agent.",
-
         "<INPUT_DOCUMENTS>",
         f"<USER_QUERY>{user_query}</USER_QUERY>",
         f"<DOCUMENT_SECTIONS>{formatted_documents}</DOCUMENT_SECTIONS>",
         "</INPUT_DOCUMENTS>",
-
         "<INSTRUCTIONS>",
         "1. **Analyze Relevance:** Carefully read the user query and the provided ICFR document section content. Determine how well the content addresses the query.",
         "2. **Generate Status Summary Flag:** Based on your analysis, provide ONLY the single-line status summary flag indicating relevance and completeness. Choose ONE:",
@@ -114,27 +106,28 @@ def get_content_synthesis_prompt(user_query: str, formatted_documents: str) -> s
         "   * `📄 Documents sections found, but they do not contain relevant information for this query.`",
         "   * `⚠️ Conflicting information found across document sections.` (Explain conflicts in the detailed report)",
         "   * `❓ Query is ambiguous based on document section content.` (Explain ambiguity in the detailed report)",
+        "   **Strict Adherence to Data Sourcing:** Remember to strictly follow the `<CRITICAL_DATA_SOURCING>` rules defined in the global `<RESTRICTIONS_AND_GUIDELINES>`. Your report MUST be derived *exclusively* from the text within the `<DOCUMENT_SECTIONS>`. Do NOT introduce any facts, concepts, standard names/numbers, definitions, interpretations, or any external knowledge not explicitly present *within* the provided sections.",
         "3. **Generate Detailed Research Report:** Synthesize a comprehensive internal report using *only* information from the provided document sections.",
         "   * Structure the report clearly using Markdown (e.g., `## Key Findings`, `## Detailed Analysis`, `## Supporting Details`, `## Conflicts/Gaps`).",
-        "   * **CRITICAL: Cite specific documents AND section names/numbers accurately *inline* within the report body, immediately following the information they support (e.g., \"... policy requires X (Source: [Document Name], Section: [Section Name/Number])\"). Use the most specific section identifier available (name or number).**",
+        '   * **CRITICAL: Cite specific documents AND section names/numbers accurately *inline* within the report body, immediately following the information they support (e.g., "... policy requires X (Source: [Document Name], Section: [Section Name/Number])"). Use the most specific section identifier available (name or number).**',
         "   * If information is conflicting, present all sides clearly.",
         "   * If relevant information is missing from the provided sections, state that clearly.",
         "   * Optimize this report for the Summarizer Agent (another AI) to read and understand easily.",
         "   * Adhere strictly to the <RESTRICTIONS_AND_GUIDELINES> provided in the <CONTEXT>.",
         "4. **Format Output:** Prepare the Status Summary Flag and the Detailed Research Report for the tool call.",
         "</INSTRUCTIONS>",
-
         "<OUTPUT_SPECIFICATION>",
         "You MUST call the `synthesize_research_findings` tool.",
         "Provide the generated status summary flag (as a single string) and the full detailed research report (as a markdown string) as arguments.",
         "Do not include any other text, preamble, or explanation in your response outside the tool call.",
         "If no relevant document sections were provided or found, the status summary flag should reflect that (`📄`), and the detailed research report argument should state that no analysis is possible based on the provided sections.",
-        SUBAGENT_RESPONSE_FORMAT, # Reinforce the expected output format
+        SUBAGENT_RESPONSE_FORMAT,  # Reinforce the expected output format
         "</OUTPUT_SPECIFICATION>",
         "</TASK>",
     ]
 
     return "\n\n".join(prompt_parts)
+
 
 # Note: ICFR doesn't seem to have an 'individual file synthesis' prompt like CAPM.
 # If one is needed later, it should be added and potentially updated similarly.

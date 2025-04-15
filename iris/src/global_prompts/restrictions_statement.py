@@ -93,7 +93,7 @@ def get_quality_guidelines() -> str:
 def get_confidence_signaling() -> str:
     """
     Generate guidelines for confidence signaling in responses.
-    
+
     Returns:
         str: Formatted confidence signaling guidelines
     """

@@ -268,23 +268,18 @@ def construct_system_prompt():
         database_statement,
         restrictions_statement,
         "</CONTEXT>",
-        
         "<OBJECTIVE>",
         ROUTER_OBJECTIVE,
         "</OBJECTIVE>",
-        
         "<STYLE>",
         ROUTER_STYLE,
         "</STYLE>",
-        
         "<TONE>",
         ROUTER_TONE,
         "</TONE>",
-        
         "<AUDIENCE>",
         ROUTER_AUDIENCE,
         "</AUDIENCE>",
-        
         f"You are {ROUTER_ROLE}.",
         ROUTER_TASK,
     ]

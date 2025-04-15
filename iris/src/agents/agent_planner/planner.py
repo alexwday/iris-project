@@ -94,7 +94,10 @@ def create_database_selection_plan(research_statement, token, is_continuation=Fa
             max_tokens=MAX_TOKENS,
             temperature=TEMPERATURE,
             tools=TOOL_DEFINITIONS,
-            tool_choice={"type": "function", "function": {"name": PLANNER_TOOL_NAME}}, # Use new tool name
+            tool_choice={
+                "type": "function",
+                "function": {"name": PLANNER_TOOL_NAME},
+            },  # Use new tool name
             stream=False,
             prompt_token_cost=PROMPT_TOKEN_COST,
             completion_token_cost=COMPLETION_TOKEN_COST,
@@ -133,15 +136,15 @@ def create_database_selection_plan(research_statement, token, is_continuation=Fa
         validated_databases = []
         for i, db_name in enumerate(selected_databases):
             if not isinstance(db_name, str):
-                 raise PlannerError(f"Database entry {i+1} is not a string: {db_name}")
+                raise PlannerError(f"Database entry {i+1} is not a string: {db_name}")
             if db_name not in AVAILABLE_DATABASES:
-                raise PlannerError(
-                    f"Selected database {i+1} is unknown: {db_name}"
-                )
+                raise PlannerError(f"Selected database {i+1} is unknown: {db_name}")
             validated_databases.append(db_name)
 
         # Log the database selection plan
-        logger.info(f"Database selection plan created with {len(validated_databases)} databases: {validated_databases}")
+        logger.info(
+            f"Database selection plan created with {len(validated_databases)} databases: {validated_databases}"
+        )
 
         return {"databases": validated_databases}
 

@@ -202,23 +202,18 @@ def construct_system_prompt():
         database_statement,
         restrictions_statement,
         "</CONTEXT>",
-        
         "<OBJECTIVE>",
         RESPONSE_OBJECTIVE,
         "</OBJECTIVE>",
-        
         "<STYLE>",
         RESPONSE_STYLE,
         "</STYLE>",
-        
         "<TONE>",
         RESPONSE_TONE,
         "</TONE>",
-        
         "<AUDIENCE>",
         RESPONSE_AUDIENCE,
         "</AUDIENCE>",
-        
         f"You are {RESPONSE_ROLE}.",
         RESPONSE_TASK,
     ]
