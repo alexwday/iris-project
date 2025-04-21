@@ -47,7 +47,7 @@ The internal Summarizer Agent, which will use your report to construct the final
 """
 
 SUBAGENT_RESPONSE_FORMAT = """
-A mandatory tool call to `synthesize_ey_guidance_findings` containing:
+A mandatory tool call to `synthesize_research_findings` containing:
 1. `status_summary`: A single-line status flag (e.g., ✅, ℹ️, 📄, ⚠️, ❓).
 2. `detailed_research_report`: A comprehensive Markdown string containing the synthesized findings with inline citations.
 """
@@ -56,7 +56,7 @@ A mandatory tool call to `synthesize_ey_guidance_findings` containing:
 SYNTHESIS_TOOL_SCHEMA = {
     "type": "function",
     "function": {
-        "name": "synthesize_ey_guidance_findings",
+        "name": "synthesize_research_findings", # Use generic name expected by calling code
         "description": "Synthesizes research findings from provided EY guidance context cards and generates a status summary.",
         "parameters": {
             "type": "object",
@@ -151,7 +151,7 @@ def get_content_synthesis_prompt(query: str, formatted_cards: str) -> str:
         "4. **Format Output:** Prepare the Status Summary Flag and the Detailed Research Report for the tool call.",
         "</INSTRUCTIONS>",
         "<OUTPUT_SPECIFICATION>",
-        "You MUST call the `synthesize_ey_guidance_findings` tool.",
+        "You MUST call the `synthesize_research_findings` tool.", # Corrected tool name
         "Provide the generated status summary flag (as a single string) and the full detailed research report (as a markdown string with inline citations) as arguments.",
         "Do not include any other text, preamble, or explanation in your response outside the tool call.",
         "If no relevant context cards were provided or found, the status summary flag should reflect that (`📄`), and the detailed research report argument should state that no analysis is possible based on the provided cards.",
