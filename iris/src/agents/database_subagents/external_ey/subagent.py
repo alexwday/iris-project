@@ -14,7 +14,7 @@ import logging
 import time
 import traceback
 import itertools
-from typing import Any, Dict, List, Optional, Tuple, Union, cast
+from typing import Any, Dict, List, Optional, Tuple, Union, cast, Union
 
 import psycopg2
 import psycopg2.extras  # For DictCursor
@@ -28,14 +28,7 @@ except ImportError:
         "WARNING: tabulate not installed. Log tables will be basic."
         " `pip install tabulate`"
     )
-try:
-    import tiktoken
-except ImportError:
-    tiktoken = None
-    print(
-        "WARNING: tiktoken not installed. Token counts will be estimated (chars/4)."
-        " `pip install tiktoken`"
-    )
+# Removed tiktoken import attempt
 
 
 from ....chat_model.model_settings import ENVIRONMENT, get_model_config
@@ -76,39 +69,13 @@ GAP_FILL_MAX_SEQUENCE_GAP = 8
 MAX_RESPONSE_TOKENS = 4000
 RESPONSE_TEMPERATURE = 0.7
 
-# --- Tokenizer Helper ---
-_TOKENIZER = None
-if tiktoken:
-    try:
-        _TOKENIZER = tiktoken.get_encoding("cl100k_base")
-        logger.info("Using 'cl100k_base' tokenizer for token counting.")
-    except Exception as e:
-        logger.warning(f"Failed tokenizer init: {e}. Estimating tokens.")
-        _TOKENIZER = None
-
-
-def count_tokens(text: str) -> int:
-    """Counts tokens using tiktoken or estimates if unavailable/fails."""
-    if not text:
-        return 0
-    if _TOKENIZER:
-        try:
-            return len(_TOKENIZER.encode(text))
-        except Exception as e:
-            logger.warning(
-                f"tiktoken encode error: {e}. Estimating tokens for this text."
-            )
-            return len(text) // 4  # Estimate
-    else:
-        return len(text) // 4  # Estimate
-
-
 # --- Helper Functions (Adapted from example.py) ---
+# Removed Tokenizer Helper section
 
 
 def _generate_query_embedding(
     query: str, token: Optional[str] = None
-) -> list[float] | None:
+) -> Union[List[float], None]:
     """Generates embedding for the query string using call_llm."""
     logger.info(f"Generating embedding for query: '{query}'...")
     try:
@@ -155,7 +122,7 @@ def _generate_query_embedding(
 
 
 def _perform_vector_search(
-    cursor, query_embedding: list[float], initial_k: int, doc_id: str | None = None
+    cursor, query_embedding: List[float], initial_k: int, doc_id: Optional[str] = None
 ) -> List[Dict[str, Any]]:
     """
     Performs vector search.
@@ -403,8 +370,8 @@ def _rerank_by_importance(
 
 
 def _expand_sections_by_token_count(
-    cursor, results: list[dict], top_k_rank: int, top_k_tokens: int, general_tokens: int
-) -> tuple[list[dict | list[dict]], set]:
+    cursor, results: List[dict], top_k_rank: int, top_k_tokens: int, general_tokens: int
+) -> Tuple[List[Union[dict, List[dict]]], set]:
     """
     Expands chunks belonging to sections below token thresholds by fetching all chunks for that section.
     Returns processed list (with groups) and set of added chunk IDs.
@@ -524,8 +491,8 @@ def _expand_sections_by_token_count(
 
 
 def _fill_sequence_gaps(
-    cursor, results: list[dict | list[dict]], max_seq_gap: int
-) -> tuple[list[dict | list[dict]], set]:
+    cursor, results: List[Union[dict, List[dict]]], max_seq_gap: int
+) -> Tuple[List[Union[dict, List[dict]]], set]:
     """
     Identifies and fills small sequence number gaps between consecutive results.
     Returns updated list and set of added chunk IDs.
@@ -626,12 +593,12 @@ def _fill_sequence_gaps(
     return final_results_with_gaps, added_chunk_ids
 
 
-def _format_chunks_as_cards(results: list[dict | list[dict]]) -> str:
+def _format_chunks_as_cards(results: List[Union[dict, List[dict]]]) -> str:
     """Formats final results (chunks and groups) into cards for the LLM."""
     logger.info("Formatting Final Results as Cards for LLM")
     cards = []
     final_item_count = 0
-    total_context_tokens = 0
+    # Removed token counting initialization
 
     # Sort results by sequence number before formatting
     # Use a helper to get the minimum sequence number for sorting
@@ -659,7 +626,7 @@ def _format_chunks_as_cards(results: list[dict | list[dict]]) -> str:
         card_parts = []
         content_parts = []
         record_for_metadata = None
-        item_token_count = 0
+        # Removed item_token_count initialization
 
         if isinstance(item, dict) and item.get('type') == 'group':
             if not item.get('chunks'): continue
@@ -668,7 +635,7 @@ def _format_chunks_as_cards(results: list[dict | list[dict]]) -> str:
             for chunk in item['chunks']:
                  content = chunk.get('content', '')
                  content_parts.append(content)
-                 item_token_count += count_tokens(content)
+                 # Removed token counting call
             content = "\n\n".join(filter(None, content_parts))
             logger.debug(f"Formatting Card {i+1}: Group of {len(item['chunks'])} chunks (Section: {record_for_metadata.get('section_hierarchy', 'N/A')})")
 
@@ -676,7 +643,7 @@ def _format_chunks_as_cards(results: list[dict | list[dict]]) -> str:
              record_for_metadata = item
              card_parts.append(f"--- CARD {i+1} ---")
              content = record_for_metadata.get('content', '')
-             item_token_count = count_tokens(content)
+             # Removed token counting call
              logger.debug(f"Formatting Card {i+1}: Single Chunk ID {record_for_metadata.get('id', 'N/A')}")
         else:
             logger.warning(f"Skipping unexpected item type during formatting: {type(item)}")
@@ -708,9 +675,9 @@ def _format_chunks_as_cards(results: list[dict | list[dict]]) -> str:
 
         cards.append("\n".join(card_parts))
         final_item_count += 1
-        total_context_tokens += item_token_count
+        # Removed token counting accumulation
 
-    logger.info(f"Formatted {final_item_count} cards. Estimated total context tokens: {total_context_tokens}")
+    logger.info(f"Formatted {final_item_count} cards.") # Removed token count from log
     return "\n\n" + "\n\n".join(cards) + "\n\n"
 
 
