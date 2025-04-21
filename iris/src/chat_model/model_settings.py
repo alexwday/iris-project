@@ -66,6 +66,18 @@ MODELS = {
             "completion_token_cost": 0.00003,
         },
     },
+    "embedding": {
+        "rbc": {
+            "name": "text-embedding-3-large",
+            "prompt_token_cost": 0.0001,  # Placeholder cost
+            "completion_token_cost": 0.0001,  # Placeholder cost (embeddings usually only have input cost)
+        },
+        "local": {
+            "name": "text-embedding-3-large",
+            "prompt_token_cost": 0.00000013, # Example cost for OpenAI text-embedding-3-large ($0.13 / 1M tokens)
+            "completion_token_cost": 0.0, # Embeddings typically don't have completion cost
+        },
+    },
 }
 
 # Request settings
