@@ -141,7 +141,7 @@ def _perform_vector_search(
             SELECT
                 c.*, -- Select all columns from the target table
                 1 - (c.embedding <=> %s::vector) AS vector_score -- Calculate vector score
-            FROM {TARGET_TABLE} c
+            FROM "{TARGET_TABLE}" c -- Quote the table name
             WHERE 1=1
             {" AND c.document_id = %s" if doc_id else ""}
             ORDER BY vector_score DESC -- Order by vector score
