@@ -1,10 +1,58 @@
 # external_ey/content_synthesis_prompt.py
 """
-Prompts and tool schemas for the External EY Guidance subagent's
-content synthesis step.
+Prompt templates for synthesizing content AND status from retrieved EY guidance documents.
+
+This module contains prompts used to guide the LLM in synthesizing
+content from multiple EY guidance context cards and providing a status summary.
+
+This version implements advanced prompt engineering techniques:
+1. CO-STAR framework (Context, Objective, Style, Tone, Audience, Response Format)
+2. Sectioning with XML-style delimiters
+3. Inclusion of global context (Project, Database, Fiscal, Restrictions)
 """
 
-# Define the tool schema for research synthesis, similar to other subagents
+from ....global_prompts.project_statement import get_project_statement
+from ....global_prompts.database_statement import get_database_statement
+from ....global_prompts.fiscal_calendar import get_fiscal_statement
+from ....global_prompts.restrictions_statement import get_restrictions_statement
+
+# Define the subagent role
+SUBAGENT_ROLE = "an expert research assistant specializing in analyzing external EY accounting guidance documents"
+
+# CO-STAR Framework Components
+SUBAGENT_OBJECTIVE = """
+To analyze provided EY guidance context cards against a user query and generate an internal research report optimized for the Summarizer agent.
+Your objective is to:
+1. Determine the relevance of the provided context card content to the user query.
+2. Generate a concise status flag summarizing the findings' relevance.
+3. Synthesize a detailed, structured research report in Markdown format using ONLY information from the provided context cards.
+4. **CRITICAL:** Include accurate citations *inline* within the report body, immediately following the information they support. Use the specific fields from the context cards: `Chapter`, `Section Title`, `Section Hierarchy`, `Standard`, `Standard Codes`. Format citations like: `(Source: EY Guidance, Chapter: [Chapter Name], Section: [Section Title/Hierarchy], Standard: [Standard], Code: [Standard Codes])`. Use the most specific location identifier available (Section Title or Hierarchy). Include Standard/Code if relevant to the cited point.
+5. Ensure the report is optimized for consumption by another AI agent (the Summarizer).
+6. Adhere strictly to all compliance restrictions.
+"""
+
+SUBAGENT_STYLE = """
+Analytical and factual.
+Focus on precise extraction and clear presentation of information from the source context cards.
+Structure the report logically with clear headings (e.g., ## Key Findings, ## Detailed Analysis).
+"""
+
+SUBAGENT_TONE = """
+Objective and neutral.
+Report findings accurately, including any limitations or conflicts in the source material.
+"""
+
+SUBAGENT_AUDIENCE = """
+The internal Summarizer Agent, which will use your report to construct the final user-facing response.
+"""
+
+SUBAGENT_RESPONSE_FORMAT = """
+A mandatory tool call to `synthesize_ey_guidance_findings` containing:
+1. `status_summary`: A single-line status flag (e.g., ✅, ℹ️, 📄, ⚠️, ❓).
+2. `detailed_research_report`: A comprehensive Markdown string containing the synthesized findings with inline citations.
+"""
+
+# Define the tool schema for research synthesis
 SYNTHESIS_TOOL_SCHEMA = {
     "type": "function",
     "function": {
@@ -15,14 +63,14 @@ SYNTHESIS_TOOL_SCHEMA = {
             "properties": {
                 "status_summary": {
                     "type": "string",
-                    "description": "Concise status summary (1 sentence) indicating finding relevance (e.g., '✅ Found direct answer in EY Guidance.', '📄 No relevant info found in EY Guidance.').",
+                    "description": "Concise status summary flag (✅, ℹ️, 📄, ⚠️, ❓) indicating finding relevance based *only* on the provided EY guidance context cards.",
                 },
-                "detailed_research": {
+                "detailed_research_report": { # Renamed from detailed_research
                     "type": "string",
-                    "description": "Detailed, structured markdown report synthesizing information from EY guidance context cards, including citations (Chapter and Section Title/Hierarchy).",
+                    "description": "Detailed, structured markdown report synthesizing information *only* from EY guidance context cards, including mandatory inline citations (Chapter, Section Title/Hierarchy, Standard, Standard Codes). Optimized for the Summarizer Agent.",
                 },
             },
-            "required": ["status_summary", "detailed_research"],
+            "required": ["status_summary", "detailed_research_report"],
         },
     },
 }
@@ -31,7 +79,7 @@ SYNTHESIS_TOOL_SCHEMA = {
 def get_content_synthesis_prompt(query: str, formatted_cards: str) -> str:
     """
     Generates the user prompt for the final content synthesis LLM call,
-    instructing it to use the provided cards and cite sources.
+    instructing it to use the provided cards, cite sources inline, and generate a status flag.
 
     Args:
         query: The user's original query.
@@ -40,40 +88,76 @@ def get_content_synthesis_prompt(query: str, formatted_cards: str) -> str:
     Returns:
         The user prompt string.
     """
+    # Fetch all global context statements
+    project_statement = get_project_statement()
+    database_statement = get_database_statement()
+    fiscal_statement = get_fiscal_statement()
+    restrictions_statement = get_restrictions_statement()
 
-    # System Message (Implicitly handled by call_llm structure, but defined here for clarity)
-    # Note: The actual system message might be set globally or within call_llm.
-    # This prompt focuses on the user message content.
-    _system_message_guide = """You are a specialized accounting research assistant with expertise in IFRS and US GAAP standards, specifically analyzing EY guidance materials.
-Your task is to answer accounting questions based ONLY on the information provided in the context cards below.
-Each card represents a relevant piece of text from the source EY guidance document. Some cards might represent a reconstructed section containing multiple original text chunks.
+    prompt_parts = [
+        f"You are {SUBAGENT_ROLE}.",
+        "<CONTEXT>",
+        "You are analyzing context cards derived from external EY accounting guidance documents.",
+        "Each card represents a relevant piece of text from the source EY guidance document.",
+        "Context Card Fields Available:",
+        "- Chapter: The name of the chapter the text belongs to.",
+        "- Section Title: The title of the specific section.",
+        "- Section Hierarchy: The structural path to the section (e.g., 'Chapter 1 > Part A > Section 1.1').",
+        "- Standard: The primary accounting standard discussed (e.g., IFRS 16, ASC 842).",
+        "- Standard Codes: Specific codes or paragraph references within the standard.",
+        "- Chapter Tags: Relevant tags associated with the chapter.",
+        "- Content: The actual text content from the source document.",
+        "Below is essential context about the project, available data, current fiscal period, and restrictions:",
+        project_statement,
+        database_statement,
+        fiscal_statement,
+        restrictions_statement,
+        "</CONTEXT>",
+        "<OBJECTIVE>",
+        SUBAGENT_OBJECTIVE,
+        "</OBJECTIVE>",
+        "<STYLE>",
+        SUBAGENT_STYLE,
+        "</STYLE>",
+        "<TONE>",
+        SUBAGENT_TONE,
+        "</TONE>",
+        "<AUDIENCE>",
+        SUBAGENT_AUDIENCE,
+        "</AUDIENCE>",
+        "<TASK>",
+        "Your goal is to provide BOTH a concise status summary flag AND a detailed, structured internal research report based *only* on the provided EY guidance context cards, formatted for the Summarizer Agent.",
+        "<INPUT_DOCUMENTS>",
+        f"<USER_QUERY>{query}</USER_QUERY>",
+        f"<CONTEXT_CARDS>{formatted_cards}</CONTEXT_CARDS>",
+        "</INPUT_DOCUMENTS>",
+        "<INSTRUCTIONS>",
+        "1. **Analyze Relevance:** Carefully read the user query and the 'Content' field within the provided EY guidance context cards. Determine how well the content addresses the query.",
+        "2. **Generate Status Summary Flag:** Based on your analysis, provide ONLY the single-line status summary flag indicating relevance and completeness. Choose ONE:",
+        "   * `✅ Found information directly addressing the query in the EY cards.`",
+        "   * `ℹ️ Found related contextual information in the EY cards, but not a direct answer.`",
+        "   * `📄 EY cards found, but they do not contain relevant information for this query.`",
+        "   * `⚠️ Conflicting information found across EY cards.` (Explain conflicts in the detailed report)",
+        "   * `❓ Query is ambiguous based on EY card content.` (Explain ambiguity in the detailed report)",
+        "   **Strict Adherence to Data Sourcing:** Remember to strictly follow the `<CRITICAL_DATA_SOURCING>` rules defined in the global `<RESTRICTIONS_AND_GUIDELINES>`. Your report MUST be derived *exclusively* from the text within the 'Content' field of the `<CONTEXT_CARDS>`. Do NOT introduce any facts, concepts, standard names/numbers, definitions, interpretations, or any external knowledge not explicitly present *within* the provided card content.",
+        "3. **Generate Detailed Research Report:** Synthesize a comprehensive internal report using *only* information from the 'Content' field of the provided context cards.",
+        "   * Structure the report clearly using Markdown (e.g., `## Key Findings`, `## Detailed Analysis`, `## Supporting Details`, `## Conflicts/Gaps`).",
+        '   * **CRITICAL CITATION: Cite sources accurately *inline* within the report body, immediately following the information they support. Use the fields from the card(s) you used: `Chapter`, `Section Title`, `Section Hierarchy`, `Standard`, `Standard Codes`. Format citations like: `(Source: EY Guidance, Chapter: [Chapter Name], Section: [Section Title/Hierarchy], Standard: [Standard], Code: [Standard Codes])`. Use the most specific location identifier (Section Title or Hierarchy). Include Standard/Code if relevant to the cited point.**',
+        "   * If multiple cards support a point, synthesize the information and cite all relevant sources clearly.",
+        "   * If information is conflicting, present all sides clearly with their respective citations.",
+        "   * If relevant information is missing from the provided cards, state that clearly.",
+        "   * Optimize this report for the Summarizer Agent (another AI) to read and understand easily.",
+        "   * Adhere strictly to the <RESTRICTIONS_AND_GUIDELINES> provided in the <CONTEXT>.",
+        "4. **Format Output:** Prepare the Status Summary Flag and the Detailed Research Report for the tool call.",
+        "</INSTRUCTIONS>",
+        "<OUTPUT_SPECIFICATION>",
+        "You MUST call the `synthesize_ey_guidance_findings` tool.",
+        "Provide the generated status summary flag (as a single string) and the full detailed research report (as a markdown string with inline citations) as arguments.",
+        "Do not include any other text, preamble, or explanation in your response outside the tool call.",
+        "If no relevant context cards were provided or found, the status summary flag should reflect that (`📄`), and the detailed research report argument should state that no analysis is possible based on the provided cards.",
+        SUBAGENT_RESPONSE_FORMAT,  # Reinforce the expected output format
+        "</OUTPUT_SPECIFICATION>",
+        "</TASK>",
+    ]
 
-Context Card Fields:
-- Chapter: The name of the chapter the text belongs to.
-- Section Title: The title of the specific section.
-- Section Hierarchy: The structural path to the section (e.g., "Chapter 1 > Part A > Section 1.1").
-- Standard: The primary accounting standard discussed (e.g., IFRS 16, ASC 842).
-- Standard Codes: Specific codes or paragraph references within the standard.
-- Chapter Tags: Relevant tags associated with the chapter.
-- Content: The actual text content from the source document.
-
-Instructions for Answering:
-1. Rely EXCLUSIVELY on the "Content" provided in the cards. DO NOT use your external knowledge or training data.
-2. Synthesize the information from the relevant cards to provide a comprehensive answer to the user's question.
-3. You MUST cite your sources for every significant point or piece of information. Use the "Chapter" and "Section Title" or "Section Hierarchy" from the card(s) you used. Format citations clearly, e.g., [Source: Chapter Name, Section Title] or [Source: Section Hierarchy].
-4. If multiple cards support a point, cite all relevant sources.
-5. If the provided cards do not contain sufficient information to fully answer the question, clearly state what information is missing or cannot be determined from the context. Do not speculate or fabricate.
-6. Structure your response logically, using headings or bullet points if helpful.
-7. Provide a concise summary (2-3 sentences) at the end of the detailed research.
-
-Remember: Accuracy and strict adherence to the provided context with proper citations are paramount. Use the provided tool to structure your response."""
-
-    # User Message
-    user_message = f"""User Question: {query}
-
-Context Cards from EY Guidance:
-{formatted_cards}
----
-Based ONLY on the context cards provided above, please answer the user's question using the 'synthesize_ey_guidance_findings' tool. Ensure your detailed research includes clear citations for each point, referencing the Chapter, Section Title, or Section Hierarchy as appropriate."""
-
-    return user_message
+    return "\n\n".join(prompt_parts)

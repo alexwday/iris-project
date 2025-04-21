@@ -49,7 +49,7 @@ logger = logging.getLogger(__name__)
 
 # --- Configuration Constants ---
 DATABASE_NAME = "external_ey"
-TARGET_TABLE = "iris-textbook-database"  # Updated table name
+TARGET_TABLE = "iris_textbook_database"  # Corrected table name
 
 # Model Capabilities
 EMBEDDING_MODEL_CAPABILITY = "embedding"
@@ -141,7 +141,7 @@ def _perform_vector_search(
             SELECT
                 c.*, -- Select all columns from the target table
                 1 - (c.embedding <=> %s::vector) AS vector_score -- Calculate vector score
-            FROM "{TARGET_TABLE}" c -- Quote the table name
+            FROM {TARGET_TABLE} c -- Removed quotes, no longer needed
             WHERE 1=1
             {" AND c.document_id = %s" if doc_id else ""}
             ORDER BY vector_score DESC -- Order by vector score
