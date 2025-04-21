@@ -214,8 +214,11 @@ def call_llm(
     if "timeout" not in params:
         params["timeout"] = REQUEST_TIMEOUT
 
-    # Handle streaming with usage tracking
-    is_streaming = params.get("stream", False)
+    # Check if this is an embedding request
+    is_embedding = params.pop("is_embedding", False) # Remove flag from params
+
+    # Handle streaming with usage tracking (only for chat completions)
+    is_streaming = params.get("stream", False) if not is_embedding else False
     if is_streaming:
         # Ensure stream_options with include_usage is set
         stream_options = params.get("stream_options", {})
@@ -251,18 +254,37 @@ def call_llm(
                 if k not in ["messages", "tools", "tool_choice"]
             }
             logger.info(
-                f"API call parameters (excluding message content): {safe_params}"
+                f"API call parameters (excluding message/input content): {safe_params}"
             )
 
-            # Make the API call
-            api_response = client.chat.completions.create(**params)
+            # --- Make the API call based on type ---
+            if is_embedding:
+                # Extract embedding-specific parameters
+                embedding_params = {
+                    "input": params.get("input"),
+                    "model": params.get("model"),
+                    "dimensions": params.get("dimensions"),
+                    "timeout": params.get("timeout", REQUEST_TIMEOUT),
+                    # Add other relevant params if needed, e.g., encoding_format
+                }
+                # Filter out None values
+                embedding_params = {k: v for k, v in embedding_params.items() if v is not None}
+                logger.info(f"Calling embeddings endpoint with params: {embedding_params}")
+                api_response = client.embeddings.create(**embedding_params)
+                # Embedding responses don't stream and have different structure
+                # Cost calculation might need specific handling based on input tokens if required
+                # For now, just return the response object. Cost logging is skipped here.
+                logger.info("Received embedding response.")
+                return api_response # Return embedding response directly
 
-            elapsed_time = time.time() - attempt_start
-            logger.info(
+            else: # It's a chat completion call
+                api_response = client.chat.completions.create(**params)
+                elapsed_time = time.time() - attempt_start
+                logger.info(
                 f"Received {'initial stream chunk' if is_streaming else 'response'} in {elapsed_time:.2f} seconds"
             )
 
-            # Handle streaming vs non-streaming response and logging
+            # Handle streaming vs non-streaming response and logging (for chat completions)
             if is_streaming:
                 # Return a generator that wraps the stream and logs usage at the end
                 return _stream_wrapper(
