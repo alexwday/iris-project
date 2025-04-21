@@ -46,10 +46,11 @@ SUBAGENT_AUDIENCE = """
 The internal Summarizer Agent, which will use your report to construct the final user-facing response.
 """
 
+# This variable defines the structure the LLM should aim for in its tool call arguments.
 SUBAGENT_RESPONSE_FORMAT = """
-A mandatory tool call to `synthesize_research_findings` containing:
-1. `status_summary`: A single-line status flag (e.g., ✅, ℹ️, 📄, ⚠️, ❓).
-2. `detailed_research_report`: A comprehensive Markdown string containing the synthesized findings with inline citations.
+Use the `synthesize_research_findings` tool with the following arguments:
+- `status_summary`: A single-line status flag string (e.g., "✅ Found information directly addressing the query in the EY cards.").
+- `detailed_research_report`: A comprehensive Markdown string containing the synthesized findings with inline citations, based ONLY on the provided context cards.
 """
 
 # Define the tool schema for research synthesis
@@ -151,11 +152,13 @@ def get_content_synthesis_prompt(query: str, formatted_cards: str) -> str:
         "4. **Format Output:** Prepare the Status Summary Flag and the Detailed Research Report for the tool call.",
         "</INSTRUCTIONS>",
         "<OUTPUT_SPECIFICATION>",
-        "You MUST call the `synthesize_research_findings` tool.", # Corrected tool name
-        "Provide the generated status summary flag (as a single string) and the full detailed research report (as a markdown string with inline citations) as arguments.",
-        "Do not include any other text, preamble, or explanation in your response outside the tool call.",
-        "If no relevant context cards were provided or found, the status summary flag should reflect that (`📄`), and the detailed research report argument should state that no analysis is possible based on the provided cards.",
-        SUBAGENT_RESPONSE_FORMAT,  # Reinforce the expected output format
+        "You MUST call the `synthesize_research_findings` tool.",
+        "The tool call arguments MUST contain exactly two keys: `status_summary` (string) and `detailed_research_report` (markdown string).", # Explicitly state required keys
+        "Provide the generated status summary flag as the value for `status_summary`.",
+        "Provide the full detailed research report (with inline citations) as the value for `detailed_research_report`.",
+        "Do not include any other text, preamble, or explanation in your response outside the tool call's JSON arguments.",
+        "If no relevant context cards were provided or found, the `status_summary` argument should reflect that (e.g., '📄 ...'), and the `detailed_research_report` argument should state that no analysis is possible based on the provided cards.",
+        # SUBAGENT_RESPONSE_FORMAT, # No longer needed here as instructions are explicit
         "</OUTPUT_SPECIFICATION>",
         "</TASK>",
     ]

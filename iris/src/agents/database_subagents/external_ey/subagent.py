@@ -736,19 +736,22 @@ def _generate_response_from_chunks(
                 logger.debug(f"Received tool arguments string: {arguments_str}")
                 try:
                     arguments = json.loads(arguments_str)
-                    if "status_summary" in arguments and "detailed_research" in arguments:
+                    # Check for the CORRECT key name 'detailed_research_report'
+                    if "status_summary" in arguments and "detailed_research_report" in arguments:
                         logger.info(f"Successfully parsed synthesis tool call for {DATABASE_NAME}.")
                         # Validate types
                         status = arguments.get("status_summary", "")
-                        research = arguments.get("detailed_research", "")
+                        # Extract using the CORRECT key name 'detailed_research_report'
+                        research_report = arguments.get("detailed_research_report", "")
                         if not isinstance(status, str): status = str(status) # Coerce
-                        if not isinstance(research, str): research = str(research) # Coerce
+                        if not isinstance(research_report, str): research_report = str(research_report) # Coerce
+                        # Return using the key 'detailed_research' as expected by the Summarizer/Router
                         return {
-                            "detailed_research": research,
+                            "detailed_research": research_report, # Use the expected output key
                             "status_summary": status,
                         }
                     else:
-                        logger.error(f"Missing required keys in parsed tool arguments: {arguments}")
+                        logger.error(f"Missing required keys ('status_summary', 'detailed_research_report') in parsed tool arguments from LLM: {arguments}")
                         return default_response
                 except json.JSONDecodeError as json_err:
                     logger.error(f"Failed to parse tool arguments JSON: {json_err}. Arguments: {arguments_str}")
