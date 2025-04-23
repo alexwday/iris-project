@@ -786,25 +786,15 @@ def _generate_response_from_chunks(
         return default_response
 
 
-# --- Main Function ---
+# --- Logic Function (Handles Core Query Processing) ---
 
-def query_database_sync(
+def _query_database_logic(
     query: str, scope: str, token: Optional[str] = None
 ) -> DatabaseResponse:
     """
-    Synchronously query the External EY database using vector search and refinement.
-
-    Args:
-        query (str): The search query to execute.
-        scope (str): The scope of the query ('metadata' or 'research').
-        token (str, optional): Authentication token for API access.
-
-    Returns:
-        DatabaseResponse: Query results. For EY, only 'research' is supported.
-                          Returns Dict[str, str] for 'research' scope.
+    Internal logic to handle database connection, embedding, scope routing,
+    and error handling for the EY subagent query.
     """
-    start_time = time.time()
-    logger.info(f"Querying {DATABASE_NAME} database: '{query}' with scope: {scope}")
     default_error_status = f"❌ Error processing {DATABASE_NAME} query."
     default_no_info_status = f"📄 No relevant information found in {DATABASE_NAME}."
     default_research = f"No detailed research generated for {DATABASE_NAME}."
@@ -963,9 +953,9 @@ def query_database_sync(
             logger.info("Database connection closed.")
 
     # This part should ideally not be reached if all scopes return explicitly
-    logger.error(f"Reached end of query_database_sync unexpectedly for scope '{scope}' in {DATABASE_NAME}.")
+    logger.error(f"Reached end of _query_database_logic unexpectedly for scope '{scope}' in {DATABASE_NAME}.")
     if scope == "metadata": return []
-    else: return {"detailed_research": "Reached end of function unexpectedly.", "status_summary": "❌ Unexpected Flow"}
+    else: return {"detailed_research": "Reached end of logic function unexpectedly.", "status_summary": "❌ Unexpected Flow"}
 
 
 # --- Main Function ---
@@ -974,7 +964,7 @@ def query_database_sync(
     query: str, scope: str, token: Optional[str] = None
 ) -> DatabaseResponse:
     """
-    Synchronously query the External EY database using vector search and refinement.
+    Synchronously query the External EY database. Handles 'metadata' and 'research' scopes.
 
     Args:
         query (str): The search query to execute.
@@ -982,13 +972,11 @@ def query_database_sync(
         token (str, optional): Authentication token for API access.
 
     Returns:
-        DatabaseResponse: Query results. For EY, only 'research' is supported.
-                          Returns Dict[str, str] for 'research' scope.
+        DatabaseResponse: Query results, either MetadataResponse or ResearchResponse.
     """
     start_time = time.time()
     logger.info(f"Querying {DATABASE_NAME} database: '{query}' with scope: {scope}")
-    default_error_status = f"❌ Error processing {DATABASE_NAME} query."
-    default_no_info_status = f"📄 No relevant information found in {DATABASE_NAME}."
+
     # Call the refactored logic function
     result = _query_database_logic(query, scope, token)
 
