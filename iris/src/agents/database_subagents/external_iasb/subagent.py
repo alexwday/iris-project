@@ -873,14 +873,169 @@ def _process_single_document_id(
     return processed_results # Return the list of processed chunks/groups
 
 
+# --- Logic Function (Handles Core Query Processing) ---
+
+def _query_database_logic(
+    query: str, scope: str, token: Optional[str] = None
+) -> DatabaseResponse:
+    """
+    Internal logic to handle database connection, embedding, scope routing,
+    and error handling for the IASB subagent query.
+    """
+    default_error_status = f"❌ Error processing {DATABASE_NAME} query."
+    default_no_info_status = f"📄 No relevant information found in {DATABASE_NAME}."
+    default_research = f"No detailed research generated for {DATABASE_NAME}."
+
+    conn = None
+    cursor = None
+
+    # --- Database Connection & Embedding ---
+    try:
+        conn = connect_to_db(ENVIRONMENT)
+        if not conn:
+            raise ConnectionError("Failed to connect to the database.")
+        register_vector(conn)
+        logger.info("Database connection successful and pgvector registered.")
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+
+        query_embedding = _generate_query_embedding(query, token)
+        if query_embedding is None:
+            # Handle embedding failure based on scope
+            if scope == "metadata":
+                return []
+            else: # research scope
+                return {
+                    "detailed_research": "Could not generate embedding for the query.",
+                    "status_summary": "❌ Embedding Generation Failed"
+                }
+
+        # --- Metadata Scope Handling ---
+        if scope == "metadata":
+            logger.info(f"Processing '{scope}' scope for {DATABASE_NAME}")
+            all_initial_results = []
+            # Perform vector search for each configured IASB document ID
+            for doc_id, k_value in IASB_DOC_CONFIG.items():
+                logger.debug(f"Performing metadata vector search for {doc_id} (k={k_value})")
+                initial_results_for_doc = _perform_vector_search(
+                    cursor, query_embedding, k_value, doc_id=doc_id
+                )
+                all_initial_results.extend(initial_results_for_doc)
+
+            if not all_initial_results:
+                logger.info(f"No initial vector search results for metadata query across all IASB sources.")
+                return []
+
+            unique_sections = {}
+            for record in all_initial_results:
+                doc_id = record.get('document_id')
+                chapter = record.get('chapter_name')
+                hierarchy = record.get('section_hierarchy')
+                title = record.get('section_title')
+                summary = record.get('chapter_summary') # Contains section summary
+                chunk_id = record.get('id')
+
+                if not all([doc_id, chapter, hierarchy, title, summary, chunk_id]):
+                    logger.warning(f"Skipping record due to missing fields: {record.get('id')}")
+                    continue
+
+                section_key = (doc_id, chapter, hierarchy)
+                if section_key not in unique_sections:
+                    unique_sections[section_key] = {
+                        'id': chunk_id, # Use first chunk ID found for this section
+                        'title': title,
+                        'summary': summary,
+                        'doc_id': doc_id # Keep original doc_id for source_document_id
+                    }
+
+            metadata_response: MetadataResponse = []
+            for section_data in unique_sections.values():
+                metadata_response.append({
+                    'id': section_data['id'],
+                    'document_name': section_data['title'], # Use section title as name
+                    'document_description': section_data['summary'], # Use section summary as description
+                    'source': DATABASE_NAME,
+                    'source_document_id': section_data['doc_id'] # Add the original document ID
+                })
+
+            logger.info(f"Returning {len(metadata_response)} unique sections for metadata scope from {DATABASE_NAME}.")
+            return metadata_response
+
+        # --- Research Scope Handling ---
+        elif scope == "research":
+            logger.info(f"Processing '{scope}' scope for {DATABASE_NAME}")
+            final_research_result: ResearchResponse = {
+                "detailed_research": default_research,
+                "status_summary": default_error_status,
+            }
+            all_processed_results = [] # Store results from all doc IDs
+
+            # Process each Document ID defined in IASB_DOC_CONFIG
+            for doc_id, k_value in IASB_DOC_CONFIG.items():
+                processed_chunks_for_doc = _process_single_document_id(
+                    cursor, query, query_embedding, doc_id, k_value, token
+                )
+                # Extend results regardless of success/failure logging within the function
+                all_processed_results.extend(processed_chunks_for_doc)
+
+            # Check if any results were found across all documents
+            if not all_processed_results:
+                logger.info(f"No relevant information found across any IASB document sources for query: '{query}'")
+                final_research_result["status_summary"] = default_no_info_status
+                final_research_result["detailed_research"] = "No relevant information found across any IASB document sources."
+                # Return early if no results found across all sources
+                return final_research_result # Already closed connection in finally block if needed
+            else:
+                # Format combined chunks into cards
+                logger.info(f"Formatting combined {len(all_processed_results)} items from all IASB sources.")
+                formatted_chunks = _format_chunks_as_cards(all_processed_results)
+
+                # Generate ONE final response from the combined cards
+                final_research_result = _generate_response_from_chunks(query, formatted_chunks, token)
+                return final_research_result # Return the final research result
+
+        else:
+            # Invalid scope handling (should ideally be caught by router)
+            logger.error(f"Invalid scope '{scope}' provided to {DATABASE_NAME} subagent.")
+            # Return empty list for metadata-like scopes, error dict for research-like scopes
+            if scope == "metadata": return []
+            else: return {"detailed_research": f"Invalid scope '{scope}' provided.", "status_summary": "❌ Invalid Scope"}
+
+    except psycopg2.Error as db_err:
+        logger.error(f"Database error during {DATABASE_NAME} query (Scope: {scope}): {db_err}", exc_info=True)
+        if conn: conn.rollback() # Rollback any transaction
+        # Return appropriate error type based on scope
+        if scope == "metadata": return []
+        else: return {"detailed_research": f"**Database Error:** {str(db_err)}", "status_summary": "❌ Database Error"}
+    except ConnectionError as conn_err:
+         logger.error(f"Connection error for {DATABASE_NAME} (Scope: {scope}): {conn_err}", exc_info=True)
+         if scope == "metadata": return []
+         else: return {"detailed_research": f"**Connection Error:** {str(conn_err)}", "status_summary": "❌ DB Connection Error"}
+    except Exception as e:
+        logger.error(f"Unexpected error querying {DATABASE_NAME} database (Scope: {scope}): {e}", exc_info=True)
+        if conn: conn.rollback()
+        if scope == "metadata": return []
+        else: return {"detailed_research": f"**Unexpected Error:** {str(e)}", "status_summary": default_error_status}
+    finally:
+        # Ensure connection is closed even if early returns happened
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+            logger.info("Database connection closed.")
+
+    # This part should ideally not be reached if all scopes return explicitly
+    logger.error(f"Reached end of _query_database_logic unexpectedly for scope '{scope}' in {DATABASE_NAME}.")
+    if scope == "metadata": return []
+    else: return {"detailed_research": "Reached end of logic function unexpectedly.", "status_summary": "❌ Unexpected Flow"}
+
+
 # --- Main Function ---
 
 def query_database_sync(
     query: str, scope: str, token: Optional[str] = None
 ) -> DatabaseResponse:
     """
-    Synchronously query the External IASB database across multiple document IDs
-    (IAS, IFRS, IFRIC, SIC) using vector search and refinement, then combines results.
+    Synchronously query the External IASB database. Handles 'metadata' and 'research' scopes.
 
     Args:
         query (str): The search query to execute.
@@ -888,99 +1043,16 @@ def query_database_sync(
         token (str, optional): Authentication token for API access.
 
     Returns:
-        DatabaseResponse: Query results. For IASB, only 'research' is supported.
-                          Returns Dict[str, str] containing combined research and status.
+        DatabaseResponse: Query results, either MetadataResponse or ResearchResponse.
     """
     start_time = time.time()
     logger.info(f"Querying {DATABASE_NAME} database: '{query}' with scope: {scope}")
-    all_processed_results = [] # Store results from all doc IDs
-    all_statuses = [] # Store status from each doc ID processing attempt
-    overall_status_icon = "✅" # Default success icon
 
-    if scope != "research":
-        logger.warning(f"Scope '{scope}' not supported for {DATABASE_NAME}. Only 'research' is supported.")
-        if scope == "metadata": return []
-        else: return {"detailed_research": f"Scope '{scope}' is not supported for {DATABASE_NAME}.", "status_summary": "❌ Invalid Scope"}
-
-    conn = None
-    cursor = None
-    final_research_result: ResearchResponse = { # Initialize final result structure
-        "detailed_research": f"No detailed research generated for {DATABASE_NAME}.",
-        "status_summary": f"❌ Error processing {DATABASE_NAME} query."
-    }
-
-    try:
-        # 1. Connect to Database and Register Vector Type
-        conn = connect_to_db(ENVIRONMENT)
-        if not conn: raise ConnectionError("Failed to connect to the database.")
-        register_vector(conn)
-        logger.info("Database connection successful and pgvector registered.")
-        cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-
-        # 2. Generate Query Embedding (once for all docs)
-        query_embedding = _generate_query_embedding(query, token)
-        if query_embedding is None:
-            return {
-                "detailed_research": "Could not generate embedding for the query.",
-                "status_summary": "❌ Embedding Generation Failed"
-            }
-
-        # 3. Process each Document ID defined in IASB_DOC_CONFIG
-        for doc_id, k_value in IASB_DOC_CONFIG.items():
-            processed_chunks_for_doc = _process_single_document_id(
-                cursor, query, query_embedding, doc_id, k_value, token
-            )
-            if processed_chunks_for_doc:
-                all_processed_results.extend(processed_chunks_for_doc)
-                all_statuses.append(f"{doc_id}: ✅ Found {len(processed_chunks_for_doc)} items")
-            else:
-                # Log if a specific doc ID processing failed or returned no results
-                all_statuses.append(f"{doc_id}: 📄 No relevant info/Error")
-                overall_status_icon = "⚠️" # Mark overall status if any part fails/finds nothing
-
-        # 4. Check if any results were found across all documents
-        if not all_processed_results:
-            logger.info("No relevant information found across any IASB document sources.")
-            final_research_result = {
-                "detailed_research": f"No relevant information found across all IASB sources ({', '.join(IASB_DOC_CONFIG.keys())}) for the query.",
-                "status_summary": f"📄 No relevant info | Statuses: {' | '.join(all_statuses)}"
-            }
-        else:
-            # 5. Format combined chunks into cards
-            logger.info(f"Formatting combined {len(all_processed_results)} items from all IASB sources.")
-            formatted_chunks = _format_chunks_as_cards(all_processed_results)
-
-            # 6. Generate ONE final response from the combined cards
-            final_research_result = _generate_response_from_chunks(query, formatted_chunks, token)
-
-            # Prepend overall status icon to the generated status summary
-            if "status_summary" in final_research_result:
-                 final_research_result["status_summary"] = f"{overall_status_icon} {final_research_result['status_summary']}"
-            else: # Should not happen if _generate_response_from_chunks works correctly
-                 final_research_result["status_summary"] = f"{overall_status_icon} Status Unknown"
-
-
-    except psycopg2.Error as db_err:
-        logger.error(f"Database error during {DATABASE_NAME} query: {db_err}", exc_info=True)
-        final_research_result = { "detailed_research": f"**Database Error:** {str(db_err)}", "status_summary": "❌ Database Error" }
-        if conn: conn.rollback()
-    except ConnectionError as conn_err:
-         logger.error(f"Connection error for {DATABASE_NAME}: {conn_err}", exc_info=True)
-         final_research_result = { "detailed_research": f"**Connection Error:** {str(conn_err)}", "status_summary": "❌ DB Connection Error" }
-    except Exception as e:
-        logger.error(f"Unexpected error querying {DATABASE_NAME} database: {e}", exc_info=True)
-        final_research_result = { "detailed_research": f"**Unexpected Error:** {str(e)}", "status_summary": f"❌ Error processing {DATABASE_NAME} query." }
-        if conn: conn.rollback()
-    finally:
-        if cursor: cursor.close()
-        if conn:
-            conn.close()
-            logger.info("Database connection closed.")
+    # Call the refactored logic function
+    result = _query_database_logic(query, scope, token)
 
     end_time = time.time()
     duration = end_time - start_time
     logger.info(f"{DATABASE_NAME} query completed in {duration:.2f} seconds.")
-    # Append duration to the final status summary
-    if "status_summary" in final_research_result:
-         final_research_result["status_summary"] += f" ({duration:.1f}s)"
-    return final_research_result
+
+    return result

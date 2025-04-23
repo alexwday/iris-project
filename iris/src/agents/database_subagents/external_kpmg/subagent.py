@@ -788,130 +788,171 @@ def _generate_response_from_chunks(
         return default_response
 
 
-# --- Main Function ---
+# --- Logic Function (Handles Core Query Processing) ---
 
-def query_database_sync(
+def _query_database_logic(
     query: str, scope: str, token: Optional[str] = None
 ) -> DatabaseResponse:
     """
-    Synchronously query the External KPMG database using vector search and refinement.
-
-    Args:
-        query (str): The search query to execute.
-        scope (str): The scope of the query ('metadata' or 'research').
-        token (str, optional): Authentication token for API access.
-
-    Returns:
-        DatabaseResponse: Query results. For KPMG, only 'research' is supported.
-                          Returns Dict[str, str] for 'research' scope.
+    Internal logic to handle database connection, embedding, scope routing,
+    and error handling for the KPMG subagent query.
     """
-    start_time = time.time()
-    logger.info(f"Querying {DATABASE_NAME} database: '{query}' with scope: {scope}")
     default_error_status = f"❌ Error processing {DATABASE_NAME} query."
     default_no_info_status = f"📄 No relevant information found in {DATABASE_NAME}."
     default_research = f"No detailed research generated for {DATABASE_NAME}."
 
-    if scope != "research":
-        logger.warning(f"Scope '{scope}' not supported for {DATABASE_NAME}. Only 'research' is supported.")
-        # Return empty list for metadata scope for consistency with router expectations
-        if scope == "metadata":
-            return []
-        else: # Should not happen if router validates scopes
-             return {
-                 "detailed_research": f"Scope '{scope}' is not supported for {DATABASE_NAME}.",
-                 "status_summary": "❌ Invalid Scope",
-             }
-
     conn = None
     cursor = None
-    research_result: ResearchResponse = {
-        "detailed_research": default_research,
-        "status_summary": default_error_status,
-    }
 
+    # --- Database Connection & Embedding ---
     try:
-        # 1. Connect to Database and Register Vector Type
         conn = connect_to_db(ENVIRONMENT)
         if not conn:
             raise ConnectionError("Failed to connect to the database.")
-        register_vector(conn) # CRITICAL: Register pgvector type handler
+        register_vector(conn)
         logger.info("Database connection successful and pgvector registered.")
         cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
-        # 2. Generate Query Embedding
         query_embedding = _generate_query_embedding(query, token)
         if query_embedding is None:
-            research_result["status_summary"] = "❌ Embedding Generation Failed"
-            research_result["detailed_research"] = "Could not generate embedding for the query."
-            return research_result # Early exit
+            # Handle embedding failure based on scope
+            if scope == "metadata":
+                return []
+            else: # research scope
+                return {
+                    "detailed_research": "Could not generate embedding for the query.",
+                    "status_summary": "❌ Embedding Generation Failed"
+                }
 
-        # --- Search & Refinement Pipeline ---
-        # 3. Initial Vector Search (Filter by specific KPMG document ID)
-        initial_results = _perform_vector_search(
-            cursor, query_embedding, INITIAL_K, doc_id=KPMG_DOCUMENT_ID
-        )
-        if not initial_results:
-            research_result["status_summary"] = default_no_info_status
-            research_result["detailed_research"] = "No results found in the initial vector search."
-            return research_result
+        # --- Metadata Scope Handling ---
+        if scope == "metadata":
+            logger.info(f"Processing '{scope}' scope for {DATABASE_NAME}")
+            # Filter by specific KPMG document ID for metadata search
+            initial_results = _perform_vector_search(
+                cursor, query_embedding, INITIAL_K, doc_id=KPMG_DOCUMENT_ID
+            )
+            if not initial_results:
+                logger.info(f"No initial vector search results for metadata query in {DATABASE_NAME}.")
+                return []
 
-        processed_results = initial_results
-        all_added_chunk_ids = set()
+            unique_sections = {}
+            for record in initial_results:
+                doc_id = record.get('document_id')
+                chapter = record.get('chapter_name')
+                hierarchy = record.get('section_hierarchy')
+                title = record.get('section_title')
+                summary = record.get('chapter_summary') # Contains section summary
+                chunk_id = record.get('id')
 
-        # 4. Summary Relevance Filtering
-        filtered_results, _ = _filter_by_summary_relevance(query, processed_results, token)
-        if not filtered_results:
-            research_result["status_summary"] = default_no_info_status
-            research_result["detailed_research"] = "No relevant information remained after summary filtering."
-            return research_result
-        processed_results = filtered_results
+                if not all([doc_id, chapter, hierarchy, title, summary, chunk_id]):
+                    logger.warning(f"Skipping record due to missing fields: {record.get('id')}")
+                    continue
 
-        # 5. Importance Reranking
-        reranked_results = _rerank_by_importance(processed_results, IMPORTANCE_FACTOR)
-        processed_results = reranked_results
+                section_key = (doc_id, chapter, hierarchy)
+                if section_key not in unique_sections:
+                    unique_sections[section_key] = {
+                        'id': chunk_id, # Use first chunk ID found for this section
+                        'title': title,
+                        'summary': summary,
+                        'doc_id': doc_id # Keep original doc_id for source_document_id
+                    }
 
-        # 6. Section Expansion
-        expanded_results, added_by_expansion = _expand_sections_by_token_count(
-            cursor, processed_results, SECTION_EXPANSION_TOP_K_RANK, SECTION_EXPANSION_TOP_K_TOKENS, SECTION_EXPANSION_GENERAL_TOKENS
-        )
-        if not expanded_results:
-            research_result["status_summary"] = default_no_info_status
-            research_result["detailed_research"] = "No results remained after section expansion."
-            return research_result
-        all_added_chunk_ids.update(added_by_expansion)
-        processed_results = expanded_results
+            metadata_response: MetadataResponse = []
+            for section_data in unique_sections.values():
+                metadata_response.append({
+                    'id': section_data['id'],
+                    'document_name': section_data['title'], # Use section title as name
+                    'document_description': section_data['summary'], # Use section summary as description
+                    'source': DATABASE_NAME,
+                    'source_document_id': section_data['doc_id'] # Add the original document ID
+                })
 
-        # 7. Sequence Gap Filling
-        filled_results, added_by_gaps = _fill_sequence_gaps(
-            cursor, processed_results, GAP_FILL_MAX_SEQUENCE_GAP
-        )
-        if not filled_results:
-            research_result["status_summary"] = default_no_info_status
-            research_result["detailed_research"] = "No results remained after sequence gap filling."
-            return research_result
-        all_added_chunk_ids.update(added_by_gaps)
-        processed_results = filled_results
+            logger.info(f"Returning {len(metadata_response)} unique sections for metadata scope from {DATABASE_NAME}.")
+            return metadata_response
 
-        # 8. Format Cards
-        formatted_chunks = _format_chunks_as_cards(processed_results)
+        # --- Research Scope Handling ---
+        elif scope == "research":
+            logger.info(f"Processing '{scope}' scope for {DATABASE_NAME}")
+            research_result: ResearchResponse = {
+                "detailed_research": default_research,
+                "status_summary": default_error_status,
+            }
+            # Start of the research pipeline
+            # Filter by specific KPMG document ID for research search
+            initial_results = _perform_vector_search(
+                cursor, query_embedding, INITIAL_K, doc_id=KPMG_DOCUMENT_ID
+            )
+            if not initial_results:
+                research_result["status_summary"] = default_no_info_status
+                research_result["detailed_research"] = "No results found in the initial vector search."
+                return research_result # Return early
 
-        # 9. Generate Final Response
-        research_result = _generate_response_from_chunks(query, formatted_chunks, token)
+            processed_results = initial_results
+            all_added_chunk_ids = set()
+
+            # 4. Summary Relevance Filtering
+            filtered_results, _ = _filter_by_summary_relevance(query, processed_results, token)
+            if not filtered_results:
+                research_result["status_summary"] = default_no_info_status
+                research_result["detailed_research"] = "No relevant information remained after summary filtering."
+                return research_result
+            processed_results = filtered_results
+
+            # 5. Importance Reranking
+            reranked_results = _rerank_by_importance(processed_results, IMPORTANCE_FACTOR)
+            processed_results = reranked_results
+
+            # 6. Section Expansion
+            expanded_results, added_by_expansion = _expand_sections_by_token_count(
+                cursor, processed_results, SECTION_EXPANSION_TOP_K_RANK, SECTION_EXPANSION_TOP_K_TOKENS, SECTION_EXPANSION_GENERAL_TOKENS
+            )
+            if not expanded_results:
+                research_result["status_summary"] = default_no_info_status
+                research_result["detailed_research"] = "No results remained after section expansion."
+                return research_result
+            all_added_chunk_ids.update(added_by_expansion)
+            processed_results = expanded_results
+
+            # 7. Sequence Gap Filling
+            filled_results, added_by_gaps = _fill_sequence_gaps(
+                cursor, processed_results, GAP_FILL_MAX_SEQUENCE_GAP
+            )
+            if not filled_results:
+                research_result["status_summary"] = default_no_info_status
+                research_result["detailed_research"] = "No results remained after sequence gap filling."
+                return research_result
+            all_added_chunk_ids.update(added_by_gaps)
+            processed_results = filled_results
+
+            # 8. Format Cards
+            formatted_chunks = _format_chunks_as_cards(processed_results)
+
+            # 9. Generate Final Response
+            research_result = _generate_response_from_chunks(query, formatted_chunks, token)
+            return research_result # Return the final research result
+
+        else:
+            # Invalid scope handling (should ideally be caught by router)
+            logger.error(f"Invalid scope '{scope}' provided to {DATABASE_NAME} subagent.")
+            # Return empty list for metadata-like scopes, error dict for research-like scopes
+            if scope == "metadata": return []
+            else: return {"detailed_research": f"Invalid scope '{scope}' provided.", "status_summary": "❌ Invalid Scope"}
 
     except psycopg2.Error as db_err:
-        logger.error(f"Database error during {DATABASE_NAME} query: {db_err}", exc_info=True)
-        research_result["detailed_research"] = f"**Database Error:** {str(db_err)}"
-        research_result["status_summary"] = "❌ Database Error"
+        logger.error(f"Database error during {DATABASE_NAME} query (Scope: {scope}): {db_err}", exc_info=True)
         if conn: conn.rollback() # Rollback any transaction
+        # Return appropriate error type based on scope
+        if scope == "metadata": return []
+        else: return {"detailed_research": f"**Database Error:** {str(db_err)}", "status_summary": "❌ Database Error"}
     except ConnectionError as conn_err:
-         logger.error(f"Connection error for {DATABASE_NAME}: {conn_err}", exc_info=True)
-         research_result["detailed_research"] = f"**Connection Error:** {str(conn_err)}"
-         research_result["status_summary"] = "❌ DB Connection Error"
+         logger.error(f"Connection error for {DATABASE_NAME} (Scope: {scope}): {conn_err}", exc_info=True)
+         if scope == "metadata": return []
+         else: return {"detailed_research": f"**Connection Error:** {str(conn_err)}", "status_summary": "❌ DB Connection Error"}
     except Exception as e:
-        logger.error(f"Unexpected error querying {DATABASE_NAME} database: {e}", exc_info=True)
-        research_result["detailed_research"] = f"**Unexpected Error:** {str(e)}"
-        research_result["status_summary"] = default_error_status
+        logger.error(f"Unexpected error querying {DATABASE_NAME} database (Scope: {scope}): {e}", exc_info=True)
         if conn: conn.rollback()
+        if scope == "metadata": return []
+        else: return {"detailed_research": f"**Unexpected Error:** {str(e)}", "status_summary": default_error_status}
     finally:
         if cursor:
             cursor.close()
@@ -919,9 +960,36 @@ def query_database_sync(
             conn.close()
             logger.info("Database connection closed.")
 
+    # This part should ideally not be reached if all scopes return explicitly
+    logger.error(f"Reached end of _query_database_logic unexpectedly for scope '{scope}' in {DATABASE_NAME}.")
+    if scope == "metadata": return []
+    else: return {"detailed_research": "Reached end of logic function unexpectedly.", "status_summary": "❌ Unexpected Flow"}
+
+
+# --- Main Function ---
+
+def query_database_sync(
+    query: str, scope: str, token: Optional[str] = None
+) -> DatabaseResponse:
+    """
+    Synchronously query the External KPMG database. Handles 'metadata' and 'research' scopes.
+
+    Args:
+        query (str): The search query to execute.
+        scope (str): The scope of the query ('metadata' or 'research').
+        token (str, optional): Authentication token for API access.
+
+    Returns:
+        DatabaseResponse: Query results, either MetadataResponse or ResearchResponse.
+    """
+    start_time = time.time()
+    logger.info(f"Querying {DATABASE_NAME} database: '{query}' with scope: {scope}")
+
+    # Call the refactored logic function
+    result = _query_database_logic(query, scope, token)
+
     end_time = time.time()
     duration = end_time - start_time
     logger.info(f"{DATABASE_NAME} query completed in {duration:.2f} seconds.")
-    # Add duration to status summary?
-    # research_result["status_summary"] += f" ({duration:.1f}s)"
-    return research_result
+
+    return result
