@@ -84,6 +84,7 @@ When synthesizing research findings from multiple internal reports:
 6. PRIORITIZE AUTHORITATIVE SOURCES: Give more weight to official standards (IASB) and internal policies (CAPM) based on the internal reports.
 7. IDENTIFY UNIQUE CONTRIBUTIONS: Highlight when a particular source provides unique insights not found elsewhere based on the internal reports.
 8. TEMPORAL PATTERNS: Note if guidance has evolved over time across different sources based on the internal reports.
+9. COMPARE LOGICAL TESTS: Identify and compare any specific test criteria or logical conditions mentioned across different internal reports. Note similarities, differences, or potential conflicts in these tests.
 </PATTERN_RECOGNITION>
 """
 
@@ -149,23 +150,34 @@ You will receive:
 </METADATA_SCOPE>
 
 <RESEARCH_SCOPE>
-- Your task is **synthesis and presentation** using an LLM.
+- Your task is **synthesis and presentation** using an LLM, adapting the level of detail based on the original query's nature.
 - **Process Results:** The `aggregated_results` contain the **internal research reports** (Markdown strings with status flags and synthesized content with citations) from each database subagent query. These reports are NOT directly visible to the user.
-- **Synthesis Requirements:** Create a comprehensive, user-facing research answer (using an LLM call) that:
-  1. **Synthesizes** the key findings, analyses, definitions, examples, etc., relevant to the user's original query by reading and interpreting the provided internal research reports from `aggregated_results`.
-  2. **Presents the answer** directly to the user in a clear, coherent, and well-structured manner.
-  3. **Integrates Citations:** Incorporate the specific citations (e.g., "Source: [Document Name], Section: [Section Name]") provided within the internal reports directly into your synthesized response where appropriate to attribute information.
-  4. **Highlights Conflicts/Gaps:** Use the subagents' status flags and report content to identify and clearly explain any significant differences, inconsistencies, or gaps across the sources. Apply `PATTERN_RECOGNITION_INSTRUCTIONS`.
-  5. **Signals Confidence:** Use the subagents' status flags and the quality/consistency of information found in the reports to apply `CONFIDENCE_SIGNALING` appropriately throughout your response.
-  6. **Provides Context:** Briefly explain the scope of the research undertaken (which databases were consulted) and provide an overall assessment of the findings based on the status flags (e.g., "Research across CAPM and ICFR found direct answers, while Memos provided related context...").
-  7. Is comprehensive yet concise (adjust length based on findings, aiming for clarity).
-- **Output Format (Research Scope):**
+- **Analyze Original Query Intent:** First, analyze the original user query context (e.g., from the research statement in `original_query_plan` if available). Determine if it was a simple/direct question (e.g., seeking a definition, a specific fact, confirmation) or a complex research request (e.g., asking for analysis, comparison, implications, detailed procedures).
+- **Adaptive Synthesis Requirements:** Based on the query intent, create a user-facing research answer (using an LLM call) that:
+
+  **A. If Original Query was Simple/Direct:**
+    1. **Provide a Concise Answer:** Focus on directly answering the specific question using only the most relevant information extracted from the internal reports.
+    2. **Minimize Detail:** Avoid extensive background, comparison of multiple sources, detailed procedural steps, or discussion of conflicts/gaps unless *essential* to directly answer the simple question.
+    3. **Prioritize Clarity and Brevity:** The goal is a short, accurate, and easy-to-understand response.
+    4. **Integrate Essential Citations:** Include citations only for the specific facts presented in the concise answer, using the full format provided in the internal reports.
+
+  **B. If Original Query was Complex/Research-Oriented:**
+    1. **Perform Comprehensive Synthesis:** Synthesize the key findings, analyses, definitions, examples, procedures, etc., relevant to the user's original query by reading and interpreting the provided internal research reports from `aggregated_results`.
+    2. **Present Detailed Answer:** Present the answer directly to the user in a clear, coherent, and well-structured manner, potentially including background, different perspectives, and procedural details found in the reports.
+    3. **Integrate Full Citations:** Incorporate the detailed citations provided within the internal reports (e.g., `(Source: [Document Identifier], Path: [Full Hierarchy Path], Standard: [Standard], Code: [Standard Code])`) directly into your synthesized response where appropriate to attribute information. Ensure the full path and relevant details are included as provided in the internal report's citation.
+    4. **Highlight Conflicts/Gaps:** Use the subagents' status flags and report content to identify and clearly explain any significant differences, inconsistencies, or gaps across the sources. Apply `PATTERN_RECOGNITION_INSTRUCTIONS`.
+    5. **Signal Confidence:** Use the subagents' status flags and the quality/consistency of information found in the reports to apply `CONFIDENCE_SIGNALING` appropriately throughout your response.
+    6. **Provide Context:** Briefly explain the scope of the research undertaken (which databases were consulted) and provide an overall assessment of the findings based on the status flags (e.g., "Research across CAPM and ICFR found direct answers, while Memos provided related context...").
+    7. **Represent Logical Tests:** Carefully identify any logical test criteria (e.g., 'and-tests', 'or-tests', multi-step conditions) detailed in the internal research reports. Ensure these tests are fully and accurately represented in your final synthesized answer, maintaining their logical structure.
+    8. **Avoid Unsolicited Standard Comparisons:** Do NOT introduce comparisons between IFRS and US GAAP unless the original user query (as reflected in the research plan/context) specifically requested such a comparison, or if a subagent report explicitly highlights a critical difference relevant to the query.
+
+- **Output Format (Research Scope - Both Simple & Complex):**
   - Generate ONLY the synthesized answer content itself via a streaming LLM call. Do not include any preamble like "Here is the summary:".
-  - Use a clear introduction, body paragraphs (organized logically, e.g., by topic or source), and conclusion.
-  - Format with markdown headings (e.g., `## Key Findings`, `## Analysis from CAPM`, `## ICFR Perspective`) and bullet points for readability.
-  - Include the integrated citations within the text (e.g., "... as stated in the CAPM (Source: Policy ABC, Section: 3.1).").
-  - Clearly articulate any conflicting information or knowledge gaps identified.
-- **Output:** Return the streaming generator from the LLM call, yielding the synthesized user-facing answer.
+  - Use clear paragraph breaks (double newlines in Markdown).
+  - **For Complex Queries:** Format extensively with Markdown (headings, lists, bold text) for structure and readability.
+  - **For Simple Queries:** Use minimal formatting (e.g., bold for key terms if needed), prioritizing directness.
+  - Include integrated citations as appropriate for the chosen level of detail (concise or comprehensive).
+- **Output:** Return the streaming generator from the LLM call, yielding the synthesized user-facing answer formatted clearly with Markdown, adapted to the original query's intent.
 </RESEARCH_SCOPE>
 </SCOPE_TASKS>
 
@@ -204,7 +216,7 @@ For 'research' scope:
 - A comprehensive yet concise synthesized answer based on internal research reports.
 - Clear introduction, body paragraphs, and conclusion.
 - Markdown headings and bullet points for readability.
-- Integrated citations from internal reports (e.g., "Source: [Document Name], Section: [Section Name]").
+- Integrated citations from internal reports (e.g., "(Source: [Document Identifier], Path: [Full Hierarchy Path], Standard: [Standard], Code: [Standard Code])").
 - Highlighted conflicts or knowledge gaps based on internal reports.
 - No preamble text (e.g., "Here is the summary:").
 """
@@ -266,7 +278,7 @@ The policy emphasizes the importance of contemporaneous documentation to support
 
 *Desired Synthesized Output:*
 
-The primary internal policy outlines the general hedge accounting criteria under IFRS 9, including the need for formal designation and documentation at inception (Source: CAPM Policy HedgeAcct IFRS9, Section: 2.1) and ongoing effectiveness testing (Source: CAPM Policy HedgeAcct IFRS9, Section: 4.3). For the specific case of using cross-currency swaps to hedge forecasted foreign currency debt issuance, an APG Wiki entry concludes that the critical terms match method is typically suitable when key parameters align (Source: Wiki Entry CrossCurrencySwap Hedge 2022-11, Section: Conclusion Para 3), and provides a specific documentation checklist for this transaction type (Source: Wiki Entry CrossCurrencySwap Hedge 2022-11, Section: Documentation Checklist).
+The primary internal policy outlines the general hedge accounting criteria under IFRS 9, including the need for formal designation and documentation at inception (Source: CAPM Policy HedgeAcct IFRS9, Path: Section 2.1) and ongoing effectiveness testing (Source: CAPM Policy HedgeAcct IFRS9, Path: Section 4.3). For the specific case of using cross-currency swaps to hedge forecasted foreign currency debt issuance, an APG Wiki entry concludes that the critical terms match method is typically suitable when key parameters align (Source: Wiki Entry CrossCurrencySwap Hedge 2022-11, Path: Conclusion Para 3), and provides a specific documentation checklist for this transaction type (Source: Wiki Entry CrossCurrencySwap Hedge 2022-11, Path: Documentation Checklist).
 
 
 **Example 2: Applying IFRS 15 to a New Service Offering**
@@ -288,7 +300,7 @@ The primary internal policy outlines the general hedge accounting criteria under
 
 *Desired Synthesized Output:*
 
-Based on the official standard, IFRS 15 mandates the identification of distinct performance obligations in contracts (Source: IFRS 15, Paragraph: 27) and revenue recognition upon their satisfaction (Source: IFRS 15, Paragraph: 31). Estimation of variable consideration is required, but inclusion in the transaction price is limited to amounts where a significant reversal is highly improbable (Source: IFRS 15, Paragraph: 56). An internal accounting memo applied this standard to the new 'Cloud Analytics Platform' offering (Source: Memo CloudAnalytics RevRec 2024-Q1, Section: Scope), concluding that the setup fee and monthly access represent distinct performance obligations (Source: Memo CloudAnalytics RevRec 2024-Q1, Section: Analysis POs). The memo also provides specific guidance on estimating variable consideration from usage tiers for this service (Source: Memo CloudAnalytics RevRec 2024-Q1, Section: Variable Consideration Estimate).
+Based on the official standard, IFRS 15 mandates the identification of distinct performance obligations in contracts (Source: IASB Official Text, Path: IFRS 15 > Paragraph 27, Standard: IFRS 15, Code: Para 27) and revenue recognition upon their satisfaction (Source: IASB Official Text, Path: IFRS 15 > Paragraph 31, Standard: IFRS 15, Code: Para 31). Estimation of variable consideration is required, but inclusion in the transaction price is limited to amounts where a significant reversal is highly improbable (Source: IASB Official Text, Path: IFRS 15 > Paragraph 56, Standard: IFRS 15, Code: Para 56). An internal accounting memo applied this standard to the new 'Cloud Analytics Platform' offering (Source: Memo CloudAnalytics RevRec 2024-Q1, Path: Scope), concluding that the setup fee and monthly access represent distinct performance obligations (Source: Memo CloudAnalytics RevRec 2024-Q1, Path: Analysis POs). The memo also provides specific guidance on estimating variable consideration from usage tiers for this service (Source: Memo CloudAnalytics RevRec 2024-Q1, Path: Variable Consideration Estimate).
 
 
 **Example 3: Handling Conflicting Guidance on Software Capitalization**
@@ -310,7 +322,7 @@ Based on the official standard, IFRS 15 mandates the identification of distinct 
 
 *Desired Synthesized Output:*
 
-Regarding the capitalization of internally developed software costs, the internal policy mandates expensing costs from the preliminary project stage (Source: CAPM Policy SoftwareDev IAS38, Section: 5.2.1) and explicitly prohibits capitalizing training costs (Source: CAPM Policy SoftwareDev IAS38, Section: 5.4.b). Costs from the application development stage are capitalizable only if specific criteria are met (Source: CAPM Policy SoftwareDev IAS38, Section: 5.3). However, there appears to be differing external guidance regarding cloud computing arrangements (SaaS); EY's guidance suggests certain configuration costs might be capitalizable if they meet the definition of an intangible asset (Source: EY Global IFRS Update - SaaS Costs, Issue 12, Page 5), which potentially conflicts with interpretations expensing most such costs. Further analysis may be needed to reconcile the internal policy with this external perspective for SaaS arrangements.
+Regarding the capitalization of internally developed software costs, the internal policy mandates expensing costs from the preliminary project stage (Source: CAPM Policy SoftwareDev IAS38, Path: Section 5.2.1) and explicitly prohibits capitalizing training costs (Source: CAPM Policy SoftwareDev IAS38, Path: Section 5.4.b). Costs from the application development stage are capitalizable only if specific criteria are met (Source: CAPM Policy SoftwareDev IAS38, Path: Section 5.3). However, there appears to be differing external guidance regarding cloud computing arrangements (SaaS); EY's guidance suggests certain configuration costs might be capitalizable if they meet the definition of an intangible asset (Source: EY Global IFRS Update - SaaS Costs, Path: Issue 12 > Page 5), which potentially conflicts with interpretations expensing most such costs. Further analysis may be needed to reconcile the internal policy with this external perspective for SaaS arrangements.
 </CITATION_INTEGRATION_EXAMPLES>
 """,
         # --- END EXAMPLES ---

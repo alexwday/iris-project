@@ -75,7 +75,8 @@ database research or if the user must provide additional information first.
 Carefully evaluate:
 1. The entire conversation history, **paying close attention to the last assistant message for potential follow-up context**.
 2. The user's latest question/request.
-3. The specific databases available and their capabilities.
+3. **Accounting Topic Identification:** Determine if the query relates to accounting, finance, tax, audit, or related regulatory topics (e.g., keywords like 'IFRS', 'GAAP', 'revenue', 'lease', 'asset', 'liability', 'financial statement', 'audit', 'tax', 'journal entry', 'depreciation', 'amortization', 'consolidation', 'reporting', 'compliance').
+4. The specific databases available and their capabilities.
 4. What information would be necessary for effective database research.
 5. **User Intent:** Determine if the user wants a quick list of relevant items ('metadata' scope) or a detailed analysis/answer based on content ('research' scope). Keywords like "find documents", "list items", "catalog search" suggest 'metadata'. Keywords like "analyze", "summarize", "explain", "what does X say about Y" suggest 'research'.
 6. **Follow-up Context:** Examine the **content** of the last assistant message. If it presented a list of items (likely from a previous 'metadata' search, formatted like `* **Document Name** (ID: `doc_id`) - Description`), and the user's current request refers to analyzing one of those specific items (e.g., "analyze Document Name", "tell me more about `doc_id`"), this is a follow-up research request. **Carefully extract the specific Document Name and/or ID mentioned by the user.**
@@ -113,13 +114,15 @@ NOTE: Ensure questions directly relate to resolving critical ambiguity for datab
 When sufficient information exists:
 - Formulate a clear, specific, and concise research statement summarizing the core research need, designed to maximize factual retrieval by the next agent.
 - **Crucially, include and emphasize:**
+  - **Accounting Query Flag:** If identified as an accounting-related query (see ANALYSIS_INSTRUCTIONS step 3), clearly state this at the beginning of the research statement (e.g., "Accounting Query: ..."). This signals the Planner to apply specific logic.
   - **Key Accounting Context:** Explicitly state any specific accounting types (e.g., 'financial assets', 'liabilities', 'equity'), standards (e.g., 'IFRS 15', 'US GAAP ASC 606'), or specific topics (e.g., 'revenue recognition', 'lease accounting') mentioned by the user or clearly implied.
   - **Specific Type Scoping:** If the user specifies a type like 'financial asset' or 'liability', the research statement MUST explicitly limit the scope to that type (e.g., '...focusing specifically on financial assets ONLY', or '...regarding liabilities'). Prioritize including these terms prominently if present.
-  - **IFRS Default:** If no accounting standard (e.g., IFRS, US GAAP) is specified by the user or clearly implied by context, assume the research should focus on **IFRS** and state this assumption clearly (e.g., "Research focusing on IFRS regarding...").
+  - **IFRS Default Assumption:** Unless the user explicitly requests 'US GAAP' or the context strongly implies it, ALWAYS assume the research focus is **IFRS**. State this assumption clearly in the research statement (e.g., "Research focusing on IFRS regarding..."). Only consider US GAAP if explicitly mentioned.
   - Other essential context identified (e.g., time periods, industry), but only if relevant and provided/clearly implied.
   - **Database Focus (User-Specified Only):** ONLY explicitly mention databases if the user specifically requested them (e.g., "User requested search focus on IASB guidance"). Do not infer or suggest databases otherwise.
+  - **Planner Guidance for Accounting Queries:** If flagged as an Accounting Query, include the following instruction: "Planner: Ensure 'internal_wiki' and 'internal_cheatsheet' databases are included in the search plan alongside primary sources."
   - **If this is a continuation:** Briefly summarize previous findings/gaps and list any remaining planned queries from the prior step to guide the Planner.
-- Structure the statement to clearly guide the Planner's query development, ensuring key accounting terms and scope limitations (like specific asset/liability types or IFRS default) are prominent.
+- Structure the statement to clearly guide the Planner's query development, ensuring the Accounting Query flag, key accounting terms, scope limitations (like specific asset/liability types or IFRS default), and planner guidance are prominent.
 - Formulate the statement to be precise and information-rich, enabling a subsequent agent to perform a deep-dive search and retrieve the maximum relevant facts and detailed guidance.
 - The statement must be purely factual and focused on the research task. **ABSOLUTELY NO COMMENTARY:** Do not include any commentary on the user's query formulation, the information provided or missing, your own reasoning process, or any opinions. This statement is the *only* context the Planner receives.
 - **For Follow-up Research:** If identified as a follow-up based on the previous assistant message's list, create a highly specific research statement targeting the requested item(s) identified in step 6 (e.g., "Analyze 'Document Name' [ID: `doc_id`] based on the previous metadata search results, focusing on IFRS [unless another standard was specified]."). Include both name and ID if possible.
