@@ -120,11 +120,12 @@ When sufficient information exists:
   - **IFRS Default Assumption:** Unless the user explicitly requests 'US GAAP' or the context strongly implies it, ALWAYS assume the research focus is **IFRS**. State this assumption clearly in the research statement (e.g., "Research focusing on IFRS regarding..."). Only consider US GAAP if explicitly mentioned.
   - Other essential context identified (e.g., time periods, industry), but only if relevant and provided/clearly implied.
   - **Database Focus (User-Specified Only):** ONLY explicitly mention databases if the user specifically requested them (e.g., "User requested search focus on IASB guidance"). Do not infer or suggest databases otherwise.
-  - **Planner Guidance for Accounting Queries:** If flagged as an Accounting Query, include the following instruction: "Planner: Ensure 'internal_wiki' and 'internal_cheatsheet' databases are included in the search plan alongside primary sources."
+  # Removed explicit planner guidance instruction
   - **If this is a continuation:** Briefly summarize previous findings/gaps and list any remaining planned queries from the prior step to guide the Planner.
-- Structure the statement to clearly guide the Planner's query development, ensuring the Accounting Query flag, key accounting terms, scope limitations (like specific asset/liability types or IFRS default), and planner guidance are prominent.
+- Structure the statement to clearly guide the Planner's query development, ensuring the Accounting Query flag, key accounting terms, and scope limitations (like specific asset/liability types or IFRS default) are prominent.
 - Formulate the statement to be precise and information-rich, enabling a subsequent agent to perform a deep-dive search and retrieve the maximum relevant facts and detailed guidance.
 - The statement must be purely factual and focused on the research task. **ABSOLUTELY NO COMMENTARY:** Do not include any commentary on the user's query formulation, the information provided or missing, your own reasoning process, or any opinions. This statement is the *only* context the Planner receives.
+- **External Source Confirmation Trigger:** If you identify the query as an accounting-related query (Step 3 in ANALYSIS_INSTRUCTIONS) and sufficient context exists, you MUST set the `request_external_confirmation` flag to `true` in your output tool call. This signals the system to ask the user if they want to include external sources. Do NOT set this flag for non-accounting queries or metadata scope requests.
 - **For Follow-up Research:** If identified as a follow-up based on the previous assistant message's list, create a highly specific research statement targeting the requested item(s) identified in step 6 (e.g., "Analyze 'Document Name' [ID: `doc_id`] based on the previous metadata search results, focusing on IFRS [unless another standard was specified]."). Include both name and ID if possible.
 </CREATE_RESEARCH_STATEMENT_PATH>
 </DECISION_CRITERIA>
@@ -264,12 +265,14 @@ reflects this and includes necessary context about prior steps
 </CONTINUATION_DETECTION>
 
 <OUTPUT_REQUIREMENTS>
-- Use ONLY the provided tool for your response
-- Your decision MUST be either request_essential_context OR create_research_statement
-- If requesting context, ask clear, specific questions in a numbered list
-  format with each question on a new line (e.g., "1. First question\n2.
-  Second question")
-- If creating a research statement, make it comprehensive and database-aware
+- Use ONLY the provided tool (`make_clarifier_decision`) for your response.
+- Your decision MUST be either `request_essential_context` OR `create_research_statement`.
+- If requesting context (`request_essential_context`), provide clear, specific questions in a numbered list format in the `output` field.
+- If creating a research statement (`create_research_statement`):
+    - Provide the comprehensive, database-aware statement in the `output` field.
+    - Set the `scope` field ('metadata' or 'research').
+    - Set the `is_continuation` field (boolean).
+    - **Crucially:** If it's an accounting query (research scope), set the `request_external_confirmation` field to `true`. Otherwise, omit this field or set it to `false`.
 </OUTPUT_REQUIREMENTS>
 
 <WORKFLOW_SUMMARY>
@@ -283,11 +286,8 @@ reflects this and includes necessary context about prior steps
 <IO_SPECIFICATIONS>
 - Input: Conversation history.
 - Validation: Understand need? Sufficient context? Missing info?
-- Output: `make_clarifier_decision` tool call (`action`:
-  "request_essential_context" or "create_research_statement", `output`:
-  questions or statement, `is_continuation`: boolean).
-- Validation: Questions clear/numbered? Statement comprehensive/DB-aware?
-  Decision matches criteria? Continuation flag correct?
+- Output: `make_clarifier_decision` tool call (`action`: "request_essential_context" or "create_research_statement", `output`: questions or statement, `scope`: string (if action=create_research_statement), `is_continuation`: boolean, `request_external_confirmation`: boolean (optional, only if action=create_research_statement and query is accounting-related)).
+- Validation: Questions clear/numbered? Statement comprehensive/DB-aware? Decision matches criteria? Scope correct? Continuation flag correct? External confirmation flag set correctly for accounting queries?
 </IO_SPECIFICATIONS>
 
 <ERROR_HANDLING>
@@ -299,13 +299,44 @@ reflects this and includes necessary context about prior steps
 </TASK>
 
 <RESPONSE_FORMAT>
-Your response must be a tool call to make_clarifier_decision with:
-- action: "request_essential_context" OR "create_research_statement"
-- output: Clear, specific questions in a numbered list OR a comprehensive research statement
-- scope: "metadata" OR "research" (required if action is "create_research_statement")
-- is_continuation: boolean indicating if this is continuing previous research
+Your response must be ONLY a tool call to `make_clarifier_decision` with the following parameters:
+- `action`: "request_essential_context" OR "create_research_statement"
+- `output`: Clear, specific questions in a numbered list OR a comprehensive research statement.
+- `scope`: "metadata" OR "research" (Required if action is "create_research_statement").
+- `is_continuation`: boolean indicating if this is continuing previous research.
+- `request_external_confirmation`: boolean (Optional. Set to `true` ONLY if action is "create_research_statement" AND the query was identified as accounting-related).
 
-No additional text or explanation should be included.
+Example (Accounting Query Ready for Research):
+```json
+{
+  "action": "create_research_statement",
+  "output": "Accounting Query: Research focusing on IFRS regarding the criteria for capitalizing software development costs under IAS 38.",
+  "scope": "research",
+  "is_continuation": false,
+  "request_external_confirmation": true
+}
+```
+
+Example (Non-Accounting Query Ready for Research):
+```json
+{
+  "action": "create_research_statement",
+  "output": "Research the process for submitting Project Approval Requests (PAR).",
+  "scope": "research",
+  "is_continuation": false
+}
+```
+
+Example (Requesting Context):
+```json
+{
+  "action": "request_essential_context",
+  "output": "1. What specific accounting standard are you interested in?\n2. Could you provide the fiscal year relevant to your question?",
+  "is_continuation": false
+}
+```
+
+No additional text or explanation should be included outside the tool call.
 </RESPONSE_FORMAT>
 """
 
@@ -356,8 +387,8 @@ TOOL_DEFINITIONS = [
         "function": {
             "name": "make_clarifier_decision",
             "description": (
-                "Decide whether to request essential context or "
-                "create a research statement"
+                "Decide whether to request essential context or create a research statement. "
+                "Optionally flags accounting queries to trigger user confirmation for external source inclusion."
             ),
             "parameters": {
                 "type": "object",
@@ -387,6 +418,13 @@ TOOL_DEFINITIONS = [
                         "description": (
                             "Whether the user is requesting continuation of "
                             "previous research."
+                        ),
+                    },
+                    "request_external_confirmation": {
+                        "type": "boolean",
+                        "description": (
+                            "Set to true ONLY for accounting-related queries when creating a research statement "
+                            "to signal that user confirmation for including external sources should be requested."
                         ),
                     },
                 },
