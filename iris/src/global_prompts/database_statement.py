@@ -56,6 +56,48 @@ AVAILABLE_DATABASES = {
         "content_type": "control documentation",
         "use_when": "Tier 1 (Domain Specific): Financial control requirements, compliance, data integrity. **Strategy:** Query if statement relates to ICFR; treat as primary within domain. **Query:** Use RBC terms, reference ICFR processes/workflows.",
     },
+    "internal_compliance": {
+        "name": "RBC Compliance Policy - Auditor Independence",
+        "description": "RBC policy (FIN-ACC-214-EN) on employing individuals in accounting/financial reporting roles to ensure auditor independence (PwC). Covers hiring restrictions, cooling-off periods, disclosures.",
+        "query_type": "semantic search", # Assuming semantic search is appropriate
+        "content_type": "compliance policy / internal controls",
+        "use_when": "Tier 1 (Domain Specific): Auditor independence rules, hiring ex-auditors, family member employment, disclosure requirements. **Strategy:** Query for specific compliance questions related to auditor independence and hiring. **Query:** Use terms like 'auditor independence', 'cooling-off period', 'PwC employment', 'FIN-ACC-214-EN'.",
+    },
+    "internal_esg": {
+        "name": "RBC Internal ESG Guidance",
+        "description": "Internal RBC guidance documents on ESG disclosures. Includes guidance on evaluating prior period changes and the ESG Materiality Framework.",
+        "query_type": "semantic search", # Assuming semantic search
+        "content_type": "ESG policy / disclosure guidance",
+        "use_when": "Tier 1 (Domain Specific): ESG reporting, materiality assessment, prior period ESG changes, alignment with ISSB/CSRD. **Strategy:** Query for specific ESG disclosure questions, materiality framework, or handling prior period adjustments. **Query:** Use terms like 'ESG materiality', 'prior period ESG', 'ISSB alignment', 'CSRD', 'ESG metrics'.",
+    },
+    "internal_ext_reporting_and_disclosure": {
+        "name": "RBC External Reporting and Disclosure Policies",
+        "description": "Internal RBC policies covering material information disclosure (LAW-8), subsidiary reporting (FIN-ACC-217), trading revenue reporting (FRTB/OSFI), and engagement/relationships with public accounting firms (FIN-ACC-212, FIN-ACC-213) focusing on auditor independence.",
+        "query_type": "semantic search", # Assuming semantic search
+        "content_type": "policies and procedures / disclosure guidance / compliance",
+        "use_when": "Tier 1 (Domain Specific): Questions about material information disclosure, subsidiary reporting rules, trading revenue classification, engaging external auditors, auditor independence (business/financial relationships). **Strategy:** Query for specific policy numbers (LAW-8, FIN-ACC-217, FIN-ACC-212, FIN-ACC-213), disclosure requirements, trading activity reporting, or auditor engagement/independence rules. **Query:** Use terms like 'material information', 'disclosure policy', 'subsidiary reporting', 'trading revenue', 'FRTB', 'auditor engagement', 'auditor independence', 'FIN-ACC-217', 'FIN-ACC-212', 'FIN-ACC-213'.",
+    },
+    "internal_global_finance_standards": {
+        "name": "RBC Global Finance Standards",
+        "description": "Internal RBC standards covering currency reporting, resident/non-resident reporting, foreign currency position accounts (FIN-ACC-14), Global Chart of Accounts minimum standards, and Global FX Rates policy (FIN-ACC-10).",
+        "query_type": "semantic search", # Assuming semantic search
+        "content_type": "financial standards / reporting requirements / policies",
+        "use_when": "Tier 1 (Domain Specific): Questions about currency reporting, resident/non-resident splits, FX position accounts, Global Chart of Accounts structure, or required FX rates for reporting. **Strategy:** Query for specific standard topics or policy numbers (FIN-ACC-14, FIN-ACC-10). **Query:** Use terms like 'currency reporting', 'resident reporting', 'FX position account', 'chart of accounts', 'global FX rates', 'FIN-ACC-14', 'FIN-ACC-10'.",
+    },
+    "internal_management_reporting": {
+        "name": "RBC Management Reporting Policies & Guidance",
+        "description": "Internal RBC policies and guidelines for management reporting, covering financial systems, performance metrics (ROE, RORC), intra-group transactions, funds transfer pricing, tax allocation, and average balance reporting (SEC Regulation S-K).",
+        "query_type": "semantic search", # Assuming semantic search
+        "content_type": "management reporting policies / performance metrics / internal controls",
+        "use_when": "Tier 1 (Domain Specific): Questions about management reporting framework, performance metrics (ROE/RORC), intra-group transactions, funds transfer pricing, tax allocation, or average balance reporting requirements. **Strategy:** Query for specific management reporting topics or average balance rules. **Query:** Use terms like 'management reporting', 'performance metrics', 'ROE', 'RORC', 'intra-group', 'funds transfer pricing', 'tax allocation', 'average balance reporting', 'SEC Regulation S-K'.",
+    },
+    "internal_process_and_controls": {
+        "name": "RBC Internal Process and Controls Policies",
+        "description": "Internal RBC policies covering Standard GL Naming Convention (FIN-ACC-22), Intra-group Accounts procedures (FIN-ACC-201), Internal Control over Financial Reporting (ICFR - NI 52-109/SOX), and the Enterprise Internal Control Management Policy (ICMP - COSO Framework).",
+        "query_type": "semantic search", # Assuming semantic search
+        "content_type": "policies and procedures / internal controls / compliance",
+        "use_when": "Tier 1 (Domain Specific): Questions about GL naming, intra-group account reconciliation, ICFR requirements (SOX/NI 52-109), or the overall ICMP framework (COSO). **Strategy:** Query for specific policy numbers (FIN-ACC-22, FIN-ACC-201), control frameworks, or process details. **Query:** Use terms like 'GL naming convention', 'intra-group accounts', 'ICFR', 'SOX', 'NI 52-109', 'ICMP', 'COSO framework', 'FIN-ACC-22', 'FIN-ACC-201'.",
+    },
     "external_ey": {
         "name": "EY IFRS Guidance",
         "description": "External IFRS guidance and interpretations from EY. Includes disclosure checklist.",
