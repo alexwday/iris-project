@@ -21,12 +21,12 @@ AVAILABLE_DATABASES = {
         "content_type": "policies and procedures",
         "use_when": "Accounting Primary Source: Official RBC policy statements. **Strategy:** The primary source for RBC accounting policy. Always consult first for accounting questions. Check US GAAP flags. **Query:** Use RBC terms, policy areas; check US GAAP flags.",
     },
-    "internal_cheatsheet": {  # Replaces internal_infographic based on user feedback
-        "name": "APG Cheat Sheet Infographics",
-        "description": "1-2 page summaries/infographics on specific accounting topics (Internal RBC).",
-        "query_type": "keyword search",  # Assuming keyword based on previous value for cheatsheet/infographic
+    "internal_cheatsheets": { # Renamed from internal_cheatsheet
+        "name": "APG Cheatsheets",
+        "description": "Internal RBC 1-2 page summaries/infographics on specific accounting topics (Cheatsheets).",
+        "query_type": "semantic search", # Aligned with internal_par process
         "content_type": "summarized guidance / infographics",
-        "use_when": "Accounting Core Context: Quick visual summaries. **Strategy:** Always included alongside CAPM for accounting queries to provide definitions/overviews. **Query:** Use concise, keyword-focused queries.",
+        "use_when": "Accounting Core Context: Quick visual summaries. **Strategy:** Always included alongside CAPM for accounting queries to provide definitions/overviews. **Query:** Use concise, topic-focused queries suitable for semantic search.",
     },
     "internal_wiki": {
         "name": "APG Wiki Entries",
