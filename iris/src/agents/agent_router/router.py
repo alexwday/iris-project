@@ -17,6 +17,7 @@ Dependencies:
 
 import json
 import logging
+from typing import Tuple, Dict, Optional, Any # Added Tuple, Dict, Optional, Any
 
 from ...chat_model.model_settings import get_model_config
 from ...llm_connectors.rbc_openai import call_llm
@@ -44,7 +45,7 @@ class RouterError(Exception):
     pass
 
 
-def get_routing_decision(conversation, token):
+def get_routing_decision(conversation, token) -> Tuple[Dict[str, Any], Optional[Dict[str, Any]]]:
     """
     Get routing decision from the model using a tool call.
 
@@ -52,14 +53,18 @@ def get_routing_decision(conversation, token):
         conversation (dict): Conversation with 'messages' key
         token (str): Authentication token for API access
             - In RBC environment: OAuth token
+            - In RBC environment: OAuth token
             - In local environment: API key
 
     Returns:
-        dict: Routing decision with 'function_name' key
+        Tuple[Dict[str, Any], Optional[Dict[str, Any]]]:
+            - Routing decision dictionary with 'function_name' key.
+            - Usage details dictionary for the LLM call, or None if error/not applicable.
 
     Raises:
-        RouterError: If there is an error in getting the routing decision
+        RouterError: If there is an error in getting the routing decision.
     """
+    usage_details = None # Initialize usage details
     try:
         # Prepare system message with router prompt
         system_message = {"role": "system", "content": SYSTEM_PROMPT}
@@ -70,11 +75,11 @@ def get_routing_decision(conversation, token):
             messages.extend(conversation["messages"])
 
         logger.info(f"Getting routing decision using model: {MODEL_NAME}")
-        logger.info("Initiating Router API call")  # Added contextual log
+        logger.info("Initiating Router API call")
 
-        # Make the API call with tool calling
-        response = call_llm(
-            oauth_token=token,  # Works with both OAuth token and API key
+        # Make the API call with tool calling (non-streaming returns tuple)
+        response, usage_details = call_llm(
+            oauth_token=token,
             model=MODEL_NAME,
             messages=messages,
             max_tokens=MAX_TOKENS,
@@ -88,16 +93,22 @@ def get_routing_decision(conversation, token):
             prompt_token_cost=PROMPT_TOKEN_COST,
             completion_token_cost=COMPLETION_TOKEN_COST,
         )
-        # Extract the tool call from the response
-        if (
-            not response.choices
-            or not response.choices[0].message
-            or not response.choices[0].message.tool_calls
-            or not response.choices[0].message.tool_calls[0]
-        ):
-            raise RouterError("No tool call received in response")
 
-        tool_call = response.choices[0].message.tool_calls[0]
+        # Check if response object itself is valid before accessing attributes
+        if not response or not hasattr(response, 'choices') or not response.choices:
+             raise RouterError("Invalid or empty response received from LLM")
+
+        # Extract the tool call from the response
+        message = response.choices[0].message
+        if not message or not message.tool_calls:
+            # Handle cases where the model might return content instead of a tool call
+            content_returned = message.content if message and message.content else "No content"
+            logger.warning(f"Expected tool call but received content: {content_returned[:100]}...")
+            # Decide on fallback behavior - perhaps default routing or raise error
+            # For now, raise error as tool call is expected
+            raise RouterError("No tool call received in response, content returned instead.")
+
+        tool_call = message.tool_calls[0]
 
         # Verify that the correct function was called
         if tool_call.function.name != "route_query":
@@ -122,8 +133,12 @@ def get_routing_decision(conversation, token):
         # Log the routing decision
         logger.info(f"Routing decision: {function_name}")
 
-        return {"function_name": function_name}
+        # Return both decision and usage details
+        return {"function_name": function_name}, usage_details
 
     except Exception as e:
-        logger.error(f"Error getting routing decision: {str(e)}")
-        raise RouterError(f"Failed to get routing decision: {str(e)}")
+        logger.error(f"Error getting routing decision: {str(e)}", exc_info=True) # Add exc_info
+        # Return default decision and None for usage on error
+        # Or re-raise, depending on desired handling in model.py
+        # Re-raising seems appropriate to signal failure upstream
+        raise RouterError(f"Failed to get routing decision: {str(e)}") from e

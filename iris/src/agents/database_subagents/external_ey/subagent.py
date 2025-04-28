@@ -962,7 +962,7 @@ def _query_database_logic(
 
 def query_database_sync(
     query: str, scope: str, token: Optional[str] = None
-) -> DatabaseResponse:
+) -> Tuple[DatabaseResponse, Optional[List[str]]]:
     """
     Synchronously query the External EY database. Handles 'metadata' and 'research' scopes.
 
@@ -979,9 +979,34 @@ def query_database_sync(
 
     # Call the refactored logic function
     result = _query_database_logic(query, scope, token)
-
+    
+    # Track chunk IDs used for process monitoring
+    chunk_ids = None
+    
+    # For research results, extract chunk IDs from initial results
+    if scope == "research" and isinstance(result, dict) and result.get("status_summary") != "❌ Embedding Generation Failed":
+        # Get chunk IDs from results, focus on those used for synthesis
+        try:
+            # Generate embedding and perform search to get chunks (simplified version of what's in _query_database_logic)
+            conn = None
+            try:
+                conn = connect_to_db(ENVIRONMENT)
+                if conn:
+                    register_vector(conn)
+                    with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
+                        query_embedding = _generate_query_embedding(query, token)
+                        if query_embedding:
+                            initial_results = _perform_vector_search(cursor, query_embedding, 5)  # Smaller number for monitoring
+                            if initial_results:
+                                chunk_ids = [str(item.get('id')) for item in initial_results if item.get('id')]
+            finally:
+                if conn:
+                    conn.close()
+        except Exception as e:
+            logger.warning(f"Failed to extract chunk IDs for monitoring: {e}")
+    
     end_time = time.time()
     duration = end_time - start_time
     logger.info(f"{DATABASE_NAME} query completed in {duration:.2f} seconds.")
 
-    return result
+    return result, chunk_ids

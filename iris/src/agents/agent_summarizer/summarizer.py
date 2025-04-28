@@ -16,11 +16,11 @@ Dependencies:
 
 import logging
 import json
-from typing import Any, Dict, List, Optional, Union, Generator
+from typing import Any, Dict, List, Optional, Union, Generator # Keep Generator
 
 from ...chat_model.model_settings import get_model_config
 
-from ...llm_connectors.rbc_openai import call_llm, log_usage_statistics
+from ...llm_connectors.rbc_openai import call_llm # Remove log_usage_statistics
 from .summarizer_settings import (
     AVAILABLE_DATABASES,
     MAX_TOKENS,
@@ -46,10 +46,13 @@ def generate_streaming_summary(
     ],  # Input is now Dict[db_name, detailed_research_string]
     scope: str,  # Keep scope for potential future variations
     token: Optional[str],
-    original_query_plan: Optional[Dict] = None,  # Keep for context if needed
-) -> Generator[str, None, None]:
+    original_query_plan: Optional[Dict] = None,
+) -> Generator[Any, None, None]: # Yields str or dict
     """
-    Generate the final response based on aggregated detailed research (synchronous version).
+    Generate the final response based on aggregated detailed research.
+
+    Yields content chunks (str) and finally a dictionary containing usage details:
+    {'usage_details': {'model': str, ...}}
 
     Currently focuses on 'research' scope, generating a streaming summary using an LLM.
     The 'metadata' scope handling is simplified as metadata is now handled
@@ -63,12 +66,15 @@ def generate_streaming_summary(
         original_query_plan (dict, optional): The original query plan (might be useful for context).
 
     Returns:
-        Generator[str, None, None]: A generator yielding response chunks from the LLM stream.
+    Yields:
+        str: Content chunks of the summary.
+        dict: The final item yielded is a dictionary {'usage_details': ...}.
 
     Raises:
         SummarizerError: If there is an error generating the response.
     """
     logger.info(f"Generating final summary for scope: {scope}")
+    final_usage_details = None # Initialize
 
     # --- Research Scope ---
     if scope == "research":
@@ -149,27 +155,31 @@ def generate_streaming_summary(
                 # No database_name needed here
             )
 
-            # Yield chunks from the synchronous LLM stream
-            for chunk in llm_stream:
-                # Usage logging is handled by call_llm when stream_options include_usage=True
-                # (which it does by default in rbc_openai.py for streaming)
+            # Process the stream, yielding content and capturing final usage details
+            for item in llm_stream:
+                if isinstance(item, dict) and 'usage_details' in item:
+                    final_usage_details = item # Capture usage details
+                    break # Stop after getting usage
+                elif hasattr(item, 'choices') and item.choices and item.choices[0].delta and item.choices[0].delta.content:
+                    yield item.choices[0].delta.content
+                # else: logger.debug("Received non-content chunk in summary stream.")
 
-                # Yield content
-                if (
-                    hasattr(chunk, "choices")
-                    and chunk.choices
-                    and hasattr(chunk.choices[0], "delta")
-                    and hasattr(chunk.choices[0].delta, "content")
-                    and chunk.choices[0].delta.content is not None
-                ):
-                    yield chunk.choices[0].delta.content
+            logger.info("Summary stream finished.")
+            # Yield final usage details
+            if final_usage_details:
+                yield final_usage_details
+            else:
+                logger.warning("Usage details not found in summary stream.")
+                yield {'usage_details': {'error': 'Usage data missing from stream'}}
 
         except Exception as e:
             logger.error(
                 f"Error generating streaming research summary: {str(e)}", exc_info=True
             )
+            # Yield error message before raising
             yield f"\n\n**Error generating research summary:** {str(e)}\n"
-            raise SummarizerError(f"Failed to generate streaming summary: {str(e)}")
+            # Re-raise to signal failure upstream
+            raise SummarizerError(f"Failed to generate streaming summary: {str(e)}") from e
 
     # --- Metadata Scope (Simplified) ---
     elif scope == "metadata":

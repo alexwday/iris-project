@@ -12,13 +12,14 @@ Functions:
 import asyncio
 import logging
 import time
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union, Tuple
 
 # Define response types consistent with database_router
 MetadataResponse = List[Dict[str, Any]]
 # ResearchResponse is now a dictionary containing detailed research and status
 ResearchResponse = Dict[str, str]
 DatabaseResponse = Union[MetadataResponse, ResearchResponse]
+SubagentResult = Tuple[DatabaseResponse, Optional[List[str]]] # Define a tuple for result + doc_ids
 
 # Get module logger
 logger = logging.getLogger(__name__)
@@ -26,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 def query_database_sync(
     query: str, scope: str, token: Optional[str] = None
-) -> DatabaseResponse:
+) -> SubagentResult:
     """
     Synchronously query the Internal Infographic database (Placeholder Stub).
 
@@ -36,20 +37,23 @@ def query_database_sync(
         token (str, optional): Authentication token (unused in stub).
 
     Returns:
-        DatabaseResponse: Empty list [] for 'metadata', or a placeholder
-                          Dict[str, str] for 'research'.
+        SubagentResult: Tuple containing the database response and None for doc_ids.
+                        The first element is either empty list [] for 'metadata', 
+                        or a placeholder Dict[str, str] for 'research'.
+                        The second element is None since this is a stub.
     """
     logger.warning(
         f"Querying Internal Infographic STUB: '{query}' with scope: {scope}. Returning placeholder data."
     )
     database_name = "internal_infographic"
+    selected_doc_ids: Optional[List[str]] = None  # Always None for stub
 
     # Removed asyncio.sleep for synchronous stub
 
     if scope == "metadata":
         # Return empty list for metadata scope
         logger.info(f"Returning empty metadata list for {database_name} stub.")
-        return []
+        return [], selected_doc_ids
     elif scope == "research":
         # Return placeholder dictionary for research scope
         placeholder_research = f"Placeholder detailed research for Internal Infographic query: '{query}'. Implementation pending."
@@ -58,7 +62,7 @@ def query_database_sync(
         return {
             "detailed_research": placeholder_research,
             "status_summary": placeholder_status,
-        }
+        }, selected_doc_ids
     else:
         # Handle invalid scope
         logger.error(
@@ -68,4 +72,4 @@ def query_database_sync(
         return {
             "detailed_research": f"Error: Invalid scope '{scope}' provided to {database_name} stub.",
             "status_summary": f"❌ Error: Invalid scope '{scope}'.",
-        }
+        }, selected_doc_ids

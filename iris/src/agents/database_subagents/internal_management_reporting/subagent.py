@@ -14,13 +14,14 @@ import json
 import logging
 import re
 import time
-from typing import Any, Dict, List, Optional, Union, cast
+from typing import Any, Dict, List, Optional, Union, cast, Tuple
 
 # Define response types consistent with database_router
 MetadataResponse = List[Dict[str, Any]]
 # ResearchResponse is now a dictionary containing detailed research and status
 ResearchResponse = Dict[str, str]
 DatabaseResponse = Union[MetadataResponse, ResearchResponse]
+SubagentResult = Tuple[DatabaseResponse, Optional[List[str]]]  # Define a tuple for result + doc_ids
 
 from ....chat_model.model_settings import ENVIRONMENT, get_model_config
 from ....initial_setup.db_config import connect_to_db
@@ -494,7 +495,7 @@ def synthesize_response_and_status(
 
 def query_database_sync(
     query: str, scope: str, token: Optional[str] = None
-) -> DatabaseResponse:
+) -> SubagentResult:
     """
     Synchronously query the Internal Management Reporting database based on the specified scope.
     """
@@ -503,47 +504,56 @@ def query_database_sync(
     default_error_status = "❌ Error during query processing."
 
     try:
+        # Track selected document IDs for process monitoring
+        selected_doc_ids: Optional[List[str]] = None
+        
         # Direct synchronous calls
         catalog = fetch_management_reporting_catalog()
         logger.info(f"Retrieved {len(catalog)} total Management Reporting catalog entries")
         if not catalog:
             if scope == "metadata":
-                return []
+                return [], None
             else:
                 return {
                     "detailed_research": "No documents found in the Internal Management Reporting database catalog.",
                     "status_summary": "📄 No documents found in catalog.",
-                }
+                }, None
 
         # Select documents
-        doc_ids = select_relevant_documents(
+        selected_doc_ids = select_relevant_documents(
             query, catalog, token, database_name=database_name
         )
-        logger.info(f"LLM selected {len(doc_ids)} relevant Management Reporting document IDs: {doc_ids}")
-        if not doc_ids:
+        logger.info(f"LLM selected {len(selected_doc_ids)} relevant Management Reporting document IDs: {selected_doc_ids}")
+        if not selected_doc_ids:
             if scope == "metadata":
-                return []
+                return [], None
             else:
                 return {
                     "detailed_research": "LLM did not select any relevant documents from the catalog based on the query.",
                     "status_summary": "📄 No relevant documents selected by LLM.",
-                }
+                }, None
 
         # Process based on scope
         if scope == "metadata":
-            selected_items = [item for item in catalog if item.get("id") in doc_ids]
+            selected_items = [item for item in catalog if item.get("id") in selected_doc_ids]
             logger.info(f"Returning {len(selected_items)} selected Management Reporting metadata items.")
-            return selected_items
+            return selected_items, selected_doc_ids
         elif scope == "research":
             # Fetch content and synthesize
-            documents = fetch_document_content(doc_ids)
+            documents = fetch_document_content(selected_doc_ids)
             logger.info(
                 f"Retrieved content for {len(documents)} Management Reporting documents for research."
             )
+            if not documents:
+                return {
+                    "detailed_research": "Could not retrieve content for the selected Management Reporting documents.",
+                    "status_summary": "❌ Error retrieving document content.",
+                }, selected_doc_ids
+                
             research_result = synthesize_response_and_status(
                 query, documents, token, database_name=database_name
             )
-            return research_result
+            return research_result, selected_doc_ids
         else:
             logger.error(f"Invalid scope provided to internal_management_reporting subagent: {scope}")
             raise ValueError(f"Invalid scope: {scope}")
@@ -552,9 +562,9 @@ def query_database_sync(
         error_msg = f"Error querying Internal Management Reporting database (scope: {scope}): {str(e)}"
         logger.error(error_msg, exc_info=True)
         if scope == "metadata":
-            return []
+            return [], None
         else:
             return {
                 "detailed_research": f"**Error processing request for Internal Management Reporting:** {str(e)}",
                 "status_summary": default_error_status,
-            }
+            }, selected_doc_ids  # Return error with any selected IDs we have

@@ -21,6 +21,7 @@ MetadataResponse = List[Dict[str, Any]]
 # ResearchResponse is now a dictionary containing detailed research and status
 ResearchResponse = Dict[str, str]
 DatabaseResponse = Union[MetadataResponse, ResearchResponse]
+SubagentResult = Tuple[DatabaseResponse, Optional[List[str]]]  # Define a tuple for result + doc_ids
 
 from ....chat_model.model_settings import ENVIRONMENT, get_model_config
 from ....initial_setup.db_config import connect_to_db
@@ -812,7 +813,7 @@ def synthesize_response_and_status(
 
 def query_database_sync(
     query: str, scope: str, token: Optional[str] = None
-) -> DatabaseResponse:
+) -> SubagentResult:
     """
     Synchronously query the Internal CAPM database based on the specified scope.
 
@@ -831,64 +832,72 @@ def query_database_sync(
         token (str, optional): Authentication token for API access.
 
     Returns:
-        DatabaseResponse: Query results, either a List[Dict] for 'metadata' scope
-                          or a Dict[str, str] for 'research' scope.
+        SubagentResult: Tuple containing the query results and selected document IDs.
+                        The first element is either a List[Dict] for 'metadata' scope
+                        or a Dict[str, str] for 'research' scope.
+                        The second element is a list of selected document IDs or None.
     """
     logger.info(f"Querying Internal CAPM database: '{query}' with scope: {scope}")
     database_name = "internal_capm"
     default_error_status = "❌ Error during query processing."
+    selected_doc_ids: Optional[List[str]] = None  # Initialize
 
     try:
         # Fetch catalog
         catalog = fetch_capm_catalog()
         logger.info(f"Retrieved {len(catalog)} total CAPM catalog entries")
         if not catalog:
+            response: DatabaseResponse
             if scope == "metadata":
-                return []
+                response = []
             else:
-                return {
+                response = {
                     "detailed_research": "No documents found in the Internal CAPM database catalog.",
                     "status_summary": "📄 No documents found in catalog.",
                 }
+            return response, selected_doc_ids  # Return empty response and None IDs
 
         # Select documents
-        doc_ids = select_relevant_documents(
+        selected_doc_ids = select_relevant_documents(  # Assign to variable
             query, catalog, token, database_name=database_name
         )
         logger.info(
-            f"LLM selected {len(doc_ids)} relevant CAPM document IDs: {doc_ids}"
+            f"LLM selected {len(selected_doc_ids)} relevant CAPM document IDs: {selected_doc_ids}"
         )
-        if not doc_ids:
+        if not selected_doc_ids:
+            response: DatabaseResponse
             if scope == "metadata":
-                return []
+                response = []
             else:
-                return {
+                response = {
                     "detailed_research": "LLM did not select any relevant documents from the catalog based on the query.",
                     "status_summary": "📄 No relevant documents selected by LLM.",
                 }
+            return response, selected_doc_ids  # Return empty response and empty IDs list
 
         # Process based on scope
         if scope == "metadata":
             # Get selected items from catalog
-            selected_items = [item for item in catalog if item.get("id") in doc_ids]
+            selected_items = [item for item in catalog if item.get("id") in selected_doc_ids]
 
             # Removed generation of condensed descriptions
 
             logger.info(
                 f"Returning {len(selected_items)} selected CAPM metadata items."
             )
-            return selected_items
+            return selected_items, selected_doc_ids  # Return metadata and IDs
         elif scope == "research":
             # Fetch sections and summaries
-            documents_with_summaries = fetch_document_sections_and_summaries(doc_ids)
+            documents_with_summaries = fetch_document_sections_and_summaries(selected_doc_ids)
             logger.info(
                 f"Retrieved sections and summaries for {len(documents_with_summaries)} CAPM documents."
             )
             if not documents_with_summaries:
-                return {
+                response = {
                     "detailed_research": "Could not retrieve sections and summaries for the selected CAPM documents.",
                     "status_summary": "❌ Error retrieving document sections.",
                 }
+                return response, selected_doc_ids  # Return error response with IDs
 
             # Select relevant sections based on summaries
             section_selections = select_relevant_sections(
@@ -899,10 +908,11 @@ def query_database_sync(
                 logger.warning(
                     "LLM did not select any relevant sections."
                 )  # Added more specific warning
-                return {
+                response = {
                     "detailed_research": "LLM did not select any relevant sections from the CAPM documents based on the query.",
                     "status_summary": "📄 No relevant sections selected by LLM.",
                 }
+                return response, selected_doc_ids  # Return error response with IDs
 
             # Fetch full content for selected sections
             documents_with_content = fetch_section_content(section_selections)
@@ -910,27 +920,31 @@ def query_database_sync(
                 f"Retrieved content for {len(documents_with_content)} CAPM documents for research."
             )
             if not documents_with_content:
-                return {
+                response = {
                     "detailed_research": "Could not retrieve content for the selected CAPM sections.",
                     "status_summary": "❌ Error retrieving section content.",
                 }
+                return response, selected_doc_ids  # Return error response with IDs
 
             # Synthesize response
             research_result = synthesize_response_and_status(
                 query, documents_with_content, token, database_name=database_name
             )
-            return research_result
+            return research_result, selected_doc_ids  # Return research result and IDs
         else:
             logger.error(f"Invalid scope provided to internal_capm subagent: {scope}")
-            raise ValueError(f"Invalid scope: {scope}")
+            raise ValueError(f"Invalid scope: {scope}")  # Let the error propagate
 
     except Exception as e:
         error_msg = f"Error querying Internal CAPM database (scope: {scope}): {str(e)}"
         logger.error(error_msg, exc_info=True)
+        response: DatabaseResponse
         if scope == "metadata":
-            return []
+            response = []
         else:  # research scope
-            return {
+            response = {
                 "detailed_research": f"**Error processing request for Internal CAPM:** {str(e)}",
                 "status_summary": default_error_status,
             }
+        # Return error response and potentially selected IDs if selection succeeded before error
+        return response, selected_doc_ids

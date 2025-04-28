@@ -14,13 +14,14 @@ import json
 import logging
 import re
 import time
-from typing import Any, Dict, List, Optional, Union, cast
+from typing import Any, Dict, List, Optional, Union, cast, Tuple
 
 # Define response types consistent with database_router
 MetadataResponse = List[Dict[str, Any]]
 # ResearchResponse is now a dictionary containing detailed research and status
 ResearchResponse = Dict[str, str]
 DatabaseResponse = Union[MetadataResponse, ResearchResponse]
+SubagentResult = Tuple[DatabaseResponse, Optional[List[str]]]  # Define a tuple for result + doc_ids
 
 from ....chat_model.model_settings import ENVIRONMENT, get_model_config
 from ....initial_setup.db_config import connect_to_db
@@ -494,7 +495,7 @@ def synthesize_response_and_status(
 
 def query_database_sync(
     query: str, scope: str, token: Optional[str] = None
-) -> DatabaseResponse:
+) -> SubagentResult:
     """
     Synchronously query the Internal Process and Controls database based on the specified scope.
     """

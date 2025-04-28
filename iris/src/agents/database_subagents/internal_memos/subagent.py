@@ -14,13 +14,14 @@ import json
 import logging
 import re
 import time
-from typing import Any, Dict, List, Optional, Union, cast
+from typing import Any, Dict, List, Optional, Union, cast, Tuple
 
 # Define response types consistent with database_router
 MetadataResponse = List[Dict[str, Any]]
 # ResearchResponse is now a dictionary containing detailed research and status
 ResearchResponse = Dict[str, str]
 DatabaseResponse = Union[MetadataResponse, ResearchResponse]
+SubagentResult = Tuple[DatabaseResponse, Optional[List[str]]]  # Define a tuple for result + doc_ids
 
 from ....chat_model.model_settings import ENVIRONMENT, get_model_config
 from ....initial_setup.db_config import connect_to_db
@@ -495,15 +496,19 @@ def synthesize_response_and_status(
 
 def query_database_sync(
     query: str, scope: str, token: Optional[str] = None
-) -> DatabaseResponse:
+) -> SubagentResult:
     """
     Synchronously query the Internal Memo database based on the specified scope.
+    
+    Returns:
+        Tuple containing the main database response and a list of selected document IDs (or None).
     """
     logger.info(
         f"Querying Internal Memo database (sync): '{query}' with scope: {scope}"
     )
     database_name = "internal_memo"
     default_error_status = "❌ Error during query processing."
+    selected_doc_ids: Optional[List[str]] = None  # Initialize
 
     try:
         # Direct synchronous calls
@@ -512,41 +517,45 @@ def query_database_sync(
         )  # Function name kept for consistency, queries 'internal_memo'
         logger.info(f"Retrieved {len(catalog)} total Memo catalog entries")
         if not catalog:
+            response: DatabaseResponse
             if scope == "metadata":
-                return []
+                response = []
             else:
-                return {
+                response = {
                     "detailed_research": "No documents found in the Internal Memo database catalog.",
                     "status_summary": "📄 No documents found in catalog.",
                 }
+            return response, selected_doc_ids  # Return empty response and None IDs
 
         # Select documents
-        doc_ids = select_relevant_documents(  # Function name kept for consistency, uses 'internal_memo' db name
+        selected_doc_ids = select_relevant_documents(  # Assign to variable
             query, catalog, token, database_name=database_name
         )
         logger.info(
-            f"LLM selected {len(doc_ids)} relevant Memo document IDs: {doc_ids}"
+            f"LLM selected {len(selected_doc_ids)} relevant Memo document IDs: {selected_doc_ids}"
         )
-        if not doc_ids:
+        if not selected_doc_ids:
+            response: DatabaseResponse
             if scope == "metadata":
-                return []
+                response = []
             else:
-                return {
+                response = {
                     "detailed_research": "LLM did not select any relevant documents from the catalog based on the query.",
                     "status_summary": "📄 No relevant documents selected by LLM.",
                 }
+            return response, selected_doc_ids  # Return empty response and empty IDs list
 
         # Process based on scope
         if scope == "metadata":
-            selected_items = [item for item in catalog if item.get("id") in doc_ids]
+            selected_items = [item for item in catalog if item.get("id") in selected_doc_ids]
             logger.info(
                 f"Returning {len(selected_items)} selected Memo metadata items."
             )
-            return selected_items
+            return selected_items, selected_doc_ids  # Return metadata and IDs
         elif scope == "research":
             # Fetch content and synthesize
             documents = fetch_document_content(
-                doc_ids
+                selected_doc_ids
             )  # Function name kept for consistency, queries 'internal_memo'
             logger.info(
                 f"Retrieved content for {len(documents)} Memo documents for research."
@@ -554,18 +563,21 @@ def query_database_sync(
             research_result = synthesize_response_and_status(  # Function name kept for consistency, uses 'internal_memo' db name
                 query, documents, token, database_name=database_name
             )
-            return research_result
+            return research_result, selected_doc_ids  # Return research and IDs
         else:
             logger.error(f"Invalid scope provided to internal_memo subagent: {scope}")
-            raise ValueError(f"Invalid scope: {scope}")
+            raise ValueError(f"Invalid scope: {scope}")  # Let the error propagate
 
     except Exception as e:
         error_msg = f"Error querying Internal Memo database (scope: {scope}): {str(e)}"
         logger.error(error_msg, exc_info=True)
+        response: DatabaseResponse
         if scope == "metadata":
-            return []
+            response = []
         else:
-            return {
+            response = {
                 "detailed_research": f"**Error processing request for Internal Memo:** {str(e)}",
                 "status_summary": default_error_status,
             }
+        # Return error response and potentially selected IDs if selection succeeded before error
+        return response, selected_doc_ids

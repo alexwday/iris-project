@@ -17,6 +17,7 @@ Dependencies:
 
 import json
 import logging
+from typing import Tuple, Dict, Optional, Any # Added Tuple, Dict, Optional, Any
 
 from ...chat_model.model_settings import get_model_config
 from ...llm_connectors.rbc_openai import call_llm
@@ -40,11 +41,10 @@ COMPLETION_TOKEN_COST = model_config["completion_token_cost"]
 
 class ClarifierError(Exception):
     """Base exception class for clarifier-related errors."""
-
     pass
 
 
-def clarify_research_needs(conversation, token):
+def clarify_research_needs(conversation, token) -> Tuple[Dict[str, Any], Optional[Dict[str, Any]]]:
     """
     Determine if essential context is needed or create a research statement.
 
@@ -55,14 +55,14 @@ def clarify_research_needs(conversation, token):
             - In local environment: API key
 
     Returns:
-        dict: Clarifier decision with keys:
-            - action: Either "request_essential_context" or "create_research_statement"
-            - output: Either context questions or a research statement
-            - is_continuation: Whether this is a continuation of previous research
+        Tuple[Dict[str, Any], Optional[Dict[str, Any]]]:
+            - Clarifier decision dictionary.
+            - Usage details dictionary for the LLM call, or None if error.
 
     Raises:
-        ClarifierError: If there is an error in the clarification process
+        ClarifierError: If there is an error in the clarification process.
     """
+    usage_details = None # Initialize usage details
     try:
         # Prepare system message with clarifier prompt
         system_message = {"role": "system", "content": SYSTEM_PROMPT}
@@ -73,10 +73,10 @@ def clarify_research_needs(conversation, token):
             messages.extend(conversation["messages"])
 
         logger.info(f"Clarifying research needs using model: {MODEL_NAME}")
-        logger.info("Initiating Clarifier API call")  # Added contextual log
+        logger.info("Initiating Clarifier API call")
 
-        # Make the API call with tool calling
-        response = call_llm(
+        # Make the API call with tool calling (non-streaming returns tuple)
+        response, usage_details = call_llm(
             oauth_token=token,
             model=MODEL_NAME,
             messages=messages,
@@ -92,16 +92,18 @@ def clarify_research_needs(conversation, token):
             completion_token_cost=COMPLETION_TOKEN_COST,
         )
 
-        # Extract the tool call from the response
-        if (
-            not response.choices
-            or not response.choices[0].message
-            or not response.choices[0].message.tool_calls
-            or not response.choices[0].message.tool_calls[0]
-        ):
-            raise ClarifierError("No tool call received in response")
+        # Check if response object itself is valid before accessing attributes
+        if not response or not hasattr(response, 'choices') or not response.choices:
+             raise ClarifierError("Invalid or empty response received from LLM")
 
-        tool_call = response.choices[0].message.tool_calls[0]
+        # Extract the tool call from the response
+        message = response.choices[0].message
+        if not message or not message.tool_calls:
+            content_returned = message.content if message and message.content else "No content"
+            logger.warning(f"Expected tool call but received content: {content_returned[:100]}...")
+            raise ClarifierError("No tool call received in response, content returned instead.")
+
+        tool_call = message.tool_calls[0]
 
         # Verify that the correct function was called
         if tool_call.function.name != "make_clarifier_decision":
@@ -150,13 +152,18 @@ def clarify_research_needs(conversation, token):
             logger.info(f"Determined scope: {scope}")
         logger.info(f"Is continuation: {is_continuation}")
 
-        return {
+        # Construct the decision dictionary
+        decision = {
             "action": action,
             "output": output,
-            "scope": scope,  # Include scope in the return dictionary
+            "scope": scope,
             "is_continuation": is_continuation,
         }
 
+        # Return both decision and usage details
+        return decision, usage_details
+
     except Exception as e:
-        logger.error(f"Error clarifying research needs: {str(e)}")
-        raise ClarifierError(f"Failed to clarify research needs: {str(e)}")
+        logger.error(f"Error clarifying research needs: {str(e)}", exc_info=True) # Add exc_info
+        # Re-raise to signal failure upstream
+        raise ClarifierError(f"Failed to clarify research needs: {str(e)}") from e

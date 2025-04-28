@@ -18,12 +18,51 @@ Dependencies:
 
 import time
 import logging
+import uuid  # Import uuid
 from typing import Dict, Any, List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timezone
 import json
+import psycopg2 # Use project's standard DB connection method
+from psycopg2.extras import Json # For inserting JSONB
 
 # Configure module logger
 logger = logging.getLogger(__name__)
+
+
+# --- Helper to extract decision details ---
+def _extract_decision_details(stage_name: str, details: Dict[str, Any]) -> Optional[str]:
+    """Extracts key decision details based on stage name for logging."""
+    # Simple extraction logic based on previously discussed plan
+    try:
+        if stage_name == "router":
+            decision = details.get('decision', {})
+            return f"Function: {decision.get('function_name')}"
+        elif stage_name == "planner":
+            dbs = details.get('selected_databases', [])
+            return f"Selected DBs: {', '.join(dbs)}" if dbs else "No DBs selected"
+        elif stage_name == "clarifier":
+            action = details.get('action')
+            # Assuming 'output' holds statement/questions from clarifier_decision
+            output = details.get('decision', {}).get('output', '')
+            return f"Action: {action}, Output: {output[:250]}..." # Truncate long outputs
+        elif stage_name.startswith("db_query_"):
+            # Subagents need to add 'document_ids' or 'chunk_ids' to details
+            ids = details.get('document_ids') or details.get('chunk_ids')
+            if ids:
+                 # Limit the number of IDs shown for brevity in logs
+                 ids_str = ', '.join(map(str, ids[:10]))
+                 suffix = "..." if len(ids) > 10 else ""
+                 return f"Selected IDs: [{ids_str}{suffix}]"
+            # Fallbacks if specific IDs aren't present
+            elif details.get('result_count') is not None:
+                 return f"Result Count: {details.get('result_count')}"
+            elif details.get('status_summary'):
+                 return f"Status: {details.get('status_summary')}"
+        # Add more specific stage handlers if needed
+    except Exception as e:
+        logger.warning(f"Error extracting decision details for stage '{stage_name}': {e}")
+    # Return None if no specific detail is extracted
+    return None
 
 
 class ProcessStage:
@@ -42,19 +81,17 @@ class ProcessStage:
             name (str): The name of the stage
         """
         self.name = name
-        self.start_time = None
-        self.end_time = None
-        self.duration = None
-        self.status = "not_started"
-        self.prompt_tokens = 0
-        self.completion_tokens = 0
-        self.total_tokens = 0
-        self.cost = 0.0
-        self.details = {}
+        self.start_time: Optional[datetime] = None # Type hint
+        self.end_time: Optional[datetime] = None   # Type hint
+        self.duration: Optional[float] = None      # Store duration in seconds
+        self.status: str = "not_started"
+        self.llm_calls_data: List[Dict[str, Any]] = [] # Store detailed LLM calls
+        self.details: Dict[str, Any] = {}
 
     def start(self) -> None:
         """Start timing the stage."""
-        self.start_time = datetime.now()
+        # Ensure timezone-aware datetime
+        self.start_time = datetime.now(timezone.utc)
         self.status = "in_progress"
 
     def end(self, status: str = "completed") -> None:
@@ -64,31 +101,27 @@ class ProcessStage:
         Args:
             status (str): Final status of the stage
         """
-        self.end_time = datetime.now()
+        # Ensure timezone-aware datetime
+        self.end_time = datetime.now(timezone.utc)
         if self.start_time:
+            # Calculate duration in seconds
             self.duration = (self.end_time - self.start_time).total_seconds()
         self.status = status
 
-    def update_tokens(
-        self,
-        prompt_tokens: int = 0,
-        completion_tokens: int = 0,
-        total_tokens: int = 0,
-        cost: float = 0.0,
-    ) -> None:
+    # Remove old update_tokens method
+    # def update_tokens(...) -> None: ...
+
+    def add_llm_call_details(self, call_details: Dict[str, Any]) -> None:
         """
-        Update token usage for the stage.
+        Add details of a single LLM call to this stage.
 
         Args:
-            prompt_tokens (int): Number of prompt tokens used
-            completion_tokens (int): Number of completion tokens used
-            total_tokens (int): Total number of tokens used
-            cost (float): Cost of token usage
+            call_details (Dict[str, Any]): Dictionary containing details like
+                                           'model', 'input_tokens', 'output_tokens',
+                                           'cost', 'response_time_ms'.
         """
-        self.prompt_tokens = prompt_tokens
-        self.completion_tokens = completion_tokens
-        self.total_tokens = total_tokens
-        self.cost = cost
+        # Basic validation could be added here if needed
+        self.llm_calls_data.append(call_details)
 
     def add_details(self, **kwargs) -> None:
         """
@@ -112,10 +145,12 @@ class ProcessStage:
             "end_time": self.end_time.isoformat() if self.end_time else None,
             "duration": self.duration,
             "status": self.status,
-            "prompt_tokens": self.prompt_tokens,
-            "completion_tokens": self.completion_tokens,
-            "total_tokens": self.total_tokens,
-            "cost": self.cost,
+            # Remove old token fields
+            # "prompt_tokens": self.prompt_tokens,
+            # "completion_tokens": self.completion_tokens,
+            # "total_tokens": self.total_tokens,
+            # "cost": self.cost,
+            "llm_calls_data": self.llm_calls_data, # Add new field
             "details": self.details,
         }
 
@@ -137,25 +172,124 @@ class ProcessMonitor:
         """
         self.enabled = enabled
         self.stages: Dict[str, ProcessStage] = {}
-        self.current_stage = None
-        self.start_time = None
-        self.end_time = None
+        self.current_stage: Optional[str] = None # Type hint
+        self.start_time: Optional[datetime] = None # Overall start time, type hint
+        self.end_time: Optional[datetime] = None   # Overall end time, type hint
+        self.run_uuid: Optional[uuid.UUID] = None  # Unique ID for the entire run
+
+    def set_run_uuid(self, run_uuid: uuid.UUID) -> None:
+        """Sets the unique identifier for the current process run."""
+        if not self.enabled:
+            return
+        self.run_uuid = run_uuid
+        logger.debug(f"Process monitor run UUID set: {run_uuid}")
 
     def start_monitoring(self) -> None:
         """Start the overall monitoring process."""
         if not self.enabled:
             return
-
-        self.start_time = datetime.now()
+        # Ensure timezone-aware datetime
+        self.start_time = datetime.now(timezone.utc)
+        # Reset stages for the new monitoring period
+        self.stages = {}
+        self.current_stage = None
+        self.end_time = None
+        # run_uuid should be set separately by the caller using set_run_uuid
         logger.debug("Process monitoring started")
 
     def end_monitoring(self) -> None:
         """End the overall monitoring process."""
         if not self.enabled:
             return
-
-        self.end_time = datetime.now()
+        # Ensure timezone-aware datetime
+        self.end_time = datetime.now(timezone.utc)
         logger.debug("Process monitoring ended")
+        # Note: Database logging is triggered separately by the caller
+
+    def log_to_database(self, cursor) -> None:
+        """
+        Logs all collected stage data for the current run to the database.
+
+        Args:
+            cursor: A psycopg2 database cursor object obtained from the caller,
+                    expected to be within an active transaction.
+        """
+        if not self.enabled:
+            logger.debug("Process monitoring disabled, skipping database logging.")
+            return
+        if not self.run_uuid:
+            logger.error("Run UUID not set, cannot log process monitor data to database.")
+            return
+        if not self.stages:
+            logger.warning("No stages recorded for this run, skipping database logging.")
+            return
+
+        logger.info(f"Logging process monitor data for run_uuid: {self.run_uuid}")
+
+        insert_query = """
+            INSERT INTO process_monitor_logs (
+                run_uuid, model_name, stage_name, stage_start_time, stage_end_time,
+                duration_ms, llm_calls, total_tokens, total_cost, status,
+                decision_details, error_message
+                -- user_id, environment, custom_metadata, notes are omitted for now
+            ) VALUES (
+                %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s,
+                %s, %s
+            );
+        """
+
+        records_to_insert = []
+        for stage in self.stages.values():
+            try:
+                # Prepare data for insertion
+                duration_ms = int(stage.duration * 1000) if stage.duration is not None else None
+                llm_calls_json = Json(stage.llm_calls_data) if stage.llm_calls_data else None
+
+                # Calculate totals from llm_calls_data
+                total_tokens = 0
+                total_cost = 0.0
+                if stage.llm_calls_data:
+                    for call in stage.llm_calls_data:
+                        total_tokens += call.get('input_tokens', 0) + call.get('output_tokens', 0)
+                        total_cost += call.get('cost', 0.0)
+
+                decision_details_str = _extract_decision_details(stage.name, stage.details)
+                error_message_str = stage.details.get('error') if stage.status == 'error' else None
+
+                record = (
+                    self.run_uuid,
+                    'iris', # model_name
+                    stage.name,
+                    stage.start_time, # Already timezone-aware UTC
+                    stage.end_time,   # Already timezone-aware UTC
+                    duration_ms,
+                    llm_calls_json,
+                    total_tokens if total_tokens > 0 else None, # Store NULL if 0
+                    total_cost if total_cost > 0 else None,     # Store NULL if 0.0
+                    stage.status,
+                    decision_details_str,
+                    error_message_str
+                )
+                records_to_insert.append(record)
+            except Exception as e:
+                logger.error(f"Error preparing stage '{stage.name}' data for DB logging: {e}", exc_info=True)
+                # Continue to next stage if possible
+
+        if not records_to_insert:
+            logger.warning("No valid stage records prepared for DB logging.")
+            return
+
+        try:
+            # Use execute_batch for potentially better performance with many stages
+            psycopg2.extras.execute_batch(cursor, insert_query, records_to_insert)
+            logger.info(f"Successfully logged {len(records_to_insert)} stages for run_uuid: {self.run_uuid}")
+        except Exception as db_err:
+            # Log the error, but let the caller handle transaction rollback/commit
+            logger.error(f"Database error during process monitor logging for run_uuid {self.run_uuid}: {db_err}", exc_info=True)
+            # Re-raise the exception so the caller knows the logging failed and can rollback
+            raise
+
 
     def start_stage(self, stage_name: str) -> None:
         """
@@ -196,31 +330,23 @@ class ProcessMonitor:
 
         logger.debug(f"Ended process stage: {stage_name} with status: {status}")
 
-    def update_stage_tokens(
-        self,
-        stage_name: str,
-        prompt_tokens: int = 0,
-        completion_tokens: int = 0,
-        total_tokens: int = 0,
-        cost: float = 0.0,
-    ) -> None:
+    # Remove old update_stage_tokens method entirely
+    # def update_stage_tokens(...) -> None: ...
+
+    def add_llm_call_details_to_stage(self, stage_name: str, call_details: Dict[str, Any]) -> None:
         """
-        Update token usage for a stage.
+        Adds details of a single LLM call to the specified stage.
 
         Args:
-            stage_name (str): Name of the stage to update
-            prompt_tokens (int): Number of prompt tokens used
-            completion_tokens (int): Number of completion tokens used
-            total_tokens (int): Total number of tokens used
-            cost (float): Cost of token usage
+            stage_name (str): The name of the stage to add details to.
+            call_details (Dict[str, Any]): Dictionary with LLM call info.
         """
         if not self.enabled or stage_name not in self.stages:
+            logger.warning(f"Attempted to add LLM details to non-existent or disabled stage: {stage_name}")
             return
 
-        # Update token usage
-        self.stages[stage_name].update_tokens(
-            prompt_tokens, completion_tokens, total_tokens, cost
-        )
+        self.stages[stage_name].add_llm_call_details(call_details)
+
 
     def add_stage_details(self, stage_name: str, **kwargs) -> None:
         """
@@ -402,7 +528,8 @@ class ProcessMonitor:
             "stages": {name: stage.to_dict() for name, stage in self.stages.items()},
         }
 
-        return json.dumps(data, indent=2)
+        # Use default=str for non-serializable types like UUID if needed elsewhere
+        return json.dumps(data, indent=2, default=str)
 
 
 # Create a global instance that can be imported and used by other modules
@@ -418,14 +545,26 @@ def enable_monitoring(enabled: bool = True) -> None:
     """
     global process_monitor
 
-    # Create a new instance with the desired enabled state
-    process_monitor = ProcessMonitor(enabled=enabled)
-
-    if enabled:
-        process_monitor.start_monitoring()
-        logger.debug("Process monitoring enabled")
-    else:
-        logger.debug("Process monitoring disabled")
+    # Avoid recreating if the state is already correct
+    # Also, ensure we don't disable if it wasn't enabled to begin with
+    if process_monitor.enabled != enabled:
+        # Only create new instance if state *changes*
+        process_monitor = ProcessMonitor(enabled=enabled)
+        if enabled:
+            # process_monitor.start_monitoring() # Start monitoring is called explicitly by model.py now
+            logger.debug("Process monitoring enabled by state change.")
+        else:
+            logger.debug("Process monitoring disabled by state change.")
+    elif enabled and not process_monitor.enabled:
+        # Handle case where it should be enabled but somehow isn't (e.g., initial state)
+        process_monitor = ProcessMonitor(enabled=True)
+        logger.debug("Process monitoring explicitly enabled.")
+    elif enabled:
+         # If already enabled, maybe reset stages? Or assume caller handles run lifecycle.
+         # For now, just log that it's already enabled.
+         logger.debug("Process monitoring was already enabled.")
+    else: # enabled is False and process_monitor.enabled is False
+        logger.debug("Process monitoring was already disabled.")
 
 
 def get_process_monitor() -> ProcessMonitor:

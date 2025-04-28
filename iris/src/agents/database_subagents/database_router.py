@@ -28,12 +28,14 @@ from ...global_prompts.database_statement import get_available_databases
 # Removed old token usage imports
 # from ...llm_connectors.rbc_openai import get_token_usage, reset_token_usage
 
-# Define response types for database queries (ResearchResponse is now Dict)
-MetadataResponse = List[Dict[str, Any]]  # List of catalog items
-ResearchResponse = Dict[
-    str, str
-]  # Dictionary with detailed_research and status_summary
-DatabaseResponse = Union[MetadataResponse, ResearchResponse]  # Combined type
+from typing import Any, Dict, Generator, List, Optional, TypeVar, Union, cast, Tuple # Added Tuple
+
+# Define response types for database queries
+MetadataResponse = List[Dict[str, Any]]
+ResearchResponse = Dict[str, str]
+DatabaseResponse = Union[MetadataResponse, ResearchResponse]
+# Define the type returned by subagents (result + optional doc IDs)
+SubagentResult = Tuple[DatabaseResponse, Optional[List[str]]]
 T = TypeVar("T")
 
 # Get available databases from the central configuration
@@ -53,7 +55,7 @@ logger = logging.getLogger(__name__)
 
 def route_query_sync(
     database: str, query: str, scope: str, token: Optional[str] = None
-) -> DatabaseResponse:
+) -> SubagentResult: # Updated return type hint
     """
     Synchronously routes a database query to the appropriate subagent module.
 
@@ -64,8 +66,9 @@ def route_query_sync(
         token (str, optional): Authentication token for API access.
 
     Returns:
-        DatabaseResponse: Query results, either a List[Dict] for 'metadata' scope
-                          or a Dict[str, str] for 'research' scope.
+        SubagentResult: A tuple containing:
+            - Query results (List[Dict] for 'metadata', Dict[str, str] for 'research').
+            - Optional list of selected document/chunk IDs used by the subagent.
 
     Raises:
         ValueError: If the database is not recognized or subagent is invalid.
@@ -77,13 +80,16 @@ def route_query_sync(
         error_msg = f"Unknown database: {database}"
         logger.error(error_msg)
         # Return appropriate error type based on expected scope return type
+        # Return appropriate error type based on expected scope return type, plus None for doc_ids
+        error_response: DatabaseResponse
         if scope == "metadata":
-            return []
+            error_response = []
         else:  # research scope
-            return {
+            error_response = {
                 "detailed_research": f"Error: {error_msg}",
                 "status_summary": f"❌ Error: Unknown database '{database}'.",
             }
+        return error_response, None # Return tuple
 
     try:
         module_path = f".{database}.subagent"
@@ -98,35 +104,41 @@ def route_query_sync(
             # Raise attribute error as it's a code structure issue and sync is expected
             raise AttributeError(error_msg)
 
-        # Use the synchronous version directly
+        # Use the synchronous version directly - it now returns a tuple
         query_func = subagent_module.query_database_sync
         logger.debug(f"Calling query_database_sync for {database}")
-        result: DatabaseResponse = query_func(query, scope, token)
+        # result: DatabaseResponse = query_func(query, scope, token) # Old call
+        result_tuple: SubagentResult = query_func(query, scope, token) # New call returns tuple
 
-        # Return the result (List[Dict] for metadata, Dict[str, str] for research)
-        return result
+        # Return the complete tuple (result, doc_ids)
+        return result_tuple
 
     except (ImportError, AttributeError) as e:
         # Handle errors related to module loading or function signature
         error_msg = f"Error loading/calling subagent for {database}: {str(e)}"
         logger.error(error_msg, exc_info=True)
+        error_response: DatabaseResponse
         if scope == "metadata":
-            return []
+            error_response = []
         else:  # research scope
-            return {
+            error_response = {
                 "detailed_research": f"Error: {error_msg}",
                 "status_summary": f"❌ Error: Could not execute query for '{database}' due to internal configuration.",
             }
+        return error_response, None # Return tuple
+
     except Exception as e:
         # Catch other potential exceptions during subagent execution
         error_msg = (
             f"Error during query execution for {database} (scope: {scope}): {str(e)}"
         )
         logger.error(error_msg, exc_info=True)
+        error_response: DatabaseResponse
         if scope == "metadata":
-            return []
+            error_response = []
         else:  # research scope
-            return {
+            error_response = {
                 "detailed_research": f"Error: {error_msg}",
                 "status_summary": f"❌ Error: Failed during query execution for '{database}'.",
             }
+        return error_response, None # Return tuple

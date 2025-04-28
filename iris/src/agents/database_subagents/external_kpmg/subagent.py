@@ -14,7 +14,7 @@ import logging
 import time
 import traceback
 import itertools
-from typing import Any, Dict, List, Optional, Tuple, Union, cast, Union
+from typing import Any, Dict, List, Optional, Tuple, Union, cast
 
 import psycopg2
 import psycopg2.extras  # For DictCursor
@@ -43,6 +43,7 @@ from .content_synthesis_prompt import (
 MetadataResponse = List[Dict[str, Any]]
 ResearchResponse = Dict[str, str]
 DatabaseResponse = Union[MetadataResponse, ResearchResponse]
+SubagentResult = Tuple[DatabaseResponse, Optional[List[str]]]  # Define a tuple for result + doc_ids
 
 # Get module logger
 logger = logging.getLogger(__name__)
@@ -970,7 +971,7 @@ def _query_database_logic(
 
 def query_database_sync(
     query: str, scope: str, token: Optional[str] = None
-) -> DatabaseResponse:
+) -> SubagentResult:
     """
     Synchronously query the External KPMG database. Handles 'metadata' and 'research' scopes.
 
@@ -980,16 +981,30 @@ def query_database_sync(
         token (str, optional): Authentication token for API access.
 
     Returns:
-        DatabaseResponse: Query results, either MetadataResponse or ResearchResponse.
+        SubagentResult: Tuple containing:
+            - DatabaseResponse: Query results, either MetadataResponse or ResearchResponse.
+            - Optional[List[str]]: List of chunk IDs used in the search, or None.
     """
     start_time = time.time()
     logger.info(f"Querying {DATABASE_NAME} database: '{query}' with scope: {scope}")
 
-    # Call the refactored logic function
+    # Call the refactored logic function to get the main result
     result = _query_database_logic(query, scope, token)
+    
+    # For this database, we track the chunk IDs from vector search results
+    # These are tracked indirectly across several helper functions
+    chunk_ids = None
+    
+    # For metadata scope, we can extract the IDs from the result
+    if scope == "metadata" and isinstance(result, list) and result:
+        chunk_ids = [item.get('id') for item in result if item.get('id')]
+        logger.info(f"Extracted {len(chunk_ids)} chunk IDs from metadata result")
+    
+    # For research scope, we don't have a good way to extract all IDs retroactively
+    # since they're processed through multiple pipeline stages
 
     end_time = time.time()
     duration = end_time - start_time
     logger.info(f"{DATABASE_NAME} query completed in {duration:.2f} seconds.")
 
-    return result
+    return result, chunk_ids
