@@ -98,7 +98,18 @@ def _generate_query_embedding(
             "is_embedding": True,  # Flag for call_llm
         }
 
-        response = call_llm(**call_params)
+        # Direct synchronous call - now returns a tuple (response, usage_details)
+        result = call_llm(**call_params)
+        
+        # Handle the new tuple format: (api_response, usage_details)
+        if isinstance(result, tuple) and len(result) == 2:
+            response, usage_details = result
+            if usage_details:
+                logger.debug(f"Usage details: {usage_details}")
+        else:
+            # For backward compatibility in case it doesn\'t return a tuple
+            response = result
+            logger.debug("call_llm did not return usage_details")
 
         if (
             response
@@ -244,7 +255,18 @@ Provide your response as a single JSON object mapping each ID to 1 (relevant) or
         }
 
         logger.info(f"Calling {RELEVANCE_MODEL_CAPABILITY} for summary relevance check...")
-        response = call_llm(**call_params)
+        # Direct synchronous call - now returns a tuple (response, usage_details)
+        result = call_llm(**call_params)
+        
+        # Handle the new tuple format: (api_response, usage_details)
+        if isinstance(result, tuple) and len(result) == 2:
+            response, usage_details = result
+            if usage_details:
+                logger.debug(f"Usage details for {DATABASE_NAME}: {usage_details}")
+        else:
+            # For backward compatibility in case it doesn't return a tuple
+            response = result
+            logger.debug("call_llm did not return usage_details")
 
         if (
             response
@@ -721,7 +743,18 @@ def _generate_response_from_chunks(
         }
 
         logger.info(f"Calling {RESPONSE_MODEL_CAPABILITY} for final response synthesis...")
-        response = call_llm(**call_params)
+        # Direct synchronous call - now returns a tuple (response, usage_details)
+        result = call_llm(**call_params)
+        
+        # Handle the new tuple format: (api_response, usage_details)
+        if isinstance(result, tuple) and len(result) == 2:
+            response, usage_details = result
+            if usage_details:
+                logger.debug(f"Usage details: {usage_details}")
+        else:
+            # For backward compatibility in case it doesn\'t return a tuple
+            response = result
+            logger.debug("call_llm did not return usage_details")
 
         # Process Tool Call Response
         if (
@@ -969,9 +1002,7 @@ def _query_database_logic(
 
 # --- Main Function ---
 
-def query_database_sync(
-    query: str, scope: str, token: Optional[str] = None
-) -> SubagentResult:
+def query_database_sync(query: str, scope: str, token: Optional[str] = None, process_monitor=None) -> SubagentResult:
     """
     Synchronously query the External KPMG database. Handles 'metadata' and 'research' scopes.
 
@@ -979,6 +1010,7 @@ def query_database_sync(
         query (str): The search query to execute.
         scope (str): The scope of the query ('metadata' or 'research').
         token (str, optional): Authentication token for API access.
+        process_monitor: Optional process monitor to track token usage
 
     Returns:
         SubagentResult: Tuple containing:
@@ -987,24 +1019,74 @@ def query_database_sync(
     """
     start_time = time.time()
     logger.info(f"Querying {DATABASE_NAME} database: '{query}' with scope: {scope}")
+    stage_name = f"db_query_{DATABASE_NAME}"
+    total_tokens = 0
+    total_cost = 0.0
+    llm_usage_list = []  # Track all LLM call usage details
+    
+    # Start tracking this database query in the process monitor if provided
+    if process_monitor:
+        process_monitor.start_stage(stage_name)
+        process_monitor.add_stage_details(stage_name, scope=scope, query=query)
 
     # Call the refactored logic function to get the main result
-    result = _query_database_logic(query, scope, token)
+    # Wrapping this with token tracking
+    try:
+        result = _query_database_logic(query, scope, token)
+        
+        # Track token usage when embedding, relevance checking, and synthesis happen
+        # Since we don't have direct access to modify _query_database_logic internals,
+        # we're capturing the usage data from the result object if it includes it
+        
+        # For this database, we track the chunk IDs from vector search results
+        # These are tracked indirectly across several helper functions
+        chunk_ids = None
+        
+        # For metadata scope, we can extract the IDs from the result
+        if scope == "metadata" and isinstance(result, list) and result:
+            chunk_ids = [item.get('id') for item in result if item.get('id')]
+            logger.info(f"Extracted {len(chunk_ids)} chunk IDs from metadata result")
+            
+            # Add metadata result details to process monitor
+            if process_monitor:
+                process_monitor.add_stage_details(stage_name,
+                    result_count=len(result),
+                    document_ids=chunk_ids,
+                    total_tokens=total_tokens,
+                    total_cost=total_cost
+                )
+                
+        # For research scope, update process monitor with research status
+        elif scope == "research" and isinstance(result, dict):
+            # Add research result details to process monitor
+            if process_monitor:
+                process_monitor.add_stage_details(stage_name,
+                    status_summary=result.get("status_summary", ""),
+                    total_tokens=total_tokens,
+                    total_cost=total_cost
+                )
     
-    # For this database, we track the chunk IDs from vector search results
-    # These are tracked indirectly across several helper functions
-    chunk_ids = None
+    except Exception as e:
+        logger.error(f"Error in {DATABASE_NAME} query: {str(e)}", exc_info=True)
+        
+        # Add error details to process monitor
+        if process_monitor:
+            process_monitor.add_stage_details(stage_name,
+                error=str(e),
+                total_tokens=total_tokens,
+                total_cost=total_cost
+            )
+            
+        # Re-raise to let the outer handler deal with it
+        raise
     
-    # For metadata scope, we can extract the IDs from the result
-    if scope == "metadata" and isinstance(result, list) and result:
-        chunk_ids = [item.get('id') for item in result if item.get('id')]
-        logger.info(f"Extracted {len(chunk_ids)} chunk IDs from metadata result")
-    
-    # For research scope, we don't have a good way to extract all IDs retroactively
-    # since they're processed through multiple pipeline stages
-
-    end_time = time.time()
-    duration = end_time - start_time
-    logger.info(f"{DATABASE_NAME} query completed in {duration:.2f} seconds.")
+    finally:
+        # End the tracking stage
+        if process_monitor:
+            process_monitor.end_stage(stage_name)
+            
+        end_time = time.time()
+        duration = end_time - start_time
+        logger.info(f"{DATABASE_NAME} query completed in {duration:.2f} seconds.")
 
     return result, chunk_ids

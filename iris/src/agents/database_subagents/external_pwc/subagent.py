@@ -20,6 +20,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union, cast
 MetadataResponse = List[Dict[str, Any]]
 ResearchResponse = Dict[str, str] # ResearchResponse is a dictionary containing detailed research and status
 DatabaseResponse = Union[MetadataResponse, ResearchResponse]
+SubagentResult = Tuple[DatabaseResponse, Optional[List[str]]]  # Define a tuple for result + doc_ids
 SubagentResult = Tuple[DatabaseResponse, Optional[List[str]]] # Define a tuple for result + doc_ids
 
 import psycopg2
@@ -49,6 +50,7 @@ from .content_synthesis_prompt import (
 MetadataResponse = List[Dict[str, Any]]
 ResearchResponse = Dict[str, str]
 DatabaseResponse = Union[MetadataResponse, ResearchResponse]
+SubagentResult = Tuple[DatabaseResponse, Optional[List[str]]]  # Define a tuple for result + doc_ids
 
 # Get module logger
 logger = logging.getLogger(__name__)
@@ -103,7 +105,18 @@ def _generate_query_embedding(
             "is_embedding": True,  # Flag for call_llm
         }
 
-        response = call_llm(**call_params)
+        # Direct synchronous call - now returns a tuple (response, usage_details)
+        result = call_llm(**call_params)
+        
+        # Handle the new tuple format: (api_response, usage_details)
+        if isinstance(result, tuple) and len(result) == 2:
+            response, usage_details = result
+            if usage_details:
+                logger.debug(f"Usage details: {usage_details}")
+        else:
+            # For backward compatibility in case it doesn\'t return a tuple
+            response = result
+            logger.debug("call_llm did not return usage_details")
 
         if (
             response
@@ -249,7 +262,18 @@ Provide your response as a single JSON object mapping each ID to 1 (relevant) or
         }
 
         logger.info(f"Calling {RELEVANCE_MODEL_CAPABILITY} for summary relevance check...")
-        response = call_llm(**call_params)
+        # Direct synchronous call - now returns a tuple (response, usage_details)
+        result = call_llm(**call_params)
+        
+        # Handle the new tuple format: (api_response, usage_details)
+        if isinstance(result, tuple) and len(result) == 2:
+            response, usage_details = result
+            if usage_details:
+                logger.debug(f"Usage details for {DATABASE_NAME}: {usage_details}")
+        else:
+            # For backward compatibility in case it doesn't return a tuple
+            response = result
+            logger.debug("call_llm did not return usage_details")
 
         if (
             response
@@ -726,7 +750,18 @@ def _generate_response_from_chunks(
         }
 
         logger.info(f"Calling {RESPONSE_MODEL_CAPABILITY} for final response synthesis...")
-        response = call_llm(**call_params)
+        # Direct synchronous call - now returns a tuple (response, usage_details)
+        result = call_llm(**call_params)
+        
+        # Handle the new tuple format: (api_response, usage_details)
+        if isinstance(result, tuple) and len(result) == 2:
+            response, usage_details = result
+            if usage_details:
+                logger.debug(f"Usage details: {usage_details}")
+        else:
+            # For backward compatibility in case it doesn\'t return a tuple
+            response = result
+            logger.debug("call_llm did not return usage_details")
 
         # Process Tool Call Response
         if (
@@ -883,7 +918,9 @@ def _query_database_logic(
                 "detailed_research": default_research,
                 "status_summary": default_error_status,
             }
-            # Start of the research pipeline
+            
+        # Return error response and potentially selected IDs if selection succeeded before error
+        return response, selected_doc_ids# Start of the research pipeline
             # Filter by specific PWC document ID for research search
             initial_results = _perform_vector_search(
                 cursor, query_embedding, INITIAL_K, doc_id=PWC_DOCUMENT_ID
@@ -974,19 +1011,12 @@ def _query_database_logic(
 
 # --- Main Function ---
 
-def query_database_sync(
-    query: str, scope: str, token: Optional[str] = None
-) -> SubagentResult:
+def query_database_sync(query: str, scope: str, token: Optional[str] = None, process_monitor=None) -> SubagentResult:
     """
-    Synchronously query the External PwC database. Handles 'metadata' and 'research' scopes.
-
-    Args:
-        query (str): The search query to execute.
-        scope (str): The scope of the query ('metadata' or 'research').
-        token (str, optional): Authentication token for API access.
-
+    Synchronously query the database based on the specified scope.
+    
     Returns:
-        DatabaseResponse: Query results, either MetadataResponse or ResearchResponse.
+        Tuple containing the main database response and a list of selected document IDs (or None).
     """
     start_time = time.time()
     logger.info(f"Querying {DATABASE_NAME} database: '{query}' with scope: {scope}")

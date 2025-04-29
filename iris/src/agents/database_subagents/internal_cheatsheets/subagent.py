@@ -14,14 +14,15 @@ import json
 import logging
 import re
 import time
-from typing import Any, Dict, List, Optional, Union, cast
+from typing import Any, Dict, List, Optional, Union, cast, Tuple
 
-from typing import Any, Dict, List, Optional, Union, cast, Tuple # Added Tuple
+from typing import Any, Dict, List, Optional, Union, cast, Tuple, Tuple # Added Tuple
 
 # Define response types consistent with database_router
 MetadataResponse = List[Dict[str, Any]]
 ResearchResponse = Dict[str, str] # ResearchResponse is now a dictionary containing detailed research and status
 DatabaseResponse = Union[MetadataResponse, ResearchResponse]
+SubagentResult = Tuple[DatabaseResponse, Optional[List[str]]]  # Define a tuple for result + doc_ids
 SubagentResult = Tuple[DatabaseResponse, Optional[List[str]]] # Define a tuple for result + doc_ids
 
 from ....chat_model.model_settings import ENVIRONMENT, get_model_config
@@ -286,13 +287,21 @@ def select_relevant_documents(
             f"Initiating Cheatsheets Document Selection API call (DB: {database_name})"
         )  # Added contextual log
         # Direct synchronous call
-        response_str = get_completion(
-            capability="small",
-            prompt=selection_prompt,
-            max_tokens=200,
-            token=token,
-            database_name=database_name,
-        )
+        result = get_completion(capability=\"small\", prompt=selection_prompt, max_tokens=200, token=token, database_name=database_name)
+
+        # Track token usage from LLM calls
+        if isinstance(result, tuple) and len(result) == 2:
+            selection_response, usage_details = result
+            llm_usage_list.append(usage_details)
+            total_tokens += usage_details.get('input_tokens', 0) + usage_details.get('output_tokens', 0)
+            total_cost += usage_details.get('cost', 0)
+            # Update process monitor if available
+            if process_monitor:
+                process_monitor.add_llm_call_details_to_stage(stage_name, usage_details)
+            selection_response_str = selection_response
+        else:
+            # For backward compatibility
+            selection_response_str = result
 
         # Check if get_completion returned an error string
         if isinstance(response_str, str) and response_str.startswith("Error:"):
@@ -380,7 +389,9 @@ def synthesize_response_and_status(
         "status_summary": default_error_status,
     }
 
-    if not documents:
+    
+        # Return error response and potentially selected IDs if selection succeeded before error
+        return response, selected_doc_idsif not documents:
         logger.warning(f"No documents provided for {database_name} synthesis.")
         return {
             "detailed_research": default_research,
@@ -408,6 +419,28 @@ def synthesize_response_and_status(
                 "function": {"name": SYNTHESIS_TOOL_SCHEMA["function"]["name"]},
             },
         )
+
+        # Track token usage from synthesis
+        if isinstance(response_obj, tuple) and len(response_obj) == 2:
+            synthesis_response, synthesis_usage = response_obj
+            llm_usage_list.append(synthesis_usage)
+            total_tokens += synthesis_usage.get('input_tokens', 0) + synthesis_usage.get('output_tokens', 0)
+            total_cost += synthesis_usage.get('cost', 0)
+            # Update process monitor if available
+            if process_monitor:
+                process_monitor.add_llm_call_details_to_stage(stage_name, synthesis_usage)
+            response_obj = synthesis_response
+
+        # Track token usage from synthesis
+        if isinstance(response_obj, tuple) and len(response_obj) == 2:
+            synthesis_response, synthesis_usage = response_obj
+            llm_usage_list.append(synthesis_usage)
+            total_tokens += synthesis_usage.get('input_tokens', 0) + synthesis_usage.get('output_tokens', 0)
+            total_cost += synthesis_usage.get('cost', 0)
+            # Update process monitor if available
+            if process_monitor:
+                process_monitor.add_llm_call_details_to_stage(stage_name, synthesis_usage)
+            response_obj = synthesis_response
 
         if isinstance(response_obj, str) and response_obj.startswith("Error:"):
             logger.error(
@@ -505,17 +538,17 @@ def synthesize_response_and_status(
         return error_result
 
 
-def query_database_sync(
-    query: str, scope: str, token: Optional[str] = None
-) -> SubagentResult:
+def query_database_sync(query: str, scope: str, token: Optional[str] = None, process_monitor=None) -> SubagentResult:
     """
-    Synchronously query the Internal Cheatsheets database based on the specified scope.
-
+    Synchronously query the database based on the specified scope.
+    
     Returns:
         Tuple containing the main database response and a list of selected document IDs (or None).
     """
     logger.info(f"Querying Internal Cheatsheets database (sync): '{query}' with scope: {scope}")
     database_name = "internal_cheatsheets"
+    default_error_status = "❌ Error during query processing."
+    selected_doc_ids: Optional[List[str]] = None  # Initialize
     default_error_status = "❌ Error during query processing."
     selected_doc_ids: Optional[List[str]] = None # Initialize
 
@@ -528,20 +561,34 @@ def query_database_sync(
                 "detailed_research": "No documents found in the Internal Cheatsheets database catalog.",
                 "status_summary": "📄 No documents found in catalog.",
             }
-            return response, selected_doc_ids # Return empty response and None IDs
+            
+            return response, selected_doc_ids  # Return empty response and None IDs
+return response, selected_doc_ids # Return empty response and None IDs
 
         # Select documents
-        selected_doc_ids = select_relevant_documents( # Assign to variable
+        selected_selected_doc_ids = select_relevant_documents(  # Assign to variable # Assign to variable
             query, catalog, token, database_name=database_name
         )
         logger.info(f"LLM selected {len(selected_doc_ids)} relevant Cheatsheets document IDs: {selected_doc_ids}")
 
+        
+        # Track token usage from document selection
+        if process_monitor:
+            process_monitor.add_stage_details(stage_name, 
+                result_count=len(selected_doc_ids), 
+                document_ids=selected_doc_ids,
+                total_tokens=total_tokens,
+                total_cost=total_cost
+            )
+        
         if not selected_doc_ids:
             response = [] if scope == "metadata" else {
                 "detailed_research": "LLM did not select any relevant documents from the catalog based on the query.",
                 "status_summary": "📄 No relevant documents selected by LLM.",
             }
-            return response, selected_doc_ids # Return empty response and empty IDs list
+            
+            return response, selected_doc_ids  # Return empty response and empty IDs list
+return response, selected_doc_ids # Return empty response and empty IDs list
 
         # Process based on scope
         if scope == "metadata":
@@ -557,7 +604,7 @@ def query_database_sync(
             return response, selected_doc_ids # Return research and IDs
         else:
             logger.error(f"Invalid scope provided to internal_cheatsheets subagent: {scope}")
-            raise ValueError(f"Invalid scope: {scope}") # Let the error propagate
+            raise ValueError(f"Invalid scope: {scope}")  # Let the error propagate # Let the error propagate
 
     except Exception as e:
         error_msg = f"Error querying Internal Cheatsheets database (scope: {scope}): {str(e)}"
@@ -566,5 +613,25 @@ def query_database_sync(
             "detailed_research": f"**Error processing request for Internal Cheatsheets:** {str(e)}",
             "status_summary": default_error_status,
         }
+        
         # Return error response and potentially selected IDs if selection succeeded before error
+        # Add token usage to process monitor before returning error
+        if process_monitor and llm_usage_list:
+            process_monitor.add_stage_details(stage_name, 
+                error=str(e),
+                document_ids=selected_doc_ids,
+                total_tokens=total_tokens,
+                total_cost=total_cost
+            )
+            
+        # Add token usage to process monitor before returning error
+        if process_monitor and llm_usage_list:
+            process_monitor.add_stage_details(stage_name, 
+                error=str(e),
+                document_ids=selected_doc_ids,
+                total_tokens=total_tokens,
+                total_cost=total_cost
+            )
+            
+        return response, selected_doc_ids# Return error response and potentially selected IDs if selection succeeded before error
         return response, selected_doc_ids

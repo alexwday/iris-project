@@ -286,13 +286,21 @@ def select_relevant_documents(
             f"Initiating ICFR Document Selection API call (DB: {database_name})"
         )  # Added contextual log
         # Direct synchronous call
-        response_str = get_completion(
-            capability="small",
-            prompt=selection_prompt,
-            max_tokens=200,
-            token=token,
-            database_name=database_name,
-        )
+        result = get_completion(capability=\"small\", prompt=selection_prompt, max_tokens=200, token=token, database_name=database_name)
+
+        # Track token usage from LLM calls
+        if isinstance(result, tuple) and len(result) == 2:
+            selection_response, usage_details = result
+            llm_usage_list.append(usage_details)
+            total_tokens += usage_details.get('input_tokens', 0) + usage_details.get('output_tokens', 0)
+            total_cost += usage_details.get('cost', 0)
+            # Update process monitor if available
+            if process_monitor:
+                process_monitor.add_llm_call_details_to_stage(stage_name, usage_details)
+            selection_response_str = selection_response
+        else:
+            # For backward compatibility
+            selection_response_str = result
 
         # Check if get_completion returned an error string
         if isinstance(response_str, str) and response_str.startswith("Error:"):
@@ -410,6 +418,28 @@ def synthesize_response_and_status(
             },
         )
 
+        # Track token usage from synthesis
+        if isinstance(response_obj, tuple) and len(response_obj) == 2:
+            synthesis_response, synthesis_usage = response_obj
+            llm_usage_list.append(synthesis_usage)
+            total_tokens += synthesis_usage.get('input_tokens', 0) + synthesis_usage.get('output_tokens', 0)
+            total_cost += synthesis_usage.get('cost', 0)
+            # Update process monitor if available
+            if process_monitor:
+                process_monitor.add_llm_call_details_to_stage(stage_name, synthesis_usage)
+            response_obj = synthesis_response
+
+        # Track token usage from synthesis
+        if isinstance(response_obj, tuple) and len(response_obj) == 2:
+            synthesis_response, synthesis_usage = response_obj
+            llm_usage_list.append(synthesis_usage)
+            total_tokens += synthesis_usage.get('input_tokens', 0) + synthesis_usage.get('output_tokens', 0)
+            total_cost += synthesis_usage.get('cost', 0)
+            # Update process monitor if available
+            if process_monitor:
+                process_monitor.add_llm_call_details_to_stage(stage_name, synthesis_usage)
+            response_obj = synthesis_response
+
         if isinstance(response_obj, str) and response_obj.startswith("Error:"):
             logger.error(
                 f"get_completion failed for {database_name} synthesis: {response_obj}"
@@ -506,9 +536,7 @@ def synthesize_response_and_status(
         return error_result
 
 
-def query_database_sync(
-    query: str, scope: str, token: Optional[str] = None
-) -> SubagentResult:
+def query_database_sync(query: str, scope: str, token: Optional[str] = None, process_monitor=None) -> SubagentResult:
     """
     Synchronously query the database based on the specified scope.
     
@@ -548,6 +576,16 @@ def query_database_sync(
         logger.info(
             f"LLM selected {len(selected_doc_ids)} relevant ICFR document IDs: {selected_doc_ids}"
         )
+        
+        # Track token usage from document selection
+        if process_monitor:
+            process_monitor.add_stage_details(stage_name, 
+                result_count=len(selected_doc_ids), 
+                document_ids=selected_doc_ids,
+                total_tokens=total_tokens,
+                total_cost=total_cost
+            )
+        
         if not selected_doc_ids:
             response: DatabaseResponse
             if scope == "metadata":
@@ -578,6 +616,26 @@ def query_database_sync(
             research_result = synthesize_response_and_status(
                 query, documents, token, database_name=database_name
             )
+            # Add token usage to process monitor before returning
+            if process_monitor:
+                process_monitor.add_stage_details(stage_name, 
+                    result_count=len(documents), 
+                    document_ids=selected_doc_ids,
+                    status_summary=research_result.get('status_summary', ''),
+                    total_tokens=total_tokens,
+                    total_cost=total_cost
+                )
+            
+            # Add token usage to process monitor before returning
+            if process_monitor:
+                process_monitor.add_stage_details(stage_name, 
+                    result_count=len(documents), 
+                    document_ids=selected_doc_ids,
+                    status_summary=research_result.get('status_summary', ''),
+                    total_tokens=total_tokens,
+                    total_cost=total_cost
+                )
+            
             return research_result, selected_doc_ids  # Return research result and IDs
         else:
             logger.error(f"Invalid scope provided to internal_icfr subagent: {scope}")

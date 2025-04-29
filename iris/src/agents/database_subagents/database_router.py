@@ -54,7 +54,7 @@ logger = logging.getLogger(__name__)
 
 
 def route_query_sync(
-    database: str, query: str, scope: str, token: Optional[str] = None
+    database: str, query: str, scope: str, token: Optional[str] = None, process_monitor=None
 ) -> SubagentResult: # Updated return type hint
     """
     Synchronously routes a database query to the appropriate subagent module.
@@ -64,6 +64,7 @@ def route_query_sync(
         query (str): The search query to execute.
         scope (str): The scope of the query ('metadata' or 'research').
         token (str, optional): Authentication token for API access.
+        process_monitor (optional): Process monitor instance for tracking token usage.
 
     Returns:
         SubagentResult: A tuple containing:
@@ -75,12 +76,17 @@ def route_query_sync(
         AttributeError: If the subagent module lacks 'query_database_sync'.
     """
     logger.info(f"Routing query (sync) to database: {database} with scope: {scope}")
+    
+    # Start tracking this database query in the process monitor if provided
+    stage_name = f"db_query_{database}"
+    if process_monitor:
+        process_monitor.start_stage(stage_name)
+        process_monitor.add_stage_details(stage_name, scope=scope, query=query)
 
     if database not in AVAILABLE_DATABASES:
         error_msg = f"Unknown database: {database}"
         logger.error(error_msg)
         # Return appropriate error type based on expected scope return type
-        # Return appropriate error type based on expected scope return type, plus None for doc_ids
         error_response: DatabaseResponse
         if scope == "metadata":
             error_response = []
@@ -89,6 +95,12 @@ def route_query_sync(
                 "detailed_research": f"Error: {error_msg}",
                 "status_summary": f"❌ Error: Unknown database '{database}'.",
             }
+        
+        # End the stage with error status if process monitor is provided
+        if process_monitor:
+            process_monitor.add_stage_details(stage_name, error=error_msg)
+            process_monitor.end_stage(stage_name, status="error")
+            
         return error_response, None # Return tuple
 
     try:
@@ -101,14 +113,41 @@ def route_query_sync(
         if not hasattr(subagent_module, "query_database_sync"):
             error_msg = f"Subagent module for '{database}' missing 'query_database_sync' function."
             logger.error(error_msg)  # Log the error
+            
+            # End stage with error if process monitor is provided
+            if process_monitor:
+                process_monitor.add_stage_details(stage_name, error=error_msg)
+                process_monitor.end_stage(stage_name, status="error")
+                
             # Raise attribute error as it's a code structure issue and sync is expected
             raise AttributeError(error_msg)
 
         # Use the synchronous version directly - it now returns a tuple
         query_func = subagent_module.query_database_sync
         logger.debug(f"Calling query_database_sync for {database}")
-        # result: DatabaseResponse = query_func(query, scope, token) # Old call
-        result_tuple: SubagentResult = query_func(query, scope, token) # New call returns tuple
+        
+        # Check if the function can accept a process_monitor parameter
+        sig = inspect.signature(query_func)
+        if 'process_monitor' in sig.parameters:
+            # Pass the process monitor if the function supports it
+            result_tuple: SubagentResult = query_func(query, scope, token, process_monitor) 
+        else:
+            # Call without process_monitor for backward compatibility
+            result_tuple: SubagentResult = query_func(query, scope, token)
+
+        # End the stage successfully if process monitor is provided
+        if process_monitor:
+            # If the subagent didn't add document IDs to the stage details, add them now
+            if result_tuple[1]:  # If doc_ids is not None
+                process_monitor.add_stage_details(stage_name, document_ids=result_tuple[1])
+            
+            # Add status summary if available in research results
+            if scope == "research" and isinstance(result_tuple[0], dict):
+                status_summary = result_tuple[0].get("status_summary", "")
+                if status_summary:
+                    process_monitor.add_stage_details(stage_name, status_summary=status_summary)
+            
+            process_monitor.end_stage(stage_name, status="completed")
 
         # Return the complete tuple (result, doc_ids)
         return result_tuple
@@ -125,6 +164,12 @@ def route_query_sync(
                 "detailed_research": f"Error: {error_msg}",
                 "status_summary": f"❌ Error: Could not execute query for '{database}' due to internal configuration.",
             }
+            
+        # End the stage with error status if process monitor is provided
+        if process_monitor:
+            process_monitor.add_stage_details(stage_name, error=error_msg)
+            process_monitor.end_stage(stage_name, status="error")
+            
         return error_response, None # Return tuple
 
     except Exception as e:
@@ -141,4 +186,10 @@ def route_query_sync(
                 "detailed_research": f"Error: {error_msg}",
                 "status_summary": f"❌ Error: Failed during query execution for '{database}'.",
             }
+            
+        # End the stage with error status if process monitor is provided
+        if process_monitor:
+            process_monitor.add_stage_details(stage_name, error=error_msg)
+            process_monitor.end_stage(stage_name, status="error")
+            
         return error_response, None # Return tuple

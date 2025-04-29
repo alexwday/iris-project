@@ -283,13 +283,21 @@ def select_relevant_documents(
             f"Initiating Wiki Document Selection API call (DB: {database_name})"
         )  # Added contextual log
         # Direct synchronous call
-        response_str = get_completion(
-            capability="small",
-            prompt=selection_prompt,
-            max_tokens=200,
-            token=token,
-            database_name=database_name,
-        )
+        result = get_completion(capability=\"small\", prompt=selection_prompt, max_tokens=200, token=token, database_name=database_name)
+
+        # Track token usage from LLM calls
+        if isinstance(result, tuple) and len(result) == 2:
+            selection_response, usage_details = result
+            llm_usage_list.append(usage_details)
+            total_tokens += usage_details.get('input_tokens', 0) + usage_details.get('output_tokens', 0)
+            total_cost += usage_details.get('cost', 0)
+            # Update process monitor if available
+            if process_monitor:
+                process_monitor.add_llm_call_details_to_stage(stage_name, usage_details)
+            selection_response_str = selection_response
+        else:
+            # For backward compatibility
+            selection_response_str = result
 
         # Check if get_completion returned an error string
         if isinstance(response_str, str) and response_str.startswith("Error:"):
@@ -405,6 +413,28 @@ def synthesize_response_and_status(
             },
         )
 
+        # Track token usage from synthesis
+        if isinstance(response_obj, tuple) and len(response_obj) == 2:
+            synthesis_response, synthesis_usage = response_obj
+            llm_usage_list.append(synthesis_usage)
+            total_tokens += synthesis_usage.get('input_tokens', 0) + synthesis_usage.get('output_tokens', 0)
+            total_cost += synthesis_usage.get('cost', 0)
+            # Update process monitor if available
+            if process_monitor:
+                process_monitor.add_llm_call_details_to_stage(stage_name, synthesis_usage)
+            response_obj = synthesis_response
+
+        # Track token usage from synthesis
+        if isinstance(response_obj, tuple) and len(response_obj) == 2:
+            synthesis_response, synthesis_usage = response_obj
+            llm_usage_list.append(synthesis_usage)
+            total_tokens += synthesis_usage.get('input_tokens', 0) + synthesis_usage.get('output_tokens', 0)
+            total_cost += synthesis_usage.get('cost', 0)
+            # Update process monitor if available
+            if process_monitor:
+                process_monitor.add_llm_call_details_to_stage(stage_name, synthesis_usage)
+            response_obj = synthesis_response
+
         if isinstance(response_obj, str) and response_obj.startswith("Error:"):
             logger.error(
                 f"get_completion failed for {database_name} synthesis: {response_obj}"
@@ -503,11 +533,17 @@ def synthesize_response_and_status(
 
 
 def query_database_sync(
-    query: str, scope: str, token: Optional[str] = None
+    query: str, scope: str, token: Optional[str] = None, process_monitor=None
 ) -> SubagentResult:
     """
     Synchronously query the Internal Wiki database based on the specified scope.
     
+    Args:
+        query: The user's query to process
+        scope: The type of data to return ("metadata" or "research")
+        token: Optional OAuth token
+        process_monitor: Optional process monitor to track token usage
+        
     Returns:
         Tuple containing the main database response and a list of selected document IDs (or None).
     """
@@ -517,6 +553,10 @@ def query_database_sync(
     database_name = "internal_wiki"
     default_error_status = "❌ Error during query processing."
     selected_doc_ids: Optional[List[str]] = None  # Initialize
+    stage_name = f"db_query_{database_name}"
+    total_tokens = 0
+    total_cost = 0.0
+    llm_usage_list = []  # Track all LLM call usage details
 
     try:
         # Direct synchronous calls
@@ -534,9 +574,65 @@ def query_database_sync(
             return response, selected_doc_ids  # Return empty response and None IDs
 
         # Select documents
-        selected_doc_ids = select_relevant_documents(  # Assign to variable
-            query, catalog, token, database_name=database_name
+        selection_result = get_completion(
+            capability="small",
+            prompt=get_catalog_selection_prompt(query, format_catalog_for_llm(catalog)),
+            max_tokens=200,
+            token=token,
+            database_name=database_name,
         )
+        
+        # Track token usage from document selection
+        if isinstance(selection_result, tuple) and len(selection_result) == 2:
+            selection_response, selection_usage = selection_result
+            llm_usage_list.append(selection_usage)
+            total_tokens += selection_usage.get('input_tokens', 0) + selection_usage.get('output_tokens', 0)
+            total_cost += selection_usage.get('cost', 0)
+            # Log usage for debugging
+            logger.debug(f"Document selection usage: {selection_usage}")
+            
+            # Update process monitor if available
+            if process_monitor:
+                process_monitor.add_llm_call_details_to_stage(stage_name, selection_usage)
+                process_monitor.add_stage_details(stage_name, task="document_selection")
+                
+            # Process the response to extract document IDs
+            selection_response_str = selection_response
+        else:
+            # For backward compatibility
+            selection_response_str = selection_result
+            
+        # Extract document IDs from selection response
+        if isinstance(selection_response_str, str) and selection_response_str.startswith("Error:"):
+            logger.error(f"get_completion failed during document selection: {selection_response_str}")
+            selected_doc_ids = []
+        else:
+            try:
+                selected_doc_ids = json.loads(selection_response_str)
+                if isinstance(selected_doc_ids, list) and all(
+                    isinstance(i, str) for i in selected_doc_ids
+                ):
+                    logger.info(f"LLM selected document IDs: {selected_doc_ids}")
+                else:
+                    logger.error(
+                        f"LLM response was valid JSON but not a list of strings: {selection_response_str}"
+                    )
+                    selected_doc_ids = []
+            except json.JSONDecodeError:
+                logger.error(
+                    "Failed to parse LLM response as JSON, attempting fallback extraction"
+                )
+                # More comprehensive regex to extract document IDs
+                matches = re.findall(r'["\'](.*?)["\']', selection_response_str)
+                # Accept any ID, not just digits, since IDs might be strings
+                selected_doc_ids = [m.strip() for m in matches if m.strip()]
+                if selected_doc_ids:
+                    logger.warning(
+                        f"Extracted document IDs using fallback regex: {selected_doc_ids}"
+                    )
+                else:
+                    logger.error("Could not extract document IDs from response using fallback.")
+        
         logger.info(
             f"LLM selected {len(selected_doc_ids)} relevant wiki document IDs: {selected_doc_ids}"
         )
@@ -549,6 +645,16 @@ def query_database_sync(
                     "detailed_research": "LLM did not select any relevant documents from the catalog based on the query.",
                     "status_summary": "📄 No relevant documents selected by LLM.",
                 }
+            
+            # Add token usage to process monitor before returning
+            if process_monitor:
+                process_monitor.add_stage_details(stage_name, 
+                    result_count=0, 
+                    document_ids=selected_doc_ids,
+                    total_tokens=total_tokens,
+                    total_cost=total_cost
+                )
+                
             return response, selected_doc_ids  # Return empty response and empty IDs list
 
         # Process based on scope
@@ -557,17 +663,163 @@ def query_database_sync(
             logger.info(
                 f"Returning {len(selected_items)} selected wiki metadata items."
             )
+            
+            # Add token usage to process monitor before returning
+            if process_monitor:
+                process_monitor.add_stage_details(stage_name, 
+                    result_count=len(selected_items), 
+                    document_ids=selected_doc_ids,
+                    total_tokens=total_tokens,
+                    total_cost=total_cost
+                )
+                
             return selected_items, selected_doc_ids  # Return metadata and IDs
+            
         elif scope == "research":
             # Fetch content and synthesize
             documents = fetch_document_content(selected_doc_ids)
             logger.info(
                 f"Retrieved content for {len(documents)} wiki documents for research."
             )
-            research_result = synthesize_response_and_status(
-                query, documents, token, database_name=database_name
+            
+            # Get research synthesis
+            synthesis_result = get_completion(
+                capability="large",
+                prompt=get_content_synthesis_prompt(query, format_documents_for_llm(documents)),
+                max_tokens=2500,
+                temperature=0.2,
+                token=token,
+                database_name=database_name,
+                tools=[SYNTHESIS_TOOL_SCHEMA],
+                tool_choice={
+                    "type": "function",
+                    "function": {"name": SYNTHESIS_TOOL_SCHEMA["function"]["name"]},
+                },
             )
+            
+            # Track token usage from research synthesis
+            if isinstance(synthesis_result, tuple) and len(synthesis_result) == 2:
+                synthesis_response, synthesis_usage = synthesis_result
+                llm_usage_list.append(synthesis_usage)
+                total_tokens += synthesis_usage.get('input_tokens', 0) + synthesis_usage.get('output_tokens', 0)
+                total_cost += synthesis_usage.get('cost', 0)
+                # Log usage for debugging
+                logger.debug(f"Research synthesis usage: {synthesis_usage}")
+                
+                # Update process monitor if available
+                if process_monitor:
+                    process_monitor.add_llm_call_details_to_stage(stage_name, synthesis_usage)
+                    
+                # Process the synthesis response
+                synthesis_response_obj = synthesis_response
+            else:
+                # For backward compatibility
+                synthesis_response_obj = synthesis_result
+            
+            # Process the synthesis response to extract research and status
+            research_result = {}
+            if isinstance(synthesis_response_obj, str) and synthesis_response_obj.startswith("Error:"):
+                logger.error(
+                    f"get_completion failed for {database_name} synthesis: {synthesis_response_obj}"
+                )
+                research_result = {
+                    "detailed_research": synthesis_response_obj,
+                    "status_summary": default_error_status,
+                }
+            else:
+                # Process Tool Call Response
+                try:
+                    if (
+                        hasattr(synthesis_response_obj, "choices")
+                        and synthesis_response_obj.choices
+                        and hasattr(synthesis_response_obj.choices[0], "message")
+                        and synthesis_response_obj.choices[0].message
+                        and hasattr(synthesis_response_obj.choices[0].message, "tool_calls")
+                        and synthesis_response_obj.choices[0].message.tool_calls
+                    ):
+                        tool_call = synthesis_response_obj.choices[0].message.tool_calls[0]
+                        if tool_call.function.name == SYNTHESIS_TOOL_SCHEMA["function"]["name"]:
+                            arguments_str = tool_call.function.arguments
+                            try:
+                                arguments = json.loads(arguments_str)
+                                if "status_summary" in arguments and "detailed_research" in arguments:
+                                    research_result = {
+                                        "status_summary": arguments.get("status_summary", default_error_status),
+                                        "detailed_research": arguments.get("detailed_research", "No research generated.")
+                                    }
+                                else:
+                                    research_result = {
+                                        "detailed_research": "Error: Tool call arguments missing required keys.",
+                                        "status_summary": default_error_status,
+                                    }
+                            except json.JSONDecodeError:
+                                research_result = {
+                                    "detailed_research": "Error: Failed to parse tool arguments JSON.",
+                                    "status_summary": default_error_status,
+                                }
+                        else:
+                            research_result = {
+                                "detailed_research": f"Error: Unexpected tool called: {tool_call.function.name}",
+                                "status_summary": default_error_status,
+                            }
+                    else:
+                        content = ""
+                        if (
+                            hasattr(synthesis_response_obj, "choices")
+                            and synthesis_response_obj.choices
+                            and hasattr(synthesis_response_obj.choices[0], "message")
+                            and synthesis_response_obj.choices[0].message
+                            and hasattr(synthesis_response_obj.choices[0].message, "content")
+                            and synthesis_response_obj.choices[0].message.content
+                        ):
+                            content = synthesis_response_obj.choices[0].message.content
+                            research_result = {
+                                "detailed_research": f"Error: LLM returned text instead of tool call. Content: {content[:200]}...",
+                                "status_summary": default_error_status,
+                            }
+                        else:
+                            research_result = {
+                                "detailed_research": "Error: No tool call or content received from LLM.",
+                                "status_summary": default_error_status,
+                            }
+                except Exception as e:
+                    research_result = {
+                        "detailed_research": f"Error processing synthesis response: {str(e)}",
+                        "status_summary": default_error_status,
+                    }
+            
+            # Add token usage to process monitor before returning
+            if process_monitor:
+                process_monitor.add_stage_details(stage_name, 
+                    result_count=len(documents), 
+                    document_ids=selected_doc_ids,
+                    status_summary=research_result.get("status_summary", ""),
+                    total_tokens=total_tokens,
+                    total_cost=total_cost
+                )
+            
+            # Add token usage to process monitor before returning
+            if process_monitor:
+                process_monitor.add_stage_details(stage_name, 
+                    result_count=len(documents), 
+                    document_ids=selected_doc_ids,
+                    status_summary=research_result.get('status_summary', ''),
+                    total_tokens=total_tokens,
+                    total_cost=total_cost
+                )
+            
+            # Add token usage to process monitor before returning
+            if process_monitor:
+                process_monitor.add_stage_details(stage_name, 
+                    result_count=len(documents), 
+                    document_ids=selected_doc_ids,
+                    status_summary=research_result.get('status_summary', ''),
+                    total_tokens=total_tokens,
+                    total_cost=total_cost
+                )
+            
             return research_result, selected_doc_ids  # Return research result and IDs
+            
         else:
             logger.error(f"Invalid scope provided to internal_wiki subagent: {scope}")
             raise ValueError(f"Invalid scope: {scope}")  # Let the error propagate
@@ -583,5 +835,15 @@ def query_database_sync(
                 "detailed_research": f"**Error processing request for Internal Wiki:** {str(e)}",
                 "status_summary": default_error_status,
             }
+            
+        # Add token usage to process monitor before returning
+        if process_monitor and llm_usage_list:
+            process_monitor.add_stage_details(stage_name, 
+                error=str(e),
+                document_ids=selected_doc_ids,
+                total_tokens=total_tokens,
+                total_cost=total_cost
+            )
+            
         # Return error response and potentially selected IDs if selection succeeded before error
         return response, selected_doc_ids

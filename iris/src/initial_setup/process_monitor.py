@@ -45,6 +45,13 @@ def _extract_decision_details(stage_name: str, details: Dict[str, Any]) -> Optio
             # Assuming 'output' holds statement/questions from clarifier_decision
             output = details.get('decision', {}).get('output', '')
             return f"Action: {action}, Output: {output[:250]}..." # Truncate long outputs
+        elif stage_name == "summary":
+            # Extract details from summary agent
+            scope = details.get('scope', 'N/A')
+            num_results = details.get('num_results', 0)
+            sources = details.get('sources', [])
+            source_count = len(sources) if sources else 0
+            return f"Scope: {scope}, Results: {num_results}, Sources: {source_count}"
         elif stage_name.startswith("db_query_"):
             # Subagents need to add 'document_ids' or 'chunk_ids' to details
             ids = details.get('document_ids') or details.get('chunk_ids')
@@ -58,6 +65,18 @@ def _extract_decision_details(stage_name: str, details: Dict[str, Any]) -> Optio
                  return f"Result Count: {details.get('result_count')}"
             elif details.get('status_summary'):
                  return f"Status: {details.get('status_summary')}"
+        elif stage_name == "ssl_setup":
+            cert_path = details.get('cert_path', 'default')
+            return f"Certificate Path: {cert_path}"
+        elif stage_name == "oauth_setup":
+            # Extract token details (don't include actual tokens)
+            token_type = details.get('token_type', 'N/A')
+            token_length = details.get('token_length', 0)
+            return f"Token Type: {token_type}, Length: {token_length}"
+        elif stage_name == "conversation_processing":
+            # Extract conversation details
+            message_count = details.get('message_count', 0)
+            return f"Messages: {message_count}"
         # Add more specific stage handlers if needed
     except Exception as e:
         logger.warning(f"Error extracting decision details for stage '{stage_name}': {e}")
