@@ -22,6 +22,7 @@ MetadataResponse = List[Dict[str, Any]]
 ResearchResponse = Dict[str, str]
 DatabaseResponse = Union[MetadataResponse, ResearchResponse]
 SubagentResult = Tuple[DatabaseResponse, Optional[List[str]]]  # Define a tuple for result + doc_ids
+SubagentResult = Tuple[DatabaseResponse, Optional[List[str]]]  # Define a tuple for result + doc_ids
 
 from ....chat_model.model_settings import ENVIRONMENT, get_model_config
 from ....initial_setup.db_config import connect_to_db
@@ -405,8 +406,19 @@ def get_completion(
         call_params.setdefault("stream", False)
 
     try:
-        # Direct synchronous call
-        response = call_llm(**call_params)
+        # Direct synchronous call - now returns a tuple (response, usage_details)
+        result = call_llm(**call_params)
+        
+        # Handle the new tuple format: (api_response, usage_details)
+        if isinstance(result, tuple) and len(result) == 2:
+            response, usage_details = result
+            if usage_details:
+                logger.debug(f"Usage details for {database_name}: {usage_details}")
+        else:
+            # For backward compatibility in case it doesn't return a tuple
+            response = result
+            logger.debug("call_llm did not return usage_details")
+            
     except Exception as llm_err:
         logger.error(f"call_llm failed: {llm_err}", exc_info=True)
         return f"Error: LLM call failed ({type(llm_err).__name__})"
@@ -815,30 +827,15 @@ def query_database_sync(
     query: str, scope: str, token: Optional[str] = None
 ) -> SubagentResult:
     """
-    Synchronously query the Internal CAPM database based on the specified scope.
-
-    This function implements the CAPM-specific query flow, which includes:
-    1. Fetching the catalog
-    2. Selecting relevant documents
-    3. For research scope:
-       a. Fetching sections and summaries
-       b. Selecting relevant sections based on summaries
-       c. Fetching full content for selected sections
-       d. Synthesizing response (with token size handling)
-
-    Args:
-        query (str): The search query to execute.
-        scope (str): The scope of the query ('metadata' or 'research').
-        token (str, optional): Authentication token for API access.
-
+    Synchronously query the database based on the specified scope.
+    
     Returns:
-        SubagentResult: Tuple containing the query results and selected document IDs.
-                        The first element is either a List[Dict] for 'metadata' scope
-                        or a Dict[str, str] for 'research' scope.
-                        The second element is a list of selected document IDs or None.
+        Tuple containing the main database response and a list of selected document IDs (or None).
     """
     logger.info(f"Querying Internal CAPM database: '{query}' with scope: {scope}")
     database_name = "internal_capm"
+    default_error_status = "❌ Error during query processing."
+    selected_doc_ids: Optional[List[str]] = None  # Initialize
     default_error_status = "❌ Error during query processing."
     selected_doc_ids: Optional[List[str]] = None  # Initialize
 
@@ -855,6 +852,7 @@ def query_database_sync(
                     "detailed_research": "No documents found in the Internal CAPM database catalog.",
                     "status_summary": "📄 No documents found in catalog.",
                 }
+            
             return response, selected_doc_ids  # Return empty response and None IDs
 
         # Select documents
@@ -873,6 +871,7 @@ def query_database_sync(
                     "detailed_research": "LLM did not select any relevant documents from the catalog based on the query.",
                     "status_summary": "📄 No relevant documents selected by LLM.",
                 }
+            
             return response, selected_doc_ids  # Return empty response and empty IDs list
 
         # Process based on scope
@@ -933,7 +932,7 @@ def query_database_sync(
             return research_result, selected_doc_ids  # Return research result and IDs
         else:
             logger.error(f"Invalid scope provided to internal_capm subagent: {scope}")
-            raise ValueError(f"Invalid scope: {scope}")  # Let the error propagate
+            raise ValueError(f"Invalid scope: {scope}")  # Let the error propagate  # Let the error propagate
 
     except Exception as e:
         error_msg = f"Error querying Internal CAPM database (scope: {scope}): {str(e)}"
@@ -946,5 +945,6 @@ def query_database_sync(
                 "detailed_research": f"**Error processing request for Internal CAPM:** {str(e)}",
                 "status_summary": default_error_status,
             }
+        
         # Return error response and potentially selected IDs if selection succeeded before error
         return response, selected_doc_ids

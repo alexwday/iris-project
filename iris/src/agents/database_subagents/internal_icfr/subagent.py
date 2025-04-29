@@ -14,13 +14,14 @@ import json
 import logging
 import re
 import time
-from typing import Any, Dict, List, Optional, Union, cast, Tuple
+from typing import Any, Dict, List, Optional, Union, cast, Tuple, Tuple
 
 # Define response types consistent with database_router
 MetadataResponse = List[Dict[str, Any]]
 # ResearchResponse is now a dictionary containing detailed research and status
 ResearchResponse = Dict[str, str]
 DatabaseResponse = Union[MetadataResponse, ResearchResponse]
+SubagentResult = Tuple[DatabaseResponse, Optional[List[str]]]  # Define a tuple for result + doc_ids
 SubagentResult = Tuple[DatabaseResponse, Optional[List[str]]]  # Define a tuple for result + doc_ids
 
 from ....chat_model.model_settings import ENVIRONMENT, get_model_config
@@ -220,8 +221,19 @@ def get_completion(
         call_params.setdefault("stream", False)
 
     try:
-        # Direct synchronous call
-        response = call_llm(**call_params)
+        # Direct synchronous call - now returns a tuple (response, usage_details)
+        result = call_llm(**call_params)
+        
+        # Handle the new tuple format: (api_response, usage_details)
+        if isinstance(result, tuple) and len(result) == 2:
+            response, usage_details = result
+            if usage_details:
+                logger.debug(f"Usage details for {database_name}: {usage_details}")
+        else:
+            # For backward compatibility in case it doesn't return a tuple
+            response = result
+            logger.debug("call_llm did not return usage_details")
+            
     except Exception as llm_err:
         logger.error(f"call_llm failed: {llm_err}", exc_info=True)
         return f"Error: LLM call failed ({type(llm_err).__name__})"
@@ -368,6 +380,7 @@ def synthesize_response_and_status(
         "status_summary": default_error_status,
     }
 
+    
     if not documents:
         logger.warning(f"No documents provided for {database_name} synthesis.")
         return {
@@ -497,12 +510,17 @@ def query_database_sync(
     query: str, scope: str, token: Optional[str] = None
 ) -> SubagentResult:
     """
-    Synchronously query the Internal ICFR database based on the specified scope.
+    Synchronously query the database based on the specified scope.
+    
+    Returns:
+        Tuple containing the main database response and a list of selected document IDs (or None).
     """
     logger.info(
         f"Querying Internal ICFR database (sync): '{query}' with scope: {scope}"
     )
     database_name = "internal_icfr"
+    default_error_status = "❌ Error during query processing."
+    selected_doc_ids: Optional[List[str]] = None  # Initialize
     default_error_status = "❌ Error during query processing."
 
     try:
@@ -510,58 +528,72 @@ def query_database_sync(
         catalog = fetch_icfr_catalog()
         logger.info(f"Retrieved {len(catalog)} total ICFR catalog entries")
         if not catalog:
+            response: DatabaseResponse
             if scope == "metadata":
-                return []
+                response = []
             else:
-                return {
+                response = {
+
                     "detailed_research": "No documents found in the Internal ICFR database catalog.",
                     "status_summary": "📄 No documents found in catalog.",
                 }
 
+        
+            return response, selected_doc_ids  # Return empty response and None IDs
+
         # Select documents
-        doc_ids = select_relevant_documents(
+        selected_doc_ids = select_relevant_documents(  # Assign to variable
             query, catalog, token, database_name=database_name
         )
         logger.info(
-            f"LLM selected {len(doc_ids)} relevant ICFR document IDs: {doc_ids}"
+            f"LLM selected {len(selected_doc_ids)} relevant ICFR document IDs: {selected_doc_ids}"
         )
-        if not doc_ids:
+        if not selected_doc_ids:
+            response: DatabaseResponse
             if scope == "metadata":
-                return []
+                response = []
             else:
-                return {
+                response = {
+
                     "detailed_research": "LLM did not select any relevant documents from the catalog based on the query.",
                     "status_summary": "📄 No relevant documents selected by LLM.",
                 }
 
+        
+            return response, selected_doc_ids  # Return empty response and empty IDs list
+
         # Process based on scope
         if scope == "metadata":
-            selected_items = [item for item in catalog if item.get("id") in doc_ids]
+            selected_items = [item for item in catalog if item.get("id") in selected_doc_ids]
             logger.info(
                 f"Returning {len(selected_items)} selected ICFR metadata items."
             )
-            return selected_items
+            return selected_items, selected_doc_ids  # Return metadata and IDs
         elif scope == "research":
             # Fetch content and synthesize
-            documents = fetch_document_content(doc_ids)
+            documents = fetch_document_content(selected_doc_ids)
             logger.info(
                 f"Retrieved content for {len(documents)} ICFR documents for research."
             )
             research_result = synthesize_response_and_status(
                 query, documents, token, database_name=database_name
             )
-            return research_result
+            return research_result, selected_doc_ids  # Return research result and IDs
         else:
             logger.error(f"Invalid scope provided to internal_icfr subagent: {scope}")
-            raise ValueError(f"Invalid scope: {scope}")
+            raise ValueError(f"Invalid scope: {scope}")  # Let the error propagate
 
     except Exception as e:
         error_msg = f"Error querying Internal ICFR database (scope: {scope}): {str(e)}"
         logger.error(error_msg, exc_info=True)
+        response: DatabaseResponse
         if scope == "metadata":
-            return []
+            response = []
         else:
-            return {
+            response = {
                 "detailed_research": f"**Error processing request for Internal ICFR:** {str(e)}",
                 "status_summary": default_error_status,
             }
+
+        # Return error response and potentially selected IDs if selection succeeded before error
+        return response, selected_doc_ids
