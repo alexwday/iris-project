@@ -364,7 +364,7 @@ def synthesize_response_and_status(
     documents: List[Dict[str, Any]],
     token: Optional[str] = None,
     database_name: str = "internal_par",
-) -> ResearchResponse:  # Actually returns just ResearchResponse, not a tuple
+) -> ResearchResponse:
     """
     Use an LLM tool call to synthesize a detailed research response AND status summary for PAR (synchronous).
     """
@@ -563,7 +563,7 @@ def query_database_sync(
             research_result = synthesize_response_and_status(
                 query, documents, token, database_name=database_name
             )
-            return research_result  # Only return research_result, not a tuple
+            return research_result, selected_doc_ids  # Return research result and IDs
         else:
             logger.error(f"Invalid scope provided to internal_par subagent: {scope}")
             raise ValueError(f"Invalid scope: {scope}")  # Let the error propagate
