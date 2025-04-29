@@ -5,6 +5,11 @@ Database configuration for local development and production environments.
 from typing import Any, Dict, Optional
 import logging
 import psycopg2
+import psycopg2.extras
+import uuid
+
+# Register UUID adapter
+psycopg2.extras.register_uuid()
 
 # Get logger
 logger = logging.getLogger(__name__)

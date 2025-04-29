@@ -265,8 +265,9 @@ class ProcessMonitor:
                 decision_details_str = _extract_decision_details(stage.name, stage.details)
                 error_message_str = stage.details.get('error') if stage.status == 'error' else None
 
+                # Convert UUID to string for PostgreSQL compatibility
                 record = (
-                    self.run_uuid,
+                    str(self.run_uuid),  # Convert UUID to string
                     'iris', # model_name
                     stage.name,
                     stage.start_time, # Already timezone-aware UTC
