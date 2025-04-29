@@ -221,8 +221,19 @@ def get_completion(
         call_params.setdefault("stream", False)
 
     try:
-        # Direct synchronous call
-        response = call_llm(**call_params)
+        # Direct synchronous call - now returns a tuple (response, usage_details)
+        result = call_llm(**call_params)
+        
+        # Handle the new tuple format: (api_response, usage_details)
+        if isinstance(result, tuple) and len(result) == 2:
+            response, usage_details = result
+            if usage_details:
+                logger.debug(f"Usage details for {database_name}: {usage_details}")
+        else:
+            # For backward compatibility in case it doesn't return a tuple
+            response = result
+            logger.debug("call_llm did not return usage_details")
+            
     except Exception as llm_err:
         logger.error(f"call_llm failed: {llm_err}", exc_info=True)
         return f"Error: LLM call failed ({type(llm_err).__name__})"
