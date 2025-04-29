@@ -220,8 +220,19 @@ def get_completion(
         call_params.setdefault("stream", False)
 
     try:
-        # Direct synchronous call
-        response = call_llm(**call_params)
+        # Direct synchronous call - now returns a tuple (response, usage_details)
+        result = call_llm(**call_params)
+        
+        # Handle the new tuple format: (api_response, usage_details)
+        if isinstance(result, tuple) and len(result) == 2:
+            response, usage_details = result
+            if usage_details:
+                logger.debug(f"Usage details for {database_name}: {usage_details}")
+        else:
+            # For backward compatibility in case it doesn't return a tuple
+            response = result
+            logger.debug("call_llm did not return usage_details")
+            
     except Exception as llm_err:
         logger.error(f"call_llm failed: {llm_err}", exc_info=True)
         return f"Error: LLM call failed ({type(llm_err).__name__})"
@@ -353,7 +364,7 @@ def synthesize_response_and_status(
     documents: List[Dict[str, Any]],
     token: Optional[str] = None,
     database_name: str = "internal_par",
-) -> ResearchResponse:
+) -> ResearchResponse:  # Actually returns just ResearchResponse, not a tuple
     """
     Use an LLM tool call to synthesize a detailed research response AND status summary for PAR (synchronous).
     """
@@ -552,7 +563,7 @@ def query_database_sync(
             research_result = synthesize_response_and_status(
                 query, documents, token, database_name=database_name
             )
-            return research_result, selected_doc_ids  # Return research and IDs
+            return research_result  # Only return research_result, not a tuple
         else:
             logger.error(f"Invalid scope provided to internal_par subagent: {scope}")
             raise ValueError(f"Invalid scope: {scope}")  # Let the error propagate
