@@ -919,9 +919,6 @@ def _query_database_logic(
                 "status_summary": default_error_status,
             }
             
-        # Return error response and potentially selected IDs if selection succeeded before error
-            return response, selected_doc_ids
-            
             # Start of the research pipeline
             # Filter by specific PWC document ID for research search
             initial_results = _perform_vector_search(
