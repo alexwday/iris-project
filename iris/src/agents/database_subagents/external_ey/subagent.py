@@ -908,7 +908,9 @@ def _query_database_logic(
             }
             
         # Return error response and potentially selected IDs if selection succeeded before error
-        return response, selected_doc_ids# Start of the research pipeline (already exists below)
+            return response, selected_doc_ids
+            
+            # Start of the research pipeline 
             initial_results = _perform_vector_search(cursor, query_embedding, INITIAL_K)
             if not initial_results:
                 research_result["status_summary"] = default_no_info_status

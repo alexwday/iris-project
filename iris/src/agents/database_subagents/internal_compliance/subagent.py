@@ -286,7 +286,7 @@ def select_relevant_documents(
             f"Initiating Compliance Document Selection API call (DB: {database_name})"
         )  # Added contextual log
         # Direct synchronous call
-        result = get_completion(capability=\"small\", prompt=selection_prompt, max_tokens=200, token=token, database_name=database_name)
+        result = get_completion(capability="small", prompt=selection_prompt, max_tokens=200, token=token, database_name=database_name)
 
         # Track token usage from LLM calls
         if isinstance(result, tuple) and len(result) == 2:
@@ -303,14 +303,14 @@ def select_relevant_documents(
             selection_response_str = result
 
         # Check if get_completion returned an error string
-        if isinstance(response_str, str) and response_str.startswith("Error:"):
+        if isinstance(selection_response_str, str) and selection_response_str.startswith("Error:"):
             logger.error(
-                f"get_completion failed during document selection: {response_str}"
+                f"get_completion failed during document selection: {selection_response_str}"
             )
             return []
 
         try:
-            selected_ids = json.loads(response_str)
+            selected_ids = json.loads(selection_response_str)
             if isinstance(selected_ids, list) and all(
                 isinstance(i, str) for i in selected_ids
             ):
@@ -318,14 +318,14 @@ def select_relevant_documents(
                 return selected_ids
             else:
                 logger.error(
-                    f"LLM response for Compliance selection was valid JSON but not list of strings: {response_str}"
+                    f"LLM response for Compliance selection was valid JSON but not list of strings: {selection_response_str}"
                 )
                 return []
         except json.JSONDecodeError:
             logger.error(
                 "Failed to parse Compliance selection LLM response as JSON, attempting fallback"
             )
-            matches = re.findall(r'"([^"]+)"', response_str)
+            matches = re.findall(r'"([^"]+)"', selection_response_str)
             valid_ids = [
                 m for m in matches if m.isdigit()
             ]  # Assuming Compliance IDs are numeric strings
@@ -416,17 +416,6 @@ def synthesize_response_and_status(
                 "function": {"name": SYNTHESIS_TOOL_SCHEMA["function"]["name"]},
             },
         )
-
-        # Track token usage from synthesis
-        if isinstance(response_obj, tuple) and len(response_obj) == 2:
-            synthesis_response, synthesis_usage = response_obj
-            llm_usage_list.append(synthesis_usage)
-            total_tokens += synthesis_usage.get('input_tokens', 0) + synthesis_usage.get('output_tokens', 0)
-            total_cost += synthesis_usage.get('cost', 0)
-            # Update process monitor if available
-            if process_monitor:
-                process_monitor.add_llm_call_details_to_stage(stage_name, synthesis_usage)
-            response_obj = synthesis_response
 
         # Track token usage from synthesis
         if isinstance(response_obj, tuple) and len(response_obj) == 2:
@@ -547,7 +536,6 @@ def query_database_sync(query: str, scope: str, token: Optional[str] = None, pro
     default_error_status = "❌ Error during query processing."
     selected_doc_ids: Optional[List[str]] = None  # Initialize
     default_error_status = "❌ Error during query processing."
-    selected_doc_ids: Optional[List[str]] = None # Initialize
 
     try:
         # Direct synchronous calls
@@ -596,7 +584,7 @@ def query_database_sync(query: str, scope: str, token: Optional[str] = None, pro
         if scope == "metadata":
             selected_items = [item for item in catalog if item.get("id") in selected_doc_ids]
             logger.info(f"Returning {len(selected_items)} selected Compliance metadata items.")
-            return selected_items, selected_doc_ids  # Return metadata and IDs, selected_doc_ids # Return metadata and IDs
+            return selected_items, selected_doc_ids  # Return metadata and IDs
         elif scope == "research":
             # Fetch content and synthesize
             documents = fetch_document_content(selected_doc_ids)
@@ -606,10 +594,10 @@ def query_database_sync(query: str, scope: str, token: Optional[str] = None, pro
             research_result = synthesize_response_and_status(
                 query, documents, token, database_name=database_name
             )
-            return research_result, selected_doc_ids # Return research and IDs
+            return research_result, selected_doc_ids  # Return research and IDs
         else:
             logger.error(f"Invalid scope provided to internal_compliance subagent: {scope}")
-            raise ValueError(f"Invalid scope: {scope}")  # Let the error propagate # Let the error propagate
+            raise ValueError(f"Invalid scope: {scope}")  # Let the error propagate
 
     except Exception as e:
         error_msg = f"Error querying Internal Compliance database (scope: {scope}): {str(e)}"

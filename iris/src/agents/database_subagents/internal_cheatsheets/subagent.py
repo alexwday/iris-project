@@ -287,7 +287,7 @@ def select_relevant_documents(
             f"Initiating Cheatsheets Document Selection API call (DB: {database_name})"
         )  # Added contextual log
         # Direct synchronous call
-        result = get_completion(capability=\"small\", prompt=selection_prompt, max_tokens=200, token=token, database_name=database_name)
+        result = get_completion(capability="small", prompt=selection_prompt, max_tokens=200, token=token, database_name=database_name)
 
         # Track token usage from LLM calls
         if isinstance(result, tuple) and len(result) == 2:
@@ -389,9 +389,7 @@ def synthesize_response_and_status(
         "status_summary": default_error_status,
     }
 
-    
-        # Return error response and potentially selected IDs if selection succeeded before error
-        return response, selected_doc_idsif not documents:
+    if not documents:
         logger.warning(f"No documents provided for {database_name} synthesis.")
         return {
             "detailed_research": default_research,
@@ -563,7 +561,6 @@ def query_database_sync(query: str, scope: str, token: Optional[str] = None, pro
             }
             
             return response, selected_doc_ids  # Return empty response and None IDs
-return response, selected_doc_ids # Return empty response and None IDs
 
         # Select documents
         selected_selected_doc_ids = select_relevant_documents(  # Assign to variable # Assign to variable
@@ -588,7 +585,6 @@ return response, selected_doc_ids # Return empty response and None IDs
             }
             
             return response, selected_doc_ids  # Return empty response and empty IDs list
-return response, selected_doc_ids # Return empty response and empty IDs list
 
         # Process based on scope
         if scope == "metadata":

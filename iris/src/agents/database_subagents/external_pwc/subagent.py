@@ -920,7 +920,9 @@ def _query_database_logic(
             }
             
         # Return error response and potentially selected IDs if selection succeeded before error
-        return response, selected_doc_ids# Start of the research pipeline
+            return response, selected_doc_ids
+            
+            # Start of the research pipeline
             # Filter by specific PWC document ID for research search
             initial_results = _perform_vector_search(
                 cursor, query_embedding, INITIAL_K, doc_id=PWC_DOCUMENT_ID

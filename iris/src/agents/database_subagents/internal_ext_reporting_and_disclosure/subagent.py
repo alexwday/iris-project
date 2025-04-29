@@ -286,7 +286,7 @@ def select_relevant_documents(
             f"Initiating External Reporting and Disclosure Document Selection API call (DB: {database_name})"
         )  # Added contextual log
         # Direct synchronous call
-        result = get_completion(capability=\"small\", prompt=selection_prompt, max_tokens=200, token=token, database_name=database_name)
+        result = get_completion(capability="small", prompt=selection_prompt, max_tokens=200, token=token, database_name=database_name)
 
         # Track token usage from LLM calls
         if isinstance(result, tuple) and len(result) == 2:

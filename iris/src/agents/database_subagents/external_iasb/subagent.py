@@ -1006,7 +1006,7 @@ def _query_database_logic(
             }
             
         # Return error response and potentially selected IDs if selection succeeded before error
-        return response, selected_doc_idsall_processed_results = [] # Store results from all doc IDs
+            all_processed_results = [] # Store results from all doc IDs
 
             # Process each Document ID defined in IASB_DOC_CONFIG
             for doc_id, k_value in IASB_DOC_CONFIG.items():
