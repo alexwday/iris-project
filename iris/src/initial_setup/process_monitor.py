@@ -176,6 +176,9 @@ class ProcessMonitor:
         self.start_time: Optional[datetime] = None # Overall start time, type hint
         self.end_time: Optional[datetime] = None   # Overall end time, type hint
         self.run_uuid: Optional[uuid.UUID] = None  # Unique ID for the entire run
+        
+        # Add debug logging for initialization
+        logging.getLogger(__name__).info(f"ProcessMonitor initialized with enabled={enabled}")
 
     def set_run_uuid(self, run_uuid: uuid.UUID) -> None:
         """Sets the unique identifier for the current process run."""
@@ -225,6 +228,11 @@ class ProcessMonitor:
             return
 
         logger.info(f"Logging process monitor data for run_uuid: {self.run_uuid}")
+        
+        # DEBUG: Print statements to help diagnose the issue
+        logger.info(f"Number of stages to log: {len(self.stages)}")
+        for stage_name, stage in self.stages.items():
+            logger.info(f"Stage '{stage_name}' - start: {stage.start_time}, end: {stage.end_time}, status: {stage.status}")
 
         insert_query = """
             INSERT INTO process_monitor_logs (
@@ -281,8 +289,20 @@ class ProcessMonitor:
             return
 
         try:
-            # Use execute_batch for potentially better performance with many stages
-            psycopg2.extras.execute_batch(cursor, insert_query, records_to_insert)
+            # Log each record individually for better debugging
+            for record in records_to_insert:
+                logger.info(f"Inserting record with stage_name={record[2]}")
+                try:
+                    cursor.execute(insert_query, record)
+                    logger.info(f"Successfully inserted record for stage {record[2]}")
+                except Exception as record_err:
+                    logger.error(f"Error inserting record for stage {record[2]}: {record_err}")
+                    # Try to log more detailed info about the record
+                    for i, value in enumerate(record):
+                        logger.info(f"  Param {i}: {type(value)} = {value}")
+                    raise
+            
+            # Log success message
             logger.info(f"Successfully logged {len(records_to_insert)} stages for run_uuid: {self.run_uuid}")
         except Exception as db_err:
             # Log the error, but let the caller handle transaction rollback/commit
@@ -544,27 +564,41 @@ def enable_monitoring(enabled: bool = True) -> None:
         enabled (bool): Whether to enable monitoring
     """
     global process_monitor
+    
+    # Log current state
+    logger.info(f"Enable_monitoring called with enabled={enabled}. Current state: {process_monitor.enabled}")
 
     # Avoid recreating if the state is already correct
     # Also, ensure we don't disable if it wasn't enabled to begin with
     if process_monitor.enabled != enabled:
         # Only create new instance if state *changes*
-        process_monitor = ProcessMonitor(enabled=enabled)
-        if enabled:
-            # process_monitor.start_monitoring() # Start monitoring is called explicitly by model.py now
-            logger.debug("Process monitoring enabled by state change.")
-        else:
-            logger.debug("Process monitoring disabled by state change.")
+        logger.info(f"Creating new ProcessMonitor instance with enabled={enabled}")
+        try:
+            process_monitor = ProcessMonitor(enabled=enabled)
+            if enabled:
+                # process_monitor.start_monitoring() # Start monitoring is called explicitly by model.py now
+                logger.info("Process monitoring enabled by state change.")
+            else:
+                logger.info("Process monitoring disabled by state change.")
+        except Exception as e:
+            logger.error(f"Error creating ProcessMonitor: {e}", exc_info=True)
     elif enabled and not process_monitor.enabled:
         # Handle case where it should be enabled but somehow isn't (e.g., initial state)
-        process_monitor = ProcessMonitor(enabled=True)
-        logger.debug("Process monitoring explicitly enabled.")
+        logger.info("Explicitly creating new ProcessMonitor in enabled state")
+        try:
+            process_monitor = ProcessMonitor(enabled=True)
+            logger.info("Process monitoring explicitly enabled.")
+        except Exception as e:
+            logger.error(f"Error explicitly enabling ProcessMonitor: {e}", exc_info=True)
     elif enabled:
          # If already enabled, maybe reset stages? Or assume caller handles run lifecycle.
          # For now, just log that it's already enabled.
-         logger.debug("Process monitoring was already enabled.")
+         logger.info("Process monitoring was already enabled.")
     else: # enabled is False and process_monitor.enabled is False
-        logger.debug("Process monitoring was already disabled.")
+        logger.info("Process monitoring was already disabled.")
+        
+    # Log the final state to confirm
+    logger.info(f"Final process_monitor state: enabled={process_monitor.enabled}")
 
 
 def get_process_monitor() -> ProcessMonitor:

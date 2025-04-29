@@ -176,11 +176,25 @@ def _model_generator(
     Core synchronous generator handling the agent workflow.
     """
     from ..initial_setup.process_monitor import enable_monitoring, get_process_monitor
+    
+    # Add more logging around the process monitoring setup
+    logger = logging.getLogger(__name__)
+    logger.info("Setting up process monitoring")
+    
     enable_monitoring(True)
     process_monitor = get_process_monitor()
+    
+    # Check if process_monitor is enabled
+    logger.info(f"Process monitor enabled after enable_monitoring call: {process_monitor.enabled}")
+    
     run_uuid_val = uuid.uuid4()
+    logger.info(f"Generated run UUID: {run_uuid_val}")
+    
     process_monitor.set_run_uuid(run_uuid_val)
+    logger.info(f"Set run UUID. Current run UUID: {process_monitor.run_uuid}")
+    
     process_monitor.start_monitoring()
+    logger.info(f"Started monitoring. Start time: {process_monitor.start_time}")
 
     # Initialize legacy debug tracking (structure might be inaccurate now)
     debug_data = None
@@ -457,14 +471,33 @@ def _model_generator(
         if process_monitor.enabled:
             try:
                 # Use the imported connect_to_db function
+                logger.info(f"Attempting to log process monitor data to database for run {process_monitor.run_uuid}")
+                logger.info(f"Total stages to log: {len(process_monitor.stages)}")
+                # Show ENVIRONMENT value
+                logger.info(f"Using environment: {ENVIRONMENT}")
+                
                 db_conn = connect_to_db(ENVIRONMENT)
                 if db_conn:
+                    logger.info("Database connection established")
+                    # Check if table exists
+                    with db_conn.cursor() as check_cursor:
+                        check_cursor.execute("""
+                            SELECT EXISTS (
+                               SELECT FROM information_schema.tables 
+                               WHERE table_schema = 'public'
+                               AND table_name = 'process_monitor_logs'
+                            );
+                        """)
+                        table_exists = check_cursor.fetchone()[0]
+                        logger.info(f"process_monitor_logs table exists: {table_exists}")
+                    
+                    # Try to log to the database
                     with db_conn.cursor() as db_cursor:
                         process_monitor.log_to_database(db_cursor)
                         db_conn.commit() # Commit transaction
                     logger.info("Process monitor data logged to database.")
                 else:
-                    logger.error("Failed to get database connection for logging process monitor data.")
+                    logger.error(f"Failed to get database connection for logging process monitor data. Environment: {ENVIRONMENT}")
             except Exception as log_exc:
                 logger.error(f"Failed to log process monitor data to database: {log_exc}", exc_info=True)
                 # Rollback if connection object available
