@@ -76,7 +76,7 @@ def call_llm(
     oauth_token: str,
     prompt_token_cost: float = 0,
     completion_token_cost: float = 0,
-    # database_name: Optional[str] = None, # No longer needed here
+    database_name: Optional[str] = None,  # Keep this for subagent compatibility
     **params,
 ) -> Any:  # Returns completion object OR stream iterator (which yields usage dict at end)
     """
