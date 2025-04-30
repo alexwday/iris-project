@@ -1,8 +1,8 @@
 # internal_memos/subagent.py
 """
-Internal Memos Subagent
+Internal Memos Subagent (Async Version)
 
-This module handles queries to the Internal Memos database synchronously,
+This module handles queries to the Internal Memos database asynchronously,
 including catalog retrieval, document selection, content retrieval,
 and response synthesis (generating detailed research and status summary using tool calls).
 
@@ -29,7 +29,7 @@ from ....llm_connectors.rbc_openai import call_llm
 from .catalog_selection_prompt import get_catalog_selection_prompt
 from .content_synthesis_prompt import (
     get_content_synthesis_prompt,
-)
+)  # Will need simplification
 
 # Get module logger
 logger = logging.getLogger(__name__)
@@ -161,9 +161,7 @@ def fetch_document_content(doc_ids: List[str]) -> List[Dict[str, Any]]:
                     )
                 if sections:
                     result.append({"document_name": doc_name, "sections": sections})
-        logger.info(
-            f"Retrieved Memos content for {len(result)} documents from database"
-        )
+        logger.info(f"Retrieved Memos content for {len(result)} documents from database")
     except Exception as e:
         logger.error(f"Error fetching Memos document content from database: {str(e)}")
     finally:
@@ -181,11 +179,13 @@ def get_completion(
     token: Optional[str] = None,
     database_name: Optional[str] = None,
     **kwargs: Any,  # Accept additional kwargs for tools, tool_choice etc.
-) -> Any:  # Returns the raw OpenAI response object or content string or error string
+) -> Tuple[Any, Optional[Dict[str, Any]]]:  # Returns (response_content, usage_details) tuple
     """
     Helper function to get a completion from the LLM synchronously.
-    Handles standard completions and tool calls.
+    Handles standard completions and tool calls. Returns content and usage details.
     """
+    usage_details = None # Initialize
+    response = None # Initialize
     try:
         model_config = get_model_config(capability)
         model_name = model_config["name"]
@@ -195,7 +195,8 @@ def get_completion(
         logger.error(
             f"Failed to get model configuration for capability '{capability}': {config_err}"
         )
-        return f"Error: Configuration error for model capability '{capability}'"
+        # Return error string and None for usage details
+        return f"Error: Configuration error for model capability '{capability}'", None
 
     messages = [
         {"role": "system", "content": "You are a helpful assistant."},
@@ -210,7 +211,7 @@ def get_completion(
         "messages": messages,
         "max_tokens": max_tokens,
         "temperature": temperature,
-        "database_name": database_name,
+        "database_name": database_name, # Pass database_name from caller
         **kwargs,
     }
 
@@ -233,14 +234,16 @@ def get_completion(
         else:
             # For backward compatibility in case it doesn't return a tuple
             response = result
+            usage_details = None # Ensure usage_details is None if not returned
             logger.debug("call_llm did not return usage_details")
             
     except Exception as llm_err:
         logger.error(f"call_llm failed: {llm_err}", exc_info=True)
-        return f"Error: LLM call failed ({type(llm_err).__name__})"
+        # Return error string and None for usage details
+        return f"Error: LLM call failed ({type(llm_err).__name__})", None
 
     if is_tool_call:
-        logger.debug("Returning raw response object for tool call.")
+        logger.debug("Returning raw response object and usage details for tool call.")
         if (
             not response
             or not hasattr(response, "choices")
@@ -249,9 +252,12 @@ def get_completion(
             or not hasattr(response.choices[0].message, "tool_calls")
         ):
             logger.error("Invalid response structure received for tool call.")
-            return "Error: Invalid response structure for tool call."
-        return response
+            # Return error string and usage details (which might be None)
+            return "Error: Invalid response structure for tool call.", usage_details
+        # Return the response object and usage details
+        return response, usage_details
     else:
+        # Handle standard completion
         response_value = ""
         if response and hasattr(response, "choices") and response.choices:
             message = response.choices[0].message
@@ -263,20 +269,23 @@ def get_completion(
         else:
             logger.error("LLM response object or choices attribute missing/empty.")
             response_value = "Error: Could not retrieve response content."
-        logger.debug("Returning extracted content string for standard completion.")
-        return response_value
+        logger.debug("Returning extracted content string and usage details for standard completion.")
+        # Return the content string and usage details
+        return response_value, usage_details
 
 
 def select_relevant_documents(
     query: str,
     catalog: List[Dict[str, Any]],
     token: Optional[str] = None,
-    database_name: str = "internal_memo",
+    database_name: str = "internal_memos", # Default to memos
+    process_monitor=None, # Added process_monitor
+    stage_name: Optional[str] = None # Added stage_name
 ) -> List[str]:
     """
-    Use an LLM to select the most relevant Memo documents synchronously.
+    Use an LLM to select the most relevant Memos documents from the catalog based on the query (synchronous).
     """
-    logger.info("Selecting relevant Memo documents from catalog")
+    logger.info("Selecting relevant Memos documents from catalog")
     formatted_catalog = format_catalog_for_llm(catalog)
     selection_prompt = get_catalog_selection_prompt(
         query, formatted_catalog
@@ -284,66 +293,72 @@ def select_relevant_documents(
 
     try:
         logger.info(
-            f"Initiating Memo Document Selection API call (DB: {database_name})"
+            f"Initiating Memos Document Selection API call (DB: {database_name})"
         )  # Added contextual log
-        # Direct synchronous call
-        result = get_completion(capability="small", prompt=selection_prompt, max_tokens=200, token=token, database_name=database_name)
+        # Direct synchronous call - now returns a tuple
+        selection_response_str, selection_usage = get_completion(
+            capability="small",
+            prompt=selection_prompt,
+            max_tokens=200,
+            token=token,
+            database_name=database_name # Pass the specific database name
+        )
 
         # Track token usage from LLM calls
-        if isinstance(result, tuple) and len(result) == 2:
-            selection_response, usage_details = result
-            llm_usage_list.append(usage_details)
-            total_tokens += usage_details.get('input_tokens', 0) + usage_details.get('output_tokens', 0)
-            total_cost += usage_details.get('cost', 0)
+        if selection_usage:
+            logger.debug(f"Document selection usage: {selection_usage}")
             # Update process monitor if available
-            if process_monitor:
-                process_monitor.add_llm_call_details_to_stage(stage_name, usage_details)
-            selection_response_str = selection_response
-        else:
-            # For backward compatibility
-            selection_response_str = result
+            if process_monitor and stage_name: # Check if monitor and stage_name exist
+                process_monitor.add_llm_call_details_to_stage(stage_name, selection_usage)
+                process_monitor.add_stage_details(stage_name, task="document_selection") # Add task detail
 
         # Check if get_completion returned an error string
-        if isinstance(response_str, str) and response_str.startswith("Error:"):
+        if isinstance(selection_response_str, str) and selection_response_str.startswith("Error:"):
             logger.error(
-                f"get_completion failed during document selection: {response_str}"
+                f"get_completion failed during document selection: {selection_response_str}"
             )
             return []
 
         try:
-            selected_ids = json.loads(response_str)
+            # Assuming selection_response_str is the string content now
+            selected_ids = json.loads(selection_response_str)
             if isinstance(selected_ids, list) and all(
                 isinstance(i, str) for i in selected_ids
             ):
-                logger.info(f"LLM selected Memo document IDs: {selected_ids}")
+                logger.info(f"LLM selected Memos document IDs: {selected_ids}")
                 return selected_ids
             else:
                 logger.error(
-                    f"LLM response for Memo selection was valid JSON but not list of strings: {response_str}"
+                    f"LLM response was valid JSON but not a list of strings: {selection_response_str}"
                 )
                 return []
         except json.JSONDecodeError:
             logger.error(
-                "Failed to parse Memo selection LLM response as JSON, attempting fallback"
+                "Failed to parse LLM response as JSON, attempting fallback extraction"
             )
-            matches = re.findall(r'"([^"]+)"', response_str)
-            # Accept any ID, not just digits, as Memo IDs might be strings
-            valid_ids = [m.strip() for m in matches if m.strip()]
+            # More comprehensive regex to extract document IDs
+            matches = re.findall(r'["\'](.*?)["\']', selection_response_str)
+            # Accept any ID, not just digits, since IDs might be strings
+            # Rewrite list comprehension as a for loop to avoid potential hidden character issues
+            valid_ids = []
+            for m in matches:
+                stripped_m = m.strip()
+                if stripped_m:
+                    valid_ids.append(stripped_m)
+            # End rewrite
             if valid_ids:
                 logger.warning(
-                    f"Extracted Memo document IDs using fallback regex: {valid_ids}"
+                    f"Extracted Memos document IDs using fallback regex: {valid_ids}"
                 )
                 return valid_ids
-            logger.error(
-                "Could not extract Memo document IDs from response using fallback."
-            )
+            logger.error("Could not extract Memos document IDs from response using fallback.")
             return []
     except Exception as e:
-        logger.error(f"Error during LLM Memo document selection: {str(e)}")
+        logger.error(f"Error during LLM Memos document selection: {str(e)}")
         return []
 
 
-# Define the tool schema for research synthesis (Copied from internal_wiki/par/icfr)
+# Define the tool schema for research synthesis
 SYNTHESIS_TOOL_SCHEMA = {
     "type": "function",
     "function": {
@@ -372,10 +387,12 @@ def synthesize_response_and_status(
     query: str,
     documents: List[Dict[str, Any]],
     token: Optional[str] = None,
-    database_name: str = "internal_memo",
-) -> ResearchResponse:
+    database_name: str = "internal_memos", # Default to memos
+    process_monitor=None, # Added process_monitor
+    stage_name: Optional[str] = None # Added stage_name
+) -> ResearchResponse: # Return only ResearchResponse
     """
-    Use an LLM tool call to synthesize a detailed research response AND status summary for Memo (synchronous).
+    Use an LLM tool call to synthesize a detailed research response AND status summary for Memos (synchronous).
     """
     logger.info(
         f"Synthesizing response and status for {database_name} using tool call."
@@ -387,29 +404,30 @@ def synthesize_response_and_status(
         "detailed_research": default_research,
         "status_summary": default_error_status,
     }
+    # synthesis_usage = None # No longer need to track usage here
 
     if not documents:
         logger.warning(f"No documents provided for {database_name} synthesis.")
         return {
             "detailed_research": default_research,
             "status_summary": default_no_info_status,
-        }
+        } # Removed None return
 
     formatted_documents = format_documents_for_llm(documents)
     synthesis_prompt = get_content_synthesis_prompt(query, formatted_documents)
 
     try:
         logger.info(
-            f"Initiating Memo Synthesis API call (DB: {database_name})"
+            f"Initiating Memos Synthesis API call (DB: {database_name})"
         )  # Added contextual log
-        # Direct synchronous call
-        response_obj = get_completion(
+        # Direct synchronous call - now returns a tuple
+        synthesis_response_obj, synthesis_usage = get_completion(
             capability="large",
             prompt=synthesis_prompt,
             max_tokens=2500,
             temperature=0.2,
             token=token,
-            database_name=database_name,
+            database_name=database_name, # Pass the specific database name
             tools=[SYNTHESIS_TOOL_SCHEMA],
             tool_choice={
                 "type": "function",
@@ -418,45 +436,32 @@ def synthesize_response_and_status(
         )
 
         # Track token usage from synthesis
-        if isinstance(response_obj, tuple) and len(response_obj) == 2:
-            synthesis_response, synthesis_usage = response_obj
-            llm_usage_list.append(synthesis_usage)
-            total_tokens += synthesis_usage.get('input_tokens', 0) + synthesis_usage.get('output_tokens', 0)
-            total_cost += synthesis_usage.get('cost', 0)
+        if synthesis_usage:
+            logger.debug(f"Research synthesis usage: {synthesis_usage}")
             # Update process monitor if available
-            if process_monitor:
+            if process_monitor and stage_name: # Check if monitor and stage_name exist
                 process_monitor.add_llm_call_details_to_stage(stage_name, synthesis_usage)
-            response_obj = synthesis_response
+                process_monitor.add_stage_details(stage_name, task="research_synthesis") # Add task detail
 
-        # Track token usage from synthesis
-        if isinstance(response_obj, tuple) and len(response_obj) == 2:
-            synthesis_response, synthesis_usage = response_obj
-            llm_usage_list.append(synthesis_usage)
-            total_tokens += synthesis_usage.get('input_tokens', 0) + synthesis_usage.get('output_tokens', 0)
-            total_cost += synthesis_usage.get('cost', 0)
-            # Update process monitor if available
-            if process_monitor:
-                process_monitor.add_llm_call_details_to_stage(stage_name, synthesis_usage)
-            response_obj = synthesis_response
-
-        if isinstance(response_obj, str) and response_obj.startswith("Error:"):
+        # Check if get_completion returned an error string in the response part
+        if isinstance(synthesis_response_obj, str) and synthesis_response_obj.startswith("Error:"):
             logger.error(
-                f"get_completion failed for {database_name} synthesis: {response_obj}"
+                f"get_completion failed for {database_name} synthesis: {synthesis_response_obj}"
             )
-            error_result["detailed_research"] = response_obj
-            return error_result
+            error_result["detailed_research"] = synthesis_response_obj
+            return error_result # Return error dict
 
         # Process Tool Call Response
         if (
-            hasattr(response_obj, "choices")
-            and response_obj.choices
-            and hasattr(response_obj.choices[0], "message")
-            and response_obj.choices[0].message
-            and hasattr(response_obj.choices[0].message, "tool_calls")
-            and response_obj.choices[0].message.tool_calls
+            hasattr(synthesis_response_obj, "choices")
+            and synthesis_response_obj.choices
+            and hasattr(synthesis_response_obj.choices[0], "message")
+            and synthesis_response_obj.choices[0].message
+            and hasattr(synthesis_response_obj.choices[0].message, "tool_calls")
+            and synthesis_response_obj.choices[0].message.tool_calls
         ):
 
-            tool_call = response_obj.choices[0].message.tool_calls[0]
+            tool_call = synthesis_response_obj.choices[0].message.tool_calls[0]
             if tool_call.function.name == SYNTHESIS_TOOL_SCHEMA["function"]["name"]:
                 arguments_str = tool_call.function.arguments
                 logger.debug(f"Received tool arguments string: {arguments_str}")
@@ -469,13 +474,14 @@ def synthesize_response_and_status(
                         logger.info(
                             f"Successfully parsed synthesis tool call for {database_name}."
                         )
+                        # Ensure values are strings, default if not (though schema should enforce)
                         status = arguments.get("status_summary", default_error_status)
                         research = arguments.get("detailed_research", default_research)
                         if not isinstance(status, str):
                             status = default_error_status
                         if not isinstance(research, str):
                             research = default_research
-                        return {"status_summary": status, "detailed_research": research}
+                        return {"status_summary": status, "detailed_research": research} # Return result dict
                     else:
                         logger.error(
                             f"Missing required keys in parsed tool arguments for {database_name}: {arguments}"
@@ -506,14 +512,14 @@ def synthesize_response_and_status(
             )
             content = ""
             if (
-                hasattr(response_obj, "choices")
-                and response_obj.choices
-                and hasattr(response_obj.choices[0], "message")
-                and response_obj.choices[0].message
-                and hasattr(response_obj.choices[0].message, "content")
-                and response_obj.choices[0].message.content
+                hasattr(synthesis_response_obj, "choices")
+                and synthesis_response_obj.choices
+                and hasattr(synthesis_response_obj.choices[0], "message")
+                and synthesis_response_obj.choices[0].message
+                and hasattr(synthesis_response_obj.choices[0].message, "content")
+                and synthesis_response_obj.choices[0].message.content
             ):
-                content = response_obj.choices[0].message.content
+                content = synthesis_response_obj.choices[0].message.content
                 logger.warning(
                     f"LLM returned content instead of tool call: {content[:200]}..."
                 )
@@ -535,54 +541,57 @@ def synthesize_response_and_status(
         return error_result
 
 
-def query_database_sync(query: str, scope: str, token: Optional[str] = None, process_monitor=None) -> SubagentResult:
+def query_database_sync(
+    query: str, scope: str, token: Optional[str] = None, process_monitor=None, query_stage_name: Optional[str] = None
+) -> SubagentResult: # Added query_stage_name
     """
-    Synchronously query the Internal Memo database based on the specified scope.
+    Synchronously query the Internal Memos database based on the specified scope.
     
+    Args:
+        query: The user's query to process
+        scope: The type of data to return ("metadata" or "research")
+        token: Optional OAuth token
+        process_monitor: Optional process monitor to track token usage
+        query_stage_name (str, optional): The specific stage name for this query instance
+                                          provided by the caller (e.g., worker).
+        
     Returns:
         Tuple containing the main database response and a list of selected document IDs (or None).
     """
     logger.info(
-        f"Querying Internal Memo database (sync): '{query}' with scope: {scope}"
+        f"Querying Internal Memos database (sync): '{query}' with scope: {scope}"
     )
-    database_name = "internal_memo"
+    database_name = "internal_memos" # Set database name
     default_error_status = "❌ Error during query processing."
     selected_doc_ids: Optional[List[str]] = None  # Initialize
+    # Use the passed-in stage name if available, otherwise default
+    stage_name = query_stage_name or f"db_query_{database_name}_unknown"
+    logger.debug(f"Using process monitor stage name: {stage_name}")
+    # REMOVED manual tracking variables and list
 
     try:
         # Direct synchronous calls
-        catalog = (
-            fetch_memos_catalog()
-        )  # Function name kept for consistency, queries 'internal_memo'
-        logger.info(f"Retrieved {len(catalog)} total Memo catalog entries")
+        catalog = fetch_memos_catalog() # Use memos function
+        logger.info(f"Retrieved {len(catalog)} total Memos catalog entries")
         if not catalog:
             response: DatabaseResponse
             if scope == "metadata":
                 response = []
             else:
                 response = {
-                    "detailed_research": "No documents found in the Internal Memo database catalog.",
+                    "detailed_research": "No documents found in the Internal Memos database catalog.",
                     "status_summary": "📄 No documents found in catalog.",
                 }
             return response, selected_doc_ids  # Return empty response and None IDs
 
-        # Select documents
-        selected_doc_ids = select_relevant_documents(  # Assign to variable
-            query, catalog, token, database_name=database_name
+        # Select documents using the updated helper function
+        selected_doc_ids = select_relevant_documents(
+            query, catalog, token, database_name, process_monitor, stage_name
         )
+        
         logger.info(
-            f"LLM selected {len(selected_doc_ids)} relevant Memo document IDs: {selected_doc_ids}"
+            f"LLM selected {len(selected_doc_ids)} relevant Memos document IDs: {selected_doc_ids}"
         )
-        
-        # Track token usage from document selection
-        if process_monitor:
-            process_monitor.add_stage_details(stage_name, 
-                result_count=len(selected_doc_ids), 
-                document_ids=selected_doc_ids,
-                total_tokens=total_tokens,
-                total_cost=total_cost
-            )
-        
         if not selected_doc_ids:
             response: DatabaseResponse
             if scope == "metadata":
@@ -592,61 +601,77 @@ def query_database_sync(query: str, scope: str, token: Optional[str] = None, pro
                     "detailed_research": "LLM did not select any relevant documents from the catalog based on the query.",
                     "status_summary": "📄 No relevant documents selected by LLM.",
                 }
+            
+            # Add details to process monitor before returning
+            if process_monitor:
+                process_monitor.add_stage_details(stage_name, 
+                    result_count=0, 
+                    document_ids=selected_doc_ids
+                )
+                
             return response, selected_doc_ids  # Return empty response and empty IDs list
 
         # Process based on scope
         if scope == "metadata":
             selected_items = [item for item in catalog if item.get("id") in selected_doc_ids]
             logger.info(
-                f"Returning {len(selected_items)} selected Memo metadata items."
+                f"Returning {len(selected_items)} selected Memos metadata items."
             )
+            
+            # Add details to process monitor before returning
+            if process_monitor:
+                process_monitor.add_stage_details(stage_name, 
+                    result_count=len(selected_items), 
+                    document_ids=selected_doc_ids
+                )
+                
             return selected_items, selected_doc_ids  # Return metadata and IDs
+            
         elif scope == "research":
             # Fetch content and synthesize
-            documents = fetch_document_content(
-                selected_doc_ids
-            )  # Function name kept for consistency, queries 'internal_memo'
+            documents = fetch_document_content(selected_doc_ids) # Use memos function
             logger.info(
-                f"Retrieved content for {len(documents)} Memo documents for research."
+                f"Retrieved content for {len(documents)} Memos documents for research."
             )
-            research_result = synthesize_response_and_status(  # Function name kept for consistency, uses 'internal_memo' db name
-                query, documents, token, database_name=database_name
-            )
-            # Add token usage to process monitor before returning
-            if process_monitor:
-                process_monitor.add_stage_details(stage_name, 
-                    result_count=len(documents), 
-                    document_ids=selected_doc_ids,
-                    status_summary=research_result.get('status_summary', ''),
-                    total_tokens=total_tokens,
-                    total_cost=total_cost
-                )
             
-            # Add token usage to process monitor before returning
+            # Get research synthesis using the updated helper function
+            # synthesize_response_and_status now returns only the ResearchResponse dict
+            research_result = synthesize_response_and_status(
+                query, documents, token, database_name, process_monitor, stage_name
+            )
+            
+            # Add details to process monitor before returning
             if process_monitor:
                 process_monitor.add_stage_details(stage_name, 
                     result_count=len(documents), 
                     document_ids=selected_doc_ids,
-                    status_summary=research_result.get('status_summary', ''),
-                    total_tokens=total_tokens,
-                    total_cost=total_cost
+                    status_summary=research_result.get("status_summary", "")
                 )
             
             return research_result, selected_doc_ids  # Return research result and IDs
+            
         else:
-            logger.error(f"Invalid scope provided to internal_memo subagent: {scope}")
+            logger.error(f"Invalid scope provided to internal_memos subagent: {scope}")
             raise ValueError(f"Invalid scope: {scope}")  # Let the error propagate
 
     except Exception as e:
-        error_msg = f"Error querying Internal Memo database (scope: {scope}): {str(e)}"
+        error_msg = f"Error querying Internal Memos database (scope: {scope}): {str(e)}"
         logger.error(error_msg, exc_info=True)
         response: DatabaseResponse
         if scope == "metadata":
             response = []
         else:
             response = {
-                "detailed_research": f"**Error processing request for Internal Memo:** {str(e)}",
+                "detailed_research": f"**Error processing request for Internal Memos:** {str(e)}",
                 "status_summary": default_error_status,
             }
+            
+            # Add details to process monitor before returning
+        if process_monitor: # Check if monitor exists before adding error details
+            process_monitor.add_stage_details(stage_name, 
+                error=str(e),
+                document_ids=selected_doc_ids # Keep doc IDs if available
+            )
+            
         # Return error response and potentially selected IDs if selection succeeded before error
         return response, selected_doc_ids
