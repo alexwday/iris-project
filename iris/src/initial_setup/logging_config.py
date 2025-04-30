@@ -16,9 +16,10 @@ Dependencies:
 
 import logging
 import sys
+import logging # Ensure logging is imported if not already assumed
 
 
-def configure_logging(level=logging.INFO):
+def configure_logging(level=logging.DEBUG): # Changed default level to DEBUG
     """
     Configure root logger with handlers for consistent logging across modules.
 
