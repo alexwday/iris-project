@@ -564,10 +564,10 @@ def query_database_sync(
     # Use the passed-in stage name if available, otherwise default
     stage_name = query_stage_name or f"db_query_{database_name}_unknown"
     logger.debug(f"Using process monitor stage name: {stage_name}")
-    # REMOVED manual tracking variables
+    # REMOVED manual tracking variables and list
     # total_tokens = 0
     # total_cost = 0.0
-    # llm_usage_list = []
+    # llm_usage_list = [] 
 
     try:
         # Direct synchronous calls
@@ -597,9 +597,10 @@ def query_database_sync(
         selection_usage = None # Initialize
         if isinstance(selection_result, tuple) and len(selection_result) == 2:
             selection_response, selection_usage = selection_result
-            # llm_usage_list.append(selection_usage) # REMOVED
-            # total_tokens += selection_usage.get('input_tokens', 0) + selection_usage.get('output_tokens', 0) # REMOVED
-            # total_cost += selection_usage.get('cost', 0) # REMOVED
+            # REMOVED manual tracking updates
+            # llm_usage_list.append(selection_usage) 
+            # total_tokens += selection_usage.get('input_tokens', 0) + selection_usage.get('output_tokens', 0) 
+            # total_cost += selection_usage.get('cost', 0) 
             # Log usage for debugging
             logger.debug(f"Document selection usage: {selection_usage}")
             
@@ -658,13 +659,11 @@ def query_database_sync(
                     "status_summary": "📄 No relevant documents selected by LLM.",
                 }
             
-            # Add details to process monitor before returning (REMOVED total_tokens/cost)
+            # Add details to process monitor before returning
             if process_monitor:
                 process_monitor.add_stage_details(stage_name, 
                     result_count=0, 
                     document_ids=selected_doc_ids
-                    # total_tokens=total_tokens, # REMOVED
-                    # total_cost=total_cost # REMOVED
                 )
                 
             return response, selected_doc_ids  # Return empty response and empty IDs list
@@ -676,13 +675,11 @@ def query_database_sync(
                 f"Returning {len(selected_items)} selected wiki metadata items."
             )
             
-            # Add details to process monitor before returning (REMOVED total_tokens/cost)
+            # Add details to process monitor before returning
             if process_monitor:
                 process_monitor.add_stage_details(stage_name, 
                     result_count=len(selected_items), 
                     document_ids=selected_doc_ids
-                    # total_tokens=total_tokens, # REMOVED
-                    # total_cost=total_cost # REMOVED
                 )
                 
             return selected_items, selected_doc_ids  # Return metadata and IDs
@@ -713,9 +710,10 @@ def query_database_sync(
             synthesis_usage = None # Initialize
             if isinstance(synthesis_result, tuple) and len(synthesis_result) == 2:
                 synthesis_response, synthesis_usage = synthesis_result
-                # llm_usage_list.append(synthesis_usage) # REMOVED
-                # total_tokens += synthesis_usage.get('input_tokens', 0) + synthesis_usage.get('output_tokens', 0) # REMOVED
-                # total_cost += synthesis_usage.get('cost', 0) # REMOVED
+                # REMOVED manual tracking updates
+                # llm_usage_list.append(synthesis_usage) 
+                # total_tokens += synthesis_usage.get('input_tokens', 0) + synthesis_usage.get('output_tokens', 0) 
+                # total_cost += synthesis_usage.get('cost', 0) 
                 # Log usage for debugging
                 logger.debug(f"Research synthesis usage: {synthesis_usage}")
                 
@@ -801,15 +799,12 @@ def query_database_sync(
                         "status_summary": default_error_status,
                     }
             
-            # Add details to process monitor before returning (REMOVED total_tokens/cost)
-            # REMOVED redundant blocks
+            # Add details to process monitor before returning
             if process_monitor:
                 process_monitor.add_stage_details(stage_name, 
                     result_count=len(documents), 
                     document_ids=selected_doc_ids,
                     status_summary=research_result.get("status_summary", "")
-                    # total_tokens=total_tokens, # REMOVED
-                    # total_cost=total_cost # REMOVED
                 )
             
             return research_result, selected_doc_ids  # Return research result and IDs
@@ -830,13 +825,11 @@ def query_database_sync(
                 "status_summary": default_error_status,
             }
             
-            # Add details to process monitor before returning (REMOVED total_tokens/cost)
+            # Add details to process monitor before returning
         if process_monitor: # Check if monitor exists before adding error details
             process_monitor.add_stage_details(stage_name, 
                 error=str(e),
                 document_ids=selected_doc_ids # Keep doc IDs if available
-                # total_tokens=total_tokens, # REMOVED
-                # total_cost=total_cost # REMOVED
             )
             
         # Return error response and potentially selected IDs if selection succeeded before error
