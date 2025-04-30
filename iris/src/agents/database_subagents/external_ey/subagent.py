@@ -51,7 +51,7 @@ logger = logging.getLogger(__name__)
 # --- Configuration Constants ---
 DATABASE_NAME = "external_ey"
 TARGET_TABLE = "iris_textbook_database"
-EY_DOCUMENT_ID = "ey_ifrs_developments_issue_160"
+EY_DOCUMENT_ID = "ey_international_gaap_2024" # Corrected Document ID
 
 # Model Capabilities
 EMBEDDING_MODEL_CAPABILITY = "embedding"
