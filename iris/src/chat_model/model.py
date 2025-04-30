@@ -122,12 +122,12 @@ def _execute_query_worker(
         )
         # Assume route_query_sync handles its own LLM calls and logging internally
         # It now returns a tuple: (result, doc_ids)
-        # Pass the process_monitor instance to the router
-        result_tuple = route_query_sync(db_name, query_text, scope, token, process_monitor=process_monitor) # ADDED process_monitor
+        # Pass the process_monitor instance and the specific stage name to the router
+        result_tuple = route_query_sync(db_name, query_text, scope, token, process_monitor=process_monitor, query_stage_name=query_stage_name) # ADDED query_stage_name
         result, doc_ids = result_tuple # Unpack the tuple
         logger.info(f"Thread completed query for database: {db_name}")
-        # process_monitor stage is now ended within route_query_sync or the subagent itself
-        # process_monitor.end_stage(query_stage_name) # REMOVED - Handled downstream
+        # End the stage for this specific query worker instance successfully
+        process_monitor.end_stage(query_stage_name) # RESTORED end_stage call here
 
         # Add result details
         if scope == "metadata" and isinstance(result, list):
@@ -152,7 +152,8 @@ def _execute_query_worker(
         logger.error(
             f"Thread error executing query for {db_name}: {str(e)}", exc_info=True
         )
-        process_monitor.end_stage(query_stage_name, "error")
+        # Ensure stage is ended with error status in case of exception
+        process_monitor.end_stage(query_stage_name, "error") # Ensure this is called on error
         process_monitor.add_stage_details(query_stage_name, error=str(e))
 
     # Return dictionary without token_usage
