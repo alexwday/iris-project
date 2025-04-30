@@ -265,18 +265,18 @@ Provide your response as a single JSON object mapping each ID to 1 (relevant) or
         logger.info(f"Calling {RELEVANCE_MODEL_CAPABILITY} for summary relevance check...")
         # Direct synchronous call - now returns a tuple (response, usage_details)
         result = call_llm(**call_params)
-        logger.debug(f"Result from call_llm in _filter_by_summary_relevance: {type(result)}") # ADDED LOG
+        # logger.debug(f"Result from call_llm in _filter_by_summary_relevance: {type(result)}") # REMOVED LOG
 
         # Handle the new tuple format: (api_response, usage_details)
         response = None
         if isinstance(result, tuple) and len(result) == 2:
             response, usage_details = result # Assign usage_details here
-            logger.debug(f"Unpacked usage_details in _filter_by_summary_relevance: {usage_details}") # ADDED LOG
+            # logger.debug(f"Unpacked usage_details in _filter_by_summary_relevance: {usage_details}") # REMOVED LOG
             if usage_details:
                 logger.debug(f"Relevance Check Usage details for {DATABASE_NAME}: {usage_details}")
         else:
             # For backward compatibility in case it doesn't return a tuple
-            logger.debug(f"call_llm result was not a tuple in _filter_by_summary_relevance. Type: {type(result)}") # ADDED LOG
+            # logger.debug(f"call_llm result was not a tuple in _filter_by_summary_relevance. Type: {type(result)}") # REMOVED LOG
             response = result
             logger.debug("call_llm did not return usage_details")
 
@@ -758,18 +758,18 @@ def _generate_response_from_chunks(
         logger.info(f"Calling {RESPONSE_MODEL_CAPABILITY} for final response synthesis...")
         # Direct synchronous call - now returns a tuple (response, usage_details)
         result = call_llm(**call_params)
-        logger.debug(f"Result from call_llm in _generate_response_from_chunks: {type(result)}") # ADDED LOG
+        # logger.debug(f"Result from call_llm in _generate_response_from_chunks: {type(result)}") # REMOVED LOG
 
         # Handle the new tuple format: (api_response, usage_details)
         response = None
         if isinstance(result, tuple) and len(result) == 2:
             response, usage_details = result # Assign usage_details here
-            logger.debug(f"Unpacked usage_details in _generate_response_from_chunks: {usage_details}") # ADDED LOG
+            # logger.debug(f"Unpacked usage_details in _generate_response_from_chunks: {usage_details}") # REMOVED LOG
             if usage_details:
                 logger.debug(f"Synthesis Usage details: {usage_details}")
         else:
             # For backward compatibility in case it doesn't return a tuple
-            logger.debug(f"call_llm result was not a tuple in _generate_response_from_chunks. Type: {type(result)}") # ADDED LOG
+            # logger.debug(f"call_llm result was not a tuple in _generate_response_from_chunks. Type: {type(result)}") # REMOVED LOG
             response = result
             logger.debug("call_llm did not return usage_details")
 
@@ -873,10 +873,10 @@ def _query_database_logic(
 
         query_embedding, embed_usage = _generate_query_embedding(query, token)
         if embed_usage:
-            logger.debug(f"Appending embedding usage to all_usage_details in _query_database_logic: {embed_usage}") # ADDED LOG
+            # logger.debug(f"Appending embedding usage to all_usage_details in _query_database_logic: {embed_usage}") # REMOVED LOG
             all_usage_details.append(embed_usage)
-        else:
-            logger.debug("No embedding usage details received in _query_database_logic.") # ADDED LOG
+        # else: # REMOVED LOG
+            # logger.debug("No embedding usage details received in _query_database_logic.") # REMOVED LOG
 
         if query_embedding is None:
             # Handle embedding failure based on scope
@@ -967,10 +967,10 @@ def _query_database_logic(
             # 4. Summary Relevance Filtering
             filtered_results, _, relevance_usage = _filter_by_summary_relevance(query, processed_results, token)
             if relevance_usage:
-                logger.debug(f"Appending relevance usage to all_usage_details in _query_database_logic: {relevance_usage}") # ADDED LOG
+                # logger.debug(f"Appending relevance usage to all_usage_details in _query_database_logic: {relevance_usage}") # REMOVED LOG
                 all_usage_details.append(relevance_usage)
-            else:
-                logger.debug("No relevance usage details received in _query_database_logic.") # ADDED LOG
+            # else: # REMOVED LOG
+                # logger.debug("No relevance usage details received in _query_database_logic.") # REMOVED LOG
             if not filtered_results:
                 research_result["status_summary"] = default_no_info_status
                 research_result["detailed_research"] = "No relevant information remained after summary filtering."
@@ -1020,10 +1020,10 @@ def _query_database_logic(
             # 9. Generate Final Response
             research_result, synthesis_usage = _generate_response_from_chunks(query, formatted_chunks, token)
             if synthesis_usage:
-                logger.debug(f"Appending synthesis usage to all_usage_details in _query_database_logic: {synthesis_usage}") # ADDED LOG
+                # logger.debug(f"Appending synthesis usage to all_usage_details in _query_database_logic: {synthesis_usage}") # REMOVED LOG
                 all_usage_details.append(synthesis_usage)
-            else:
-                logger.debug("No synthesis usage details received in _query_database_logic.") # ADDED LOG
+            # else: # REMOVED LOG
+                # logger.debug("No synthesis usage details received in _query_database_logic.") # REMOVED LOG
 
             # Return the final research result, the *initial* chunk IDs, the *final* chunk IDs, and usage details
             return research_result, initial_chunk_ids, final_chunk_ids, all_usage_details
@@ -1121,12 +1121,12 @@ def query_database_sync(query: str, scope: str, token: Optional[str] = None, pro
                 if usage: # Ensure usage is not None
                     try:
                         # Add each LLM call's details to the monitor stage
-                        logger.debug(f"Adding usage details to process monitor in query_database_sync: {usage}") # ADDED LOG
+                        # logger.debug(f"Adding usage details to process monitor in query_database_sync: {usage}") # REMOVED LOG
                         process_monitor.add_llm_call_details_to_stage(stage_name, usage)
                     except Exception as monitor_err:
                         logger.error(f"Error adding LLM usage details to process monitor for stage {stage_name}: {monitor_err}", exc_info=True)
-                else:
-                    logger.debug("Skipping adding None usage details to process monitor in query_database_sync.") # ADDED LOG
+                # else: # REMOVED LOG
+                    # logger.debug("Skipping adding None usage details to process monitor in query_database_sync.") # REMOVED LOG
 
         # Add final details (like initial/final chunk IDs or status) to the monitor stage
         # Use the specific stage_name passed from the worker

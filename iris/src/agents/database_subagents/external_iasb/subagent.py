@@ -1138,7 +1138,7 @@ def _query_database_logic(
 
 # --- Main Function ---
 
-def query_database_sync(query: str, scope: str, token: Optional[str] = None, process_monitor=None) -> SubagentResult:
+def query_database_sync(query: str, scope: str, token: Optional[str] = None, process_monitor=None, query_stage_name: Optional[str] = None) -> SubagentResult: # Added query_stage_name
     """
     Synchronously query the External IASB database. Handles 'metadata' and 'research' scopes.
 
@@ -1146,7 +1146,9 @@ def query_database_sync(query: str, scope: str, token: Optional[str] = None, pro
         query (str): The search query to execute.
         scope (str): The scope of the query ('metadata' or 'research').
         token (str, optional): Authentication token for API access.
-        process_monitor: Optional process monitor to track token usage
+        process_monitor: Optional process monitor to track token usage.
+        query_stage_name (str, optional): The specific stage name for this query instance
+                                          provided by the caller (e.g., worker).
 
     Returns:
         SubagentResult: Tuple containing:
@@ -1155,17 +1157,19 @@ def query_database_sync(query: str, scope: str, token: Optional[str] = None, pro
     """
     start_time = time.time()
     logger.info(f"Querying {DATABASE_NAME} database: '{query}' with scope: {scope}")
-    stage_name = f"db_query_{DATABASE_NAME}"
+    # Use the passed-in stage name if available, otherwise default (though it should always be passed now)
+    stage_name = query_stage_name or f"db_query_{DATABASE_NAME}_unknown"
+    logger.debug(f"Using process monitor stage name: {stage_name}")
     result: DatabaseResponse = {} if scope == "research" else [] # Initialize result
     initial_chunk_ids: Optional[List[str]] = None
     final_chunk_ids: Optional[List[str]] = None # Added final_chunk_ids
     all_usage_details: List[LlmUsageDetails] = []
 
-    # Start tracking this database query in the process monitor if provided
-    if process_monitor:
-        process_monitor.start_stage(stage_name)
-        # Add initial details like scope and query
-        process_monitor.add_stage_details(stage_name, scope=scope, query=query)
+    # REMOVED: Stage start is now handled by the caller (_execute_query_worker)
+    # if process_monitor:
+    #     process_monitor.start_stage(stage_name)
+    #     # Add initial details like scope and query
+    #     process_monitor.add_stage_details(stage_name, scope=scope, query=query)
 
     try:
         # Call the logic function which now returns result, initial_ids, final_ids, and usage_details
@@ -1182,6 +1186,7 @@ def query_database_sync(query: str, scope: str, token: Optional[str] = None, pro
                         logger.error(f"Error adding LLM usage details to process monitor for stage {stage_name}: {monitor_err}", exc_info=True)
 
         # Add final details (like initial/final chunk IDs or status) to the monitor stage
+        # Use the specific stage_name passed from the worker
         if process_monitor:
             details_to_add = {}
             if initial_chunk_ids:
@@ -1207,19 +1212,20 @@ def query_database_sync(query: str, scope: str, token: Optional[str] = None, pro
              result = [] # Return empty list on error for metadata
 
         # Add error details to process monitor
+        # Use the specific stage_name passed from the worker
         if process_monitor:
             process_monitor.add_stage_details(stage_name, error=str(e))
-            # End stage with error status
-            process_monitor.end_stage(stage_name, status="error")
+            # REMOVED: Stage end (even for errors) is now handled by the caller (_execute_query_worker)
+            # process_monitor.end_stage(stage_name, status="error")
 
         # Re-raise the exception? Or return the error result?
         # Current structure returns the error result. If re-raise is needed, uncomment below:
         # raise
 
     finally:
-        # End the tracking stage if it hasn't been ended due to error
-        if process_monitor and process_monitor.stages.get(stage_name) and process_monitor.stages[stage_name].status == "in_progress":
-            process_monitor.end_stage(stage_name) # Default status is 'completed'
+        # REMOVED: Stage end is now handled by the caller (_execute_query_worker)
+        # if process_monitor and process_monitor.stages.get(stage_name) and process_monitor.stages[stage_name].status == "in_progress":
+        #     process_monitor.end_stage(stage_name) # Default status is 'completed'
 
         end_time = time.time()
         duration = end_time - start_time
