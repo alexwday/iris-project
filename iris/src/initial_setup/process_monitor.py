@@ -53,18 +53,36 @@ def _extract_decision_details(stage_name: str, details: Dict[str, Any]) -> Optio
             source_count = len(sources) if sources else 0
             return f"Scope: {scope}, Results: {num_results}, Sources: {source_count}"
         elif stage_name.startswith("db_query_"):
-            # Subagents need to add 'document_ids' or 'chunk_ids' to details
-            ids = details.get('document_ids') or details.get('chunk_ids')
-            if ids:
-                 # Limit the number of IDs shown for brevity in logs
-                 ids_str = ', '.join(map(str, ids[:10]))
-                 suffix = "..." if len(ids) > 10 else ""
-                 return f"Selected IDs: [{ids_str}{suffix}]"
-            # Fallbacks if specific IDs aren't present
-            elif details.get('result_count') is not None:
-                 return f"Result Count: {details.get('result_count')}"
+            # Look for both initial and final IDs
+            initial_ids = details.get('initial_document_ids')
+            final_ids = details.get('final_document_ids')
+            # Fallback to old key for backward compatibility or if only one is logged
+            legacy_ids = details.get('document_ids') or details.get('chunk_ids')
+
+            details_parts = []
+            if initial_ids:
+                count = len(initial_ids)
+                ids_str = ', '.join(map(str, initial_ids[:5])) # Show fewer IDs per list
+                suffix = "..." if count > 5 else ""
+                details_parts.append(f"Initial ({count}): [{ids_str}{suffix}]")
+            if final_ids:
+                count = len(final_ids)
+                ids_str = ', '.join(map(str, final_ids[:5])) # Show fewer IDs per list
+                suffix = "..." if count > 5 else ""
+                details_parts.append(f"Final ({count}): [{ids_str}{suffix}]")
+            elif legacy_ids and not initial_ids: # Show legacy only if new ones aren't present
+                 count = len(legacy_ids)
+                 ids_str = ', '.join(map(str, legacy_ids[:10])) # Keep 10 for legacy view
+                 suffix = "..." if count > 10 else ""
+                 details_parts.append(f"Selected ({count}): [{ids_str}{suffix}]")
+
+            if details_parts:
+                return " ".join(details_parts)
+            # Fallbacks if no IDs are present
             elif details.get('status_summary'):
                  return f"Status: {details.get('status_summary')}"
+            elif details.get('result_count') is not None:
+                 return f"Result Count: {details.get('result_count')}" # Less likely now
         elif stage_name == "ssl_setup":
             cert_path = details.get('cert_path', 'default')
             return f"Certificate Path: {cert_path}"
