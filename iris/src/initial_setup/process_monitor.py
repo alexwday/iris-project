@@ -296,7 +296,8 @@ class ProcessMonitor:
                 total_cost = 0.0
                 if stage.llm_calls_data:
                     for call in stage.llm_calls_data:
-                        total_tokens += call.get('input_tokens', 0) + call.get('output_tokens', 0)
+                        # Use correct keys 'prompt_tokens' and 'completion_tokens'
+                        total_tokens += call.get('prompt_tokens', 0) + call.get('completion_tokens', 0)
                         total_cost += call.get('cost', 0.0)
 
                 decision_details_str = _extract_decision_details(stage.name, stage.details)
