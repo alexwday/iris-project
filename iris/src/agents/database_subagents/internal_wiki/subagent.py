@@ -326,7 +326,13 @@ def select_relevant_documents(
             # Look for digits or string IDs in JSON-like arrays
             matches = re.findall(r'["\'](.*?)["\']', response_str)
             # Accept any ID, not just digits, since IDs might be strings
-            valid_ids = [m.strip() for m in matches if m.strip()]
+            # Rewrite list comprehension as a for loop to avoid potential hidden character issues
+            valid_ids = []
+            for m in matches:
+                stripped_m = m.strip()
+                if stripped_m:
+                    valid_ids.append(stripped_m)
+            # End rewrite
             if valid_ids:
                 logger.warning(
                     f"Extracted document IDs using fallback regex: {valid_ids}"
@@ -533,8 +539,8 @@ def synthesize_response_and_status(
 
 
 def query_database_sync(
-    query: str, scope: str, token: Optional[str] = None, process_monitor=None
-) -> SubagentResult:
+    query: str, scope: str, token: Optional[str] = None, process_monitor=None, query_stage_name: Optional[str] = None
+) -> SubagentResult: # Added query_stage_name
     """
     Synchronously query the Internal Wiki database based on the specified scope.
     
@@ -543,6 +549,8 @@ def query_database_sync(
         scope: The type of data to return ("metadata" or "research")
         token: Optional OAuth token
         process_monitor: Optional process monitor to track token usage
+        query_stage_name (str, optional): The specific stage name for this query instance
+                                          provided by the caller (e.g., worker).
         
     Returns:
         Tuple containing the main database response and a list of selected document IDs (or None).
@@ -553,10 +561,13 @@ def query_database_sync(
     database_name = "internal_wiki"
     default_error_status = "❌ Error during query processing."
     selected_doc_ids: Optional[List[str]] = None  # Initialize
-    stage_name = f"db_query_{database_name}"
-    total_tokens = 0
-    total_cost = 0.0
-    llm_usage_list = []  # Track all LLM call usage details
+    # Use the passed-in stage name if available, otherwise default
+    stage_name = query_stage_name or f"db_query_{database_name}_unknown"
+    logger.debug(f"Using process monitor stage name: {stage_name}")
+    # REMOVED manual tracking variables
+    # total_tokens = 0
+    # total_cost = 0.0
+    # llm_usage_list = []
 
     try:
         # Direct synchronous calls
@@ -583,18 +594,19 @@ def query_database_sync(
         )
         
         # Track token usage from document selection
+        selection_usage = None # Initialize
         if isinstance(selection_result, tuple) and len(selection_result) == 2:
             selection_response, selection_usage = selection_result
-            llm_usage_list.append(selection_usage)
-            total_tokens += selection_usage.get('input_tokens', 0) + selection_usage.get('output_tokens', 0)
-            total_cost += selection_usage.get('cost', 0)
+            # llm_usage_list.append(selection_usage) # REMOVED
+            # total_tokens += selection_usage.get('input_tokens', 0) + selection_usage.get('output_tokens', 0) # REMOVED
+            # total_cost += selection_usage.get('cost', 0) # REMOVED
             # Log usage for debugging
             logger.debug(f"Document selection usage: {selection_usage}")
             
-            # Update process monitor if available
-            if process_monitor:
+            # Update process monitor if available (using correct stage_name)
+            if process_monitor and selection_usage: # Check if usage exists
                 process_monitor.add_llm_call_details_to_stage(stage_name, selection_usage)
-                process_monitor.add_stage_details(stage_name, task="document_selection")
+                process_monitor.add_stage_details(stage_name, task="document_selection") # Add task detail
                 
             # Process the response to extract document IDs
             selection_response_str = selection_response
@@ -646,13 +658,13 @@ def query_database_sync(
                     "status_summary": "📄 No relevant documents selected by LLM.",
                 }
             
-            # Add token usage to process monitor before returning
+            # Add details to process monitor before returning (REMOVED total_tokens/cost)
             if process_monitor:
                 process_monitor.add_stage_details(stage_name, 
                     result_count=0, 
-                    document_ids=selected_doc_ids,
-                    total_tokens=total_tokens,
-                    total_cost=total_cost
+                    document_ids=selected_doc_ids
+                    # total_tokens=total_tokens, # REMOVED
+                    # total_cost=total_cost # REMOVED
                 )
                 
             return response, selected_doc_ids  # Return empty response and empty IDs list
@@ -664,13 +676,13 @@ def query_database_sync(
                 f"Returning {len(selected_items)} selected wiki metadata items."
             )
             
-            # Add token usage to process monitor before returning
+            # Add details to process monitor before returning (REMOVED total_tokens/cost)
             if process_monitor:
                 process_monitor.add_stage_details(stage_name, 
                     result_count=len(selected_items), 
-                    document_ids=selected_doc_ids,
-                    total_tokens=total_tokens,
-                    total_cost=total_cost
+                    document_ids=selected_doc_ids
+                    # total_tokens=total_tokens, # REMOVED
+                    # total_cost=total_cost # REMOVED
                 )
                 
             return selected_items, selected_doc_ids  # Return metadata and IDs
@@ -698,16 +710,17 @@ def query_database_sync(
             )
             
             # Track token usage from research synthesis
+            synthesis_usage = None # Initialize
             if isinstance(synthesis_result, tuple) and len(synthesis_result) == 2:
                 synthesis_response, synthesis_usage = synthesis_result
-                llm_usage_list.append(synthesis_usage)
-                total_tokens += synthesis_usage.get('input_tokens', 0) + synthesis_usage.get('output_tokens', 0)
-                total_cost += synthesis_usage.get('cost', 0)
+                # llm_usage_list.append(synthesis_usage) # REMOVED
+                # total_tokens += synthesis_usage.get('input_tokens', 0) + synthesis_usage.get('output_tokens', 0) # REMOVED
+                # total_cost += synthesis_usage.get('cost', 0) # REMOVED
                 # Log usage for debugging
                 logger.debug(f"Research synthesis usage: {synthesis_usage}")
                 
-                # Update process monitor if available
-                if process_monitor:
+                # Update process monitor if available (using correct stage_name)
+                if process_monitor and synthesis_usage: # Check if usage exists
                     process_monitor.add_llm_call_details_to_stage(stage_name, synthesis_usage)
                     
                 # Process the synthesis response
@@ -788,34 +801,15 @@ def query_database_sync(
                         "status_summary": default_error_status,
                     }
             
-            # Add token usage to process monitor before returning
+            # Add details to process monitor before returning (REMOVED total_tokens/cost)
+            # REMOVED redundant blocks
             if process_monitor:
                 process_monitor.add_stage_details(stage_name, 
                     result_count=len(documents), 
                     document_ids=selected_doc_ids,
-                    status_summary=research_result.get("status_summary", ""),
-                    total_tokens=total_tokens,
-                    total_cost=total_cost
-                )
-            
-            # Add token usage to process monitor before returning
-            if process_monitor:
-                process_monitor.add_stage_details(stage_name, 
-                    result_count=len(documents), 
-                    document_ids=selected_doc_ids,
-                    status_summary=research_result.get('status_summary', ''),
-                    total_tokens=total_tokens,
-                    total_cost=total_cost
-                )
-            
-            # Add token usage to process monitor before returning
-            if process_monitor:
-                process_monitor.add_stage_details(stage_name, 
-                    result_count=len(documents), 
-                    document_ids=selected_doc_ids,
-                    status_summary=research_result.get('status_summary', ''),
-                    total_tokens=total_tokens,
-                    total_cost=total_cost
+                    status_summary=research_result.get("status_summary", "")
+                    # total_tokens=total_tokens, # REMOVED
+                    # total_cost=total_cost # REMOVED
                 )
             
             return research_result, selected_doc_ids  # Return research result and IDs
@@ -836,13 +830,13 @@ def query_database_sync(
                 "status_summary": default_error_status,
             }
             
-        # Add token usage to process monitor before returning
-        if process_monitor and llm_usage_list:
+            # Add details to process monitor before returning (REMOVED total_tokens/cost)
+        if process_monitor: # Check if monitor exists before adding error details
             process_monitor.add_stage_details(stage_name, 
                 error=str(e),
-                document_ids=selected_doc_ids,
-                total_tokens=total_tokens,
-                total_cost=total_cost
+                document_ids=selected_doc_ids # Keep doc IDs if available
+                # total_tokens=total_tokens, # REMOVED
+                # total_cost=total_cost # REMOVED
             )
             
         # Return error response and potentially selected IDs if selection succeeded before error
