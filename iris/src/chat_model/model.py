@@ -122,10 +122,12 @@ def _execute_query_worker(
         )
         # Assume route_query_sync handles its own LLM calls and logging internally
         # It now returns a tuple: (result, doc_ids)
-        result_tuple = route_query_sync(db_name, query_text, scope, token)
+        # Pass the process_monitor instance to the router
+        result_tuple = route_query_sync(db_name, query_text, scope, token, process_monitor=process_monitor) # ADDED process_monitor
         result, doc_ids = result_tuple # Unpack the tuple
         logger.info(f"Thread completed query for database: {db_name}")
-        process_monitor.end_stage(query_stage_name)
+        # process_monitor stage is now ended within route_query_sync or the subagent itself
+        # process_monitor.end_stage(query_stage_name) # REMOVED - Handled downstream
 
         # Add result details
         if scope == "metadata" and isinstance(result, list):
