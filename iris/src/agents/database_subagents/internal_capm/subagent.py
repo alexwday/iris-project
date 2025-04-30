@@ -22,28 +22,23 @@ MetadataResponse = List[Dict[str, Any]]
 ResearchResponse = Dict[str, str]
 DatabaseResponse = Union[MetadataResponse, ResearchResponse]
 SubagentResult = Tuple[DatabaseResponse, Optional[List[str]]]  # Define a tuple for result + doc_ids
-SubagentResult = Tuple[DatabaseResponse, Optional[List[str]]]  # Define a tuple for result + doc_ids
 
 from ....chat_model.model_settings import ENVIRONMENT, get_model_config
 from ....initial_setup.db_config import connect_to_db
 from ....llm_connectors.rbc_openai import call_llm
 from .catalog_selection_prompt import get_catalog_selection_prompt
 from .section_selection_prompt import get_section_selection_prompt
-
-# Removed: from .description_condensation_prompt import get_description_condensation_prompt
 from .content_synthesis_prompt import (
     get_content_synthesis_prompt,
-    get_individual_file_synthesis_prompt,
-    INDIVIDUAL_DOCUMENT_TOOL_SCHEMA,
+    # Removed unused individual synthesis prompt and schema
 )
 
 # Get module logger
 logger = logging.getLogger(__name__)
 
-# Approximate tokens per character (used for token size estimation)
-TOKENS_PER_CHAR = 0.25
+# Removed unused token estimation constant
 
-# Define the tool schema for research synthesis
+# Define the tool schema for research synthesis (consistent with wiki)
 SYNTHESIS_TOOL_SCHEMA = {
     "type": "function",
     "function": {
@@ -68,9 +63,6 @@ SYNTHESIS_TOOL_SCHEMA = {
 
 
 # Formatting functions
-# Removed generate_condensed_description function
-
-
 def format_catalog_for_llm(catalog_records: List[Dict[str, Any]]) -> str:
     """
     Format the catalog records into a string that is optimized for LLM comprehension.
@@ -109,8 +101,8 @@ def format_sections_and_summaries_for_llm(documents: List[Dict[str, Any]]) -> st
 
 def format_documents_for_llm(documents: List[Dict[str, Any]]) -> str:
     """
-    Format retrieved documents into a string that is optimized for LLM analysis.
-    This is used for the content synthesis step.
+    Format retrieved documents (with full content) into a string optimized for LLM analysis.
+    This is used for the final content synthesis step.
     """
     formatted_docs = ""
     for doc in documents:
@@ -125,22 +117,7 @@ def format_documents_for_llm(documents: List[Dict[str, Any]]) -> str:
         formatted_docs += "---\n\n"
     return formatted_docs.strip()
 
-
-def format_single_document_for_llm(document: Dict[str, Any]) -> str:
-    """
-    Format a single document into a string that is optimized for LLM analysis.
-    This is used when processing documents individually due to token limits.
-    """
-    doc_name = document.get("document_name", "Untitled")
-    formatted_doc = f"# {doc_name}\n\n"
-    sections = document.get("sections", [])
-    for section in sections:
-        section_name = section.get("section_name", "Untitled Section")
-        section_content = section.get("section_content", "No content available")
-        formatted_doc += f"## {section_name}\n\n"
-        formatted_doc += f"{section_content}\n\n"
-    return formatted_doc.strip()
-
+# Removed unused format_single_document_for_llm function
 
 # Database interaction functions
 def fetch_capm_catalog() -> List[Dict[str, Any]]:
@@ -229,7 +206,7 @@ def fetch_document_sections_and_summaries(doc_ids: List[str]) -> List[Dict[str, 
                 for row in cur.fetchall():
                     sections.append(
                         {
-                            "section_id": row[0],
+                            "section_id": row[0], # Keep section_id
                             "section_name": (row[1] if row[1] else f"Section {row[0]}"),
                             "section_summary": (
                                 row[2] if row[2] else "No summary available"
@@ -252,7 +229,7 @@ def fetch_document_sections_and_summaries(doc_ids: List[str]) -> List[Dict[str, 
 
 
 def fetch_section_content(
-    section_id_selections: Dict[str, List[str]],  # Renamed parameter
+    section_id_selections: Dict[str, List[str]],
 ) -> List[Dict[str, Any]]:
     """
     Fetch the full content of specified sections from CAPM documents using section IDs.
@@ -278,30 +255,28 @@ def fetch_section_content(
         for doc_name, section_ids in section_id_selections.items():
             logger.debug(
                 f"Querying content for doc: '{doc_name}', section IDs: {section_ids}"
-            )  # Log query details
+            )
             if not section_ids:
                 logger.warning(
                     f"Skipping document '{doc_name}' as no section IDs were selected."
                 )
                 continue
 
-            # Ensure section IDs are appropriate for the query (e.g., integers if the column is integer)
-            # Assuming section_id in DB is integer, attempt conversion. If it's text, use strings directly.
+            # Assuming section_id in DB is integer
             try:
-                # Assuming section_id is stored as an integer in the DB
                 int_section_ids = [int(sid) for sid in section_ids]
                 placeholders = ",".join(["%s"] * len(int_section_ids))
                 query_params = [doc_name] + int_section_ids
-                id_column_name = "section_id"  # Use the correct column name
+                id_column_name = "section_id"
             except ValueError:
                 logger.error(
                     f"Could not convert all section IDs to integers for doc '{doc_name}': {section_ids}. Check LLM output format.",
                     exc_info=True,
                 )
-                continue  # Skip this document if IDs are not valid integers
+                continue
 
             with conn.cursor() as cur:
-                try:  # Add try/except around DB execution
+                try:
                     sql_query = f"""
                         SELECT section_id, section_name, section_content
                         FROM apg_content
@@ -314,12 +289,11 @@ def fetch_section_content(
                     rows = cur.fetchall()
                     logger.debug(
                         f"Found {len(rows)} sections in DB for doc: '{doc_name}' with IDs: {int_section_ids}"
-                    )  # Log result count
+                    )
                     sections = []
                     for row in rows:
                         sections.append(
                             {
-                                # Keep section_name in the output for synthesis context
                                 "section_name": (
                                     row[1] if row[1] else f"Section {row[0]}"
                                 ),
@@ -328,14 +302,10 @@ def fetch_section_content(
                         )
                     if sections:
                         result.append({"document_name": doc_name, "sections": sections})
-                    elif (
-                        rows is None
-                    ):  # Check if fetchall returned None (might indicate error)
+                    elif rows is None:
                         logger.error(
                             f"Database query returned None for doc: '{doc_name}' with IDs {int_section_ids}"
                         )
-                    # else: sections is empty and rows is not None (means query ran but found 0 matching rows)
-                    # logger.debug(f"Query executed successfully but found 0 matching sections for doc: '{doc_name}' with IDs {int_section_ids}") # Optional
 
                 except Exception as db_exec_err:
                     logger.error(
@@ -345,7 +315,7 @@ def fetch_section_content(
 
         logger.info(
             f"Retrieved CAPM content for {len(result)} documents from database"
-        )  # This log remains correct
+        )
     except Exception as e:
         logger.error(
             f"Error during CAPM section content fetching loop: {str(e)}", exc_info=True
@@ -356,7 +326,7 @@ def fetch_section_content(
     return result
 
 
-# LLM interaction helper
+# LLM interaction helper (Updated to match wiki template)
 def get_completion(
     capability: str,
     prompt: str,
@@ -365,11 +335,13 @@ def get_completion(
     token: Optional[str] = None,
     database_name: Optional[str] = None,
     **kwargs: Any,  # Accept additional kwargs for tools, tool_choice etc.
-) -> Any:  # Returns the raw OpenAI response object or content string or error string
+) -> Tuple[Any, Optional[Dict[str, Any]]]:  # Returns (response_content, usage_details) tuple
     """
-    Helper function to get a completion from the LLM.
-    Handles standard completions and tool calls.
+    Helper function to get a completion from the LLM synchronously.
+    Handles standard completions and tool calls. Returns content and usage details.
     """
+    usage_details = None # Initialize
+    response = None # Initialize
     try:
         model_config = get_model_config(capability)
         model_name = model_config["name"]
@@ -379,7 +351,8 @@ def get_completion(
         logger.error(
             f"Failed to get model configuration for capability '{capability}': {config_err}"
         )
-        return f"Error: Configuration error for model capability '{capability}'"
+        # Return error string and None for usage details
+        return f"Error: Configuration error for model capability '{capability}'", None
 
     messages = [
         {"role": "system", "content": "You are a helpful assistant."},
@@ -417,14 +390,16 @@ def get_completion(
         else:
             # For backward compatibility in case it doesn't return a tuple
             response = result
+            usage_details = None # Ensure usage_details is None if not returned
             logger.debug("call_llm did not return usage_details")
             
     except Exception as llm_err:
         logger.error(f"call_llm failed: {llm_err}", exc_info=True)
-        return f"Error: LLM call failed ({type(llm_err).__name__})"
+        # Return error string and None for usage details
+        return f"Error: LLM call failed ({type(llm_err).__name__})", None
 
     if is_tool_call:
-        logger.debug("Returning raw response object for tool call.")
+        logger.debug("Returning raw response object and usage details for tool call.")
         if (
             not response
             or not hasattr(response, "choices")
@@ -433,9 +408,12 @@ def get_completion(
             or not hasattr(response.choices[0].message, "tool_calls")
         ):
             logger.error("Invalid response structure received for tool call.")
-            return "Error: Invalid response structure for tool call."
-        return response
+            # Return error string and usage details (which might be None)
+            return "Error: Invalid response structure for tool call.", usage_details
+        # Return the response object and usage details
+        return response, usage_details
     else:
+        # Handle standard completion
         response_value = ""
         if response and hasattr(response, "choices") and response.choices:
             message = response.choices[0].message
@@ -447,15 +425,19 @@ def get_completion(
         else:
             logger.error("LLM response object or choices attribute missing/empty.")
             response_value = "Error: Could not retrieve response content."
-        logger.debug("Returning extracted content string for standard completion.")
-        return response_value
+        logger.debug("Returning extracted content string and usage details for standard completion.")
+        # Return the content string and usage details
+        return response_value, usage_details
 
 
+# Updated select_relevant_documents with process monitoring
 def select_relevant_documents(
     query: str,
     catalog: List[Dict[str, Any]],
     token: Optional[str] = None,
     database_name: str = "internal_capm",
+    process_monitor=None,
+    stage_name: Optional[str] = None
 ) -> List[str]:
     """
     Use an LLM to select the most relevant CAPM documents.
@@ -468,8 +450,8 @@ def select_relevant_documents(
         logger.info(
             f"Initiating CAPM Document Selection API call (DB: {database_name})"
         )
-        # Direct synchronous call
-        response_str = get_completion(
+        # Direct synchronous call - now returns a tuple
+        selection_response_str, selection_usage = get_completion(
             capability="small",
             prompt=selection_prompt,
             max_tokens=200,
@@ -477,15 +459,23 @@ def select_relevant_documents(
             database_name=database_name,
         )
 
+        # Track token usage from LLM calls
+        if selection_usage:
+            logger.debug(f"Document selection usage: {selection_usage}")
+            # Update process monitor if available
+            if process_monitor and stage_name:
+                process_monitor.add_llm_call_details_to_stage(stage_name, selection_usage)
+                process_monitor.add_stage_details(stage_name, task="document_selection")
+
         # Check if get_completion returned an error string
-        if isinstance(response_str, str) and response_str.startswith("Error:"):
+        if isinstance(selection_response_str, str) and selection_response_str.startswith("Error:"):
             logger.error(
-                f"get_completion failed during document selection: {response_str}"
+                f"get_completion failed during document selection: {selection_response_str}"
             )
             return []
 
         try:
-            selected_ids = json.loads(response_str)
+            selected_ids = json.loads(selection_response_str)
             if isinstance(selected_ids, list) and all(
                 isinstance(i, str) for i in selected_ids
             ):
@@ -493,17 +483,15 @@ def select_relevant_documents(
                 return selected_ids
             else:
                 logger.error(
-                    f"LLM response for CAPM selection was valid JSON but not list of strings: {response_str}"
+                    f"LLM response for CAPM selection was valid JSON but not list of strings: {selection_response_str}"
                 )
                 return []
         except json.JSONDecodeError:
             logger.error(
                 "Failed to parse CAPM selection LLM response as JSON, attempting fallback"
             )
-            matches = re.findall(r'"([^"]+)"', response_str)
-            valid_ids = [
-                m for m in matches if m.isdigit()
-            ]  # Assuming CAPM IDs are numeric strings
+            matches = re.findall(r'["\'](.*?)["\']', selection_response_str)
+            valid_ids = [m.strip() for m in matches if m.strip()]
             if valid_ids:
                 logger.warning(
                     f"Extracted CAPM document IDs using fallback regex: {valid_ids}"
@@ -518,23 +506,18 @@ def select_relevant_documents(
         return []
 
 
+# Updated select_relevant_sections with process monitoring
 def select_relevant_sections(
     query: str,
     documents_with_summaries: List[Dict[str, Any]],
     token: Optional[str] = None,
     database_name: str = "internal_capm",
+    process_monitor=None,
+    stage_name: Optional[str] = None
 ) -> Dict[str, List[str]]:
     """
     Use an LLM to select the most relevant sections from CAPM documents based on summaries.
-
-    Args:
-        query: The user query
-        documents_with_summaries: List of documents with their sections and summaries
-        token: Optional authentication token
-        database_name: Database name for logging
-
-    Returns:
-        Dictionary mapping document names to lists of selected section names
+    Returns: Dictionary mapping document names to lists of selected section IDs (as strings)
     """
     logger.info("Selecting relevant CAPM sections based on summaries")
     formatted_sections = format_sections_and_summaries_for_llm(documents_with_summaries)
@@ -542,32 +525,39 @@ def select_relevant_sections(
 
     try:
         logger.info(f"Initiating CAPM Section Selection API call (DB: {database_name})")
-        # Direct synchronous call
-        response_str = get_completion(
+        # Direct synchronous call - now returns a tuple
+        section_response_str, section_usage = get_completion(
             capability="small",
             prompt=selection_prompt,
-            max_tokens=500,
+            max_tokens=500, # Increased max_tokens slightly
             token=token,
             database_name=database_name,
         )
 
+        # Track token usage from LLM calls
+        if section_usage:
+            logger.debug(f"Section selection usage: {section_usage}")
+            # Update process monitor if available
+            if process_monitor and stage_name:
+                process_monitor.add_llm_call_details_to_stage(stage_name, section_usage)
+                process_monitor.add_stage_details(stage_name, task="section_selection")
+
         # Check if get_completion returned an error string
-        if isinstance(response_str, str) and response_str.startswith("Error:"):
+        if isinstance(section_response_str, str) and section_response_str.startswith("Error:"):
             logger.error(
-                f"get_completion failed during section selection: {response_str}"
+                f"get_completion failed during section selection: {section_response_str}"
             )
             return {}
 
         try:
             # Attempt to extract JSON block using regex
-            json_match = re.search(r"\{.*\}", response_str, re.DOTALL)
+            json_match = re.search(r"\{.*\}", section_response_str, re.DOTALL)
             if json_match:
                 json_str = json_match.group(0)
-                selected_sections = json.loads(json_str)  # Parse the extracted string
+                selected_sections = json.loads(json_str)
             else:
-                # Log if no JSON block found
                 logger.error(
-                    f"Could not find JSON block in LLM response for section selection. Response: {response_str}"
+                    f"Could not find JSON block in LLM response for section selection. Response: {section_response_str}"
                 )
                 return {}
 
@@ -575,195 +565,51 @@ def select_relevant_sections(
             if isinstance(selected_sections, dict) and all(
                 isinstance(doc_name, str)
                 and isinstance(section_ids, list)
-                and all(
-                    isinstance(sid, str) for sid in section_ids
-                )  # Ensure IDs are strings
+                and all(isinstance(sid, str) for sid in section_ids)
                 for doc_name, section_ids in selected_sections.items()
             ):
                 logger.info(f"LLM selected CAPM section IDs: {selected_sections}")
-                # Cast section IDs to the expected type if necessary, though string is fine for DB query
-                # For now, directly return the dict[str, list[str]]
-                return selected_sections  # Return the dictionary mapping doc names to lists of section IDs
+                return selected_sections
             else:
-                # Log the original response if structure is wrong after successful parse
                 logger.error(
-                    f"LLM response for CAPM section ID selection was valid JSON but not in expected format (dict[str, list[str]]): {response_str}"
+                    f"LLM response for CAPM section ID selection was valid JSON but not in expected format (dict[str, list[str]]): {section_response_str}"
                 )
                 return {}
         except json.JSONDecodeError as e:
-            # Log the raw response string that failed parsing
             logger.error(
-                f"Failed to parse CAPM section selection LLM response as JSON. Error: {e}. Raw Response: {response_str}"
+                f"Failed to parse CAPM section selection LLM response as JSON. Error: {e}. Raw Response: {section_response_str}"
             )
             return {}
     except Exception as e:
         logger.error(
             f"Error during LLM CAPM section selection: {str(e)}", exc_info=True
-        )  # Added exc_info for more detail
+        )
         return {}
 
+# Removed unused estimate_token_size and synthesize_individual_document functions
 
-def estimate_token_size(documents: List[Dict[str, Any]]) -> int:
-    """
-    Estimate the token size of the document content.
-    This is used to determine if we need to process documents individually.
-
-    Args:
-        documents: List of documents with their sections and content
-
-    Returns:
-        Estimated token count
-    """
-    total_chars = 0
-    for doc in documents:
-        sections = doc.get("sections", [])
-        for section in sections:
-            content = section.get("section_content", "")
-            total_chars += len(content)
-
-    # Approximate token count based on characters
-    return int(total_chars * TOKENS_PER_CHAR)
-
-
-def synthesize_individual_document(
-    query: str,
-    document: Dict[str, Any],
-    token: Optional[str] = None,
-    database_name: str = "internal_capm",
-) -> str:
-    """
-    Use an LLM to synthesize a response from a single CAPM document.
-    Used when total content exceeds token limits.
-
-    Args:
-        query: The user query
-        document: A single document with its sections and content
-        token: Optional authentication token
-        database_name: Database name for logging
-
-    Returns:
-        Synthesized response for the document
-    """
-    logger.info(
-        f"Synthesizing response for individual CAPM document: {document.get('document_name')}"
-    )
-    formatted_document = format_single_document_for_llm(document)
-    synthesis_prompt = get_individual_file_synthesis_prompt(query, formatted_document)
-
-    try:
-        logger.info(
-            f"Initiating Individual CAPM Document Synthesis API call (DB: {database_name})"
-        )
-        # Direct synchronous call
-        response_obj = get_completion(
-            capability="large",
-            prompt=synthesis_prompt,
-            max_tokens=1500,
-            temperature=0.2,
-            token=token,
-            database_name=database_name,
-            tools=[INDIVIDUAL_DOCUMENT_TOOL_SCHEMA],
-            tool_choice={
-                "type": "function",
-                "function": {
-                    "name": INDIVIDUAL_DOCUMENT_TOOL_SCHEMA["function"]["name"]
-                },
-            },
-        )
-
-        if isinstance(response_obj, str) and response_obj.startswith("Error:"):
-            logger.error(
-                f"get_completion failed for individual CAPM document synthesis: {response_obj}"
-            )
-            return f"Error processing document {document.get('document_name')}: {response_obj}"
-
-        # Process Tool Call Response
-        if (
-            hasattr(response_obj, "choices")
-            and response_obj.choices
-            and hasattr(response_obj.choices[0], "message")
-            and response_obj.choices[0].message
-            and hasattr(response_obj.choices[0].message, "tool_calls")
-            and response_obj.choices[0].message.tool_calls
-        ):
-
-            tool_call = response_obj.choices[0].message.tool_calls[0]
-            if (
-                tool_call.function.name
-                == INDIVIDUAL_DOCUMENT_TOOL_SCHEMA["function"]["name"]
-            ):
-                arguments_str = tool_call.function.arguments
-                logger.debug(f"Received tool arguments string: {arguments_str}")
-                try:
-                    arguments = json.loads(arguments_str)
-                    if "document_summary" in arguments:
-                        logger.info(
-                            f"Successfully parsed individual document synthesis tool call for {database_name}."
-                        )
-                        summary = arguments.get("document_summary", "")
-                        if not isinstance(summary, str):
-                            summary = ""
-                        return summary
-                    else:
-                        logger.error(
-                            f"Missing required keys in parsed tool arguments for individual document: {arguments}"
-                        )
-                        return f"Error: Tool call arguments missing required keys for document {document.get('document_name')}."
-                except json.JSONDecodeError as json_err:
-                    logger.error(
-                        f"Failed to parse tool arguments JSON for individual document: {json_err}. Arguments: {arguments_str}"
-                    )
-                    return f"Error: Failed to parse tool arguments JSON for document {document.get('document_name')} - {json_err}"
-            else:
-                logger.error(
-                    f"Unexpected tool called for individual document: {tool_call.function.name}"
-                )
-                return f"Error: Unexpected tool called for document {document.get('document_name')}: {tool_call.function.name}"
-        else:
-            logger.error(
-                f"No tool call received from LLM for individual document synthesis, despite being requested."
-            )
-            content = ""
-            if (
-                hasattr(response_obj, "choices")
-                and response_obj.choices
-                and hasattr(response_obj.choices[0], "message")
-                and response_obj.choices[0].message
-                and hasattr(response_obj.choices[0].message, "content")
-                and response_obj.choices[0].message.content
-            ):
-                content = response_obj.choices[0].message.content
-                logger.warning(
-                    f"LLM returned content instead of tool call: {content[:200]}..."
-                )
-                return f"Error: LLM returned text instead of tool call for document {document.get('document_name')}. Content: {content[:200]}..."
-            else:
-                return f"Error: No tool call or content received from LLM for document {document.get('document_name')}."
-
-    except Exception as e:
-        logger.error(
-            f"Exception during individual document synthesis: {str(e)}",
-            exc_info=True,
-        )
-        return f"Error during synthesis of document {document.get('document_name')}: {str(e)}"
-
-
+# Updated synthesize_response_and_status with process monitoring (using single synthesis call)
 def synthesize_response_and_status(
     query: str,
-    documents: List[Dict[str, Any]],
+    documents: List[Dict[str, Any]], # Expects documents with full section content
     token: Optional[str] = None,
     database_name: str = "internal_capm",
+    process_monitor=None,
+    stage_name: Optional[str] = None
 ) -> ResearchResponse:
     """
-    Use an LLM tool call to synthesize a detailed research response AND status summary for CAPM.
-    Processes each document individually in separate, staggered LLM calls.
+    Use an LLM tool call to synthesize a detailed research response AND status summary for CAPM (synchronous).
     """
     logger.info(
-        f"Synthesizing response and status for {database_name} by processing documents individually."
+        f"Synthesizing response and status for {database_name} using tool call."
     )
     default_error_status = f"❌ Error processing {database_name} query."
     default_no_info_status = f"📄 No relevant information found in {database_name}."
     default_research = f"No detailed research generated for {database_name} due to missing documents or error."
+    error_result = {
+        "detailed_research": default_research,
+        "status_summary": default_error_status,
+    }
 
     if not documents:
         logger.warning(f"No documents provided for {database_name} synthesis.")
@@ -772,441 +618,241 @@ def synthesize_response_and_status(
             "status_summary": default_no_info_status,
         }
 
-    individual_results = []
-    success_count = 0
-    error_count = 0
-
-    for i, document in enumerate(documents):
-        doc_name = document.get("document_name", "Untitled")
-        logger.info(f"Processing document {i+1}/{len(documents)}: {doc_name}")
-
-        # Stagger calls
-        if i > 0:
-            logger.debug(f"Sleeping for 1 second before processing next document.")
-            time.sleep(1)
-
-        doc_result = synthesize_individual_document(
-            query, document, token, database_name
-        )
-
-        if isinstance(doc_result, str) and doc_result.startswith("Error:"):
-            logger.error(f"Error synthesizing document {doc_name}: {doc_result}")
-            individual_results.append((doc_name, doc_result))
-            error_count += 1
-        else:
-            logger.info(f"Successfully synthesized document {doc_name}")
-            individual_results.append((doc_name, doc_result))
-            success_count += 1
-
-    # Combine individual results with formatting
-    combined_research = ""
-    for doc_name, result in individual_results:
-        combined_research += f"## {doc_name}\n\n"
-        combined_research += f"{result}\n\n"
-        combined_research += "---\n\n"
-
-    # Generate final status summary
-    if success_count > 0 and error_count == 0:
-        status_summary = f"✅ Found information from {success_count} document(s)."
-    elif success_count > 0 and error_count > 0:
-        status_summary = f"⚠️ Found information from {success_count} document(s), but encountered errors processing {error_count} other(s)."
-    elif success_count == 0 and error_count > 0:
-        status_summary = (
-            f"❌ Errors encountered while processing {error_count} document(s)."
-        )
-    else:  # success_count == 0 and error_count == 0 (shouldn't happen if documents list is not empty, but handle defensively)
-        status_summary = default_no_info_status
-
-    return {
-        "detailed_research": combined_research.strip(),
-        "status_summary": status_summary,
-    }
-
-
-def query_database_sync(query: str, scope: str, token: Optional[str] = None, process_monitor=None) -> SubagentResult:
-    """
-    Synchronously query the database based on the specified scope.
-    
-    Returns:
-        Tuple containing the main database response and a list of selected document IDs (or None).
-    """
-    logger.info(f"Querying Internal CAPM database: '{query}' with scope: {scope}")
-    database_name = "internal_capm"
-    default_error_status = "❌ Error during query processing."
-    selected_doc_ids: Optional[List[str]] = None  # Initialize
-    stage_name = f"db_query_{database_name}"
-    total_tokens = 0
-    total_cost = 0.0
-    llm_usage_list = []  # Track all LLM call usage details
+    formatted_documents = format_documents_for_llm(documents) # Use formatter for full content
+    synthesis_prompt = get_content_synthesis_prompt(query, formatted_documents)
 
     try:
-        # Fetch catalog
+        logger.info(
+            f"Initiating CAPM Synthesis API call (DB: {database_name})"
+        )
+        # Direct synchronous call - now returns a tuple
+        synthesis_response_obj, synthesis_usage = get_completion(
+            capability="large",
+            prompt=synthesis_prompt,
+            max_tokens=2500, # Adjust as needed for CAPM content size
+            temperature=0.2,
+            token=token,
+            database_name=database_name,
+            tools=[SYNTHESIS_TOOL_SCHEMA],
+            tool_choice={
+                "type": "function",
+                "function": {"name": SYNTHESIS_TOOL_SCHEMA["function"]["name"]},
+            },
+        )
+
+        # Track token usage from synthesis
+        if synthesis_usage:
+            logger.debug(f"Research synthesis usage: {synthesis_usage}")
+            # Update process monitor if available
+            if process_monitor and stage_name:
+                process_monitor.add_llm_call_details_to_stage(stage_name, synthesis_usage)
+                process_monitor.add_stage_details(stage_name, task="research_synthesis")
+
+        # Check if get_completion returned an error string in the response part
+        if isinstance(synthesis_response_obj, str) and synthesis_response_obj.startswith("Error:"):
+            logger.error(
+                f"get_completion failed for {database_name} synthesis: {synthesis_response_obj}"
+            )
+            error_result["detailed_research"] = synthesis_response_obj
+            return error_result
+
+        # Process Tool Call Response
+        if (
+            hasattr(synthesis_response_obj, "choices")
+            and synthesis_response_obj.choices
+            and hasattr(synthesis_response_obj.choices[0], "message")
+            and synthesis_response_obj.choices[0].message
+            and hasattr(synthesis_response_obj.choices[0].message, "tool_calls")
+            and synthesis_response_obj.choices[0].message.tool_calls
+        ):
+
+            tool_call = synthesis_response_obj.choices[0].message.tool_calls[0]
+            if tool_call.function.name == SYNTHESIS_TOOL_SCHEMA["function"]["name"]:
+                arguments_str = tool_call.function.arguments
+                logger.debug(f"Received tool arguments string: {arguments_str}")
+                try:
+                    arguments = json.loads(arguments_str)
+                    if (
+                        "status_summary" in arguments
+                        and "detailed_research" in arguments
+                    ):
+                        logger.info(
+                            f"Successfully parsed synthesis tool call for {database_name}."
+                        )
+                        status = arguments.get("status_summary", default_error_status)
+                        research = arguments.get("detailed_research", default_research)
+                        if not isinstance(status, str): status = default_error_status
+                        if not isinstance(research, str): research = default_research
+                        return {"status_summary": status, "detailed_research": research}
+                    else:
+                        logger.error(
+                            f"Missing required keys in parsed tool arguments for {database_name}: {arguments}"
+                        )
+                        error_result["detailed_research"] = "Error: Tool call arguments missing required keys."
+                        return error_result
+                except json.JSONDecodeError as json_err:
+                    logger.error(
+                        f"Failed to parse tool arguments JSON for {database_name}: {json_err}. Arguments: {arguments_str}"
+                    )
+                    error_result["detailed_research"] = f"Error: Failed to parse tool arguments JSON - {json_err}"
+                    return error_result
+            else:
+                logger.error(
+                    f"Unexpected tool called for {database_name}: {tool_call.function.name}"
+                )
+                error_result["detailed_research"] = f"Error: Unexpected tool called: {tool_call.function.name}"
+                return error_result
+        else:
+            logger.error(
+                f"No tool call received from LLM for {database_name} synthesis, despite being requested."
+            )
+            content = ""
+            if (
+                hasattr(synthesis_response_obj, "choices")
+                and synthesis_response_obj.choices
+                and hasattr(synthesis_response_obj.choices[0], "message")
+                and synthesis_response_obj.choices[0].message
+                and hasattr(synthesis_response_obj.choices[0].message, "content")
+                and synthesis_response_obj.choices[0].message.content
+            ):
+                content = synthesis_response_obj.choices[0].message.content
+                logger.warning(
+                    f"LLM returned content instead of tool call: {content[:200]}..."
+                )
+                error_result["detailed_research"] = f"Error: LLM returned text instead of tool call. Content: {content[:200]}..."
+            else:
+                error_result["detailed_research"] = "Error: No tool call or content received from LLM."
+            return error_result
+
+    except Exception as e:
+        logger.error(
+            f"Exception during synthesis tool call for {database_name}: {str(e)}",
+            exc_info=True,
+        )
+        error_result["detailed_research"] = f"Error during synthesis: {str(e)}"
+        return error_result
+
+
+# Updated query_database_sync with process monitoring and CAPM workflow
+def query_database_sync(
+    query: str, scope: str, token: Optional[str] = None, process_monitor=None, query_stage_name: Optional[str] = None
+) -> SubagentResult:
+    """
+    Synchronously query the Internal CAPM database based on the specified scope.
+    Includes document selection, section selection, and content synthesis.
+    """
+    logger.info(f"Querying Internal CAPM database (sync): '{query}' with scope: {scope}")
+    database_name = "internal_capm"
+    default_error_status = "❌ Error during query processing."
+    selected_doc_ids: Optional[List[str]] = None
+    # Use the passed-in stage name if available, otherwise default
+    stage_name = query_stage_name or f"db_query_{database_name}_unknown"
+    logger.debug(f"Using process monitor stage name: {stage_name}")
+    # Removed manual tracking variables
+
+    try:
+        # 1. Fetch Catalog
         catalog = fetch_capm_catalog()
         logger.info(f"Retrieved {len(catalog)} total CAPM catalog entries")
         if not catalog:
-            response: DatabaseResponse
-            if scope == "metadata":
-                response = []
-            else:
-                response = {
-                    "detailed_research": "No documents found in the Internal CAPM database catalog.",
-                    "status_summary": "📄 No documents found in catalog.",
-                }
-            
-            return response, selected_doc_ids  # Return empty response and None IDs
+            response: DatabaseResponse = [] if scope == "metadata" else {
+                "detailed_research": "No documents found in the Internal CAPM database catalog.",
+                "status_summary": "📄 No documents found in catalog.",
+            }
+            return response, None
 
-        # Select documents
-        selection_result = get_completion(
-            capability="small",
-            prompt=get_catalog_selection_prompt(query, format_catalog_for_llm(catalog)),
-            max_tokens=200,
-            token=token,
-            database_name=database_name,
+        # 2. Select Relevant Documents
+        selected_doc_ids = select_relevant_documents(
+            query, catalog, token, database_name, process_monitor, stage_name
         )
-        
-        # Track token usage from document selection
-        if isinstance(selection_result, tuple) and len(selection_result) == 2:
-            selection_response, selection_usage = selection_result
-            llm_usage_list.append(selection_usage)
-            total_tokens += selection_usage.get('input_tokens', 0) + selection_usage.get('output_tokens', 0)
-            total_cost += selection_usage.get('cost', 0)
-            
-            # Update process monitor if available
-            if process_monitor:
-                process_monitor.add_llm_call_details_to_stage(stage_name, selection_usage)
-                process_monitor.add_stage_details(stage_name, task="document_selection")
-                
-            # Process the response to extract document IDs
-            selection_response_str = selection_response
-        else:
-            # For backward compatibility
-            selection_response_str = selection_result
-            
-        # Extract document IDs from selection response
-        if isinstance(selection_response_str, str) and selection_response_str.startswith("Error:"):
-            logger.error(f"get_completion failed during document selection: {selection_response_str}")
-            selected_doc_ids = []
-        else:
-            try:
-                selected_doc_ids = json.loads(selection_response_str)
-                if isinstance(selected_doc_ids, list) and all(
-                    isinstance(i, str) for i in selected_doc_ids
-                ):
-                    logger.info(f"LLM selected document IDs: {selected_doc_ids}")
-                else:
-                    logger.error(
-                        f"LLM response was valid JSON but not a list of strings: {selection_response_str}"
-                    )
-                    selected_doc_ids = []
-            except json.JSONDecodeError:
-                logger.error(
-                    "Failed to parse LLM response as JSON, attempting fallback extraction"
-                )
-                # More comprehensive regex to extract document IDs
-                matches = re.findall(r'["\'](.*?)["\']', selection_response_str)
-                # Accept any ID, not just digits, since IDs might be strings
-                selected_doc_ids = [m.strip() for m in matches if m.strip()]
-                if selected_doc_ids:
-                    logger.warning(
-                        f"Extracted document IDs using fallback regex: {selected_doc_ids}"
-                    )
-                else:
-                    logger.error("Could not extract document IDs from response using fallback.")
-                    
-        logger.info(
-            f"LLM selected {len(selected_doc_ids)} relevant CAPM document IDs: {selected_doc_ids}"
-        )
-        
+        logger.info(f"LLM selected {len(selected_doc_ids)} relevant CAPM document IDs: {selected_doc_ids}")
+
         if not selected_doc_ids:
-            response: DatabaseResponse
-            if scope == "metadata":
-                response = []
-            else:
-                response = {
-                    "detailed_research": "LLM did not select any relevant documents from the catalog based on the query.",
-                    "status_summary": "📄 No relevant documents selected by LLM.",
-                }
-            
-            # Add token usage to process monitor before returning
+            response: DatabaseResponse = [] if scope == "metadata" else {
+                "detailed_research": "LLM did not select any relevant documents from the catalog based on the query.",
+                "status_summary": "📄 No relevant documents selected by LLM.",
+            }
             if process_monitor:
-                process_monitor.add_stage_details(stage_name, 
-                    result_count=0, 
-                    document_ids=selected_doc_ids,
-                    total_tokens=total_tokens,
-                    total_cost=total_cost
-                )
-                
-            return response, selected_doc_ids  # Return empty response and empty IDs list
+                process_monitor.add_stage_details(stage_name, result_count=0, document_ids=[])
+            return response, [] # Return empty list for doc IDs
 
-        # Process based on scope
+        # 3. Process based on scope
         if scope == "metadata":
-            # Get selected items from catalog
             selected_items = [item for item in catalog if item.get("id") in selected_doc_ids]
-
-            # Removed generation of condensed descriptions
-
-            logger.info(
-                f"Returning {len(selected_items)} selected CAPM metadata items."
-            )
-            
-            # Add token usage to process monitor before returning
+            logger.info(f"Returning {len(selected_items)} selected CAPM metadata items.")
             if process_monitor:
-                process_monitor.add_stage_details(stage_name, 
-                    result_count=len(selected_items), 
-                    document_ids=selected_doc_ids,
-                    total_tokens=total_tokens,
-                    total_cost=total_cost
-                )
-                
-            return selected_items, selected_doc_ids  # Return metadata and IDs
-            
+                process_monitor.add_stage_details(stage_name, result_count=len(selected_items), document_ids=selected_doc_ids)
+            return selected_items, selected_doc_ids
+
         elif scope == "research":
-            # Fetch sections and summaries
+            # 4. Fetch Sections and Summaries for Selected Documents
             documents_with_summaries = fetch_document_sections_and_summaries(selected_doc_ids)
-            logger.info(
-                f"Retrieved sections and summaries for {len(documents_with_summaries)} CAPM documents."
-            )
             if not documents_with_summaries:
                 response = {
                     "detailed_research": "Could not retrieve sections and summaries for the selected CAPM documents.",
                     "status_summary": "❌ Error retrieving document sections.",
                 }
-                
-                # Add token usage to process monitor before returning
                 if process_monitor:
-                    process_monitor.add_stage_details(stage_name, 
-                        result_count=0, 
-                        document_ids=selected_doc_ids,
-                        error="Could not retrieve document sections",
-                        total_tokens=total_tokens,
-                        total_cost=total_cost
-                    )
-                    
-                return response, selected_doc_ids  # Return error response with IDs
+                    process_monitor.add_stage_details(stage_name, error="Could not retrieve document sections", document_ids=selected_doc_ids)
+                return response, selected_doc_ids
 
-            # Select relevant sections based on summaries
-            section_result = get_completion(
-                capability="small",
-                prompt=get_section_selection_prompt(query, format_sections_and_summaries_for_llm(documents_with_summaries)),
-                max_tokens=500,
-                token=token,
-                database_name=database_name,
-            )
+            # 5. Select Relevant Sections based on Summaries
+            section_selections = select_relevant_sections(
+                query, documents_with_summaries, token, database_name, process_monitor, stage_name
+            ) # Returns Dict[doc_name, List[section_id_str]]
             
-            # Track token usage from section selection
-            if isinstance(section_result, tuple) and len(section_result) == 2:
-                section_response, section_usage = section_result
-                llm_usage_list.append(section_usage)
-                total_tokens += section_usage.get('input_tokens', 0) + section_usage.get('output_tokens', 0)
-                total_cost += section_usage.get('cost', 0)
-                
-                # Update process monitor if available
-                if process_monitor:
-                    process_monitor.add_llm_call_details_to_stage(stage_name, section_usage)
-                    process_monitor.add_stage_details(stage_name, task="section_selection")
-                    
-                section_response_str = section_response
-            else:
-                # For backward compatibility
-                section_response_str = section_result
-            
-            # Process section selection response
-            if isinstance(section_response_str, str) and section_response_str.startswith("Error:"):
-                logger.error(f"get_completion failed during section selection: {section_response_str}")
-                section_selections = {}
-            else:
-                try:
-                    # Attempt to extract JSON block using regex
-                    json_match = re.search(r"\{.*\}", section_response_str, re.DOTALL)
-                    if json_match:
-                        json_str = json_match.group(0)
-                        section_selections = json.loads(json_str)  # Parse the extracted string
-                    else:
-                        logger.error(f"Could not find JSON block in LLM response for section selection")
-                        section_selections = {}
-                except json.JSONDecodeError:
-                    logger.error(f"Failed to parse section selection LLM response as JSON")
-                    section_selections = {}
-            
-            if not section_selections:
+            # Filter out documents with no selected sections
+            valid_section_selections = {
+                doc_name: sec_ids for doc_name, sec_ids in section_selections.items() if sec_ids
+            }
+
+            if not valid_section_selections:
                 logger.warning("LLM did not select any relevant sections.")
                 response = {
                     "detailed_research": "LLM did not select any relevant sections from the CAPM documents based on the query.",
                     "status_summary": "📄 No relevant sections selected by LLM.",
                 }
-                
-                # Add token usage to process monitor before returning
                 if process_monitor:
-                    process_monitor.add_stage_details(stage_name, 
-                        result_count=0, 
-                        document_ids=selected_doc_ids,
-                        error="No relevant sections selected",
-                        total_tokens=total_tokens,
-                        total_cost=total_cost
-                    )
-                    
-                return response, selected_doc_ids  # Return error response with IDs
+                     process_monitor.add_stage_details(stage_name, error="No relevant sections selected", document_ids=selected_doc_ids)
+                return response, selected_doc_ids
 
-            # Fetch full content for selected sections
-            documents_with_content = fetch_section_content(section_selections)
-            logger.info(
-                f"Retrieved content for {len(documents_with_content)} CAPM documents for research."
-            )
+            # 6. Fetch Full Content for Selected Sections
+            documents_with_content = fetch_section_content(valid_section_selections)
             if not documents_with_content:
                 response = {
                     "detailed_research": "Could not retrieve content for the selected CAPM sections.",
                     "status_summary": "❌ Error retrieving section content.",
                 }
-                
-                # Add token usage to process monitor before returning
                 if process_monitor:
-                    process_monitor.add_stage_details(stage_name, 
-                        result_count=0, 
-                        document_ids=selected_doc_ids,
-                        error="Could not retrieve section content",
-                        total_tokens=total_tokens,
-                        total_cost=total_cost
-                    )
-                    
-                return response, selected_doc_ids  # Return error response with IDs
+                    process_monitor.add_stage_details(stage_name, error="Could not retrieve section content", document_ids=selected_doc_ids)
+                return response, selected_doc_ids
 
-            # Synthesize response
-            synthesis_result = get_completion(
-                capability="large",
-                prompt=get_content_synthesis_prompt(query, format_documents_for_llm(documents_with_content)),
-                max_tokens=1500,
-                temperature=0.2,
-                token=token,
-                database_name=database_name,
-                tools=[SYNTHESIS_TOOL_SCHEMA],
-                tool_choice={
-                    "type": "function",
-                    "function": {"name": SYNTHESIS_TOOL_SCHEMA["function"]["name"]},
-                },
+            # 7. Synthesize Final Response
+            research_result = synthesize_response_and_status(
+                query, documents_with_content, token, database_name, process_monitor, stage_name
             )
-            
-            # Track token usage from research synthesis
-            if isinstance(synthesis_result, tuple) and len(synthesis_result) == 2:
-                synthesis_response, synthesis_usage = synthesis_result
-                llm_usage_list.append(synthesis_usage)
-                total_tokens += synthesis_usage.get('input_tokens', 0) + synthesis_usage.get('output_tokens', 0)
-                total_cost += synthesis_usage.get('cost', 0)
-                
-                # Update process monitor if available
-                if process_monitor:
-                    process_monitor.add_llm_call_details_to_stage(stage_name, synthesis_usage)
-                    
-                synthesis_response_obj = synthesis_response
-            else:
-                # For backward compatibility
-                synthesis_response_obj = synthesis_result
-            
-            # Process the synthesis response to extract research and status
-            research_result = {}
-            if isinstance(synthesis_response_obj, str) and synthesis_response_obj.startswith("Error:"):
-                logger.error(f"get_completion failed for synthesis: {synthesis_response_obj}")
-                research_result = {
-                    "detailed_research": synthesis_response_obj,
-                    "status_summary": default_error_status,
-                }
-            else:
-                # Process Tool Call Response
-                try:
-                    if (
-                        hasattr(synthesis_response_obj, "choices")
-                        and synthesis_response_obj.choices
-                        and hasattr(synthesis_response_obj.choices[0], "message")
-                        and synthesis_response_obj.choices[0].message
-                        and hasattr(synthesis_response_obj.choices[0].message, "tool_calls")
-                        and synthesis_response_obj.choices[0].message.tool_calls
-                    ):
-                        tool_call = synthesis_response_obj.choices[0].message.tool_calls[0]
-                        if tool_call.function.name == SYNTHESIS_TOOL_SCHEMA["function"]["name"]:
-                            arguments_str = tool_call.function.arguments
-                            try:
-                                arguments = json.loads(arguments_str)
-                                if "status_summary" in arguments and "detailed_research" in arguments:
-                                    research_result = {
-                                        "status_summary": arguments.get("status_summary", default_error_status),
-                                        "detailed_research": arguments.get("detailed_research", "No research generated.")
-                                    }
-                                else:
-                                    research_result = {
-                                        "detailed_research": "Error: Tool call arguments missing required keys.",
-                                        "status_summary": default_error_status,
-                                    }
-                            except json.JSONDecodeError:
-                                research_result = {
-                                    "detailed_research": "Error: Failed to parse tool arguments JSON.",
-                                    "status_summary": default_error_status,
-                                }
-                        else:
-                            research_result = {
-                                "detailed_research": f"Error: Unexpected tool called: {tool_call.function.name}",
-                                "status_summary": default_error_status,
-                            }
-                    else:
-                        content = ""
-                        if (
-                            hasattr(synthesis_response_obj, "choices")
-                            and synthesis_response_obj.choices
-                            and hasattr(synthesis_response_obj.choices[0], "message")
-                            and synthesis_response_obj.choices[0].message
-                            and hasattr(synthesis_response_obj.choices[0].message, "content")
-                            and synthesis_response_obj.choices[0].message.content
-                        ):
-                            content = synthesis_response_obj.choices[0].message.content
-                            research_result = {
-                                "detailed_research": f"Error: LLM returned text instead of tool call. Content: {content[:200]}...",
-                                "status_summary": default_error_status,
-                            }
-                        else:
-                            research_result = {
-                                "detailed_research": "Error: No tool call or content received from LLM.",
-                                "status_summary": default_error_status,
-                            }
-                except Exception as e:
-                    research_result = {
-                        "detailed_research": f"Error processing synthesis response: {str(e)}",
-                        "status_summary": default_error_status,
-                    }
-                    
-            # Add token usage to process monitor before returning
+
+            # Log final details for the stage
             if process_monitor:
-                process_monitor.add_stage_details(stage_name, 
-                    result_count=len(documents_with_content), 
-                    document_ids=selected_doc_ids,
-                    status_summary=research_result.get("status_summary", ""),
-                    total_tokens=total_tokens,
-                    total_cost=total_cost
+                process_monitor.add_stage_details(
+                    stage_name,
+                    result_count=len(documents_with_content), # Count of docs with synthesized content
+                    document_ids=selected_doc_ids, # Original selected doc IDs
+                    status_summary=research_result.get("status_summary", "")
                 )
-                
-            return research_result, selected_doc_ids  # Return research result and IDs
-            
+            return research_result, selected_doc_ids
+
         else:
             logger.error(f"Invalid scope provided to internal_capm subagent: {scope}")
-            raise ValueError(f"Invalid scope: {scope}")  # Let the error propagate
+            raise ValueError(f"Invalid scope: {scope}")
 
     except Exception as e:
         error_msg = f"Error querying Internal CAPM database (scope: {scope}): {str(e)}"
         logger.error(error_msg, exc_info=True)
-        response: DatabaseResponse
-        if scope == "metadata":
-            response = []
-        else:  # research scope
-            response = {
-                "detailed_research": f"**Error processing request for Internal CAPM:** {str(e)}",
-                "status_summary": default_error_status,
-            }
-        
-        # Add token usage to process monitor before returning
-        if process_monitor and llm_usage_list:
-            process_monitor.add_stage_details(stage_name, 
-                error=str(e),
-                document_ids=selected_doc_ids,
-                total_tokens=total_tokens,
-                total_cost=total_cost
-            )
-            
-        # Return error response and potentially selected IDs if selection succeeded before error
+        response: DatabaseResponse = [] if scope == "metadata" else {
+            "detailed_research": f"**Error processing request for Internal CAPM:** {str(e)}",
+            "status_summary": default_error_status,
+        }
+        if process_monitor:
+            process_monitor.add_stage_details(stage_name, error=str(e), document_ids=selected_doc_ids)
         return response, selected_doc_ids
