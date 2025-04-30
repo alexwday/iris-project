@@ -177,11 +177,13 @@ def get_completion(
     token: Optional[str] = None,
     database_name: Optional[str] = None,
     **kwargs: Any,  # Accept additional kwargs for tools, tool_choice etc.
-) -> Any:  # Returns the raw OpenAI response object or content string or error string
+) -> Tuple[Any, Optional[Dict[str, Any]]]:  # Returns (response_content, usage_details) tuple
     """
     Helper function to get a completion from the LLM synchronously.
-    Handles standard completions and tool calls.
+    Handles standard completions and tool calls. Returns content and usage details.
     """
+    usage_details = None # Initialize
+    response = None # Initialize
     try:
         model_config = get_model_config(capability)
         model_name = model_config["name"]
@@ -191,7 +193,8 @@ def get_completion(
         logger.error(
             f"Failed to get model configuration for capability '{capability}': {config_err}"
         )
-        return f"Error: Configuration error for model capability '{capability}'"
+        # Return error string and None for usage details
+        return f"Error: Configuration error for model capability '{capability}'", None
 
     messages = [
         {"role": "system", "content": "You are a helpful assistant."},
@@ -229,14 +232,16 @@ def get_completion(
         else:
             # For backward compatibility in case it doesn't return a tuple
             response = result
+            usage_details = None # Ensure usage_details is None if not returned
             logger.debug("call_llm did not return usage_details")
             
     except Exception as llm_err:
         logger.error(f"call_llm failed: {llm_err}", exc_info=True)
-        return f"Error: LLM call failed ({type(llm_err).__name__})"
+        # Return error string and None for usage details
+        return f"Error: LLM call failed ({type(llm_err).__name__})", None
 
     if is_tool_call:
-        logger.debug("Returning raw response object for tool call.")
+        logger.debug("Returning raw response object and usage details for tool call.")
         if (
             not response
             or not hasattr(response, "choices")
@@ -245,9 +250,12 @@ def get_completion(
             or not hasattr(response.choices[0].message, "tool_calls")
         ):
             logger.error("Invalid response structure received for tool call.")
-            return "Error: Invalid response structure for tool call."
-        return response
+            # Return error string and usage details (which might be None)
+            return "Error: Invalid response structure for tool call.", usage_details
+        # Return the response object and usage details
+        return response, usage_details
     else:
+        # Handle standard completion
         response_value = ""
         if response and hasattr(response, "choices") and response.choices:
             message = response.choices[0].message
@@ -259,8 +267,9 @@ def get_completion(
         else:
             logger.error("LLM response object or choices attribute missing/empty.")
             response_value = "Error: Could not retrieve response content."
-        logger.debug("Returning extracted content string for standard completion.")
-        return response_value
+        logger.debug("Returning extracted content string and usage details for standard completion.")
+        # Return the content string and usage details
+        return response_value, usage_details
 
 
 def select_relevant_documents(
@@ -268,6 +277,8 @@ def select_relevant_documents(
     catalog: List[Dict[str, Any]],
     token: Optional[str] = None,
     database_name: str = "internal_wiki",
+    process_monitor=None, # Added process_monitor
+    stage_name: Optional[str] = None # Added stage_name
 ) -> List[str]:
     """
     Use an LLM to select the most relevant documents from the catalog based on the query (synchronous).
@@ -282,32 +293,33 @@ def select_relevant_documents(
         logger.info(
             f"Initiating Wiki Document Selection API call (DB: {database_name})"
         )  # Added contextual log
-        # Direct synchronous call
-        result = get_completion(capability="small", prompt=selection_prompt, max_tokens=200, token=token, database_name=database_name)
+        # Direct synchronous call - now returns a tuple
+        selection_response_str, selection_usage = get_completion(
+            capability="small",
+            prompt=selection_prompt,
+            max_tokens=200,
+            token=token,
+            database_name=database_name
+        )
 
         # Track token usage from LLM calls
-        if isinstance(result, tuple) and len(result) == 2:
-            selection_response, usage_details = result
-            llm_usage_list.append(usage_details)
-            total_tokens += usage_details.get('input_tokens', 0) + usage_details.get('output_tokens', 0)
-            total_cost += usage_details.get('cost', 0)
+        if selection_usage:
+            logger.debug(f"Document selection usage: {selection_usage}")
             # Update process monitor if available
-            if process_monitor:
-                process_monitor.add_llm_call_details_to_stage(stage_name, usage_details)
-            selection_response_str = selection_response
-        else:
-            # For backward compatibility
-            selection_response_str = result
+            if process_monitor and stage_name: # Check if monitor and stage_name exist
+                process_monitor.add_llm_call_details_to_stage(stage_name, selection_usage)
+                process_monitor.add_stage_details(stage_name, task="document_selection") # Add task detail
 
         # Check if get_completion returned an error string
-        if isinstance(response_str, str) and response_str.startswith("Error:"):
+        if isinstance(selection_response_str, str) and selection_response_str.startswith("Error:"):
             logger.error(
-                f"get_completion failed during document selection: {response_str}"
+                f"get_completion failed during document selection: {selection_response_str}"
             )
             return []
 
         try:
-            selected_ids = json.loads(response_str)
+            # Assuming selection_response_str is the string content now
+            selected_ids = json.loads(selection_response_str)
             if isinstance(selected_ids, list) and all(
                 isinstance(i, str) for i in selected_ids
             ):
@@ -315,7 +327,7 @@ def select_relevant_documents(
                 return selected_ids
             else:
                 logger.error(
-                    f"LLM response was valid JSON but not a list of strings: {response_str}"
+                    f"LLM response was valid JSON but not a list of strings: {selection_response_str}"
                 )
                 return []
         except json.JSONDecodeError:
@@ -323,8 +335,7 @@ def select_relevant_documents(
                 "Failed to parse LLM response as JSON, attempting fallback extraction"
             )
             # More comprehensive regex to extract document IDs
-            # Look for digits or string IDs in JSON-like arrays
-            matches = re.findall(r'["\'](.*?)["\']', response_str)
+            matches = re.findall(r'["\'](.*?)["\']', selection_response_str)
             # Accept any ID, not just digits, since IDs might be strings
             # Rewrite list comprehension as a for loop to avoid potential hidden character issues
             valid_ids = []
@@ -375,7 +386,9 @@ def synthesize_response_and_status(
     documents: List[Dict[str, Any]],
     token: Optional[str] = None,
     database_name: str = "internal_wiki",
-) -> ResearchResponse:
+    process_monitor=None, # Added process_monitor
+    stage_name: Optional[str] = None # Added stage_name
+) -> ResearchResponse: # Return only ResearchResponse
     """
     Use an LLM tool call to synthesize a detailed research response AND status summary (synchronous).
     """
@@ -389,13 +402,14 @@ def synthesize_response_and_status(
         "detailed_research": default_research,
         "status_summary": default_error_status,
     }
+    # synthesis_usage = None # No longer need to track usage here
 
     if not documents:
         logger.warning(f"No documents provided for {database_name} synthesis.")
         return {
             "detailed_research": default_research,
             "status_summary": default_no_info_status,
-        }
+        } # Removed None return
 
     formatted_documents = format_documents_for_llm(documents)
     synthesis_prompt = get_content_synthesis_prompt(query, formatted_documents)
@@ -404,8 +418,8 @@ def synthesize_response_and_status(
         logger.info(
             f"Initiating Wiki Synthesis API call (DB: {database_name})"
         )  # Added contextual log
-        # Direct synchronous call
-        response_obj = get_completion(
+        # Direct synchronous call - now returns a tuple
+        synthesis_response_obj, synthesis_usage = get_completion(
             capability="large",
             prompt=synthesis_prompt,
             max_tokens=2500,
@@ -420,45 +434,32 @@ def synthesize_response_and_status(
         )
 
         # Track token usage from synthesis
-        if isinstance(response_obj, tuple) and len(response_obj) == 2:
-            synthesis_response, synthesis_usage = response_obj
-            llm_usage_list.append(synthesis_usage)
-            total_tokens += synthesis_usage.get('input_tokens', 0) + synthesis_usage.get('output_tokens', 0)
-            total_cost += synthesis_usage.get('cost', 0)
+        if synthesis_usage:
+            logger.debug(f"Research synthesis usage: {synthesis_usage}")
             # Update process monitor if available
-            if process_monitor:
+            if process_monitor and stage_name: # Check if monitor and stage_name exist
                 process_monitor.add_llm_call_details_to_stage(stage_name, synthesis_usage)
-            response_obj = synthesis_response
+                process_monitor.add_stage_details(stage_name, task="research_synthesis") # Add task detail
 
-        # Track token usage from synthesis
-        if isinstance(response_obj, tuple) and len(response_obj) == 2:
-            synthesis_response, synthesis_usage = response_obj
-            llm_usage_list.append(synthesis_usage)
-            total_tokens += synthesis_usage.get('input_tokens', 0) + synthesis_usage.get('output_tokens', 0)
-            total_cost += synthesis_usage.get('cost', 0)
-            # Update process monitor if available
-            if process_monitor:
-                process_monitor.add_llm_call_details_to_stage(stage_name, synthesis_usage)
-            response_obj = synthesis_response
-
-        if isinstance(response_obj, str) and response_obj.startswith("Error:"):
+        # Check if get_completion returned an error string in the response part
+        if isinstance(synthesis_response_obj, str) and synthesis_response_obj.startswith("Error:"):
             logger.error(
-                f"get_completion failed for {database_name} synthesis: {response_obj}"
+                f"get_completion failed for {database_name} synthesis: {synthesis_response_obj}"
             )
-            error_result["detailed_research"] = response_obj
-            return error_result
+            error_result["detailed_research"] = synthesis_response_obj
+            return error_result # Return error dict
 
         # Process Tool Call Response
         if (
-            hasattr(response_obj, "choices")
-            and response_obj.choices
-            and hasattr(response_obj.choices[0], "message")
-            and response_obj.choices[0].message
-            and hasattr(response_obj.choices[0].message, "tool_calls")
-            and response_obj.choices[0].message.tool_calls
+            hasattr(synthesis_response_obj, "choices")
+            and synthesis_response_obj.choices
+            and hasattr(synthesis_response_obj.choices[0], "message")
+            and synthesis_response_obj.choices[0].message
+            and hasattr(synthesis_response_obj.choices[0].message, "tool_calls")
+            and synthesis_response_obj.choices[0].message.tool_calls
         ):
 
-            tool_call = response_obj.choices[0].message.tool_calls[0]
+            tool_call = synthesis_response_obj.choices[0].message.tool_calls[0]
             if tool_call.function.name == SYNTHESIS_TOOL_SCHEMA["function"]["name"]:
                 arguments_str = tool_call.function.arguments
                 logger.debug(f"Received tool arguments string: {arguments_str}")
@@ -478,7 +479,7 @@ def synthesize_response_and_status(
                             status = default_error_status
                         if not isinstance(research, str):
                             research = default_research
-                        return {"status_summary": status, "detailed_research": research}
+                        return {"status_summary": status, "detailed_research": research} # Return result dict
                     else:
                         logger.error(
                             f"Missing required keys in parsed tool arguments for {database_name}: {arguments}"
@@ -509,14 +510,14 @@ def synthesize_response_and_status(
             )
             content = ""
             if (
-                hasattr(response_obj, "choices")
-                and response_obj.choices
-                and hasattr(response_obj.choices[0], "message")
-                and response_obj.choices[0].message
-                and hasattr(response_obj.choices[0].message, "content")
-                and response_obj.choices[0].message.content
+                hasattr(synthesis_response_obj, "choices")
+                and synthesis_response_obj.choices
+                and hasattr(synthesis_response_obj.choices[0], "message")
+                and synthesis_response_obj.choices[0].message
+                and hasattr(synthesis_response_obj.choices[0].message, "content")
+                and synthesis_response_obj.choices[0].message.content
             ):
-                content = response_obj.choices[0].message.content
+                content = synthesis_response_obj.choices[0].message.content
                 logger.warning(
                     f"LLM returned content instead of tool call: {content[:200]}..."
                 )
@@ -584,67 +585,10 @@ def query_database_sync(
                 }
             return response, selected_doc_ids  # Return empty response and None IDs
 
-        # Select documents
-        selection_result = get_completion(
-            capability="small",
-            prompt=get_catalog_selection_prompt(query, format_catalog_for_llm(catalog)),
-            max_tokens=200,
-            token=token,
-            database_name=database_name,
+        # Select documents using the updated helper function
+        selected_doc_ids = select_relevant_documents(
+            query, catalog, token, database_name, process_monitor, stage_name
         )
-        
-        # Track token usage from document selection
-        selection_usage = None # Initialize
-        if isinstance(selection_result, tuple) and len(selection_result) == 2:
-            selection_response, selection_usage = selection_result
-            # REMOVED manual tracking updates
-            # llm_usage_list.append(selection_usage) 
-            # total_tokens += selection_usage.get('input_tokens', 0) + selection_usage.get('output_tokens', 0) 
-            # total_cost += selection_usage.get('cost', 0) 
-            # Log usage for debugging
-            logger.debug(f"Document selection usage: {selection_usage}")
-            
-            # Update process monitor if available (using correct stage_name)
-            if process_monitor and selection_usage: # Check if usage exists
-                process_monitor.add_llm_call_details_to_stage(stage_name, selection_usage)
-                process_monitor.add_stage_details(stage_name, task="document_selection") # Add task detail
-                
-            # Process the response to extract document IDs
-            selection_response_str = selection_response
-        else:
-            # For backward compatibility
-            selection_response_str = selection_result
-            
-        # Extract document IDs from selection response
-        if isinstance(selection_response_str, str) and selection_response_str.startswith("Error:"):
-            logger.error(f"get_completion failed during document selection: {selection_response_str}")
-            selected_doc_ids = []
-        else:
-            try:
-                selected_doc_ids = json.loads(selection_response_str)
-                if isinstance(selected_doc_ids, list) and all(
-                    isinstance(i, str) for i in selected_doc_ids
-                ):
-                    logger.info(f"LLM selected document IDs: {selected_doc_ids}")
-                else:
-                    logger.error(
-                        f"LLM response was valid JSON but not a list of strings: {selection_response_str}"
-                    )
-                    selected_doc_ids = []
-            except json.JSONDecodeError:
-                logger.error(
-                    "Failed to parse LLM response as JSON, attempting fallback extraction"
-                )
-                # More comprehensive regex to extract document IDs
-                matches = re.findall(r'["\'](.*?)["\']', selection_response_str)
-                # Accept any ID, not just digits, since IDs might be strings
-                selected_doc_ids = [m.strip() for m in matches if m.strip()]
-                if selected_doc_ids:
-                    logger.warning(
-                        f"Extracted document IDs using fallback regex: {selected_doc_ids}"
-                    )
-                else:
-                    logger.error("Could not extract document IDs from response using fallback.")
         
         logger.info(
             f"LLM selected {len(selected_doc_ids)} relevant wiki document IDs: {selected_doc_ids}"
@@ -691,113 +635,11 @@ def query_database_sync(
                 f"Retrieved content for {len(documents)} wiki documents for research."
             )
             
-            # Get research synthesis
-            synthesis_result = get_completion(
-                capability="large",
-                prompt=get_content_synthesis_prompt(query, format_documents_for_llm(documents)),
-                max_tokens=2500,
-                temperature=0.2,
-                token=token,
-                database_name=database_name,
-                tools=[SYNTHESIS_TOOL_SCHEMA],
-                tool_choice={
-                    "type": "function",
-                    "function": {"name": SYNTHESIS_TOOL_SCHEMA["function"]["name"]},
-                },
+            # Get research synthesis using the updated helper function
+            # synthesize_response_and_status now returns only the ResearchResponse dict
+            research_result = synthesize_response_and_status(
+                query, documents, token, database_name, process_monitor, stage_name
             )
-            
-            # Track token usage from research synthesis
-            synthesis_usage = None # Initialize
-            if isinstance(synthesis_result, tuple) and len(synthesis_result) == 2:
-                synthesis_response, synthesis_usage = synthesis_result
-                # REMOVED manual tracking updates
-                # llm_usage_list.append(synthesis_usage) 
-                # total_tokens += synthesis_usage.get('input_tokens', 0) + synthesis_usage.get('output_tokens', 0) 
-                # total_cost += synthesis_usage.get('cost', 0) 
-                # Log usage for debugging
-                logger.debug(f"Research synthesis usage: {synthesis_usage}")
-                
-                # Update process monitor if available (using correct stage_name)
-                if process_monitor and synthesis_usage: # Check if usage exists
-                    process_monitor.add_llm_call_details_to_stage(stage_name, synthesis_usage)
-                    
-                # Process the synthesis response
-                synthesis_response_obj = synthesis_response
-            else:
-                # For backward compatibility
-                synthesis_response_obj = synthesis_result
-            
-            # Process the synthesis response to extract research and status
-            research_result = {}
-            if isinstance(synthesis_response_obj, str) and synthesis_response_obj.startswith("Error:"):
-                logger.error(
-                    f"get_completion failed for {database_name} synthesis: {synthesis_response_obj}"
-                )
-                research_result = {
-                    "detailed_research": synthesis_response_obj,
-                    "status_summary": default_error_status,
-                }
-            else:
-                # Process Tool Call Response
-                try:
-                    if (
-                        hasattr(synthesis_response_obj, "choices")
-                        and synthesis_response_obj.choices
-                        and hasattr(synthesis_response_obj.choices[0], "message")
-                        and synthesis_response_obj.choices[0].message
-                        and hasattr(synthesis_response_obj.choices[0].message, "tool_calls")
-                        and synthesis_response_obj.choices[0].message.tool_calls
-                    ):
-                        tool_call = synthesis_response_obj.choices[0].message.tool_calls[0]
-                        if tool_call.function.name == SYNTHESIS_TOOL_SCHEMA["function"]["name"]:
-                            arguments_str = tool_call.function.arguments
-                            try:
-                                arguments = json.loads(arguments_str)
-                                if "status_summary" in arguments and "detailed_research" in arguments:
-                                    research_result = {
-                                        "status_summary": arguments.get("status_summary", default_error_status),
-                                        "detailed_research": arguments.get("detailed_research", "No research generated.")
-                                    }
-                                else:
-                                    research_result = {
-                                        "detailed_research": "Error: Tool call arguments missing required keys.",
-                                        "status_summary": default_error_status,
-                                    }
-                            except json.JSONDecodeError:
-                                research_result = {
-                                    "detailed_research": "Error: Failed to parse tool arguments JSON.",
-                                    "status_summary": default_error_status,
-                                }
-                        else:
-                            research_result = {
-                                "detailed_research": f"Error: Unexpected tool called: {tool_call.function.name}",
-                                "status_summary": default_error_status,
-                            }
-                    else:
-                        content = ""
-                        if (
-                            hasattr(synthesis_response_obj, "choices")
-                            and synthesis_response_obj.choices
-                            and hasattr(synthesis_response_obj.choices[0], "message")
-                            and synthesis_response_obj.choices[0].message
-                            and hasattr(synthesis_response_obj.choices[0].message, "content")
-                            and synthesis_response_obj.choices[0].message.content
-                        ):
-                            content = synthesis_response_obj.choices[0].message.content
-                            research_result = {
-                                "detailed_research": f"Error: LLM returned text instead of tool call. Content: {content[:200]}...",
-                                "status_summary": default_error_status,
-                            }
-                        else:
-                            research_result = {
-                                "detailed_research": "Error: No tool call or content received from LLM.",
-                                "status_summary": default_error_status,
-                            }
-                except Exception as e:
-                    research_result = {
-                        "detailed_research": f"Error processing synthesis response: {str(e)}",
-                        "status_summary": default_error_status,
-                    }
             
             # Add details to process monitor before returning
             if process_monitor:
