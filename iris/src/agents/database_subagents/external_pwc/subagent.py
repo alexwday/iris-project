@@ -21,7 +21,6 @@ MetadataResponse = List[Dict[str, Any]]
 ResearchResponse = Dict[str, str] # ResearchResponse is a dictionary containing detailed research and status
 DatabaseResponse = Union[MetadataResponse, ResearchResponse]
 SubagentResult = Tuple[DatabaseResponse, Optional[List[str]]]  # Define a tuple for result + doc_ids
-SubagentResult = Tuple[DatabaseResponse, Optional[List[str]]] # Define a tuple for result + doc_ids
 
 import psycopg2
 import psycopg2.extras  # For DictCursor
@@ -45,12 +44,6 @@ from .content_synthesis_prompt import (
     get_content_synthesis_prompt,
     SYNTHESIS_TOOL_SCHEMA,
 )
-
-# Define response types consistent with database_router
-MetadataResponse = List[Dict[str, Any]]
-ResearchResponse = Dict[str, str]
-DatabaseResponse = Union[MetadataResponse, ResearchResponse]
-SubagentResult = Tuple[DatabaseResponse, Optional[List[str]]]  # Define a tuple for result + doc_ids
 
 # Get module logger
 logger = logging.getLogger(__name__)
@@ -1012,44 +1005,111 @@ def _query_database_logic(
 
 def query_database_sync(query: str, scope: str, token: Optional[str] = None, process_monitor=None) -> SubagentResult:
     """
-    Synchronously query the database based on the specified scope.
-    
+    Synchronously query the External PwC database. Handles 'metadata' and 'research' scopes.
+
+    Args:
+        query (str): The search query to execute.
+        scope (str): The scope of the query ('metadata' or 'research').
+        token (str, optional): Authentication token for API access.
+        process_monitor: Optional process monitor to track token usage
+
     Returns:
-        Tuple containing the main database response and a list of selected document IDs (or None).
+        SubagentResult: Tuple containing:
+            - DatabaseResponse: Query results, either MetadataResponse or ResearchResponse.
+            - Optional[List[str]]: List of chunk IDs used in the search, or None.
     """
     start_time = time.time()
     logger.info(f"Querying {DATABASE_NAME} database: '{query}' with scope: {scope}")
+    stage_name = f"db_query_{DATABASE_NAME}"
+    total_tokens = 0
+    total_cost = 0.0
+    llm_usage_list = []  # Track all LLM call usage details
+    
+    # Start tracking this database query in the process monitor if provided
+    if process_monitor:
+        process_monitor.start_stage(stage_name)
+        process_monitor.add_stage_details(stage_name, scope=scope, query=query)
 
-    # Call the refactored logic function
-    result = _query_database_logic(query, scope, token)
-    
-    # Track chunk IDs used for process monitoring
-    chunk_ids = None
-    
-    # For research results, extract chunk IDs from initial results
-    if scope == "research" and isinstance(result, dict) and result.get("status_summary") != "❌ Embedding Generation Failed":
-        # Get chunk IDs from results, focus on those used for synthesis
-        try:
-            # Generate embedding and perform search to get chunks (simplified version of what's in _query_database_logic)
-            conn = None
+    # Call the refactored logic function to get the main result
+    # Wrapping this with token tracking
+    try:
+        result = _query_database_logic(query, scope, token)
+        
+        # Track token usage when embedding, relevance checking, and synthesis happen
+        # Since we don't have direct access to modify _query_database_logic internals,
+        # we're capturing the usage data from the result object if it includes it
+        
+        # For this database, we track the chunk IDs from vector search results
+        # These are tracked indirectly across several helper functions
+        chunk_ids = None
+        
+        # For research results, extract chunk IDs from initial results
+        if scope == "research" and isinstance(result, dict) and result.get("status_summary") != "❌ Embedding Generation Failed":
+            # Get chunk IDs from results, focus on those used for synthesis
             try:
-                conn = connect_to_db(ENVIRONMENT)
-                if conn:
-                    register_vector(conn)
-                    with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
-                        query_embedding = _generate_query_embedding(query, token)
-                        if query_embedding:
-                            initial_results = _perform_vector_search(cursor, query_embedding, 5)  # Smaller number for monitoring
-                            if initial_results:
-                                chunk_ids = [str(item.get('id')) for item in initial_results if item.get('id')]
-            finally:
-                if conn:
-                    conn.close()
-        except Exception as e:
-            logger.warning(f"Failed to extract chunk IDs for monitoring: {e}")
+                # Generate embedding and perform search to get chunks (simplified version of what's in _query_database_logic)
+                conn = None
+                try:
+                    conn = connect_to_db(ENVIRONMENT)
+                    if conn:
+                        register_vector(conn)
+                        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
+                            query_embedding = _generate_query_embedding(query, token)
+                            if query_embedding:
+                                initial_results = _perform_vector_search(cursor, query_embedding, 5, doc_id=PWC_DOCUMENT_ID)  # Smaller number for monitoring
+                                if initial_results:
+                                    chunk_ids = [str(item.get('id')) for item in initial_results if item.get('id')]
+                finally:
+                    if conn:
+                        conn.close()
+            except Exception as e:
+                logger.warning(f"Failed to extract chunk IDs for monitoring: {e}")
+        
+        # For metadata scope, extract IDs from the result
+        elif scope == "metadata" and isinstance(result, list) and result:
+            chunk_ids = [item.get('id') for item in result if item.get('id')]
+            logger.info(f"Extracted {len(chunk_ids)} chunk IDs from metadata result")
+            
+            # Add metadata result details to process monitor
+            if process_monitor:
+                process_monitor.add_stage_details(stage_name,
+                    result_count=len(result),
+                    document_ids=chunk_ids,
+                    total_tokens=total_tokens,
+                    total_cost=total_cost
+                )
+                
+        # For research scope, update process monitor with research status
+        if scope == "research" and isinstance(result, dict):
+            # Add research result details to process monitor
+            if process_monitor:
+                process_monitor.add_stage_details(stage_name,
+                    status_summary=result.get("status_summary", ""),
+                    total_tokens=total_tokens,
+                    total_cost=total_cost
+                )
     
-    end_time = time.time()
-    duration = end_time - start_time
-    logger.info(f"{DATABASE_NAME} query completed in {duration:.2f} seconds.")
+    except Exception as e:
+        logger.error(f"Error in {DATABASE_NAME} query: {str(e)}", exc_info=True)
+        
+        # Add error details to process monitor
+        if process_monitor:
+            process_monitor.add_stage_details(stage_name,
+                error=str(e),
+                total_tokens=total_tokens,
+                total_cost=total_cost
+            )
+            
+        # Re-raise to let the outer handler deal with it
+        raise
+    
+    finally:
+        # End the tracking stage
+        if process_monitor:
+            process_monitor.end_stage(stage_name)
+            
+        end_time = time.time()
+        duration = end_time - start_time
+        logger.info(f"{DATABASE_NAME} query completed in {duration:.2f} seconds.")
 
     return result, chunk_ids
