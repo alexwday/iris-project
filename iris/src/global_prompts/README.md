@@ -1,23 +1,43 @@
 # Global Prompts (`iris/src/global_prompts/`)
 
-This directory stores prompt templates or statements that are shared and potentially used by multiple agents across the IRIS system. Centralizing these prompts helps maintain consistency and makes them easier to update.
+This directory contains global prompt utilities and statements used across the IRIS system to provide consistent context, instructions, and knowledge source descriptions to the various agents.
 
-## Purpose
+## Key Components
 
-Global prompts often contain foundational information, instructions, or context that is relevant to various stages of the query processing pipeline. Examples include:
+* **`project_statement.py`**: Generates a detailed project context statement with XML-style delimiters. This statement provides essential information about the project's purpose, knowledge sources (internal and external), and system goals. It is prefixed to system prompts to ensure agents have a shared understanding of the project scope.
+* **`database_statement.py`**: Provides centralized descriptions of all available databases used in the system. It serves as the single source of truth for database information, including names, descriptions, content types, query types, and usage guidance. It formats this information with XML-style delimiters for inclusion in agent prompts.
+* **`fiscal_calendar.py`**, **`restrictions_statement.py`**, and other prompt files: Contain additional global statements and instructions relevant to fiscal periods, usage restrictions, and project-specific guidelines.
+* **`__init__.py`**: Marks the directory as a Python package.
 
-*   **System Persona/Role:** Defining how the AI should behave or respond.
-*   **Core Instructions:** General guidelines applicable to multiple agents.
-*   **Contextual Data:** Information like the current date, fiscal calendar details (`fiscal_calendar.py`), project scope (`project_statement.py`), general database information (`database_statement.py`), or operational constraints (`restrictions_statement.py`) that agents might need to consider.
+## Workflow
 
-## Usage
+1. **Project Context Generation**:
+   * The `get_project_statement` function in `project_statement.py` generates a comprehensive project context statement that is included in system prompts to provide agents with background on the IRIS system and its knowledge sources.
 
-Agents or the main orchestration logic (`chat_model/model.py`) can import and utilize these prompts as needed, often incorporating them into the more specific prompts used for individual agent tasks.
+2. **Database Information Provision**:
+   * The `get_database_statement` function in `database_statement.py` returns a formatted statement describing all available internal and external databases, their purposes, and usage strategies. This ensures agents query the appropriate sources effectively.
 
-## Files
+3. **Additional Global Prompts**:
+   * Other prompt files provide standardized instructions and constraints that are incorporated into agent prompts to maintain consistency and compliance.
 
-*   **`database_statement.py`**: Provides general information about the available databases.
-*   **`fiscal_calendar.py`**: Contains details about the relevant fiscal calendar.
-*   **`project_statement.py`**: Defines the overall scope or purpose of the IRIS project.
-*   **`restrictions_statement.py`**: Outlines any known limitations or restrictions for the system's operation or responses.
-*   **`__init__.py`**: Marks the directory as a Python package.
+## Global Prompts Role and Design
+
+The global prompts serve to:
+
+* Provide a unified and consistent context across all agents.
+* Centralize knowledge about data sources and project scope.
+* Facilitate prompt engineering by structuring instructions and information with XML-style delimiters.
+* Ensure agents operate with aligned understanding and guidelines.
+
+## Dependencies
+
+* Standard Python logging for error handling and debugging.
+* Modular prompt components imported and combined as needed.
+
+## Error Handling
+
+* Functions include basic error handling and logging to ensure robustness in prompt generation.
+
+---
+
+Refer to the main project README and other module READMEs for details on how global prompts integrate with the IRIS system.
