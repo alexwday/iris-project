@@ -4,4 +4,12 @@ Version: 0.1
 Requires-Dist: openai
 Requires-Dist: requests
 Requires-Dist: cryptography
+Requires-Dist: psycopg2-binary
+Requires-Dist: jupyter
+Provides-Extra: dev
+Requires-Dist: pytest; extra == "dev"
+Requires-Dist: pytest-cov; extra == "dev"
+Requires-Dist: black; extra == "dev"
+Requires-Dist: mypy; extra == "dev"
+Dynamic: provides-extra
 Dynamic: requires-dist

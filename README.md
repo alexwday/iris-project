@@ -1,205 +1,155 @@
-# IRIS Project
+# IRIS Project - Comprehensive Overview
 
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 
 ## Overview
 
-IRIS (Intelligent Retrieval & Interaction System) is an AI agent-based system designed to answer user queries by interacting with various internal and external financial data sources. It follows a structured pipeline:
+IRIS (Intelligent Retrieval & Interaction System) is an advanced AI agent-based system designed to answer user queries by interacting with a diverse set of internal and external financial data sources. It employs a modular pipeline of specialized agents to route, clarify, plan, query, and synthesize responses efficiently and accurately.
 
-1.  **Route:** Determines if the query needs database research or can be answered directly.
-2.  **Clarify:** Refines the research goal and scope, potentially asking clarifying questions.
-3.  **Plan:** Creates a strategy for which databases to query.
-4.  **Query:** Executes queries against selected databases concurrently using specialized subagents.
-5.  **Summarize/Respond:** Synthesizes research findings into a coherent answer or returns collected metadata.
+## Core Features
 
-## Features
-
-*   **Agent Pipeline:** Orchestrates tasks through specialized agents (Router, Clarifier, Planner, Database Router, Summarizer, Direct Response).
-*   **Multi-Source Data Integration:** Connects to various internal databases (Memos, Wiki, PAR, ICFR, Cheatsheets, CAPM) and external sources (EY, IASB, KPMG, PwC) via dedicated subagents.
-*   **Intelligent Query Handling:** Routes, clarifies, and plans queries for efficient data retrieval.
-*   **Concurrent Database Access:** Queries multiple databases in parallel for faster results.
-*   **Response Synthesis & Summarization:** Consolidates information from multiple sources into coherent responses.
-
-### Agent Flow Diagram
-
-```mermaid
-graph LR
-    A[User Query] --> B(Router);
-    B -- Needs Research --> C(Clarifier);
-    B -- Direct Answer --> H(Direct Response);
-    C --> D(Planner);
-    D --> E(Database Router);
-    E --> F((Subagent 1));
-    E --> G((Subagent N));
-    F --> I(Summarizer);
-    G --> I(Summarizer);
-    I --> J[Final Response];
-    H --> J;
-
-    style F fill:#f9f,stroke:#333,stroke-width:2px;
-    style G fill:#f9f,stroke:#333,stroke-width:2px;
-    style E fill:#ccf,stroke:#333,stroke-width:2px;
-```
+- **Agent Pipeline:** A structured flow of agents including Router, Clarifier, Planner, Database Router, Summarizer, and Direct Response agents.
+- **Multi-Source Data Integration:** Connects to various internal databases (e.g., Memos, Wiki, PAR, ICFR, Cheatsheets, CAPM) and external sources (EY, IASB, KPMG, PwC) through dedicated subagents.
+- **Intelligent Query Handling:** Routes queries to appropriate agents, clarifies research goals, and plans database queries.
+- **Concurrent Database Access:** Executes parallel queries across multiple databases for faster results.
+- **Response Synthesis:** Aggregates and summarizes findings into coherent, traceable answers.
 
 ## Project Structure
 
 ```
 iris-project/
-├── .gitignore              # Git ignore rules
-├── init-schema.sql         # Database initialization schema (Reference)
-├── README.md               # This file
-├── setup.py                # Project installation script
-├── iris/                   # Main Python package
-│   └── src/                # Source code
-│       ├── agents/         # Core AI agents and subagents ([README](./iris/src/agents/README.md))
-│       ├── chat_model/     # Main orchestration logic ([README](./iris/src/chat_model/README.md))
+├── .gitignore
+├── init-schema.sql
+├── README.md                 # This file
+├── setup.py
+├── iris/
+│   └── src/
+│       ├── agents/           # Core AI agents and subagents ([README](./iris/src/agents/README.md))
+│       ├── chat_model/       # Orchestration logic ([README](./iris/src/chat_model/README.md))
 │       ├── conversation_setup/ # Conversation management ([README](./iris/src/conversation_setup/README.md))
-│       ├── global_prompts/   # Shared prompts ([README](./iris/src/global_prompts/README.md))
-│       ├── initial_setup/    # Configuration, DB, logging, OAuth, SSL setup ([README](./iris/src/initial_setup/README.md))
-│       └── llm_connectors/ # Connectors to specific LLMs ([README](./iris/src/llm_connectors/README.md))
-├── notebooks/              # Jupyter notebooks for testing, debugging, etc. ([README](./notebooks/README.md))
-└── venv/                   # Python virtual environment (if created)
+│       ├── global_prompts/   # Shared prompts and statements ([README](./iris/src/global_prompts/README.md))
+│       ├── initial_setup/    # Configuration, DB, logging, OAuth, SSL ([README](./iris/src/initial_setup/README.md))
+│       └── llm_connectors/   # LLM API connectors ([README](./iris/src/llm_connectors/README.md))
+├── notebooks/                # Jupyter notebooks for testing and analysis ([README](./notebooks/README.md))
+└── venv/                    # Python virtual environment (if created)
 ```
-(Note: Some utility scripts might exist but are not part of a dedicated `scripts/` directory in the main structure.)
+
+## Detailed Module Descriptions
+
+### Agents (`iris/src/agents/`)
+
+The core AI agents form the processing pipeline for user queries:
+
+- **Agent Router:** Determines if a query requires database research or direct response.
+- **Agent Clarifier:** Refines the research goal and scope.
+- **Agent Planner:** Plans which database subagents to query.
+- **Database Subagents:** Specialized subagents for querying specific internal and external data sources. See [Database Subagents README](./iris/src/agents/database_subagents/README.md) for details.
+- **Agent Summarizer:** Synthesizes research findings into coherent responses.
+- **Agent Direct Response:** Provides direct answers from conversation history when research is unnecessary.
+
+Each agent has its own directory with implementation and configuration files.
+
+### Database Subagents (`iris/src/agents/database_subagents/`)
+
+This directory contains subagents tailored to specific data sources:
+
+- **Internal Sources:** e.g., CAPM, Cheatsheets, Compliance, ESG, Ext Reporting, Global Finance Standards, ICFR, Management Reporting, Memos, PAR, Process and Controls, Wiki.
+- **External Sources:** e.g., EY, IASB, KPMG, PwC.
+
+Each subagent directory includes querying logic, prompt templates, and integration with process monitoring.
+
+Example: The Internal CAPM subagent ([README](./iris/src/agents/database_subagents/internal_capm/README.md)) implements a multi-step querying and synthesis process for RBC accounting policy manuals.
+
+### Chat Model Orchestration (`iris/src/chat_model/`)
+
+Contains the main orchestration logic managing the agent pipeline, environment setup, concurrent database querying, and response generation. Key files include `model.py` and `model_settings.py`.
+
+### Conversation Setup (`iris/src/conversation_setup/`)
+
+Manages conversation history processing, filtering, and formatting to provide consistent input to agents. Includes conversation processing logic and configuration.
+
+### Global Prompts (`iris/src/global_prompts/`)
+
+Provides shared prompt utilities and statements to ensure consistent context and instructions across agents. Includes project context, database descriptions, fiscal calendar, and usage restrictions.
+
+### Initial Setup (`iris/src/initial_setup/`)
+
+Handles foundational configuration such as database connections, centralized logging, process monitoring, OAuth authentication, and SSL setup.
+
+### LLM Connectors (`iris/src/llm_connectors/`)
+
+Implements connectors to large language model APIs, primarily OpenAI, handling authentication, retries, streaming, and usage logging.
+
+### Notebooks (`notebooks/`)
+
+Contains Jupyter notebooks for testing, debugging, data export, process monitoring analysis, and end-to-end pipeline testing.
 
 ## Getting Started
 
 ### Prerequisites
 
-*   Python 3.9+ (recommended)
-*   PostgreSQL installed locally
+- Python 3.9+
+- PostgreSQL installed and running
 
 ### Installation & Setup
 
-1.  **Clone the repository (if you haven't already):**
-    ```bash
-    git clone <repository-url>
-    cd iris-project
-    ```
+1. Clone the repository:
+   ```bash
+   git clone <repository-url>
+   cd iris-project
+   ```
 
-2.  **Database Setup:**
-    This project assumes a PostgreSQL database named `maven-finance` is already running and accessible. The connection details (host, port, user, password) should be configured appropriately for the environment (e.g., via environment variables read by `iris/src/initial_setup/db_config.py`). The required schema is defined in `init-schema.sql` for reference.
+2. Set up the PostgreSQL database named `maven-finance` with the schema in `init-schema.sql`.
 
-3.  **Set up Python Environment:**
-    It's recommended to use a virtual environment.
-    ```bash
-    # Create a virtual environment
-    python -m venv venv
+3. Create and activate a Python virtual environment:
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # macOS/Linux
+   ```
 
-    # Activate the environment
-    # On macOS/Linux:
-    source venv/bin/activate
-    # On Windows:
-    # venv\Scripts\activate
-    ```
+4. Install dependencies:
+   ```bash
+   pip install -e .
+   pip install -e ".[dev]"
+   ```
 
-4.  **Install Dependencies:**
-    Install the project and its dependencies in editable mode.
-    ```bash
-    # Install base package
-    pip install -e .
-    
-    # Install development tools
-    pip install -e ".[dev]"
-    ```
+### Usage
 
-## Usage
-
-The primary way to interact with the IRIS system is by running the `test_notebook.ipynb` which calls the main `model()` function.
-
-1.  **Launch Jupyter:**
-    ```bash
-    jupyter notebook
-    ```
-2.  **Open and Run:** Navigate to `notebooks/test_notebook.ipynb` in the Jupyter interface. Modify the `conversation` variable within the notebook to ask your query, and then run the cells.
-
-(Note: Some older utility scripts might be present in the codebase but are not the primary method of interaction or management.)
+Run the primary test notebook:
+```bash
+jupyter notebook
+```
+Open `notebooks/test_notebook.ipynb` and modify the `conversation` variable to input queries.
 
 ## Development
 
-### Code Style
+- Code style enforced with Black.
+- Type checking with MyPy.
+- Testing with Pytest.
 
-This project uses:
-- [Black](https://black.readthedocs.io/en/stable/) for code formatting
-- [MyPy](https://mypy.readthedocs.io/en/stable/) for static type checking
-- [Pytest](https://docs.pytest.org/en/stable/) for testing
-
-### Quality Checks
-
-Ensure code quality by running the following checks from the project root:
-
-*   **Formatting (Black):**
-    ```bash
-    black iris/
-    ```
-*   **Type Checking (MyPy):**
-    ```bash
-    mypy iris/
-    ```
-*   **Testing (Pytest):**
-    ```bash
-    pytest
-    ```
-
-## Documentation
-
-Every module, class, and function should be documented with Google-style docstrings. Type hints should be used for all function parameters and return values.
-
-Example:
-```python
-def function_name(param1: str, param2: int) -> bool:
-    """Short description of function purpose.
-    
-    Longer description explaining details if needed.
-    
-    Args:
-        param1: Description of first parameter.
-        param2: Description of second parameter.
-        
-    Returns:
-        Description of the return value.
-        
-    Raises:
-        ExceptionType: When and why this exception occurs.
-    """
-    ...
+Run quality checks:
+```bash
+black iris/
+mypy iris/
+pytest
 ```
 
 ## Troubleshooting
 
-### Common Issues
-
-1. **Database Connection Problems**
-   - Ensure PostgreSQL is running and accessible.
-   - Verify database name and connection credentials used by the application (see `iris/src/initial_setup/db_config.py`).
-   - Check network connectivity and firewall rules between the application host and the database server.
-
-2. **Missing Dependencies**
-   - Reinstall with: `pip install -e ".[dev]"`
-   - Ensure your virtual environment is activated
-
-3. **Jupyter Notebook Issues**
-   - Make sure you're running the notebook from within the virtual environment
-   - Verify kernel selection in the notebook
+- Ensure PostgreSQL is running and accessible.
+- Verify database credentials in `iris/src/initial_setup/db_config.py`.
+- Activate the virtual environment before running notebooks.
 
 ## Contributing
 
-When contributing to this project, please follow the existing code style guidelines and add appropriate tests for new features.
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/your-feature`)
-3. Make your changes
-4. Run tests and ensure code quality checks pass
-5. Commit your changes
-6. Push to your branch
-7. Create a Pull Request
+Follow existing code style and add tests for new features. Use feature branches and pull requests.
 
 ## License
 
-This project is proprietary and confidential. All rights reserved.
+Proprietary and confidential.
 
 ## Acknowledgments
 
-* This project uses OpenAI's API for language model capabilities
-* Database integration is handled through PostgreSQL
+- OpenAI API for language model capabilities.
+- PostgreSQL for database integration.

@@ -1,3 +1,11 @@
 openai
 requests
 cryptography
+psycopg2-binary
+jupyter
+
+[dev]
+pytest
+pytest-cov
+black
+mypy
