@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IRIS Router and Direct Response Improvements</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            line-height: 1.6;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1, h2, h3, h4 {
+            color: #2c3e50;
+            margin-top: 30px;
+        }
+        h1 {
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+        h2 {
+            border-bottom: 1px solid #bdc3c7;
+            padding-bottom: 5px;
+        }
+        code {
+            font-family: 'Courier New', Courier, monospace;
+            background-color: #f8f8f8;
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-size: 0.9em;
+        }
+        pre {
+            background-color: #f8f8f8;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-size: 0.9em;
+            border: 1px solid #ddd;
+        }
+        .highlight {
+            background-color: #fffacd;
+            padding: 2px;
+        }
+        .change-block {
+            padding: 20px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .before {
+            background-color: #ffeeee;
+            border-left: 5px solid #e74c3c;
+        }
+        .after {
+            background-color: #eeffee;
+            border-left: 5px solid #2ecc71;
+        }
+        .description {
+            background-color: #eef6ff;
+            border-left: 5px solid #3498db;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 20px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px 12px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        .toc {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .toc ul {
+            list-style-type: none;
+            padding-left: 20px;
+        }
+        .toc li {
+            margin: 5px 0;
+        }
+        .summary {
+            background-color: #f0f4f8;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            border-left: 5px solid #3498db;
+        }
+        .warning {
+            background-color: #fff3e6;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            border-left: 5px solid #e67e22;
+        }
+    </style>
+</head>
+<body>
+    <h1>IRIS Router and Direct Response Agent Improvements</h1>
+    <p>This document outlines the changes made to improve how finance-related queries are handled in the IRIS system.</p>
+    
+    <div class="toc">
+        <h3>Table of Contents</h3>
+        <ul>
+            <li><a href="#problem">1. Problem Statement</a></li>
+            <li><a href="#solution">2. Solution Overview</a></li>
+            <li>
+                <a href="#router">3. Router Agent Changes</a>
+                <ul>
+                    <li><a href="#router-decision">3.1 Decision Criteria</a></li>
+                    <li><a href="#router-examples">3.2 Research Examples</a></li>
+                    <li><a href="#router-direct">3.3 Direct Response Examples</a></li>
+                    <li><a href="#router-error">3.4 Error Handling</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#direct">4. Direct Response Agent Changes</a>
+                <ul>
+                    <li><a href="#direct-constraints">4.1 Constraints Section</a></li>
+                    <li><a href="#direct-error">4.2 Error Handling</a></li>
+                </ul>
+            </li>
+            <li><a href="#impact">5. Impact Analysis</a></li>
+        </ul>
+    </div>
+
+    <section id="problem">
+        <h2>1. Problem Statement</h2>
+        <div class="description">
+            <p>The IRIS system was sometimes sending general finance-related queries to the direct response agent instead of routing them for research. Specifically:</p>
+            <ul>
+                <li>Basic finance concept definitions like "what is a derivative?" were being answered directly without database research</li>
+                <li>This created a risk of providing responses based on the model's training data rather than authoritative sources</li>
+                <li>Any finance or accounting topic should ideally use the research path to ensure accuracy and attribution</li>
+            </ul>
+            <p>Both the router and direct response components needed updates to ensure proper handling of all finance-related queries.</p>
+        </div>
+    </section>
+
+    <section id="solution">
+        <h2>2. Solution Overview</h2>
+        <div class="summary">
+            <p>The solution consists of multiple layers of defense:</p>
+            <ol>
+                <li><strong>Primary Layer</strong>: Update the router to explicitly route ALL finance-related queries (including basic definitions) to the research path</li>
+                <li><strong>Secondary Layer</strong>: Strengthen the direct response agent to refuse to answer finance queries without prior research results in the conversation</li>
+                <li><strong>Additional Safety</strong>: Add explicit examples and error handling guidance to both components</li>
+            </ol>
+            <p>This multi-layered approach ensures that even if one component fails to correctly identify a finance query, the other component will provide a safeguard.</p>
+        </div>
+    </section>
+
+    <section id="router">
+        <h2 id="router">3. Router Agent Changes</h2>
+
+        <h3 id="router-decision">3.1 Decision Criteria</h3>
+        <p>We updated the decision criteria to explicitly state that ANY finance/accounting definition or concept should be routed to research.</p>
+
+        <div class="change-block before">
+            <h4>Before:</h4>
+            <pre><code>&lt;DECISION_CRITERIA&gt;
+This system relies only on conversation context, not internal training data:
+- For accounting/finance topics, PREFER RESEARCH over direct response by default
+- Consider research especially when:
+  * Query mentions specific accounting standards (IFRS, IAS, GAAP, etc.)
+  * Query mentions specific financial reporting requirements
+  * Query asks about implementations, interpretations, or applications of standards
+  * Query mentions or implies the need for authoritative sources
+  * Query contains database specificity phrases like "check guidance", "reference", etc.
+  * **Query asks to list, find, or search for items/documents/files within a specific database (e.g., "what files are in the wiki?", "find memos about X", "list ICFR documents related to Y"). These require a 'metadata' database lookup.**
+- Only choose direct response when:
+  * The question is extremely basic, definitional, or conceptual *and* does not require referencing specific database content (even just listing items).
+  * The user explicitly requests a direct response using phrases like "without research", "quick answer" *and* the question doesn't inherently require database access.
+  * The conversation already contains the complete information needed to answer
+  * The question is about general calculations or formulas without reference to standards
+&lt;/DECISION_CRITERIA&gt;</code></pre>
+        </div>
+
+        <div class="change-block after">
+            <h4>After:</h4>
+            <pre><code>&lt;DECISION_CRITERIA&gt;
+This system relies only on conversation context, not internal training data:
+- For accounting/finance topics, PREFER RESEARCH over direct response by default
+- Consider research especially when:
+  * Query mentions specific accounting standards (IFRS, IAS, GAAP, etc.)
+  * Query mentions specific financial reporting requirements
+  * Query asks about implementations, interpretations, or applications of standards
+  * Query mentions or implies the need for authoritative sources
+  * Query contains database specificity phrases like "check guidance", "reference", etc.
+  * **Query asks to list, find, or search for items/documents/files within a specific database (e.g., "what files are in the wiki?", "find memos about X", "list ICFR documents related to Y"). These require a 'metadata' database lookup.**
+  * <span class="highlight">**Query asks for definitions or explanations of ANY finance or accounting terms, concepts, or instruments (e.g., "what is a derivative?", "explain EBITDA", "define hedge accounting")**</span>
+- Only choose direct response when:
+  * <span class="highlight">The question is about general non-finance topics or is extremely basic, definitional, or conceptual *and* does not relate to finance, accounting, or require referencing specific database content (even just listing items).</span>
+  * The user explicitly requests a direct response using phrases like "without research", "quick answer" *and* the question doesn't inherently require database access.
+  * <span class="highlight">The conversation already contains the complete information needed to answer (from previous research results)</span>
+  * <span class="highlight">The question is about general calculations or formulas without reference to standards and not related to finance-specific concepts</span>
+&lt;/DECISION_CRITERIA&gt;</code></pre>
+        </div>
+
+        <h3 id="router-examples">3.2 Research Examples</h3>
+        <p>Added explicit examples of basic finance queries that should go to research.</p>
+
+        <div class="change-block before">
+            <h4>Before:</h4>
+            <pre><code>&lt;RESEARCH_EXAMPLES&gt;
+1. "What does IFRS 15 say about revenue recognition for long-term contracts?"
+   (Mentions specific accounting standard, requires authoritative reference)
+   
+2. "How should we account for leases under the new standards?"
+   (Refers to accounting standards, requires authoritative guidance)
+   
+3. "What's RBC's policy on hedge accounting?"
+   (Asks about specific policy that would be in the databases)
+   
+4. "Can you check the guidance on impairment testing for goodwill?"
+   (Explicitly requests checking guidance/reference material)
+
+5. "What are the disclosure requirements for related party transactions?"
+   (Asks about specific requirements that need authoritative reference)
+
+6. "What files are in the internal wiki about leases?"
+   (Asks to list items within a specific database - requires metadata research)
+
+7. "Find documents in ICFR related to control testing."
+   (Asks to find items within a specific database - requires metadata research)
+&lt;/RESEARCH_EXAMPLES&gt;</code></pre>
+        </div>
+
+        <div class="change-block after">
+            <h4>After:</h4>
+            <pre><code>&lt;RESEARCH_EXAMPLES&gt;
+1. "What does IFRS 15 say about revenue recognition for long-term contracts?"
+   (Mentions specific accounting standard, requires authoritative reference)
+   
+2. "How should we account for leases under the new standards?"
+   (Refers to accounting standards, requires authoritative guidance)
+   
+3. "What's RBC's policy on hedge accounting?"
+   (Asks about specific policy that would be in the databases)
+   
+4. "Can you check the guidance on impairment testing for goodwill?"
+   (Explicitly requests checking guidance/reference material)
+
+5. "What are the disclosure requirements for related party transactions?"
+   (Asks about specific requirements that need authoritative reference)
+
+6. "What files are in the internal wiki about leases?"
+   (Asks to list items within a specific database - requires metadata research)
+
+7. "Find documents in ICFR related to control testing."
+   (Asks to find items within a specific database - requires metadata research)
+
+<span class="highlight">8. "What is a derivative?"
+   (Asks for definition of a finance term - requires authoritative reference)
+
+9. "Can you explain EBITDA?"
+   (Requests explanation of a finance concept - requires authoritative reference)</span>
+&lt;/RESEARCH_EXAMPLES&gt;</code></pre>
+        </div>
+
+        <h3 id="router-direct">3.3 Direct Response Examples</h3>
+        <p>Updated direct response examples to clearly show that only explicit user requests or non-finance topics should go to direct response.</p>
+
+        <div class="change-block before">
+            <h4>Before:</h4>
+            <pre><code>&lt;DIRECT_RESPONSE_EXAMPLES&gt;
+1. "What's the difference between FIFO and LIFO inventory methods?"
+   (Basic accounting concept that doesn't require specific policy reference)
+   
+2. "Can you quickly explain what EBITDA means?"
+   (Contains "quickly explain" indicating desire for direct answer)
+   
+3. "Based on our previous conversation about revenue recognition, how would this apply to software sales?"
+   (Builds on information already provided in conversation)
+   
+4. "How do I calculate the present value of future cash flows?"
+   (General calculation question without reference to specific standards)
+   
+5. "Can you summarize what we discussed earlier about lease classifications?"
+   (Explicitly asks for summary of previous conversation content)
+&lt;/DIRECT_RESPONSE_EXAMPLES&gt;</code></pre>
+        </div>
+
+        <div class="change-block after">
+            <h4>After:</h4>
+            <pre><code>&lt;DIRECT_RESPONSE_EXAMPLES&gt;
+1. "Based on our previous conversation about revenue recognition, how would this apply to software sales?"
+   (Builds on research information already provided in conversation)
+   
+2. "Can you summarize what we discussed earlier about lease classifications?"
+   (Explicitly asks for summary of previous conversation content)
+   
+<span class="highlight">3. "What were the key points from the IFRS guidance you just showed me?"
+   (Refers to information already researched and present in conversation)</span>
+   
+<span class="highlight">4. "Could you explain the third point in simpler terms?"
+   (Follow-up clarification on previously researched information)</span>
+   
+5. "What's your favorite color?"
+   (Non-finance question that doesn't require research)
+&lt;/DIRECT_RESPONSE_EXAMPLES&gt;</code></pre>
+        </div>
+
+        <h3 id="router-error">3.4 Error Handling</h3>
+        <p>Added stronger error handling rules to reinforce proper routing of finance queries.</p>
+
+        <div class="change-block before">
+            <h4>Before:</h4>
+            <pre><code>&lt;ROUTER_SPECIFIC_ERROR_HANDLING&gt;
+- If the query is ambiguous between research/direct response, prefer research
+- If you can't determine the query type, default to research_from_database
+- If the conversation history is inconsistent, focus on the most recent query
+- If the query contains multiple questions, route based on the most complex one
+&lt;/ROUTER_SPECIFIC_ERROR_HANDLING&gt;</code></pre>
+        </div>
+
+        <div class="change-block after">
+            <h4>After:</h4>
+            <pre><code>&lt;ROUTER_SPECIFIC_ERROR_HANDLING&gt;
+- If the query is ambiguous between research/direct response, <span class="highlight">ALWAYS</span> prefer research
+- If you can't determine the query type, <span class="highlight">ALWAYS</span> default to research_from_database
+<span class="highlight">- If the query contains ANY finance or accounting terms, ALWAYS route to research_from_database</span>
+- If the conversation history is inconsistent, focus on the most recent query
+- If the query contains multiple questions, route based on the most complex one
+<span class="highlight">- If unsure whether a term is finance-related, err on the side of caution and route to research_from_database</span>
+&lt;/ROUTER_SPECIFIC_ERROR_HANDLING&gt;</code></pre>
+        </div>
+    </section>
+
+    <section id="direct">
+        <h2>4. Direct Response Agent Changes</h2>
+        <p>Even if the router mistakenly sends a finance query to direct response, we've added stronger checks in the direct response agent to ensure it doesn't answer finance queries without prior research data.</p>
+
+        <h3 id="direct-constraints">4.1 Constraints Section</h3>
+        <p>Added specific finance-related constraints to ensure the direct response agent never uses its training data for finance queries.</p>
+
+        <div class="change-block before">
+            <h4>Before:</h4>
+            <pre><code>&lt;CONSTRAINTS&gt;
+- **ABSOLUTE RULE:** Use **ONLY** information explicitly present in the provided conversation history (which must originate from user input or prior DB research results within the history). NO training data, NO external knowledge, NO assumptions.
+- DO NOT reference searching databases *unless* you determine the history is insufficient for the current query, as per RESPONSE GUIDANCE point 4.
+- DO NOT suggest performing research *unless* the history is insufficient (see above).
+- NEVER hallucinate information not found in the conversation.
+&lt;/CONSTRAINTS&gt;</code></pre>
+        </div>
+
+        <div class="change-block after">
+            <h4>After:</h4>
+            <pre><code>&lt;CONSTRAINTS&gt;
+- **ABSOLUTE RULE:** Use **ONLY** information explicitly present in the provided conversation history (which must originate from user input or prior DB research results within the history). NO training data, NO external knowledge, NO assumptions.
+<span class="highlight">- **FINANCE/ACCOUNTING QUERIES:** For ANY finance or accounting topic (including basic definitions like "what is a derivative?"), you MUST check if the information comes from prior research results in the conversation. If there is no research data about the topic in the conversation history, you MUST state that you cannot answer without research and recommend initiating a database search.</span>
+- DO NOT reference searching databases *unless* you determine the history is insufficient for the current query, as per RESPONSE GUIDANCE point 4.
+- DO NOT suggest performing research *unless* the history is insufficient (see above).
+- NEVER hallucinate information not found in the conversation.
+<span class="highlight">- NEVER use your training data to answer finance or accounting questions, even basic definitional ones.</span>
+&lt;/CONSTRAINTS&gt;</code></pre>
+        </div>
+
+        <h3 id="direct-error">4.2 Error Handling</h3>
+        <p>Updated error handling to be even more explicit about refusing to answer finance queries without research data.</p>
+
+        <div class="change-block before">
+            <h4>Before:</h4>
+            <pre><code>&lt;ERROR_HANDLING&gt;
+- General: Handle unexpected input, ambiguity (choose likely, state assumption), missing info (assume reasonably, state assumption), limitations (acknowledge). Use confidence signaling.
+- Direct Response Specific: Insufficient history for a complete answer -> Acknowledge limits and suggest DB search might be needed (per RESPONSE GUIDANCE). Query needs info clearly not in history -> Explain what's missing. Outside accounting policy scope -> State inability to answer (per global restrictions). Asked about DBs -> Remind using context only.
+&lt;/ERROR_HANDLING&gt;</code></pre>
+        </div>
+
+        <div class="change-block after">
+            <h4>After:</h4>
+            <pre><code>&lt;ERROR_HANDLING&gt;
+- General: Handle unexpected input, ambiguity (choose likely, state assumption), missing info (assume reasonably, state assumption), limitations (acknowledge). Use confidence signaling.
+- Direct Response Specific: 
+  <span class="highlight">* FINANCE/ACCOUNTING QUERIES: For ANY finance or accounting topic, even basic definition queries like "what is a derivative?", you MUST verify the information is from previous research in the conversation. If not, REFUSE to answer and recommend initiating research.</span>
+  * Insufficient history for a complete answer -> Acknowledge limits and suggest DB search might be needed (per RESPONSE GUIDANCE). 
+  * Query needs info clearly not in history -> Explain what's missing. 
+  * Outside accounting policy scope -> State inability to answer (per global restrictions). 
+  * Asked about DBs -> Remind using context only.
+  <span class="highlight">* If a user asks a finance question and there has been no research on that topic -> You MUST decline to answer and recommend database research.</span>
+&lt;/ERROR_HANDLING&gt;</code></pre>
+        </div>
+    </section>
+
+    <section id="impact">
+        <h2>5. Impact Analysis</h2>
+        <div class="description">
+            <p>These changes create multiple layers of protection to ensure that finance-related information comes only from authorized sources:</p>
+            
+            <h3>Protection Layers</h3>
+            <ol>
+                <li><strong>Router Improvements</strong>: Explicitly routes all finance queries (including basic definitions) to research</li>
+                <li><strong>Direct Response Safety Net</strong>: Even if router fails, the direct response agent will refuse to answer finance queries without prior research</li>
+                <li><strong>Global Prompts Alignment</strong>: Changes remain consistent with existing global statements about data sourcing and compliance</li>
+            </ol>
+
+            <h3>Expected Outcomes</h3>
+            <ul>
+                <li>Finance definitions like "what is a derivative?" will consistently go to research</li>
+                <li>Users will receive authoritative information from approved databases</li>
+                <li>No more responses based solely on the model's training data for finance topics</li>
+                <li>Improved compliance with policy that all finance information must come from approved sources</li>
+            </ul>
+        </div>
+    </section>
+
+
+    <hr>
+    <footer>
+        <p>Document generated: May 6, 2025</p>
+    </footer>
+</body>
+</html>
