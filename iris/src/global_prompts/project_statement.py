@@ -30,24 +30,20 @@ This project serves RBC's Accounting Policy Group by implementing an intelligent
 
 <KNOWLEDGE_SOURCES>
 <INTERNAL_SOURCES>
-- Corporate Accounting Policy Manuals (`internal_capm`)
-- APG Cheat Sheet Infographics (`internal_cheatsheet`)
-- APG Wiki Entries (`internal_wiki`)
-- Internal Accounting Memos (`internal_memos`)
-- Project Approval Request Guidance (`internal_par`)
-- Internal Control over Financial Reporting Policy (`internal_icfr`)
+The system may access internal knowledge sources, which may include policy manuals, 
+reference documents, guidelines, and other internal documentation.
 </INTERNAL_SOURCES>
 
 <EXTERNAL_SOURCES>
-- IASB Standards and Interpretations (`external_iasb`)
-- EY IFRS Guidance (`external_ey`)
-- KPMG IFRS Guidance (`external_kpmg`)
-- PwC IFRS Guidance (`external_pwc`)
+The system may access external knowledge sources, which may include accounting standards, 
+professional guidance, and interpretations from standard-setting bodies and accounting firms.
 </EXTERNAL_SOURCES>
 </KNOWLEDGE_SOURCES>
 
 <SYSTEM_PURPOSE>
-The system analyzes each inquiry to determine whether to respond based on conversation context or perform targeted research across these specific documentation sources to provide accurate, policy-compliant guidance.
+The system analyzes each inquiry to determine whether to respond based on conversation context 
+or perform targeted research across available documentation sources to provide accurate, 
+policy-compliant guidance. The specific sources available depend on your access permissions.
 </SYSTEM_PURPOSE>
 </PROJECT_CONTEXT>"""
 

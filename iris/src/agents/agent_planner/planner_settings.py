@@ -91,14 +91,24 @@ Based on the provided inputs:
 1. **Identify Core Needs & Context:** Analyze the `research_statement` for the core question, information needs, and any specific key accounting context (e.g., 'asset', 'liability', 'equity', 'IFRS 15', 'US GAAP ASC 606', 'revenue recognition'). Check if the statement mentions explicit user requests for specific databases from their *original* query.
 2. **Check for Accounting Query Flag:** Determine if the `research_statement` starts with "Accounting Query:".
 3. **Database Selection Logic:**
-    a. **If Accounting Query Flag is PRESENT:**
-        i.   **Mandatory Internal Core:** ALWAYS include `internal_capm`, `internal_wiki`, and `internal_cheatsheet`.
-        ii.  **Consider Internal Supportive:** Consider including `internal_memos` based on the specific accounting topic's complexity or need for deeper analysis mentioned in the `research_statement`.
-        iii. **Include External based on User Choice:** Check the `include_external` input flag. If it is `true`, select relevant external databases (e.g., `external_iasb`, `external_pwc`, `external_ey`, `external_kpmg`) that provide authoritative or supplementary guidance based on the topic. Aim for 1-2 relevant external sources unless more are justified by the query.
-        iv.  **Original User Request Override:** If the `research_statement` indicates the user *explicitly requested* specific databases (internal or external) in their original query, prioritize including those regardless of the `include_external` flag's value.
-    b. **If Accounting Query Flag is ABSENT:**
-        i.   **Prioritize Internal:** Identify relevant internal databases first based on the `research_statement`.
-        ii.  **Select External Only If Necessary:** Only add external databases if the `research_statement` indicates they were explicitly requested by the user in the original query, are required for comparison, or internal sources are clearly insufficient. (The `include_external` flag primarily applies to accounting queries triggered by the Clarifier).
+    a. **User Explicitly Requested Database Override:**
+        i.   **HIGHEST PRIORITY:** If the `research_statement` indicates the user *explicitly requested* a specific database or databases in their original query, ONLY select those requested databases and IGNORE ALL OTHER SELECTION LOGIC below. This overrides all other rules.
+            - Example indicators: "search wiki for X", "check capm about Y", "look in external_iasb for Z"
+        ii.  If user-requested databases appear to be unavailable (not in the list of AVAILABLE_DATABASES), then fall back to the regular selection logic below.
+            
+    b. **If Accounting Query Flag is PRESENT (and no specific database explicitly requested):**
+        i.   **Core Internal Sources:** Select internal accounting policy databases that are AVAILABLE to the user:
+             - For accounting core information, prioritize internal policy manuals, wiki entries, and cheatsheets if they exist in the available databases.
+             - Do NOT assume specific database names - check if each is available before selecting.
+        ii.  **Consider Internal Supportive Sources:** Consider including internal memos or other specialized internal sources (if available) based on the specific accounting topic's complexity or need for deeper analysis mentioned in the `research_statement`.
+        iii. **Include External based on User Choice:** Check the `include_external` input flag. If it is `true`, select relevant external sources that provide authoritative or supplementary guidance based on the topic. Aim for 1-2 relevant external sources unless more are justified by the query.
+             - Select only from what's available to the user - do not assume specific external sources exist.
+    
+    c. **If Accounting Query Flag is ABSENT (and no specific database explicitly requested):**
+        i.   **Prioritize Internal:** Identify relevant internal databases first based on the `research_statement` and what's available to the user.
+        ii.  **Select External Only If Necessary:** Only add external databases if they were explicitly mentioned in the query, are required for comparison, or internal sources are clearly insufficient. (The `include_external` flag primarily applies to accounting queries triggered by the Clarifier).
+    
+    d. **IMPORTANT - Database Availability:** Remember that not all users have access to all databases. Always check if a database exists in the provided AVAILABLE_DATABASES dictionary before selecting it. Never assume specific database names will be available - your selection must adapt to what's actually available to each user.
 4. **Scale Database Count (1-5 Total):** Adjust the *total* number of selected databases based on the overall complexity and breadth of the `research_statement` and the decision regarding external sources (driven by the `include_external` flag for accounting queries). Ensure the final count is between 1 and 5.
 5. **Final Selection:** Compile the final list of selected database names.
 6. **No Query Formulation:** Remember, your task is ONLY database selection. The full `research_statement` is used as the query.
