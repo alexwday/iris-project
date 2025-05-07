@@ -71,6 +71,26 @@ def evaluate_test_result(
         # Extract the evaluation from the response
         evaluation_text = response.choices[0].message.content.strip()
         
+        # Create a default template in case parsing fails
+        default_template = {
+            "database_selection": {
+                "correct": None,
+                "score": None,
+                "comments": "Unable to determine from LLM response"
+            },
+            "document_selection": {
+                "correct": None,
+                "score": None,
+                "comments": "Unable to determine from LLM response"
+            },
+            "answer_accuracy": {
+                "score": None,
+                "comments": "Unable to determine from LLM response"
+            },
+            "overall_assessment": "Unable to parse LLM response into a valid evaluation",
+            "raw_response": evaluation_text
+        }
+        
         # Parse JSON response
         try:
             # Try to parse the entire response as JSON
@@ -79,21 +99,35 @@ def evaluate_test_result(
         except json.JSONDecodeError:
             # If that fails, try to extract JSON from markdown code blocks
             logger.warning("Failed to parse entire response as JSON, trying to extract JSON from code blocks")
-            if "```json" in evaluation_text:
-                # Extract JSON from markdown code blocks
-                json_block = evaluation_text.split("```json")[1].split("```")[0].strip()
-                evaluation = json.loads(json_block)
-                logger.info("Successfully extracted JSON from code block")
-            else:
-                # If no code blocks, try to find any JSON-like structure
-                logger.warning("No JSON code blocks found, attempting to extract JSON-like structure")
-                import re
-                json_match = re.search(r'\{.*\}', evaluation_text, re.DOTALL)
-                if json_match:
-                    evaluation = json.loads(json_match.group(0))
-                    logger.info("Successfully extracted JSON-like structure")
+            try:
+                if "```json" in evaluation_text:
+                    # Extract JSON from markdown code blocks
+                    json_block = evaluation_text.split("```json")[1].split("```")[0].strip()
+                    evaluation = json.loads(json_block)
+                    logger.info("Successfully extracted JSON from code block")
                 else:
-                    raise ValueError("Failed to extract valid JSON from LLM response")
+                    # If no code blocks, try to find any JSON-like structure
+                    logger.warning("No JSON code blocks found, attempting to extract JSON-like structure")
+                    import re
+                    json_match = re.search(r'\{.*\}', evaluation_text, re.DOTALL)
+                    if json_match:
+                        evaluation = json.loads(json_match.group(0))
+                        logger.info("Successfully extracted JSON-like structure")
+                    else:
+                        logger.error("Failed to extract valid JSON from LLM response")
+                        evaluation = default_template
+            except Exception as parse_error:
+                logger.error(f"JSON parsing error: {str(parse_error)}")
+                evaluation = default_template
+        
+        # Validate and ensure the evaluation has the expected structure
+        for field in ["database_selection", "document_selection", "answer_accuracy"]:
+            if field not in evaluation:
+                logger.warning(f"Field '{field}' missing from evaluation, adding default")
+                evaluation[field] = default_template[field]
+                
+        if "overall_assessment" not in evaluation:
+            evaluation["overall_assessment"] = default_template["overall_assessment"]
         
         # Add metadata to evaluation
         evaluation["metadata"] = {

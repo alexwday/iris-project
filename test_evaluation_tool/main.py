@@ -36,6 +36,7 @@ def process_excel_file(
 ) -> Dict[str, Any]:
     """
     Process a single Excel file: convert to markdown, evaluate with LLM.
+    Processes each sheet separately.
 
     Args:
         excel_file (str): Path to Excel file
@@ -46,7 +47,7 @@ def process_excel_file(
         save_intermediate (bool, optional): Save intermediate markdown files. Defaults to True.
 
     Returns:
-        dict: Evaluation results for the Excel file
+        dict: Evaluation results for the Excel file, with sheet names as keys
     """
     logger.info(f"Processing Excel file: {excel_file}")
     
@@ -56,24 +57,58 @@ def process_excel_file(
         file_output_dir = os.path.join(output_dir, filename)
         os.makedirs(file_output_dir, exist_ok=True)
 
-        # Convert Excel to markdown
-        markdown = excel_to_markdown(excel_file, sheet_name=sheet_name)
+        # Convert Excel to markdown - get a dictionary of sheets
+        markdown_dict = excel_to_markdown(excel_file, sheet_name=sheet_name, separate_sheets=True)
         
-        # Save markdown if requested
-        if save_intermediate:
-            md_file_path = os.path.join(file_output_dir, f"{filename}.md")
-            save_markdown_to_file(markdown, md_file_path)
+        # Save each sheet's markdown separately and evaluate
+        results = {}
+        for sheet_name, markdown in markdown_dict.items():
+            logger.info(f"Processing sheet: {sheet_name}")
+            
+            # Create sheet-specific directory
+            sheet_dir = os.path.join(file_output_dir, f"sheet_{sheet_name}")
+            os.makedirs(sheet_dir, exist_ok=True)
+            
+            # Save markdown if requested
+            if save_intermediate:
+                md_file_path = os.path.join(sheet_dir, f"{sheet_name}.md")
+                save_markdown_to_file(markdown, md_file_path)
+            
+            try:
+                # Evaluate the test result for this sheet
+                logger.info(f"Evaluating sheet: {sheet_name}")
+                evaluation = evaluate_test_result(
+                    test_markdown=markdown,
+                    oauth_token=oauth_token,
+                    model=model,
+                    save_result=True,
+                    output_dir=sheet_dir
+                )
+                results[sheet_name] = evaluation
+                logger.info(f"Evaluation complete for sheet: {sheet_name}")
+            
+            except Exception as e:
+                logger.error(f"Error evaluating sheet {sheet_name}: {str(e)}")
+                results[sheet_name] = {
+                    "error": str(e),
+                    "sheet": sheet_name,
+                    "status": "failed"
+                }
         
-        # Evaluate the test result
-        evaluation = evaluate_test_result(
-            test_markdown=markdown,
-            oauth_token=oauth_token,
-            model=model,
-            save_result=True,
-            output_dir=file_output_dir
-        )
+        # Create an overall results summary
+        summary = {
+            "file": excel_file,
+            "sheets_evaluated": len(results),
+            "successful_sheets": sum(1 for v in results.values() if v.get("status") != "failed"),
+            "results_by_sheet": results
+        }
         
-        return evaluation
+        # Save summary to file
+        summary_path = os.path.join(file_output_dir, "summary.json")
+        with open(summary_path, "w") as f:
+            json.dump(summary, f, indent=2)
+        
+        return summary
     
     except Exception as e:
         logger.error(f"Error processing Excel file {excel_file}: {str(e)}")
@@ -175,12 +210,27 @@ def main():
             if idx < len(excel_files) - 1:
                 time.sleep(1)
         
-        # Aggregate evaluations
-        if len(evaluations) > 1:
-            logger.info(f"Aggregating {len(evaluations)} evaluations")
+        # Flatten evaluations from each file/sheet for aggregation
+        flattened_evaluations = []
+        for file_eval in evaluations:
+            if "results_by_sheet" in file_eval:
+                # Extract individual sheet evaluations
+                for sheet_name, sheet_eval in file_eval["results_by_sheet"].items():
+                    if "status" not in sheet_eval or sheet_eval["status"] != "failed":
+                        sheet_eval["file"] = file_eval["file"]
+                        sheet_eval["sheet"] = sheet_name
+                        flattened_evaluations.append(sheet_eval)
+            else:
+                # Add the file evaluation directly if it's not sheet-based
+                if "status" not in file_eval or file_eval["status"] != "failed":
+                    flattened_evaluations.append(file_eval)
+        
+        # Aggregate evaluations if we have any successful ones
+        if len(flattened_evaluations) > 0:
+            logger.info(f"Aggregating {len(flattened_evaluations)} successful evaluations")
             
             summary = aggregate_evaluations(
-                evaluations=evaluations,
+                evaluations=flattened_evaluations,
                 oauth_token=oauth_token,
                 model=args.model,
                 save_result=True,

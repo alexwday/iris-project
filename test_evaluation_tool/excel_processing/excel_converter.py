@@ -24,7 +24,8 @@ logger = logging.getLogger(__name__)
 def excel_to_markdown(
     file_path: str,
     sheet_name: Optional[Union[str, int]] = None,
-) -> str:
+    separate_sheets: bool = True
+) -> Union[str, Dict[str, str]]:
     """
     Convert Excel sheet data to markdown format, preserving the original structure.
     This function captures the entire active area of each sheet, including all columns
@@ -34,9 +35,14 @@ def excel_to_markdown(
         file_path (str): Path to the Excel file
         sheet_name (str|int, optional): Sheet name or index to process. 
                                       If None, processes all sheets.
+        separate_sheets (bool): If True, returns a dictionary with sheet names as keys
+                               and markdown content as values. If False, returns a single
+                               markdown string with all sheets.
 
     Returns:
-        str: Markdown representation of the Excel data
+        Union[str, Dict[str, str]]: If separate_sheets is True, returns a dictionary mapping
+                                   sheet names to markdown content. Otherwise, returns a single
+                                   markdown string with all sheets.
 
     Raises:
         FileNotFoundError: If Excel file does not exist
@@ -66,18 +72,31 @@ def excel_to_markdown(
                 raise ValueError(error_msg)
             
             logger.info(f"Converting sheet: {sheet_name}")
-            return _convert_sheet_to_markdown(xl, sheet_name)
+            markdown = _convert_sheet_to_markdown(xl, sheet_name)
+            if separate_sheets:
+                return {str(sheet_name): markdown}
+            else:
+                return f"## Sheet: {sheet_name}\n\n{markdown}"
         else:
             # Process all sheets
             logger.info(f"Converting all sheets")
-            md_content = []
             
-            for sheet in sheet_names:
-                logger.info(f"Converting sheet: {sheet}")
-                sheet_md = _convert_sheet_to_markdown(xl, sheet)
-                md_content.append(f"## Sheet: {sheet}\n\n{sheet_md}")
-            
-            return "\n\n".join(md_content)
+            if separate_sheets:
+                # Return a dictionary with sheet names as keys
+                result = {}
+                for sheet in sheet_names:
+                    logger.info(f"Converting sheet: {sheet}")
+                    sheet_md = _convert_sheet_to_markdown(xl, sheet)
+                    result[sheet] = sheet_md
+                return result
+            else:
+                # Return a single markdown string with all sheets
+                md_content = []
+                for sheet in sheet_names:
+                    logger.info(f"Converting sheet: {sheet}")
+                    sheet_md = _convert_sheet_to_markdown(xl, sheet)
+                    md_content.append(f"## Sheet: {sheet}\n\n{sheet_md}")
+                return "\n\n".join(md_content)
     
     except Exception as e:
         logger.error(f"Error converting Excel to markdown: {str(e)}")
