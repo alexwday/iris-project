@@ -38,7 +38,15 @@ from config import (
     LLM_MODEL,
     USE_OAUTH
 )
-from ssl.ssl import setup_ssl
+# Try to import from ssl_correct first (which should have the fixed implementation)
+try:
+    from ssl_correct.ssl import setup_ssl
+    logging.info("Using ssl_correct implementation")
+except ImportError:
+    # Fall back to regular ssl module if ssl_correct is not available
+    from ssl.ssl import setup_ssl
+    logging.info("Using standard ssl implementation")
+
 from oauth.oauth import setup_oauth
 
 # Set up logging
@@ -83,6 +91,26 @@ def parse_arguments():
         default=HTML_OUTPUT_FILE,
         help=f'Output HTML file path (default: {HTML_OUTPUT_FILE})'
     )
+    parser.add_argument(
+        '--rbc-env',
+        action='store_true',
+        help='Use RBC environment settings (default: False)'
+    )
+    parser.add_argument(
+        '--use-ssl',
+        action='store_true',
+        help='Use SSL for API connections (default: False)'
+    )
+    parser.add_argument(
+        '--use-oauth',
+        action='store_true',
+        help='Use OAuth for authentication (default: False)'
+    )
+    parser.add_argument(
+        '--local-env',
+        action='store_true',
+        help='Use local environment settings (overrides RBC/SSL/OAuth to False)'
+    )
     return parser.parse_args()
 
 
@@ -96,6 +124,28 @@ def main():
     
     logger.info(f"Starting Excel Test Summary Tool")
     logger.info(f"Processing Excel file: {args.excel_file}")
+    
+    # Update configuration from command line args
+    import sys
+    from . import config
+    
+    # Handle --local-env flag (overrides all other settings)
+    if args.local_env:
+        config.IS_RBC_ENV = False
+        config.USE_SSL = False
+        config.USE_OAUTH = False
+        logger.info("Using local environment settings (SSL and OAuth disabled)")
+    else:
+        # Apply individual flags if specified
+        if args.rbc_env:
+            config.IS_RBC_ENV = True
+            logger.info("RBC environment enabled from command line")
+        if args.use_ssl:
+            config.USE_SSL = True
+            logger.info("SSL enabled from command line")
+        if args.use_oauth:
+            config.USE_OAUTH = True
+            logger.info("OAuth enabled from command line")
     
     try:
         # Get the API key - if provided via CLI args, use it directly

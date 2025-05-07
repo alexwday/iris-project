@@ -65,19 +65,44 @@ The tool generates:
 
 The HTML report will be saved at `results/test_summary_report.html` by default.
 
-## SSL and OAuth Configuration
+## Environment Configuration
+
+### Local Environment (Recommended)
+
+For local development, the simplest approach is to disable all enterprise features:
+
+```bash
+# Run in local environment mode (disables SSL and OAuth)
+python run_summary.py path/to/your/excel_file.xlsx --local-env
+
+# Or explicitly using environment variables
+export IS_RBC_ENV=0
+export USE_SSL=0
+export USE_OAUTH=0
+python run_summary.py path/to/your/excel_file.xlsx
+```
+
+### Enterprise Environment
 
 For enterprise environments that require SSL certificates and OAuth authentication:
 
 ```bash
-# Enable SSL certificate validation
-export USE_SSL=1
+# Enable via command-line arguments
+python run_summary.py path/to/your/excel_file.xlsx --rbc-env --use-ssl --use-oauth
 
-# Enable OAuth token authentication
-export USE_OAUTH=1
-
-# Set RBC environment flag (if applicable)
+# Or via environment variables
 export IS_RBC_ENV=1
+export USE_SSL=1
+export USE_OAUTH=1
+python run_summary.py path/to/your/excel_file.xlsx
 ```
 
-When running in a local environment, the tool will use the OPENAI_API_KEY directly without OAuth authentication by default.
+#### SSL Certificate Configuration
+
+When SSL is enabled (`--use-ssl` or `USE_SSL=1`), the tool looks for a certificate file:
+- It will first check for `ssl_correct/rbc-ca-bundle.cer`
+- If not found, it will fall back to `ssl/rbc-ca-bundle.cer`
+
+Make sure to place your SSL certificate in one of these locations when running with SSL enabled.
+
+When running in a local environment, the tool will use the OPENAI_API_KEY directly without OAuth authentication and SSL by default.

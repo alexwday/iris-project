@@ -22,7 +22,17 @@ from ..config import (
     USE_SSL
 )
 from ..oauth.oauth import setup_oauth
-from ..ssl.ssl import setup_ssl
+
+# Try to import from ssl_correct first (which should have the fixed implementation)
+try:
+    from ..ssl_correct.ssl import setup_ssl
+    import logging
+    logging.getLogger(__name__).info("Using ssl_correct implementation")
+except ImportError:
+    # Fall back to regular ssl module if ssl_correct is not available
+    from ..ssl.ssl import setup_ssl
+    import logging
+    logging.getLogger(__name__).info("Using standard ssl implementation")
 
 # Set up logging
 logger = logging.getLogger(__name__)

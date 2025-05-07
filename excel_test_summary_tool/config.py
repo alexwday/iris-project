@@ -6,10 +6,15 @@ import logging
 # Get module logger
 logger = logging.getLogger(__name__)
 
-# Environment configuration - hardcoded settings
-IS_RBC_ENV = True  # Set to True for RBC environment, False for local
-USE_OAUTH = True   # Set to True to use OAuth authentication
-USE_SSL = True     # Set to True to use SSL certificate
+# Environment configuration - read from environment variables or use defaults
+IS_RBC_ENV = os.environ.get('IS_RBC_ENV', '0').lower() in ('true', 't', '1', 'yes', 'y')  # Set to True for RBC environment, False for local
+USE_OAUTH = os.environ.get('USE_OAUTH', '0').lower() in ('true', 't', '1', 'yes', 'y')    # Set to True to use OAuth authentication
+USE_SSL = os.environ.get('USE_SSL', '0').lower() in ('true', 't', '1', 'yes', 'y')         # Set to True to use SSL certificate
+
+# Log the environment settings
+logger.info(f"Environment: {'RBC' if IS_RBC_ENV else 'Local'}")
+logger.info(f"OAuth authentication: {'Enabled' if USE_OAUTH else 'Disabled'}")
+logger.info(f"SSL verification: {'Enabled' if USE_SSL else 'Disabled'}")
 
 # API configuration
 BASE_URL = "https://api.openai.com/v1"
