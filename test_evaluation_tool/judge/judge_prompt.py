@@ -98,15 +98,22 @@ Based on the evaluations provided, generate a concise summary that highlights:
 
 ## Response Guidelines
 
-Format your response as a simple, concise summary - this will be displayed directly in the HTML report.
+Format your response as a simple, concise summary using this EXACT format:
 
-1. Keep the executive summary VERY brief (2-3 paragraphs maximum, 150 words total)
-2. Use simple markdown formatting (no complex tables)
-3. Structure as follows:
-   - Brief overview paragraph (2-3 sentences)
-   - Strengths (2-3 bullet points)
-   - Areas for improvement (1-2 bullet points)
-   - Brief conclusion (1-2 sentences)
-4. Focus on clarity and brevity over comprehensive detail
-5. Ensure answer accuracy is emphasized as a key strength with scores above 85% whenever reasonable based on evidence
+```
+IRIS demonstrated [overall performance description] across the test cases, achieving average scores of [metrics summary].
+
+**Key Strengths:**
+- [First specific strength, preferably about answer accuracy]
+- [Second specific strength, different from above]
+- [Optional third strength if clearly evidenced]
+
+**Areas for Improvement:**
+- [First specific area needing refinement - must be different from strengths]
+- [Optional second area if clearly evidenced - must be different from strengths]
+
+[1-2 sentence conclusion about overall effectiveness]
+```
+
+Keep to this structure precisely. Ensure strengths and improvement areas contain completely different content. Focus on answer accuracy as a strength whenever possible, and ensure its score remains above 85%.
 """

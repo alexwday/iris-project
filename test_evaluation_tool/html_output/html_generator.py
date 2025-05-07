@@ -59,8 +59,16 @@ def _markdown_to_html(markdown_text):
     if not markdown_text:
         return ""
     
+    # Handle code blocks (```code```) - protect them from other processing
+    code_blocks = []
+    def replace_code_block(match):
+        code_blocks.append(match.group(1))
+        return f"CODE_BLOCK_{len(code_blocks)-1}"
+    
+    html = re.sub(r'```(.*?)```', replace_code_block, markdown_text, flags=re.DOTALL)
+    
     # Convert headers (# Header -> <h1>Header</h1>, etc.)
-    html = re.sub(r'^# (.*?)$', r'<h1>\1</h1>', markdown_text, flags=re.MULTILINE)
+    html = re.sub(r'^# (.*?)$', r'<h1>\1</h1>', html, flags=re.MULTILINE)
     html = re.sub(r'^## (.*?)$', r'<h2>\1</h2>', html, flags=re.MULTILINE)
     html = re.sub(r'^### (.*?)$', r'<h3>\1</h3>', html, flags=re.MULTILINE)
     html = re.sub(r'^#### (.*?)$', r'<h4>\1</h4>', html, flags=re.MULTILINE)
@@ -88,11 +96,13 @@ def _markdown_to_html(markdown_text):
             html_list += '</ol>'
             html = html.replace(section_text, html_list)
     
-    # Convert bold (**text** -> <strong>text</strong>)
+    # Handle **bold** sections with proper HTML
+    # We need a more specific pattern to avoid conflicts with list items and other markdown
     html = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', html)
     
     # Convert italic (*text* -> <em>text</em>)
-    html = re.sub(r'\*(.*?)\*', r'<em>\1</em>', html)
+    # Be cautious with asterisks that might be part of lists
+    html = re.sub(r'(?<!\*)\*(?!\*)(.*?)(?<!\*)\*(?!\*)', r'<em>\1</em>', html)
     
     # Convert paragraphs (blank lines separate paragraphs)
     paragraphs = html.split('\n\n')
@@ -134,6 +144,14 @@ def _markdown_to_html(markdown_text):
             
             html_table += '  </tbody>\n</table>\n'
             html = html.replace(table_text, html_table)
+    
+    # Restore code blocks
+    for i, code in enumerate(code_blocks):
+        html = html.replace(f"CODE_BLOCK_{i}", f'<pre><code>{code}</code></pre>')
+    
+    # Add more specific styling for key sections
+    html = html.replace('<strong>Key Strengths:</strong>', '<strong class="key-section strengths">Key Strengths:</strong>')
+    html = html.replace('<strong>Areas for Improvement:</strong>', '<strong class="key-section improvements">Areas for Improvement:</strong>')
     
     return html
 
@@ -373,6 +391,19 @@ def _generate_html_content(
             border-bottom: 2px solid #3498db;
             padding-bottom: 10px;
             margin-bottom: 20px;
+        }}
+        .key-section {{
+            display: block;
+            margin-top: 15px;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }}
+        .key-section.strengths {{
+            color: #28a745;
+        }}
+        .key-section.improvements {{
+            color: #dc3545;
+            margin-top: 20px;
         }}
     </style>
     <script>
