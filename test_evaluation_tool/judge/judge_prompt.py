@@ -28,12 +28,13 @@ Key information to find in the table:
 ## Your Task
 
 As an evaluator, you need to analyze the table to determine:
-1. Database Selection: Did IRIS select the correct database? If scored, what was the score?
-2. Document Selection: Did IRIS retrieve the correct documents? If scored, what was the score?
-3. Answer Accuracy: How accurate was IRIS's response? What score was given?
-4. Reviewer's Overall Score: What was the final overall score provided by the reviewer (often found at the bottom)?
-5. Calculate percentage scores: For each component and overall performance
-6. Overall Assessment: A brief summary of performance
+1. Question: Extract the specific question that was asked to IRIS (usually near the top of the sheet)
+2. Database Selection: Did IRIS select the correct database? If scored, what was the score?
+3. Document Selection: Did IRIS retrieve the correct documents? If scored, what was the score?
+4. Answer Accuracy: How accurate was IRIS's response? What score was given?
+5. Reviewer's Overall Score: What was the final overall score provided by the reviewer (often found at the bottom)?
+6. Calculate percentage scores: For each component and overall performance
+7. Overall Assessment: A brief summary of performance
 
 You will use the function `extract_evaluation` to provide your evaluation in a structured format. For percentage scores, convert any 0-5 scores to 0-100% (e.g., 4/5 = 80%).
 

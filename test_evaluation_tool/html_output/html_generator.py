@@ -269,7 +269,7 @@ def _generate_html_content(
             background-color: #f1f1f1;
             color: #444;
             cursor: pointer;
-            padding: 18px;
+            padding: 15px;
             width: 100%;
             border: none;
             text-align: left;
@@ -279,10 +279,30 @@ def _generate_html_content(
             margin-bottom: 10px;
             display: flex;
             justify-content: space-between;
-            align-items: center;
+            align-items: flex-start;
         }}
         .active, .collapsible:hover {{
             background-color: #e1e6f0;
+        }}
+        .collapsible-content {{
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            flex: 1;
+        }}
+        .collapsible-title {{
+            font-weight: bold;
+            color: #2c3e50;
+        }}
+        .collapsible-question {{
+            font-style: italic;
+            color: #555;
+            margin: 5px 0;
+            max-width: 80%;
+        }}
+        .collapsible-score {{
+            font-size: 0.9em;
+            color: #666;
         }}
         .content {{
             padding: 0 18px;
@@ -469,10 +489,24 @@ def _generate_html_content(
         # Format overall percentage score
         overall_display = f"{overall_pct}%" if overall_pct is not None else "N/A"
         
+        # Get the question if available
+        question = eval_data.get('question', 'Question not found')
+        
+        # Format file name for display (extract from path if needed)
+        if isinstance(file_info, str) and '/' in file_info:
+            # Extract just the file name without path
+            display_file = os.path.basename(file_info)
+        else:
+            display_file = file_info
+            
         # Create collapsible button with indicators
         html += f"""
     <button class="collapsible">
-        <span>{title} - Overall Score: {overall_display}</span>
+        <div class="collapsible-content">
+            <div class="collapsible-title">{display_file}{' - ' + sheet_info if sheet_info else ''}</div>
+            <div class="collapsible-question">{question}</div>
+            <div class="collapsible-score">Overall Score: {overall_display}</div>
+        </div>
         <div class="collapsible-indicators">
             <span class="indicator {get_indicator_class(db_pct)}" title="Database Selection"></span>
             <span class="indicator {get_indicator_class(doc_pct)}" title="Document Selection"></span>
@@ -519,6 +553,11 @@ def _generate_html_content(
         
         # Close the score container and add details
         html += f"""
+            </div>
+            
+            <div class="question-container">
+                <h4 class="metric-header">Question</h4>
+                <div class="question-text">{question}</div>
             </div>
             
             <h4 class="metric-header">Database Selection</h4>

@@ -157,12 +157,16 @@ def evaluate_test_result(
                             },
                             "required": ["overall_pct"]
                         },
+                        "question": {
+                            "type": "string",
+                            "description": "The actual question that was asked to IRIS (usually found near the top of the sheet)"
+                        },
                         "overall_assessment": {
                             "type": "string",
                             "description": "Short 1-2 sentence summary of the test result"
                         }
                     },
-                    "required": ["database_selection", "document_selection", "answer_accuracy", "reviewer_overall_score", "percentage_score", "overall_assessment"]
+                    "required": ["database_selection", "document_selection", "answer_accuracy", "reviewer_overall_score", "percentage_score", "question", "overall_assessment"]
                 }
             }
         }
@@ -206,6 +210,7 @@ def evaluate_test_result(
                 "answer_accuracy_pct": None,
                 "overall_pct": None
             },
+            "question": "Unable to extract question from sheet",
             "overall_assessment": "Unable to extract evaluation from LLM response"
         }
         
@@ -272,6 +277,10 @@ def evaluate_test_result(
                     for pct_field in ["database_selection_pct", "document_selection_pct", "answer_accuracy_pct", "overall_pct"]:
                         if pct_field not in evaluation[field]:
                             evaluation[field][pct_field] = None
+        
+        # Ensure question and overall assessment are present        
+        if "question" not in evaluation:
+            evaluation["question"] = default_template["question"]
                 
         if "overall_assessment" not in evaluation:
             evaluation["overall_assessment"] = default_template["overall_assessment"]
