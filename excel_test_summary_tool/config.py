@@ -6,10 +6,10 @@ import logging
 # Get module logger
 logger = logging.getLogger(__name__)
 
-# Environment configuration - read from environment variables or use defaults
-IS_RBC_ENV = os.environ.get('IS_RBC_ENV', '0').lower() in ('true', 't', '1', 'yes', 'y')  # Set to True for RBC environment, False for local
-USE_OAUTH = os.environ.get('USE_OAUTH', '0').lower() in ('true', 't', '1', 'yes', 'y')    # Set to True to use OAuth authentication
-USE_SSL = os.environ.get('USE_SSL', '0').lower() in ('true', 't', '1', 'yes', 'y')         # Set to True to use SSL certificate
+# Environment configuration - read from environment variables with RBC defaults
+IS_RBC_ENV = os.environ.get('IS_RBC_ENV', '1').lower() in ('true', 't', '1', 'yes', 'y')  # Default to RBC environment
+USE_OAUTH = os.environ.get('USE_OAUTH', '1').lower() in ('true', 't', '1', 'yes', 'y')    # Default to OAuth authentication
+USE_SSL = os.environ.get('USE_SSL', '1').lower() in ('true', 't', '1', 'yes', 'y')         # Default to SSL certificate
 
 # Log the environment settings
 logger.info(f"Environment: {'RBC' if IS_RBC_ENV else 'Local'}")

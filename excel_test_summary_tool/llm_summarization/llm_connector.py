@@ -43,16 +43,26 @@ class LLMConnectorError(Exception):
     pass
 
 
-def setup_llm_environment():
+def setup_llm_environment(cert_path=None):
     """
     Set up the environment for LLM API access.
+    
+    Args:
+        cert_path (str, optional): Custom path to SSL certificate
     
     Returns:
         str: API token or key to use for API access
     """
     # Configure SSL if needed
     if USE_SSL:
-        setup_ssl()
+        try:
+            setup_ssl(custom_cert_path=cert_path)
+        except Exception as e:
+            logger.warning(f"SSL setup failed: {str(e)}. Continuing without SSL verification.")
+            # Disable SSL verification as a fallback
+            import urllib3
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+            os.environ['PYTHONHTTPSVERIFY'] = '0'
     
     # Get API token or key
     return setup_oauth()

@@ -111,6 +111,10 @@ def parse_arguments():
         action='store_true',
         help='Use local environment settings (overrides RBC/SSL/OAuth to False)'
     )
+    parser.add_argument(
+        '--cert-path',
+        help='Custom path to SSL certificate file'
+    )
     return parser.parse_args()
 
 
@@ -152,7 +156,7 @@ def main():
         # Otherwise, set up OAuth and SSL as needed
         api_key = args.api_key
         if not api_key:
-            api_key = setup_llm_environment()
+            api_key = setup_llm_environment(cert_path=args.cert_path)
         
         # Step 1: Load Excel file
         excel_data = load_excel_file(args.excel_file)

@@ -87,8 +87,11 @@ python run_summary.py path/to/your/excel_file.xlsx
 For enterprise environments that require SSL certificates and OAuth authentication:
 
 ```bash
-# Enable via command-line arguments
-python run_summary.py path/to/your/excel_file.xlsx --rbc-env --use-ssl --use-oauth
+# Enable via command-line arguments (RBC environment is now default)
+python run_summary.py path/to/your/excel_file.xlsx
+
+# Specify a certificate path
+python run_summary.py path/to/your/excel_file.xlsx --cert-path /path/to/your/certificate.pem
 
 # Or via environment variables
 export IS_RBC_ENV=1
@@ -97,12 +100,28 @@ export USE_OAUTH=1
 python run_summary.py path/to/your/excel_file.xlsx
 ```
 
+If you're having issues with SSL certificates, you can try disabling SSL verification (not recommended for production use):
+
+```bash
+# Disable SSL verification as a last resort
+PYTHONHTTPSVERIFY=0 python run_summary.py path/to/your/excel_file.xlsx
+```
+
 #### SSL Certificate Configuration
 
-When SSL is enabled (`--use-ssl` or `USE_SSL=1`), the tool looks for a certificate file:
-- It will first check for `ssl_correct/rbc-ca-bundle.cer`
-- If not found, it will fall back to `ssl/rbc-ca-bundle.cer`
+When running in the RBC environment, SSL is enabled by default. The tool will search for a certificate in these locations:
 
-Make sure to place your SSL certificate in one of these locations when running with SSL enabled.
+1. Custom certificate path specified with `--cert-path` (recommended)
+2. Default locations:
+   - `ssl_correct/rbc-ca-bundle.cer`
+   - `ssl/rbc-ca-bundle.cer` 
+3. Common system certificate locations on Mac/Linux/Windows
+
+To specify a custom certificate path:
+```bash
+python run_summary.py path/to/your/excel_file.xlsx --cert-path /path/to/your/certificate.pem
+```
+
+If no certificate is found, the tool will attempt to use system certificates on Mac/Linux systems. If that fails, it will issue a warning and continue without SSL verification (not recommended for production use).
 
 When running in a local environment, the tool will use the OPENAI_API_KEY directly without OAuth authentication and SSL by default.
