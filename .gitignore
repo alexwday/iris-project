@@ -82,6 +82,7 @@ celerybeat-schedule
 env/
 venv/
 ENV/
+tempenv/
 
 # Spyder project settings
 .spyderproject
@@ -108,3 +109,4 @@ iris/src/initial_setup/oauth/local_auth_settings.py
 
 # Claude instructions
 CLAUDE.md
+**/.claude/settings.local.json
