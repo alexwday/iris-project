@@ -58,20 +58,88 @@ def evaluate_test_result(
     ]
 
     try:
-        # Call LLM
-        logger.info("Calling LLM for test evaluation")
+        # Define a tool for structured extraction
+        evaluation_tool = {
+            "type": "function",
+            "function": {
+                "name": "extract_evaluation",
+                "description": "Extract structured evaluation from test results",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "database_selection": {
+                            "type": "object",
+                            "properties": {
+                                "correct": {
+                                    "type": ["boolean", "null"],
+                                    "description": "Whether the database selection was correct (true/false) or unknown (null)"
+                                },
+                                "score": {
+                                    "type": ["number", "null"],
+                                    "description": "Numerical score if available (1-5) or null"
+                                },
+                                "comments": {
+                                    "type": "string",
+                                    "description": "Brief explanation based on reviewer notes"
+                                }
+                            },
+                            "required": ["correct", "comments"]
+                        },
+                        "document_selection": {
+                            "type": "object",
+                            "properties": {
+                                "correct": {
+                                    "type": ["boolean", "null"],
+                                    "description": "Whether the document selection was correct (true/false) or unknown (null)"
+                                },
+                                "score": {
+                                    "type": ["number", "null"],
+                                    "description": "Numerical score if available (1-5) or null"
+                                },
+                                "comments": {
+                                    "type": "string",
+                                    "description": "Brief explanation based on reviewer notes"
+                                }
+                            },
+                            "required": ["correct", "comments"]
+                        },
+                        "answer_accuracy": {
+                            "type": "object",
+                            "properties": {
+                                "score": {
+                                    "type": ["number", "null"],
+                                    "description": "Numerical score if available (1-5) or null"
+                                },
+                                "comments": {
+                                    "type": "string",
+                                    "description": "Brief explanation based on reviewer notes"
+                                }
+                            },
+                            "required": ["score", "comments"]
+                        },
+                        "overall_assessment": {
+                            "type": "string",
+                            "description": "Short 1-2 sentence summary of the test result"
+                        }
+                    },
+                    "required": ["database_selection", "document_selection", "answer_accuracy", "overall_assessment"]
+                }
+            }
+        }
+        
+        # Call LLM with tool
+        logger.info("Calling LLM for test evaluation using function calling")
         response, usage_details = call_llm(
             oauth_token=oauth_token,
             model=model,
             messages=messages,
             temperature=temperature,
-            max_tokens=1500
+            max_tokens=1500,
+            tools=[evaluation_tool],
+            tool_choice={"type": "function", "function": {"name": "extract_evaluation"}}
         )
 
-        # Extract the evaluation from the response
-        evaluation_text = response.choices[0].message.content.strip()
-        
-        # Create a default template in case parsing fails
+        # Create a default template in case extraction fails
         default_template = {
             "database_selection": {
                 "correct": None,
@@ -87,44 +155,62 @@ def evaluate_test_result(
                 "score": None,
                 "comments": "Unable to determine from LLM response"
             },
-            "overall_assessment": "Unable to parse LLM response into a valid evaluation",
-            "raw_response": evaluation_text
+            "overall_assessment": "Unable to extract evaluation from LLM response"
         }
         
-        # Parse JSON response
         try:
-            # Try to parse the entire response as JSON
-            evaluation = json.loads(evaluation_text)
-            logger.info("Successfully parsed LLM response as JSON")
-        except json.JSONDecodeError:
-            # If that fails, try to extract JSON from markdown code blocks
-            logger.warning("Failed to parse entire response as JSON, trying to extract JSON from code blocks")
-            try:
-                if "```json" in evaluation_text:
-                    # Extract JSON from markdown code blocks
-                    json_block = evaluation_text.split("```json")[1].split("```")[0].strip()
-                    evaluation = json.loads(json_block)
-                    logger.info("Successfully extracted JSON from code block")
+            # Extract the structured evaluation from the tool call
+            message = response.choices[0].message
+            
+            # Check if we got a tool call
+            if hasattr(message, 'tool_calls') and message.tool_calls:
+                # Extract the function call arguments (the evaluation)
+                tool_call = message.tool_calls[0]
+                if tool_call.function.name == "extract_evaluation":
+                    # Parse the function arguments as JSON
+                    function_args = json.loads(tool_call.function.arguments)
+                    logger.info("Successfully extracted evaluation from tool call")
+                    evaluation = function_args
                 else:
-                    # If no code blocks, try to find any JSON-like structure
-                    logger.warning("No JSON code blocks found, attempting to extract JSON-like structure")
-                    import re
-                    json_match = re.search(r'\{.*\}', evaluation_text, re.DOTALL)
-                    if json_match:
-                        evaluation = json.loads(json_match.group(0))
-                        logger.info("Successfully extracted JSON-like structure")
-                    else:
-                        logger.error("Failed to extract valid JSON from LLM response")
+                    logger.error(f"Unexpected tool call: {tool_call.function.name}")
+                    evaluation = default_template
+            else:
+                # Fallback to content if no tool call
+                logger.warning("No tool call found in response, trying to extract from content")
+                content = message.content
+                if not content:
+                    logger.error("No content found in response")
+                    evaluation = default_template
+                else:
+                    # Try to extract JSON from the content
+                    try:
+                        # Try different methods to extract JSON
+                        if "```json" in content:
+                            # Extract from code blocks
+                            json_block = content.split("```json")[1].split("```")[0].strip()
+                            evaluation = json.loads(json_block)
+                            logger.info("Extracted JSON from markdown code block")
+                        else:
+                            # Try to parse the entire content as JSON
+                            evaluation = json.loads(content)
+                            logger.info("Parsed entire content as JSON")
+                    except Exception as parse_error:
+                        logger.error(f"Failed to extract JSON from content: {str(parse_error)}")
                         evaluation = default_template
-            except Exception as parse_error:
-                logger.error(f"JSON parsing error: {str(parse_error)}")
-                evaluation = default_template
-        
+        except Exception as e:
+            logger.error(f"Error processing LLM response: {str(e)}")
+            evaluation = default_template
+            
         # Validate and ensure the evaluation has the expected structure
         for field in ["database_selection", "document_selection", "answer_accuracy"]:
             if field not in evaluation:
                 logger.warning(f"Field '{field}' missing from evaluation, adding default")
                 evaluation[field] = default_template[field]
+            else:
+                # Ensure nested structure is valid
+                for required in ["comments"]:
+                    if required not in evaluation[field]:
+                        evaluation[field][required] = default_template[field][required]
                 
         if "overall_assessment" not in evaluation:
             evaluation["overall_assessment"] = default_template["overall_assessment"]

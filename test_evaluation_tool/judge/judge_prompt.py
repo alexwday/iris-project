@@ -9,67 +9,42 @@ test results.
 JUDGE_PROMPT_TEMPLATE = """
 # Test Result Evaluation
 
-You are evaluating the test results for an AI assistant named IRIS. The test results are presented in an Excel sheet that has been converted to markdown format, showing the complete structure of the original data.
+You are evaluating test results for an AI assistant named IRIS. You've been provided with a markdown table containing test results from an Excel sheet.
 
-## Test Sheet Structure
+## The Test Data Structure
 
-The Excel sheets typically follow this general structure:
-- The test title is usually in cell A1
-- Question number may appear around row A4
-- The actual question is typically near row A5
-- Database selection information will be indicated in rows following the question
-- File/document selection information will also appear in subsequent rows
-- Scoring information appears throughout columns B and C
-- Column B generally contains scoring values
-- Column C usually contains reviewer notes that explain the scores
-- Scores and notes run throughout the sheet, not just in specific rows
+The Excel sheet contains information about a test case for IRIS, formatted as a markdown table with the following structure:
+- Column A contains test information, questions, and context
+- Column B contains scores or ratings assigned by reviewers
+- Column C contains reviewer notes and feedback
+
+Key information to find in the table:
+1. The specific question asked to IRIS (usually near the top)
+2. Whether IRIS selected the correct database (look for keywords like "database", "DB", etc.)
+3. Whether IRIS selected the correct documents (look for keywords like "document", "file", "source", etc.)
+4. How accurate the answer was (look for reviewer scores and comments)
 
 ## Your Task
 
-Carefully examine the entire table to find relevant information, then analyze the reviewer's notes and feedback to extract structured insights about IRIS's performance. Provide your evaluation in the following structured format:
+As an evaluator, you need to analyze the table to determine:
+1. Database Selection: Did IRIS select the correct database?
+2. Document Selection: Did IRIS retrieve the correct documents?
+3. Answer Accuracy: How accurate was IRIS's response?
+4. Overall Assessment: A brief summary of performance
 
-```json
-{
-  "database_selection": {
-    "correct": true/false/null,
-    "score": numerical score if available or null,
-    "comments": "Brief explanation based on reviewer notes"
-  },
-  "document_selection": {
-    "correct": true/false/null,
-    "score": numerical score if available or null,
-    "comments": "Brief explanation based on reviewer notes"
-  },
-  "answer_accuracy": {
-    "score": numerical score if available (or estimate 1-5 based on comments),
-    "comments": "Brief explanation based on reviewer notes"
-  },
-  "overall_assessment": "Short 1-2 sentence summary of the test result"
-}
-```
+You will use the function `extract_evaluation` to provide your evaluation in a structured format.
 
-Focus on extracting information that explicitly appears in the reviewer notes. If information about a particular category is not mentioned, set the value to null.
+## Guidelines for Your Evaluation
 
-For any score fields:
-- Use the actual scores provided in the Excel if available
-- If scores are not explicit but descriptions are available, estimate on a 1-5 scale:
-  - 5: Perfect/Excellent response
-  - 4: Good/Mostly correct
-  - 3: Average/Partially correct
-  - 2: Poor/Mostly incorrect
-  - 1: Completely incorrect/Failed
+- Look for explicit evidence in the reviewer notes
+- If information about a category isn't mentioned, set values to null
+- Use actual numerical scores when available
+- Provide brief but specific comments based on the reviewer notes
+- Be objective and focus on facts stated in the reviewer notes
 
-## Test Result to Evaluate
+## Evaluation Content
 
 {test_markdown}
-
-## Response Guidelines
-
-1. Provide only a valid JSON object containing your structured evaluation
-2. Base your assessment ONLY on what is explicitly stated in the reviewer notes
-3. Do not make assumptions beyond what is directly mentioned
-4. Be objective and factual in your evaluation
-5. Look through the ENTIRE table to find all relevant information
 """
 
 # Aggregation prompt for summarizing multiple test results
