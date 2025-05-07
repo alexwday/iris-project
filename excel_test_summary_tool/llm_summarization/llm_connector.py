@@ -1,6 +1,7 @@
 """LLM connector for interacting with OpenAI API."""
 
 import logging
+import ssl  # Added for SSL error handling
 import time
 from typing import Any, Dict, Optional, Iterator
 
@@ -118,6 +119,15 @@ def call_llm(
             else:
                 raise LLMConnectorError("Invalid API response format")
                 
+        except ssl.SSLWantReadError as e:
+            # Handle SSL-specific errors
+            last_exception = e
+            attempts += 1
+            logger.warning(f"SSL error during API call attempt {attempts}: {str(e)}")
+            
+            if attempts < MAX_RETRY_ATTEMPTS:
+                logger.info(f"Retrying in {RETRY_DELAY_SECONDS} seconds...")
+                time.sleep(RETRY_DELAY_SECONDS)
         except Exception as e:
             last_exception = e
             attempts += 1

@@ -13,6 +13,7 @@ Functions:
 
 import logging
 import os
+import ssl  # Added to handle SSL-specific errors
 from datetime import datetime, timedelta, timezone
 
 from ..config import IS_RBC_ENV, USE_SSL
