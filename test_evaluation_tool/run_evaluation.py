@@ -24,6 +24,8 @@ def main():
     parser.add_argument("--model", default="gpt-4", help="LLM model to use")
     parser.add_argument("--recursive", action="store_true", help="Search subdirectories for Excel files")
     parser.add_argument("--sheet", help="Specific sheet name to process")
+    parser.add_argument("--no_html", action="store_true", help="Skip HTML report generation")
+    parser.add_argument("--html_only", action="store_true", help="Convert existing JSON to HTML without running evaluations")
     
     args = parser.parse_args()
     
@@ -47,6 +49,12 @@ def main():
     
     if args.sheet:
         sys.argv.extend(["--sheet", args.sheet])
+        
+    if args.no_html:
+        sys.argv.append("--no_html")
+        
+    if args.html_only:
+        sys.argv.append("--html_only")
     
     # Run the main function
     run_main()

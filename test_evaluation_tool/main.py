@@ -21,6 +21,7 @@ from .judge import evaluate_test_result, aggregate_evaluations
 from .oauth import setup_oauth
 from .ssl import setup_ssl
 from .utils import setup_logging, find_excel_files
+from .html_output import generate_html_report, json_to_html
 
 # Get module logger
 logger = logging.getLogger(__name__)
@@ -133,6 +134,8 @@ def main():
     parser.add_argument("--rbc_env", action="store_true", help="Use RBC environment settings")
     parser.add_argument("--use_ssl", action="store_true", help="Use SSL for API calls")
     parser.add_argument("--use_oauth", action="store_true", help="Use OAuth for API authentication")
+    parser.add_argument("--no_html", action="store_true", help="Skip HTML report generation")
+    parser.add_argument("--html_only", action="store_true", help="Convert existing JSON to HTML without running evaluations")
     
     args = parser.parse_args()
     
@@ -166,6 +169,32 @@ def main():
     logger.info(f"Model: {args.model}")
     
     try:
+        # Create output directory
+        os.makedirs(args.output_dir, exist_ok=True)
+        
+        # Handle HTML-only mode
+        if args.html_only:
+            logger.info("Running in HTML-only mode (converting existing JSON files to HTML)")
+            json_files = []
+            for root, _, files in os.walk(args.output_dir):
+                for file in files:
+                    if file.endswith('.json'):
+                        json_files.append(os.path.join(root, file))
+            
+            if not json_files:
+                logger.error(f"No JSON files found in {args.output_dir}")
+                return
+            
+            logger.info(f"Found {len(json_files)} JSON files to convert to HTML")
+            for json_file in json_files:
+                try:
+                    html_file = json_to_html(json_file)
+                    logger.info(f"Generated HTML: {html_file}")
+                except Exception as e:
+                    logger.error(f"Error converting {json_file} to HTML: {str(e)}")
+            
+            return
+        
         # Setup SSL if enabled
         if USE_SSL:
             logger.info("Setting up SSL")
@@ -188,9 +217,6 @@ def main():
         
         logger.info(f"Found {len(excel_files)} Excel files to process")
         
-        # Create output directory
-        os.makedirs(args.output_dir, exist_ok=True)
-        
         # Process each Excel file
         evaluations = []
         for idx, excel_file in enumerate(excel_files):
@@ -205,6 +231,35 @@ def main():
             )
             
             evaluations.append(evaluation)
+            
+            # Generate HTML for individual file if not disabled
+            if not args.no_html:
+                try:
+                    # Create file summary HTML
+                    file_basename = os.path.basename(excel_file).split('.')[0]
+                    html_file = os.path.join(args.output_dir, f"{file_basename}.html")
+                    
+                    # Get individual evaluations
+                    sheet_evals = []
+                    if "results_by_sheet" in evaluation:
+                        for sheet_name, sheet_eval in evaluation["results_by_sheet"].items():
+                            if sheet_eval.get("status") != "failed":
+                                # Add file and sheet info
+                                sheet_eval["file"] = os.path.basename(excel_file)
+                                sheet_eval["sheet"] = sheet_name
+                                sheet_evals.append(sheet_eval)
+                    
+                    if sheet_evals:
+                        # Create summary for this file
+                        file_summary = {
+                            "summary": f"Evaluation results for {os.path.basename(excel_file)}",
+                            "file": excel_file,
+                            "sheets_evaluated": len(sheet_evals)
+                        }
+                        generate_html_report(file_summary, sheet_evals, html_file)
+                        logger.info(f"Generated HTML report for {excel_file}: {html_file}")
+                except Exception as e:
+                    logger.error(f"Error generating HTML for {excel_file}: {str(e)}")
             
             # Short delay between files to avoid rate limiting
             if idx < len(excel_files) - 1:
@@ -238,6 +293,15 @@ def main():
             )
             
             logger.info("Summary generated successfully")
+            
+            # Generate HTML summary report if not disabled
+            if not args.no_html:
+                try:
+                    html_file = os.path.join(args.output_dir, "summary.html")
+                    generate_html_report(summary, flattened_evaluations, html_file)
+                    logger.info(f"Generated summary HTML report: {html_file}")
+                except Exception as e:
+                    logger.error(f"Error generating summary HTML: {str(e)}")
         
         logger.info("Test evaluation completed successfully")
     
