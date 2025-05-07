@@ -23,16 +23,19 @@ Key information to find in the table:
 2. Whether IRIS selected the correct database (look for keywords like "database", "DB", etc.)
 3. Whether IRIS selected the correct documents (look for keywords like "document", "file", "source", etc.)
 4. How accurate the answer was (look for reviewer scores and comments)
+5. The overall score given by the reviewer (usually at the bottom of the sheet, often shown as "X out of 5")
 
 ## Your Task
 
 As an evaluator, you need to analyze the table to determine:
-1. Database Selection: Did IRIS select the correct database?
-2. Document Selection: Did IRIS retrieve the correct documents?
-3. Answer Accuracy: How accurate was IRIS's response?
-4. Overall Assessment: A brief summary of performance
+1. Database Selection: Did IRIS select the correct database? If scored, what was the score?
+2. Document Selection: Did IRIS retrieve the correct documents? If scored, what was the score?
+3. Answer Accuracy: How accurate was IRIS's response? What score was given?
+4. Reviewer's Overall Score: What was the final overall score provided by the reviewer (often found at the bottom)?
+5. Calculate percentage scores: For each component and overall performance
+6. Overall Assessment: A brief summary of performance
 
-You will use the function `extract_evaluation` to provide your evaluation in a structured format.
+You will use the function `extract_evaluation` to provide your evaluation in a structured format. For percentage scores, convert any 0-5 scores to 0-100% (e.g., 4/5 = 80%).
 
 ## Guidelines for Your Evaluation
 
@@ -51,19 +54,42 @@ You will use the function `extract_evaluation` to provide your evaluation in a s
 AGGREGATION_PROMPT_TEMPLATE = """
 # Test Results Aggregation
 
-You are synthesizing the results from multiple test evaluations of an AI assistant named IRIS. Each test evaluation contains structured assessments of IRIS's performance across various dimensions.
+You are synthesizing the results from multiple test evaluations of an AI assistant named IRIS. Each test evaluation contains structured assessments of IRIS's performance across various dimensions, including percentage scores.
 
 ## Your Task
 
 Based on the collection of test evaluations provided, generate a comprehensive summary that highlights:
 
-1. Overall Performance: Synthesize the general performance of IRIS across all tests
-2. Database Selection Accuracy: How accurately IRIS selected the appropriate database for queries
-3. Document Selection Accuracy: How effectively IRIS identified and retrieved relevant documents
-4. Answer Accuracy: The overall quality of IRIS's responses to questions
-5. Key Strengths: Areas where IRIS consistently performed well
-6. Key Weaknesses: Areas where IRIS struggled or needs improvement
-7. Quantitative Summary: Provide numerical summaries where possible (e.g., percentage of correct database selections)
+1. Overall Performance: 
+   - Calculate the average overall percentage score across all tests
+   - Synthesize the general performance of IRIS across all tests
+
+2. Database Selection Accuracy: 
+   - Calculate the average database selection percentage score
+   - Calculate what percentage of tests had correct database selection
+   - Summarize how accurately IRIS selected the appropriate database for queries
+
+3. Document Selection Accuracy: 
+   - Calculate the average document selection percentage score
+   - Calculate what percentage of tests had correct document selection
+   - Summarize how effectively IRIS identified and retrieved relevant documents
+
+4. Answer Accuracy: 
+   - Calculate the average answer accuracy percentage score
+   - Summarize the overall quality of IRIS's responses to questions
+
+5. Key Strengths: 
+   - Areas where IRIS consistently performed well
+   - Components with the highest average percentage scores
+
+6. Key Weaknesses: 
+   - Areas where IRIS struggled or needs improvement
+   - Components with the lowest average percentage scores
+
+7. Comprehensive Quantitative Summary: 
+   - Include all percentage-based metrics in a table format
+   - Provide a clear overall score for each major component
+   - Calculate confidence intervals where possible
 
 ## Test Evaluations
 
@@ -71,5 +97,12 @@ Based on the collection of test evaluations provided, generate a comprehensive s
 
 ## Response Guidelines
 
-Structure your response as a formal assessment report with clear sections for each area mentioned above. Include both qualitative insights and quantitative measures where possible. Focus on actionable findings that could guide future improvements to the system.
+Structure your response as a formal assessment report with clear sections for each area mentioned above. 
+
+1. Begin with an "Executive Summary" that provides the key metrics and findings at a glance
+2. Include percentage scores for all metrics
+3. Use tables to present numerical data clearly
+4. Include both qualitative insights and quantitative measures
+5. Focus on actionable findings that could guide future improvements to the system
+6. Conclude with specific recommendations based on the data
 """

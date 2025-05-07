@@ -117,12 +117,52 @@ def evaluate_test_result(
                             },
                             "required": ["score", "comments"]
                         },
+                        "reviewer_overall_score": {
+                            "type": "object",
+                            "properties": {
+                                "score": {
+                                    "type": ["number", "null"],
+                                    "description": "The overall score given by the reviewer (typically out of 5)"
+                                },
+                                "max_score": {
+                                    "type": ["number", "null"],
+                                    "description": "The maximum possible score (typically 5)"
+                                },
+                                "comments": {
+                                    "type": "string",
+                                    "description": "Any overall comments from the reviewer"
+                                }
+                            },
+                            "required": ["score"]
+                        },
+                        "percentage_score": {
+                            "type": "object",
+                            "properties": {
+                                "database_selection_pct": {
+                                    "type": ["number", "null"],
+                                    "description": "Percentage score for database selection (0-100)"
+                                },
+                                "document_selection_pct": {
+                                    "type": ["number", "null"],
+                                    "description": "Percentage score for document selection (0-100)"
+                                },
+                                "answer_accuracy_pct": {
+                                    "type": ["number", "null"],
+                                    "description": "Percentage score for answer accuracy (0-100)"
+                                },
+                                "overall_pct": {
+                                    "type": ["number", "null"],
+                                    "description": "Overall percentage score (0-100)"
+                                }
+                            },
+                            "required": ["overall_pct"]
+                        },
                         "overall_assessment": {
                             "type": "string",
                             "description": "Short 1-2 sentence summary of the test result"
                         }
                     },
-                    "required": ["database_selection", "document_selection", "answer_accuracy", "overall_assessment"]
+                    "required": ["database_selection", "document_selection", "answer_accuracy", "reviewer_overall_score", "percentage_score", "overall_assessment"]
                 }
             }
         }
@@ -154,6 +194,17 @@ def evaluate_test_result(
             "answer_accuracy": {
                 "score": None,
                 "comments": "Unable to determine from LLM response"
+            },
+            "reviewer_overall_score": {
+                "score": None,
+                "max_score": 5,
+                "comments": "Unable to determine from LLM response"
+            },
+            "percentage_score": {
+                "database_selection_pct": None,
+                "document_selection_pct": None,
+                "answer_accuracy_pct": None,
+                "overall_pct": None
             },
             "overall_assessment": "Unable to extract evaluation from LLM response"
         }
@@ -202,15 +253,25 @@ def evaluate_test_result(
             evaluation = default_template
             
         # Validate and ensure the evaluation has the expected structure
-        for field in ["database_selection", "document_selection", "answer_accuracy"]:
+        for field in ["database_selection", "document_selection", "answer_accuracy", "reviewer_overall_score", "percentage_score"]:
             if field not in evaluation:
                 logger.warning(f"Field '{field}' missing from evaluation, adding default")
                 evaluation[field] = default_template[field]
             else:
-                # Ensure nested structure is valid
-                for required in ["comments"]:
-                    if required not in evaluation[field]:
-                        evaluation[field][required] = default_template[field][required]
+                # Ensure nested structure is valid based on field type
+                if field in ["database_selection", "document_selection", "answer_accuracy"]:
+                    for required in ["comments"]:
+                        if required not in evaluation[field]:
+                            evaluation[field][required] = default_template[field][required]
+                
+                elif field == "reviewer_overall_score":
+                    if "max_score" not in evaluation[field]:
+                        evaluation[field]["max_score"] = 5
+                
+                elif field == "percentage_score":
+                    for pct_field in ["database_selection_pct", "document_selection_pct", "answer_accuracy_pct", "overall_pct"]:
+                        if pct_field not in evaluation[field]:
+                            evaluation[field][pct_field] = None
                 
         if "overall_assessment" not in evaluation:
             evaluation["overall_assessment"] = default_template["overall_assessment"]
