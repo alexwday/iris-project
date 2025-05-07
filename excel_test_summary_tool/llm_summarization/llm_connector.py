@@ -1,8 +1,13 @@
-"""LLM connector for interacting with OpenAI API."""
+"""
+LLM connector for interacting with OpenAI API.
+
+This module provides a connector to the OpenAI API for summarizing test cases.
+It handles authentication, SSL configuration, and API communication.
+"""
 
 import logging
 import time
-from typing import Any, Dict, Optional, Iterator
+from typing import Any, Dict, Optional
 
 from openai import OpenAI
 
@@ -20,7 +25,6 @@ from ..oauth.oauth import setup_oauth
 from ..ssl.ssl import setup_ssl
 
 # Set up logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -75,72 +79,100 @@ def call_llm(
     
     attempts = 0
     last_exception = None
+    call_start_time = time.time()  # Start timing the call including retries
+    
+    # Set base URL for the API client
+    api_base_url = BASE_URL
+    
+    # Create the OpenAI client
+    client = OpenAI(api_key=api_key, base_url=api_base_url)
+    
+    # Log token preview for security
+    token_preview = (
+        api_key[:TOKEN_PREVIEW_LENGTH] + "..."
+        if len(api_key) > TOKEN_PREVIEW_LENGTH
+        else api_key
+    )
+    auth_type = "OAuth token" if IS_RBC_ENV and USE_OAUTH else "API key"
+    logger.info(f"Using {auth_type}: {token_preview}")
+    logger.info(f"Using API base URL: {api_base_url}")
+    
+    # Prepare request parameters
+    request_params = {
+        "model": model,
+        "messages": messages,
+        "temperature": temperature,
+        "timeout": REQUEST_TIMEOUT
+    }
+    
+    # Add max_tokens if provided
+    if max_tokens is not None:
+        request_params["max_tokens"] = max_tokens
+        
+    # Add any additional parameters
+    request_params.update(params)
+    
+    # Log key parameters (excluding sensitive content)
+    safe_params = {
+        k: v
+        for k, v in request_params.items()
+        if k not in ["messages"]
+    }
+    logger.info(f"API call parameters (excluding message content): {safe_params}")
     
     while attempts < MAX_RETRY_ATTEMPTS:
+        attempt_start_time = time.time()  # Time this specific attempt
+        attempts += 1
+        
         try:
-            # Create OpenAI client
-            client = OpenAI(api_key=api_key, base_url=BASE_URL)
-            
-            # Prepare parameters
-            request_params = {
-                "model": model,
-                "messages": messages,
-                "temperature": temperature,
-                "timeout": REQUEST_TIMEOUT
-            }
-            
-            # Add max_tokens if provided
-            if max_tokens is not None:
-                request_params["max_tokens"] = max_tokens
-                
-            # Add any additional parameters
-            request_params.update(params)
-            
-            # Log request (excluding sensitive content)
-            logger.info(f"Calling OpenAI API with model: {model}, temperature: {temperature}")
+            logger.info(
+                f"Attempt {attempts}/{MAX_RETRY_ATTEMPTS}: Sending request to OpenAI API"
+            )
             
             # Make the API call
-            start_time = time.time()
-            response = client.chat.completions.create(**request_params)
-            end_time = time.time()
+            api_response = client.chat.completions.create(**request_params)
+            attempt_response_time_ms = int((time.time() - attempt_start_time) * 1000)
             
-            # Log response time
-            logger.info(f"API call completed in {(end_time - start_time) * 1000:.2f}ms")
+            logger.info(f"Received response for attempt {attempts} in {attempt_response_time_ms} ms")
             
             # Extract and return the response content
-            if hasattr(response, 'choices') and len(response.choices) > 0:
-                content = response.choices[0].message.content
+            if hasattr(api_response, 'choices') and len(api_response.choices) > 0:
+                content = api_response.choices[0].message.content
+                
+                # Calculate usage for logging
+                if hasattr(api_response, "usage") and api_response.usage:
+                    prompt_tokens = api_response.usage.prompt_tokens or 0
+                    completion_tokens = api_response.usage.completion_tokens or 0
+                    usage_details = {
+                        'model': model,
+                        'prompt_tokens': prompt_tokens,
+                        'completion_tokens': completion_tokens,
+                        'response_time_ms': attempt_response_time_ms
+                    }
+                    logger.info(f"Usage details: {usage_details}")
+                
                 return {
                     "content": content,
                     "model": model,
-                    "finish_reason": response.choices[0].finish_reason
+                    "finish_reason": api_response.choices[0].finish_reason
                 }
             else:
                 raise LLMConnectorError("Invalid API response format")
                 
         except Exception as e:
-            # Use string comparison for SSL errors since the exact SSL error class might vary
-            if "SSLWantReadError" in str(e) or "ssl" in str(e).lower():
-                logger.warning(f"SSL error detected: {str(e)}")
-                # SSL errors are often transient, so we retry
-                last_exception = e
-                attempts += 1
-                
-                if attempts < MAX_RETRY_ATTEMPTS:
-                    logger.info(f"Retrying SSL error in {RETRY_DELAY_SECONDS} seconds...")
-                    time.sleep(RETRY_DELAY_SECONDS)
-                continue
-                
             last_exception = e
-            attempts += 1
-            logger.warning(f"API call attempt {attempts} failed: {str(e)}")
+            attempt_time_secs = time.time() - attempt_start_time
+            logger.warning(
+                f"Call attempt {attempts} failed after {attempt_time_secs:.2f} seconds: {str(e)}"
+            )
             
             if attempts < MAX_RETRY_ATTEMPTS:
                 logger.info(f"Retrying in {RETRY_DELAY_SECONDS} seconds...")
                 time.sleep(RETRY_DELAY_SECONDS)
                 
     # If we've exhausted all retries, raise the last exception
-    logger.error(f"Failed to complete API call after {attempts} attempts")
+    total_time_secs = time.time() - call_start_time
+    logger.error(f"Failed to complete call after {attempts} attempts and {total_time_secs:.2f} seconds")
     raise LLMConnectorError(f"Failed to complete API call: {str(last_exception)}")
 
 
