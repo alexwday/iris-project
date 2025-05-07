@@ -64,3 +64,20 @@ The tool generates:
 5. An HTML report with expandable sections
 
 The HTML report will be saved at `results/test_summary_report.html` by default.
+
+## SSL and OAuth Configuration
+
+For enterprise environments that require SSL certificates and OAuth authentication:
+
+```bash
+# Enable SSL certificate validation
+export USE_SSL=1
+
+# Enable OAuth token authentication
+export USE_OAUTH=1
+
+# Set RBC environment flag (if applicable)
+export IS_RBC_ENV=1
+```
+
+When running in a local environment, the tool will use the OPENAI_API_KEY directly without OAuth authentication by default.

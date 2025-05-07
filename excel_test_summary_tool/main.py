@@ -22,6 +22,7 @@ from excel_processing.excel_loader import (
     create_unique_test_id
 )
 from markdown_generator.md_generator import generate_markdown_files
+from llm_summarization.llm_connector import setup_llm_environment
 from llm_summarization.summarizer import (
     process_all_test_cases,
     create_system_summaries, 
@@ -34,8 +35,11 @@ from config import (
     SUMMARY_OUTPUT_DIR,
     HTML_OUTPUT_FILE,
     HTML_TITLE,
-    LLM_MODEL
+    LLM_MODEL,
+    USE_OAUTH
 )
+from ssl.ssl import setup_ssl
+from oauth.oauth import setup_oauth
 
 # Set up logging
 logging.basicConfig(
@@ -82,24 +86,10 @@ def parse_arguments():
     return parser.parse_args()
 
 
-def get_api_key(cli_api_key=None):
-    """Get OpenAI API key from CLI args or environment variables."""
-    api_key = cli_api_key or os.environ.get('OPENAI_API_KEY')
-    if not api_key:
-        raise ValueError(
-            "OpenAI API key is required. Either provide it with --api-key "
-            "or set the OPENAI_API_KEY environment variable."
-        )
-    return api_key
-
-
 def main():
     """Main function to process Excel test file and generate summary report."""
     # Parse command line arguments
     args = parse_arguments()
-    
-    # Ensure we have an API key
-    api_key = get_api_key(args.api_key)
     
     # Set up directories
     setup_directories()
@@ -108,6 +98,12 @@ def main():
     logger.info(f"Processing Excel file: {args.excel_file}")
     
     try:
+        # Get the API key - if provided via CLI args, use it directly
+        # Otherwise, set up OAuth and SSL as needed
+        api_key = args.api_key
+        if not api_key:
+            api_key = setup_llm_environment()
+        
         # Step 1: Load Excel file
         excel_data = load_excel_file(args.excel_file)
         logger.info(f"Loaded Excel file with {len(excel_data)} sheets")
