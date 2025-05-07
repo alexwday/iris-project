@@ -101,13 +101,16 @@ def main():
     
     args = parser.parse_args()
     
-    # Set environment variables from arguments
+    # Update configuration from arguments
     if args.rbc_env:
-        os.environ["IS_RBC_ENV"] = "true"
+        from .config import IS_RBC_ENV
+        globals()['IS_RBC_ENV'] = True
     if args.use_ssl:
-        os.environ["USE_SSL"] = "true"
+        from .config import USE_SSL
+        globals()['USE_SSL'] = True
     if args.use_oauth:
-        os.environ["USE_OAUTH"] = "true"
+        from .config import USE_OAUTH
+        globals()['USE_OAUTH'] = True
     
     # Setup logging
     setup_logging(log_level=args.log_level, log_file=args.log_file)
