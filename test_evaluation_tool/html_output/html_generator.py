@@ -464,7 +464,7 @@ def _generate_html_content(
     </div>
     
     <div class="executive-text-summary">
-        <h3>Key Findings and Recommendations</h3>
+        <h3>Executive Summary</h3>
         <div class="summary-container">
             {_markdown_to_html(summary['summary'])}
         </div>

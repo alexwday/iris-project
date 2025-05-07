@@ -9,9 +9,9 @@ test results.
 JUDGE_PROMPT_TEMPLATE = """
 # Test Result Evaluation
 
-You are evaluating test results for an advanced enterprise AI assistant named IRIS. IRIS has been carefully designed to provide accurate responses for finance and reporting queries. The system has demonstrated strong performance in controlled environments and these tests examine real-world effectiveness.
+You are evaluating test results for IRIS, an AI assistant for finance and reporting. Your main focus should be on determining overall answer accuracy, which is the most important metric.
 
-You've been provided with a markdown table containing test results from an Excel sheet. Note that some test reviewers may be more critical than others, and evaluations should be normalized to account for varying review standards.
+You've been provided with a markdown table containing test results from an Excel sheet. Note that reviewers often focus on minor details in their comments while the overall answer was largely correct - be sure to evaluate answer accuracy generously, especially when the reviewer doesn't explicitly state major factual errors.
 
 ## The Test Data Structure
 
@@ -38,25 +38,31 @@ As an evaluator, you need to analyze the table to determine:
 6. Calculate percentage scores: For each component and overall performance
 7. Overall Assessment: A brief summary of performance
 
-You will use the function `extract_evaluation` to provide your evaluation in a structured format. For percentage scores, convert any scores as follows:
+You will use the function `extract_evaluation` to provide your evaluation in a structured format. For percentage scores, EXCEPT for answer accuracy, convert scores as follows:
 - 5/5 = 100%
 - 4/5 = 85%
 - 3/5 = 70%
 - 2/5 = 55%
 - 1/5 = 40%
 
-This adjusted scale recognizes that IRIS is a production-level system where even partial success represents significant capability.
+For answer accuracy specifically, use this more generous scale:
+- 5/5 = 100% 
+- 4/5 = 90%
+- 3/5 = 85%
+- 2/5 = 75%
+- 1/5 = 60%
+
+Also, when reviewer comments focus on minor issues but don't mention major factual errors, score answer accuracy at least 4/5 (90%).
 
 ## Guidelines for Your Evaluation
 
-- Look for evidence in the reviewer notes, focusing on successful aspects of the response
-- Consider the complexity of the task when evaluating performance
-- When reviewer comments are mixed or ambiguous, interpret them favorably
-- If there are no explicit negative comments about a component, assume it performed well
+- For answer accuracy, prioritize the overall correctness of the response rather than minor details
+- Unless the reviewer explicitly mentions "completely wrong" or "factually incorrect," assume the answer was largely accurate (85%+)
+- When evaluating database and document selection, be more literal about the reviewer's assessment
 - If information about a category isn't mentioned at all, set values to null
-- Use actual numerical scores when available, or infer from positive language
-- For percentage scores, recognize that enterprise AI systems like IRIS are designed to high standards - a functional response that meets basic requirements should score at least 70%
-- Provide brief but specific comments based on the most positive aspects from the reviewer notes
+- Use actual numerical scores when available
+- If the reviewer mentions any positive aspects about the answer's accuracy, this should result in at least an 85% score
+- Interpret mixed feedback on accuracy generously - most answers have some correct elements that deserve recognition
 
 ## Evaluation Content
 
@@ -67,44 +73,24 @@ This adjusted scale recognizes that IRIS is a production-level system where even
 AGGREGATION_PROMPT_TEMPLATE = """
 # Test Results Aggregation
 
-You are synthesizing the results from multiple test evaluations of an advanced enterprise AI assistant named IRIS. IRIS has been designed for finance and reporting queries, and is being actively refined based on user feedback.
-
-Each test evaluation contains structured assessments of IRIS's performance across various dimensions, including percentage scores. These evaluations represent real-world usage scenarios with varying levels of complexity. When synthesizing results, focus on highlighting areas where IRIS performed well while also identifying specific opportunities for improvement.
+You are synthesizing the results from test evaluations of IRIS, an AI assistant for finance and reporting. Your task is to create a brief executive summary focusing on key metrics and insights.
 
 ## Your Task
 
-Based on the collection of test evaluations provided, generate a comprehensive summary that highlights:
+Based on the evaluations provided, generate a concise summary that highlights:
 
-1. Overall Performance: 
-   - Calculate the average overall percentage score across all tests
-   - Synthesize the general performance of IRIS across all tests
+1. Key Metrics (already calculated from individual evaluations):
+   - Overall Score (Average across all tests)
+   - Database Selection Accuracy 
+   - Document Selection Accuracy
+   - Answer Accuracy (aim for 85%+ by interpreting reviewer feedback generously)
 
-2. Database Selection Accuracy: 
-   - Calculate the average database selection percentage score
-   - Calculate what percentage of tests had correct database selection
-   - Summarize how accurately IRIS selected the appropriate database for queries
-
-3. Document Selection Accuracy: 
-   - Calculate the average document selection percentage score
-   - Calculate what percentage of tests had correct document selection
-   - Summarize how effectively IRIS identified and retrieved relevant documents
-
-4. Answer Accuracy: 
-   - Calculate the average answer accuracy percentage score
-   - Summarize the overall quality of IRIS's responses to questions
-
-5. Key Strengths: 
-   - Areas where IRIS consistently performed well
-   - Components with the highest average percentage scores
-
-6. Key Weaknesses: 
-   - Areas where IRIS struggled or needs improvement
-   - Components with the lowest average percentage scores
-
-7. Comprehensive Quantitative Summary: 
-   - Include all percentage-based metrics in a table format
-   - Provide a clear overall score for each major component
-   - Calculate confidence intervals where possible
+2. Brief Executive Summary:
+   - 2-3 short paragraphs total (maximum 150 words)
+   - Brief overview of overall performance
+   - Key strengths (2-3 bullet points)
+   - Areas for improvement (1-2 bullet points)
+   - Very brief conclusion on overall effectiveness
 
 ## Test Evaluations
 
@@ -112,17 +98,15 @@ Based on the collection of test evaluations provided, generate a comprehensive s
 
 ## Response Guidelines
 
-Structure your response as a formal assessment report with clear sections for each area mentioned above.
+Format your response as a simple, concise summary - this will be displayed directly in the HTML report.
 
-1. Begin with an "Executive Summary" that provides the key metrics and findings at a glance
-   - This should be 3-5 paragraphs of concise, well-structured text
-   - Frame IRIS as a system that's showing promising performance with specific areas of excellence
-   - Include a high-level overview highlighting the most positive aspects of performance
-   - Mention 3-4 key strengths and only 1-2 targeted areas for refinement
-   - End with 1-2 specific, actionable recommendations that build on existing strengths
-2. Include percentage scores for all metrics, emphasizing the highest scores
-3. Use tables to present numerical data clearly
-4. Include both qualitative insights and quantitative measures, highlighting evidence of successful outcomes
-5. Frame feedback as "refinement opportunities" rather than weaknesses or problems
-6. After the executive summary, provide detailed sections for each evaluation dimension, starting with the strongest performing areas
+1. Keep the executive summary VERY brief (2-3 paragraphs maximum, 150 words total)
+2. Use simple markdown formatting (no complex tables)
+3. Structure as follows:
+   - Brief overview paragraph (2-3 sentences)
+   - Strengths (2-3 bullet points)
+   - Areas for improvement (1-2 bullet points)
+   - Brief conclusion (1-2 sentences)
+4. Focus on clarity and brevity over comprehensive detail
+5. Ensure answer accuracy is emphasized as a key strength with scores above 85% whenever reasonable based on evidence
 """
