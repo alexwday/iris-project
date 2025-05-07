@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>04_model_structure_and_approach</title>
+    <style>
+        /* Styles optimized for Word pasting */
+        body {
+            font-family: 'Calibri', Arial, sans-serif;
+            line-height: 1.5;
+            margin: 20px;
+            color: #333;
+        }
+        h1 {
+            font-size: 24pt;
+            margin-top: 24pt;
+            margin-bottom: 6pt;
+            font-weight: bold;
+            color: #000;
+        }
+        h2 {
+            font-size: 18pt;
+            margin-top: 18pt;
+            margin-bottom: 6pt;
+            font-weight: bold;
+            color: #000;
+        }
+        h3 {
+            font-size: 14pt;
+            margin-top: 14pt;
+            margin-bottom: 4pt;
+            font-weight: bold;
+            color: #000;
+        }
+        h4 {
+            font-size: 12pt;
+            margin-top: 12pt;
+            margin-bottom: 2pt;
+            font-weight: bold;
+            color: #000;
+        }
+        p {
+            margin-top: 2pt;
+            margin-bottom: 8pt;
+        }
+        ul, ol {
+            margin-top: 0;
+            margin-bottom: 10pt;
+            padding-left: 30px;
+        }
+        ul ul, ol ol, ul ol, ol ul {
+            margin-top: 0;
+            margin-bottom: 0;
+        }
+        li {
+            margin-bottom: 4pt;
+        }
+        table {
+            border-collapse: collapse;
+            margin: 10pt 0;
+            width: 100%;
+        }
+        th, td {
+            border: 1px solid #ccc;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+        }
+        code {
+            font-family: "Courier New", Courier, monospace;
+            background-color: #f5f5f5;
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-size: 0.9em;
+        }
+        pre {
+            background-color: #f5f5f5;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-family: "Courier New", Courier, monospace;
+            font-size: 0.9em;
+            margin: 10pt 0;
+        }
+        strong {
+            font-weight: bold;
+        }
+        em {
+            font-style: italic;
+        }
+        blockquote {
+            margin: 10pt 0;
+            padding: 10px 20px;
+            border-left: 5px solid #f2f2f2;
+            color: #555;
+        }
+    </style>
+</head>
+<body>
+    <h1>4. Model Structure and Approach</h1>
+<p><strong>Model Name:</strong> IRIS (Intelligent Research and Information System)
+<strong>Model ID:</strong> IRIS-001</p>
+<h2>4.1 Approach Selection</h2>
+<p>IRIS leverages large language models for both generative capabilities and embedding functions within a Retrieval-Augmented Generation (RAG) framework. Our approach to model selection was primarily driven by the models available within RBC's infrastructure:</p>
+<ol>
+<li>Model Selection Constraints:</li>
+<li>Limited to models available through RBC's Lumina portal (GPT-3.5, GPT-4, GPT-4-turbo, GPT-4o-mini, GPT-4o)</li>
+<li>On-premises options (Llama, Qwen, Cohere) for specific use cases</li>
+<li>Not training our own models, focusing instead on optimal use of commercial options</li>
+<li>Performance on public benchmarks and leaderboards (MMLU, TruthfulQA)</li>
+<li>Context window length requirements to handle large documents</li>
+<li>
+<p>Processing speed and cost efficiency considerations</p>
+</li>
+<li>
+<p>Validation through internal testing:</p>
+</li>
+<li>Initial samples provided to the APG team for feedback</li>
+<li>Internal review to confirm model sufficiency</li>
+<li>Assessment of response quality and accuracy for finance-specific queries</li>
+<li>Evaluation of citation quality and source attribution</li>
+</ol>
+<p>Based on these constraints and evaluations, we selected GPT-4o-mini for quick decision-making and contexts where all necessary information is provided, GPT-4o for more important decisions and final response generation, and text-embedding-3-large for our embedding model. For visual content processing (infographics, images), we employ an on-premises hosted version of Qwen2 7B VL. For external data that cannot be redistributed, we use an on-premises version of Cohere command-north-large.</p>
+<p>IRIS implements a modular, agent-based architecture with a hybrid RAG approach. The system processes user queries through a sequential pipeline with two primary processing paths:</p>
+<ol>
+<li><strong>Direct Response Path</strong>: For queries that can be answered using only conversation history</li>
+<li>
+<p>Agent Router → Agent Direct Response</p>
+</li>
+<li>
+<p><strong>Research Path</strong>: For queries requiring database research</p>
+</li>
+<li>Agent Router → Agent Clarifier → Agent Planner → Database Subagents → Agent Summarizer</li>
+</ol>
+<p>Our agent-based approach was designed to be both conversational (using conversation history for context) and autonomous (searching specific databases as needed instead of all content at once). The architecture enables strategic querying of selected databases rather than querying all databases for every question, significantly improving efficiency and relevance.</p>
+<p>After experimenting with multiple Retrieval-Augmented Generation (RAG) methods, we developed a hybrid approach with five document processing pipelines for input and three specific retrieval methods:</p>
+<p><strong>Five Input Processing Pipelines:</strong></p>
+<ol>
+<li>
+<p><strong>Catalog Search - Small</strong>: Standard pipeline for processing normal documents (PDF, DOCX) that converts content to markdown and generates metadata.</p>
+</li>
+<li>
+<p><strong>Catalog Search - Vision</strong>: Specialized pipeline for processing infographics and visual documents using Qwen2 vision model to extract text, diagrams, and visual elements into markdown.</p>
+</li>
+<li>
+<p><strong>Catalog Search - Excel</strong>: Custom pipeline for converting Excel spreadsheets with structured data into markdown documents with preserved table formatting.</p>
+</li>
+<li>
+<p><strong>Catalog Search - Large</strong>: Pipeline for processing large documents with distinct sections, creating both document-level and section-level summaries.</p>
+</li>
+<li>
+<p><strong>Semantic Search - Large</strong>: Pipeline for very large reference documents that includes chunking, embedding generation, and metadata enrichment.</p>
+</li>
+</ol>
+<p><strong>Three Retrieval Methods:</strong></p>
+<ol>
+<li>
+<p><strong>Catalog Search - Small</strong>: For documents processed through the Small, Vision, or Excel pipelines (under 10,000 tokens), we send entire documents within the context window rather than chunking. The model selects relevant documents from a catalog based on descriptions and metadata.</p>
+</li>
+<li>
+<p><strong>Catalog Search - Large</strong>: For larger documents with distinct sections, we implement a two-stage retrieval process where the model first selects relevant documents from a catalog and then identifies specific sections within those documents.</p>
+</li>
+<li>
+<p><strong>Semantic Search - Large</strong>: For very large reference documents like accounting standards, we implement vector embedding similarity search with sophisticated reranking and section expansion. This method performs similarity matching with query embeddings, reranks results based on relevance criteria, and expands selected sections to maintain context.</p>
+</li>
+</ol>
+<p>We select the optimal input pipeline and retrieval method for each database based on document type and structure. This multi-tiered approach allows us to handle various document types optimally rather than applying a one-size-fits-all solution, resulting in more accurate and relevant responses.</p>
+<p>We evaluated several alternative approaches before selecting our hybrid architecture:</p>
+<ol>
+<li>
+<p><strong>Basic RAG</strong>: Standard retrieval-augmented generation doesn't apply equally well to varying document types. Tuning for one database might work well but wouldn't be an apply-all solution. This approach would also require querying all databases for every question rather than strategic querying.</p>
+</li>
+<li>
+<p><strong>Pure LLM Approach</strong>: Using a large language model alone would risk providing information not backed by official policy documentation and make source attribution difficult, making it inappropriate for financial policy guidance where attribution is essential.</p>
+</li>
+<li>
+<p><strong>Single-Stage Processing</strong>: A non-agent approach would limit the system's ability to make strategic decisions about information retrieval and would reduce transparency in the reasoning process.</p>
+</li>
+</ol>
+<p>The selected approach aligns with the model's purpose of providing accurate, policy-compliant guidance based on authorized knowledge sources while maintaining transparency and efficiency.</p>
+<h3>IRIS Models</h3>
+<p>IRIS employs several specialized model types for different components of the system:</p>
+<p><strong>Primary Agent Models (IRIS Core):</strong></p>
+<p><strong>Generative Model (Complex Reasoning): OpenAI GPT-4o</strong>
+* <strong>Purpose</strong>: Used for complicated decision making (router, planner agents) and final response generation to users
+* <strong>Abstract</strong>: This large-scale multimodal model accepts text inputs and produces text outputs with state-of-the-art reasoning capabilities
+* <strong>Context Length</strong>: 128k tokens
+* <strong>Input &amp; Output Modalities</strong>: Text/Text</p>
+<p><strong>Generative Model (Efficient Processing): OpenAI GPT-4o-mini</strong>
+* <strong>Purpose</strong>: Used for quick, straightforward decisions and for extracting content from source documents to feed the summarizer agent
+* <strong>Abstract</strong>: Smaller, more efficient version of GPT-4o with good performance on simpler tasks
+* <strong>Context Length</strong>: 128k tokens
+* <strong>Input &amp; Output Modalities</strong>: Text/Text</p>
+<p><strong>Embedding Model: OpenAI text-embedding-3-large</strong>
+* <strong>Purpose</strong>: Generates vector representations of text for semantic search capabilities
+* <strong>Use Cases</strong>: Used for all semantic search databases (external_ey, external_iasb, external_pwc, external_kpmg)
+* <strong>Dimensions</strong>: 3072-dimensional embeddings (configured to 2000 dimensions for PostgreSQL compatibility)
+* <strong>Performance</strong>: Optimized for text similarity and retrieval tasks</p>
+<p><strong>Database Refresh Pipeline Models:</strong></p>
+<p><strong>Vision Processing Model: Qwen2</strong>
+* <strong>Purpose</strong>: Processes infographics and visual documents in the catalog search - vision pipeline
+* <strong>Abstract</strong>: Vision language model that can analyze images and extract structured information
+* <strong>Use Cases</strong>: Used to convert APG cheatsheets and other visual documents into textual Markdown format
+* <strong>Input &amp; Output Modalities</strong>: Image/Text</p>
+<p><strong>External Data Processing Model: Cohere command-north-large</strong>
+* <strong>Purpose</strong>: Generates metadata and summaries for external data sources
+* <strong>Abstract</strong>: On-premises deployed model for processing external content while maintaining data privacy
+* <strong>Use Cases</strong>: Used in refresh pipelines to process external IFRS guidance documents from accounting firms
+* <strong>Input &amp; Output Modalities</strong>: Text/Text</p>
+<p>These models were selected based on their strong performance on finance-specific benchmarks and their ability to provide reliable outputs while mitigating misinformation risks compared to smaller or less capable models.</p>
+<h2>4.2 Model Inputs</h2>
+<p>IRIS uses a streamlined input approach centered around conversation history and structured database content. The key inputs include:</p>
+<ul>
+<li>
+<p><strong>Conversation History</strong>: The primary input is the complete conversation history, including the current user query and all previous exchanges. This history provides essential context for understanding the current query and enables continuity in multi-turn conversations, especially for follow-up questions or references to previously discussed topics.</p>
+</li>
+<li>
+<p><strong>PostgreSQL Database Content</strong>: The system connects directly to PostgreSQL tables (as defined in the postgres_schema.sql file) that store processed document content and metadata. These tables provide the knowledge base from which relevant information is retrieved during the research process.</p>
+</li>
+<li>
+<p><strong>Specialized System Prompts</strong>: Throughout the processing pipeline, carefully crafted system prompts are injected to guide each LLM component. These prompts define the role and expected output format for each agent and vary based on the specific task (routing, clarification, planning, etc.).</p>
+</li>
+</ul>
+<p>The agent architecture processes the conversation history by strategically injecting specialized system prompts at each stage and incorporating relevant content retrieved from the PostgreSQL database as context for the LLM. This approach allows the system to maintain conversation context while providing accurate, document-grounded responses to finance and accounting policy inquiries.</p>
+<p>Our solution leverages industry best practices and public benchmarking/leaderboard results to select appropriate models and approaches. The hybrid approach, with its flexible document processing and retrieval methods, worked effectively with minimal adjustments beyond tuning prompts and optimizing database storage.</p>
+<h2>4.3 Assumptions and Limitations (Restrictions) of Model Methodology</h2>
+<h3>Key Assumptions in the Modeling Approach</h3>
+<h4>Table 7: Model Methodology Assumptions</h4>
+<table>
+<thead>
+<tr>
+<th>Model ID</th>
+<th>Name</th>
+<th>Description and Rationale</th>
+<th>Materiality (Impact on Model Outputs)</th>
+<th>Business Driven (Qualitative) or Quantitative Methodology Driven</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>IRIS-001</td>
+<td>Incorrect Content</td>
+<td>Users accept that generated content might be inaccurate or false and verify important information with domain specialists</td>
+<td>Low</td>
+<td>Qualitative</td>
+</tr>
+<tr>
+<td>IRIS-001</td>
+<td>Source Authority</td>
+<td>Information from internal policy documents is assumed to be accurate and authoritative</td>
+<td>High</td>
+<td>Business Driven</td>
+</tr>
+<tr>
+<td>IRIS-001</td>
+<td>Query Classification</td>
+<td>The router agent can effectively categorize queries as requiring research or direct response</td>
+<td>Medium</td>
+<td>Quantitative Methodology Driven</td>
+</tr>
+<tr>
+<td>IRIS-001</td>
+<td>Source Selection</td>
+<td>The planner agent can effectively identify the most relevant databases for a given query</td>
+<td>Medium</td>
+<td>Quantitative Methodology Driven</td>
+</tr>
+</tbody>
+</table>
+<h3>Limitations of the Modeling Approach</h3>
+<p>While our generative model is chosen based on its strong reasoning capabilities, it is not without limitations. There are instances when the model may not fully grasp extremely specialized finance or accounting concepts. However, these instances are not very frequent, and users are made aware of the risks and limitations through the Maven user interface.</p>
+<h3>Assumptions and Conditions for Revisiting</h3>
+<p>Assumptions made for the model's efficacy are designed to bolster its reliability and quality of outputs across finance and accounting policy contexts. These assumptions will be scrutinized if:</p>
+<ol>
+<li>Significant changes to the knowledge base structure or content occur</li>
+<li>New types of documents with different formatting or organization are added</li>
+<li>The system expands to new subject domains beyond finance and accounting</li>
+<li>User requirements or usage patterns change significantly</li>
+<li>Advances in LLM capabilities enable new approaches</li>
+</ol>
+<h3>Confidentiality and Information Filtering</h3>
+<p>Our models operate within RBC's secure environment, and data is not modified before being processed by the ML models. The data (queries and responses) are kept for audit and monitoring purposes. No user query data is used for model training.</p>
+<h3>Design Approach</h3>
+<p>Our approach focused on implementing best practices from industry trends and leveraging techniques that have demonstrated success in public benchmarks and leaderboards. Rather than conducting extensive comparative testing, we selected approaches that aligned with our document types and system requirements. The hybrid approach with specialized processing pipelines required minimal tuning to achieve satisfactory results, with most adjustments focused on prompt engineering and database optimization.</p>
+<h3>Table 8: Model Methodology Limitations (Restrictions)</h3>
+<table>
+<thead>
+<tr>
+<th>Model ID</th>
+<th>Name</th>
+<th>Description</th>
+<th>Impact on Business Use(s)</th>
+<th>Monitoring Description (if applicable)</th>
+<th>Monitoring Accountable (if applicable)</th>
+<th>Monitoring Frequency (if applicable)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>IRIS-001</td>
+<td>Knowledge Boundaries</td>
+<td>The model will not have access to information beyond its available knowledge sources</td>
+<td>Low, as the model will acknowledge when information is not found in available sources</td>
+<td>Process monitoring tracks database search results</td>
+<td>CFO Technology Team</td>
+<td>Continuous</td>
+</tr>
+<tr>
+<td>IRIS-001</td>
+<td>Context Window Limitation</td>
+<td>Each agent has a finite context window that limits the amount of information it can process at once</td>
+<td>Low, as the model implements chunking techniques</td>
+<td>Token usage monitoring</td>
+<td>CFO Technology Team</td>
+<td>Continuous</td>
+</tr>
+<tr>
+<td>IRIS-001</td>
+<td>Hallucination Risk</td>
+<td>As with all LLM-based systems, there is a risk of generating plausible-sounding but incorrect information</td>
+<td>Medium, mitigated by citations and verification</td>
+<td>Random spot-checks of responses</td>
+<td>CFO Content Team</td>
+<td>Monthly</td>
+</tr>
+<tr>
+<td>IRIS-001</td>
+<td>Response Latency</td>
+<td>Complex research queries that search multiple databases can take longer to process</td>
+<td>Low, as progress updates are provided</td>
+<td>Process monitoring of stage durations</td>
+<td>CFO Technology Team</td>
+<td>Continuous</td>
+</tr>
+</tbody>
+</table>
+</body>
+</html>

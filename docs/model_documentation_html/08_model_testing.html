@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>08_model_testing</title>
+    <style>
+        /* Styles optimized for Word pasting */
+        body {
+            font-family: 'Calibri', Arial, sans-serif;
+            line-height: 1.5;
+            margin: 20px;
+            color: #333;
+        }
+        h1 {
+            font-size: 24pt;
+            margin-top: 24pt;
+            margin-bottom: 6pt;
+            font-weight: bold;
+            color: #000;
+        }
+        h2 {
+            font-size: 18pt;
+            margin-top: 18pt;
+            margin-bottom: 6pt;
+            font-weight: bold;
+            color: #000;
+        }
+        h3 {
+            font-size: 14pt;
+            margin-top: 14pt;
+            margin-bottom: 4pt;
+            font-weight: bold;
+            color: #000;
+        }
+        h4 {
+            font-size: 12pt;
+            margin-top: 12pt;
+            margin-bottom: 2pt;
+            font-weight: bold;
+            color: #000;
+        }
+        p {
+            margin-top: 2pt;
+            margin-bottom: 8pt;
+        }
+        ul, ol {
+            margin-top: 0;
+            margin-bottom: 10pt;
+            padding-left: 30px;
+        }
+        ul ul, ol ol, ul ol, ol ul {
+            margin-top: 0;
+            margin-bottom: 0;
+        }
+        li {
+            margin-bottom: 4pt;
+        }
+        table {
+            border-collapse: collapse;
+            margin: 10pt 0;
+            width: 100%;
+        }
+        th, td {
+            border: 1px solid #ccc;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+        }
+        code {
+            font-family: "Courier New", Courier, monospace;
+            background-color: #f5f5f5;
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-size: 0.9em;
+        }
+        pre {
+            background-color: #f5f5f5;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-family: "Courier New", Courier, monospace;
+            font-size: 0.9em;
+            margin: 10pt 0;
+        }
+        strong {
+            font-weight: bold;
+        }
+        em {
+            font-style: italic;
+        }
+        blockquote {
+            margin: 10pt 0;
+            padding: 10px 20px;
+            border-left: 5px solid #f2f2f2;
+            color: #555;
+        }
+    </style>
+</head>
+<body>
+    <h1>8. Model Testing</h1>
+<p><strong>Model Name:</strong> IRIS (Intelligent Research and Information System)
+<strong>Model ID:</strong> IRIS-001</p>
+<p>This section documents the testing methodology and results used to validate the IRIS system. The testing focused on evaluating the system's ability to retrieve relevant information from knowledge sources and generate appropriate responses across a range of finance and accounting policy queries.</p>
+<blockquote>
+<p><strong>Note:</strong> Supporting test artifacts are available in the following SharePoint folders:
+- Test Questions: <code>https://rbcds.sharepoint.com/sites/IRISProject/Shared Documents/TestArtifacts/TestQuestions/</code> (contains APG and non-APG test query sets)
+- APG Feedback: <code>https://rbcds.sharepoint.com/sites/IRISProject/Shared Documents/TestArtifacts/APGFeedback/</code> (contains detailed feedback from APG reviewers)
+- Quantitative Results: <code>https://rbcds.sharepoint.com/sites/IRISProject/Shared Documents/TestArtifacts/QuantitativeResults/</code> (contains metrics and analysis for non-APG databases)
+- APG Signoff: <code>https://rbcds.sharepoint.com/sites/IRISProject/Shared Documents/TestArtifacts/APGSignoff/</code> (contains final signoff documentation from APG team)</p>
+</blockquote>
+<h2>8.1 Testing Approach</h2>
+<p>The IRIS testing strategy centered on an iterative, database-by-database development and testing approach, with a focus on ensuring that the agent-based architecture and knowledge retrieval mechanisms functioned correctly to produce accurate, policy-compliant responses.</p>
+<h3>8.1.1 Query Dataset Development</h3>
+<p>Two distinct query sets were developed for comprehensive testing:</p>
+<ol>
+<li>
+<p><strong>APG-Focused Queries</strong>: Approximately 50 example queries provided by the Accounting Policy Group (APG), specifically targeting accounting policy databases.</p>
+</li>
+<li>
+<p><strong>CFO-Focused Queries</strong>: Approximately 50 additional queries curated by the internal team, designed to test broader CFO group databases.</p>
+</li>
+</ol>
+<p>These queries were deliberately created to cover common inquiry types and critical finance and accounting areas across all integrated knowledge sources.</p>
+<blockquote>
+<p><strong>Note:</strong> The complete set of test queries used for system validation is available in the SharePoint folder: <code>https://rbcds.sharepoint.com/sites/IRISProject/Shared Documents/TestArtifacts/TestQuestions/</code></p>
+</blockquote>
+<h3>8.1.2 Iterative Testing and Development Process</h3>
+<p>Testing and development were conducted through an incremental, database-by-database approach:</p>
+<ol>
+<li><strong>Method Development Phase</strong>:</li>
+<li>Initial retrieval method was developed for a single database</li>
+<li>Test outputs were generated and sent to the APG team for review</li>
+<li>Feedback was collected and analyzed</li>
+<li>Enhancements were implemented based on feedback</li>
+<li>
+<p>Process was repeated until performance was satisfactory for that database</p>
+</li>
+<li>
+<p><strong>Method Expansion Phase</strong>:</p>
+</li>
+<li>When starting integration with a new database, the existing method was tested first</li>
+<li>If performance was insufficient, a new method was developed</li>
+<li>This led to the development of three distinct retrieval methods and five data processing pipelines</li>
+<li>
+<p>Each new method underwent the same iterative feedback and enhancement process</p>
+</li>
+<li>
+<p><strong>Comprehensive Testing Phase</strong>:</p>
+</li>
+<li>Once all databases and methods were implemented, a final round of testing was conducted</li>
+<li>APG databases received final signoff from the APG team</li>
+<li>Non-APG databases were evaluated with detailed scoring metrics</li>
+<li>Results were aggregated into a comprehensive evaluation report</li>
+</ol>
+<p>This development approach ensured that each database and retrieval method was optimized for the specific document types it contained. Testing was conducted using the Dataiku implementation, which has been made available to business users for providing feedback.</p>
+<h3>8.1.3 Testing Methodology</h3>
+<p>The testing process involved structured evaluation across multiple dimensions:</p>
+<ol>
+<li>
+<p><strong>Question Submission</strong>: Test questions were submitted to the model through the Dataiku interface</p>
+</li>
+<li>
+<p><strong>Performance Recording</strong>: For each question, evaluators recorded:</p>
+</li>
+<li>Database selection accuracy: Did the system select the appropriate database(s)?</li>
+<li>Document selection accuracy: Did the system retrieve the relevant documents?</li>
+<li>Response quality: Overall score of the generated response</li>
+<li>
+<p>Paragraph-level feedback: Detailed comments on each section of the response</p>
+</li>
+<li>
+<p><strong>Documentation</strong>: All results were recorded in Excel templates for consistent evaluation</p>
+</li>
+<li>
+<p><strong>Analysis</strong>: Results were aggregated to calculate performance metrics and identify improvement areas</p>
+</li>
+<li>
+<p><strong>Negative Testing</strong>: Additional tests specifically probed system boundaries and restrictions to ensure appropriate guardrails were functioning</p>
+</li>
+</ol>
+<h2>8.2 Testing Results</h2>
+<h3>8.2.1 Key Performance Metrics</h3>
+<p>The final comprehensive testing phase yielded specific performance metrics for the non-APG databases:</p>
+<ol>
+<li>
+<p><strong>Overall Performance Score</strong>: 89.6% based on reviewer evaluations</p>
+</li>
+<li>
+<p><strong>Database Selection Accuracy</strong>: 99.4% accuracy in selecting the appropriate knowledge source(s)</p>
+</li>
+<li>
+<p><strong>Document Selection Accuracy</strong>: 97.7% accuracy in retrieving relevant documents from selected databases</p>
+</li>
+<li>
+<p><strong>Answer Accuracy</strong>: 94.2% (calculated based on reviewer comments and evaluation notes)</p>
+</li>
+</ol>
+<blockquote>
+<p><strong>Note:</strong> Complete quantitative test results and detailed metrics are available in the SharePoint folder: <code>https://rbcds.sharepoint.com/sites/IRISProject/Shared Documents/TestArtifacts/QuantitativeResults/</code></p>
+</blockquote>
+<p>For APG databases, the evaluation process involved direct feedback and signoff rather than numerical scoring. The APG team provided expected answers for each test question and evaluated whether the system outputs met these expectations. Final signoff was received for all 50 APG test questions, confirming satisfactory performance.</p>
+<blockquote>
+<p><strong>Note:</strong> Final APG signoff documentation is available in the SharePoint folder: <code>https://rbcds.sharepoint.com/sites/IRISProject/Shared Documents/TestArtifacts/APGSignoff/</code></p>
+</blockquote>
+<p>Given the shared retrieval methods between APG and non-APG databases, and the positive feedback from both evaluation processes, the system demonstrates consistently strong performance across all knowledge sources.</p>
+<h3>8.2.2 Identified Issues and Resolutions</h3>
+<p>Through the iterative testing process, several issues were identified and addressed. The following represents key issues from actual business feedback:</p>
+<blockquote>
+<p><strong>Note:</strong> Detailed feedback from APG reviewers, including issue reports and suggested improvements, is available in the SharePoint folder: <code>https://rbcds.sharepoint.com/sites/IRISProject/Shared Documents/TestArtifacts/APGFeedback/</code></p>
+</blockquote>
+<ol>
+<li><strong>Unsolicited IFRS vs. GAAP Comparisons</strong>: </li>
+<li><strong>Issue</strong>: The system included IFRS vs. GAAP comparisons even when not requested, making responses unnecessarily long.</li>
+<li>
+<p><strong>Resolution</strong>: Enhanced prompt instructions for the CAPM subagent to focus only on the standard relevant to the query (defaulting to IFRS if none specified) and actively filter out information about other standards unless explicitly requested.</p>
+</li>
+<li>
+<p><strong>Incomplete Answers Due to Sequential Database Processing</strong>:</p>
+</li>
+<li><strong>Issue</strong>: Responses sometimes contained information only from one database (e.g., CAPM) when relevant information also existed in others (e.g., APG Wiki).</li>
+<li>
+<p><strong>Resolution</strong>: Implemented parallel database querying and updated the Summarizer agent to synthesize findings from all sources into a comprehensive response.</p>
+</li>
+<li>
+<p><strong>Overly Verbose Response Format</strong>:</p>
+</li>
+<li><strong>Issue</strong>: Responses included excessive internal processing details like "Thought", "Clarify", "Researching", making outputs long and difficult to follow.</li>
+<li>
+<p><strong>Resolution</strong>: Eliminated internal "thinking" steps from display, streamlined clarification and research status updates, and configured the Summarizer to generate only the final, synthesized report.</p>
+</li>
+<li>
+<p><strong>Incorrect Handling of Finance-Related Queries</strong>:</p>
+</li>
+<li><strong>Issue</strong>: Basic finance concept definitions were sometimes answered directly without database research, risking responses based on the model's training data.</li>
+<li>
+<p><strong>Resolution</strong>: Updated the Router agent to explicitly route all finance-related queries (including basic definitions) to the research path, and enhanced the Direct Response agent to refuse answering finance queries without prior research results.</p>
+</li>
+<li>
+<p><strong>Missing Critical Information</strong>:</p>
+</li>
+<li><strong>Issue</strong>: Specific, critical pieces of information (like conditions or criteria) were sometimes missing from responses.</li>
+<li>
+<p><strong>Resolution</strong>: Enhanced prompts for subagents to accurately extract specific conditions or tests, and for the Summarizer to preserve these details in the final synthesis.</p>
+</li>
+<li>
+<p><strong>Unnecessary Detail in Responses</strong>:</p>
+</li>
+<li><strong>Issue</strong>: Even when asking about specific aspects (e.g., classification of financial assets), responses included details on unrelated aspects (e.g., measurement, impairment).</li>
+<li>
+<p><strong>Resolution</strong>: Implemented adaptive synthesis logic to match the scope of the response to the specific user request, providing concise answers for targeted questions.</p>
+</li>
+<li>
+<p><strong>Inconsistent Spacing/Formatting</strong>:</p>
+</li>
+<li><strong>Issue</strong>: Response formatting showed inconsistencies in spacing, indentation, and Markdown usage.</li>
+<li>
+<p><strong>Resolution</strong>: Enhanced formatting instructions for the Summarizer agent with explicit guidelines for handling headings, lists, paragraph spacing, and proper Markdown structure.</p>
+</li>
+<li>
+<p><strong>Incorrect Labeling of Source Authority</strong>:</p>
+</li>
+<li><strong>Issue</strong>: External firm guidance (EY, KPMG, PwC) was incorrectly labeled as "authoritative" when only standards bodies like IASB are authoritative.</li>
+<li><strong>Resolution</strong>: Updated source descriptions to clearly label external firm guidance as "External Supplementary" and IASB as "External Authoritative," ensuring correct source hierarchy understanding.</li>
+</ol>
+<h3>8.2.3 User Interface Issues Addressed</h3>
+<p>Several issues related to the user interface were also identified and addressed:</p>
+<ol>
+<li><strong>Inability to Scroll During Response Streaming</strong>:</li>
+<li><strong>Issue</strong>: Users couldn't scroll up to view previous messages during response generation.</li>
+<li>
+<p><strong>Resolution</strong>: Modified the UI code to allow scrolling during streaming while maintaining auto-scroll after completion.</p>
+</li>
+<li>
+<p><strong>Non-functional Feedback Controls</strong>:</p>
+</li>
+<li><strong>Issue</strong>: Thumbs up/down icons didn't function in the test environment.</li>
+<li>
+<p><strong>Resolution</strong>: Clarified that these features are planned for the production implementation.</p>
+</li>
+<li>
+<p><strong>Graphical Content Display</strong>:</p>
+</li>
+<li><strong>Issue</strong>: Users requested the ability to see actual graphical cheat sheets rather than text descriptions.</li>
+<li><strong>Resolution</strong>: Implemented multi-pass vision preprocessing to extract detailed content from graphical elements while acknowledging the current text-only display limitation.</li>
+</ol>
+<h2>8.3 Implementation of Feedback</h2>
+<p>The feedback collection and implementation process was systematic and thorough:</p>
+<ol>
+<li><strong>Feedback Collection</strong>:</li>
+<li>Detailed comments were collected from APG reviewers for each test query</li>
+<li>Excel templates documented performance across multiple dimensions</li>
+<li>
+<p>Issues were categorized by frequency and impact</p>
+</li>
+<li>
+<p><strong>Issue Prioritization</strong>:</p>
+</li>
+<li>High-impact issues (affecting response accuracy) were addressed first</li>
+<li>Widespread issues affecting multiple queries were prioritized</li>
+<li>
+<p>UI/UX enhancements were scheduled according to their impact on usability</p>
+</li>
+<li>
+<p><strong>Implementation Approach</strong>:</p>
+</li>
+<li>System components were refined through targeted prompt engineering</li>
+<li>Core architectural changes (e.g., parallel database querying) were implemented</li>
+<li>
+<p>UI enhancements were developed in coordination with front-end teams</p>
+</li>
+<li>
+<p><strong>Verification</strong>:</p>
+</li>
+<li>Each implemented fix was verified through targeted testing</li>
+<li>Previously problematic queries were re-tested to confirm improvements</li>
+<li>Full test suites were re-run to ensure no regression</li>
+</ol>
+<p>This systematic approach to feedback implementation ensured continuous improvement of the system throughout the development cycle.</p>
+<h2>8.4 Model Components Validation</h2>
+<p>While IRIS doesn't implement custom model training, it leverages pre-trained models in specific ways. The testing validated the effectiveness of these model components:</p>
+<h3>8.4.1 Pre-trained Models Performance</h3>
+<ol>
+<li><strong>GPT-4o and GPT-4o-mini</strong>: These models serve as the primary reasoning engines within the agent architecture. Testing confirmed that:</li>
+<li>They effectively interpret user queries and generate appropriate research statements</li>
+<li>They can accurately select relevant documents from catalog descriptions</li>
+<li>They generate coherent, well-structured responses from retrieved information</li>
+<li>
+<p>They maintain appropriate limitations and disclaimers in responses</p>
+</li>
+<li>
+<p><strong>Embedding Model (text-embedding-3-large)</strong>: This model generates vector representations for semantic search. Testing verified:</p>
+</li>
+<li>High-quality semantic similarity matching between queries and documents</li>
+<li>Effective ranking of relevant documents</li>
+<li>
+<p>Appropriate balance between precision and recall in search results</p>
+</li>
+<li>
+<p><strong>Qwen2 Vision Model</strong>: This model processes infographics and visual documents. Testing confirmed:</p>
+</li>
+<li>Accurate extraction of text from visual elements</li>
+<li>Proper interpretation of charts, tables, and diagrams</li>
+<li>
+<p>Effective conversion of visual information to structured text format</p>
+</li>
+<li>
+<p><strong>Cohere command-north-large</strong>: This on-premises deployed model is used for database refresh pipelines. Validation confirmed:</p>
+</li>
+<li>Effective processing of external IFRS guidance documents</li>
+<li>Proper metadata generation and summarization</li>
+<li>Appropriate data privacy preservation for external content</li>
+</ol>
+<p>The performance of these pre-trained components was deemed satisfactory for production use based on the query testing results, with no formal pre-testing required due to reliance on established benchmarking statistics that demonstrate sufficient capabilities.</p>
+<h3>8.4.2 Retrieval Method Validation</h3>
+<p>Each retrieval method was validated for its specific use case through the iterative testing process described above. This database-by-database approach ensured that the appropriate method was selected for each content type:</p>
+<ol>
+<li>
+<p><strong>Catalog Search - Small</strong>: Demonstrated effectiveness for standard documents with simple structure.</p>
+</li>
+<li>
+<p><strong>Catalog Search - Large</strong>: Proven appropriate for larger documents with distinct sections, maintaining document context while focusing on relevant sections.</p>
+</li>
+<li>
+<p><strong>Catalog Search - Excel</strong>: Successfully handled structured data from Excel sources, maintaining tabular format and relationships.</p>
+</li>
+<li>
+<p><strong>Catalog Search - Vision</strong>: Verified ability to extract and structure information from visual documents, making infographics accessible to the query pipeline.</p>
+</li>
+<li>
+<p><strong>Semantic Search - Large</strong>: Confirmed effectiveness for very large reference documents, retrieving relevant passages while maintaining appropriate context.</p>
+</li>
+</ol>
+<p>These methods were selected based on document characteristics and evolved through the iterative testing process, with each method optimized for specific document types and structures.</p>
+<h3>8.4.3 Guardrail Testing</h3>
+<p>Negative testing was conducted to verify the system's ability to recognize and appropriately respond to out-of-scope queries. These tests confirmed that:</p>
+<ol>
+<li>The system correctly identifies queries outside its knowledge domain</li>
+<li>Appropriate disclaimers are provided when queries cannot be answered</li>
+<li>The system maintains proper boundaries regarding financial advice and regulatory guidance</li>
+<li>Messages consistently include required disclaimer statements</li>
+</ol>
+<p>This testing validated that the safety guardrails implemented in the system function as intended, ensuring appropriate use within defined boundaries.</p>
+<h2>8.5 Current Implementation and Future Integration</h2>
+<p>The IRIS system has been implemented in Dataiku as a Dash web application for initial testing and feedback. This implementation has been made available to business users for evaluation and has undergone multiple rounds of refinement based on their feedback.</p>
+<p>The current status of the system includes:</p>
+<ol>
+<li>
+<p><strong>Functional Implementation</strong>: The complete IRIS functionality is operational in the Dataiku environment, with all agent components functioning as designed.</p>
+</li>
+<li>
+<p><strong>Database Connectivity</strong>: All database connections have been established and validated, with proper access controls implemented.</p>
+</li>
+<li>
+<p><strong>User Feedback Collection</strong>: Business users have provided feedback on the system's performance and response quality, which has been incorporated into ongoing refinements.</p>
+</li>
+<li>
+<p><strong>Maven Integration Planning</strong>: The IRIS code is being prepared for integration into the Maven UI, with plans to have a working demonstration available in the Maven development environment by June 2025.</p>
+</li>
+</ol>
+<p>The Maven integration will maintain the same core functionality with no code changes to the underlying model. The integration will primarily focus on adapting the API interface to work within the Maven ecosystem while using the same PostgreSQL database for knowledge retrieval.</p>
+<h2>8.6 Testing Limitations</h2>
+<p>It is important to acknowledge several limitations in the testing approach:</p>
+<ol>
+<li>
+<p><strong>No Blind Testing</strong>: Due to resource constraints, formal blind testing with independent evaluators was not conducted. Testing relied on the same teams involved in development.</p>
+</li>
+<li>
+<p><strong>Limited Statistical Validation</strong>: Given the nature of the system as a RAG implementation rather than a custom-trained model, extensive statistical validation was not performed.</p>
+</li>
+<li>
+<p><strong>No Formal Benchmark Comparison</strong>: Alternative RAG architectures or methods were not explicitly tested as comparisons, as method selection was based on prior experience and project requirements.</p>
+</li>
+<li>
+<p><strong>Limited Load Testing</strong>: While basic functionality was confirmed, extensive load or stress testing to identify performance boundaries was not conducted.</p>
+</li>
+<li>
+<p><strong>Subject Matter Expert Availability</strong>: Testing relied on available subject matter experts rather than a formal, diverse panel of evaluators.</p>
+</li>
+<li>
+<p><strong>Testing Environment Limitations</strong>: Testing has been conducted primarily in the Dataiku environment, with full Maven integration testing pending.</p>
+</li>
+</ol>
+<p>These limitations are considered acceptable given the nature of the project and its intended use as an internal tool with human oversight.</p>
+<h2>8.7 Testing Conclusions</h2>
+<p>The testing conducted for the IRIS system provides reasonable confidence in its ability to serve its intended purpose:</p>
+<ol>
+<li>
+<p><strong>Core Functionality</strong>: The system effectively retrieves relevant information from finance and accounting knowledge sources and generates appropriate, well-structured responses, with quantitative metrics supporting this conclusion (99.4% database selection, 97.7% document selection, 94.2% answer accuracy).</p>
+</li>
+<li>
+<p><strong>Knowledge Boundaries</strong>: The system appropriately identifies when information is outside its knowledge base and provides appropriate disclaimers, as confirmed through negative testing.</p>
+</li>
+<li>
+<p><strong>Response Quality</strong>: With iterative improvements based on testing feedback, the system's response quality reached a level deemed acceptable for production use, with formal signoff from the APG team and an overall performance score of 89.6%.</p>
+</li>
+<li>
+<p><strong>Document Integration</strong>: Through the database refresh process, the system can incorporate new documents, enabling it to remain current as policies evolve.</p>
+</li>
+</ol>
+<p>Based on the testing results, the IRIS system is considered suitable for deployment as a finance and accounting policy guidance tool, with the understanding that human oversight remains essential for verifying responses on critical matters. The feedback collection mechanism and ongoing monitoring will support continuous improvement as the system is used in practice.</p>
+</body>
+</html>

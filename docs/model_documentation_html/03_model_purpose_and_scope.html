@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>03_model_purpose_and_scope</title>
+    <style>
+        /* Styles optimized for Word pasting */
+        body {
+            font-family: 'Calibri', Arial, sans-serif;
+            line-height: 1.5;
+            margin: 20px;
+            color: #333;
+        }
+        h1 {
+            font-size: 24pt;
+            margin-top: 24pt;
+            margin-bottom: 6pt;
+            font-weight: bold;
+            color: #000;
+        }
+        h2 {
+            font-size: 18pt;
+            margin-top: 18pt;
+            margin-bottom: 6pt;
+            font-weight: bold;
+            color: #000;
+        }
+        h3 {
+            font-size: 14pt;
+            margin-top: 14pt;
+            margin-bottom: 4pt;
+            font-weight: bold;
+            color: #000;
+        }
+        h4 {
+            font-size: 12pt;
+            margin-top: 12pt;
+            margin-bottom: 2pt;
+            font-weight: bold;
+            color: #000;
+        }
+        p {
+            margin-top: 2pt;
+            margin-bottom: 8pt;
+        }
+        ul, ol {
+            margin-top: 0;
+            margin-bottom: 10pt;
+            padding-left: 30px;
+        }
+        ul ul, ol ol, ul ol, ol ul {
+            margin-top: 0;
+            margin-bottom: 0;
+        }
+        li {
+            margin-bottom: 4pt;
+        }
+        table {
+            border-collapse: collapse;
+            margin: 10pt 0;
+            width: 100%;
+        }
+        th, td {
+            border: 1px solid #ccc;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+        }
+        code {
+            font-family: "Courier New", Courier, monospace;
+            background-color: #f5f5f5;
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-size: 0.9em;
+        }
+        pre {
+            background-color: #f5f5f5;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-family: "Courier New", Courier, monospace;
+            font-size: 0.9em;
+            margin: 10pt 0;
+        }
+        strong {
+            font-weight: bold;
+        }
+        em {
+            font-style: italic;
+        }
+        blockquote {
+            margin: 10pt 0;
+            padding: 10px 20px;
+            border-left: 5px solid #f2f2f2;
+            color: #555;
+        }
+    </style>
+</head>
+<body>
+    <h1>3. Model Purpose and Scope</h1>
+<p><strong>Model Name:</strong> IRIS (Intelligent Research and Information System)
+<strong>Model ID:</strong> IRIS-001</p>
+<h2>3.1 Model Purpose and Use</h2>
+<p>IRIS was initially designed to serve as an intelligent research and response system for RBC's Accounting Policy Group (APG) but has evolved to support the broader CFO Group. The primary purpose of IRIS is to provide accurate, policy-compliant guidance in response to finance and accounting policy inquiries through natural language conversations.</p>
+<p>The model utilizes a sophisticated agent-based architecture with a Retrieval-Augmented Generation (RAG) approach to analyze inquiries and determine whether to respond based on conversation context alone or to perform targeted research across specific documentation sources. This dual-path approach allows IRIS to provide both quick responses to straightforward queries and comprehensive, researched answers to complex finance and accounting policy questions. The centralized architecture enables the addition of new knowledge sources without rebuilding the entire system, creating a scalable platform for organization-wide finance and accounting guidance.</p>
+<p>IRIS performs several key functions throughout its operational pipeline. The system begins with the Agent Router, which analyzes user inquiries to determine whether they can be answered directly from conversation history or require database research. For research-path queries, the Agent Clarifier evaluates contextual sufficiency and either requests essential missing information or creates a comprehensive research statement. The Agent Planner selects the most relevant databases to query based on the research statement. Database Subagents then access appropriate knowledge sources through one of three specialized retrieval methods tailored to document types: Catalog Search - Small, Catalog Search - Large, or Semantic Search - Large. Finally, the Agent Summarizer integrates findings from multiple sources into coherent, properly cited responses with appropriate disclaimers and source attributions.</p>
+<p>The model delivers significant value to RBC by providing centralized access to finance and accounting policy information across multiple sources, ensuring consistent, policy-compliant guidance with proper citations and disclaimers. This approach substantially reduces the time needed to retrieve relevant finance and accounting information while offering comprehensive coverage of both internal RBC finance policies and selected external standards. By streamlining information access, IRIS enhances productivity for finance professionals across the CFO Group, supporting more efficient decision-making processes while ensuring compliance with established policies and standards.</p>
+<h3>Table 4: Model Dependencies</h3>
+<table>
+<thead>
+<tr>
+<th>Base Model ID</th>
+<th>Upstream Model(s)</th>
+<th>Interdependent Model(s)</th>
+<th>Downstream Model(s)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>IRIS-001</td>
+<td>N/A</td>
+<td>N/A</td>
+<td>N/A</td>
+</tr>
+</tbody>
+</table>
+<h2>3.2 Scope of Application</h2>
+<p>The target scope of IRIS is for use across the CFO Group within RBC. It is designed to provide information and guidance within the domains of finance and accounting policy, with content coverage spanning a comprehensive range of internal and external resources.</p>
+<p>The system's content scope encompasses internal RBC finance and accounting policies and procedures, CFO and APG-developed guides, cheatsheets, and wikis, as well as internal accounting memos and project approval requests. It also covers financial reporting and control documentation, management reporting policies and guidelines, IFRS standards and interpretations, and accounting firm guidance on IFRS application from EY, KPMG, and PwC. This diverse content base enables IRIS to address a wide range of finance and accounting information needs.</p>
+<p>IRIS is designed to handle various query types, including definitional queries about finance and accounting concepts, questions about policy application and interpretation, and requests for specific standard references. The system can also process inquiries about financial treatment for specific scenarios, conduct metadata searches for available documents on particular topics, and provide guidance on financial reporting requirements. This versatility makes it a comprehensive research tool for finance and accounting professionals.</p>
+<p>The system serves RBC CFO Group members exclusively. Access is managed through Active Directory groups, with permissions to specific databases granted based on user roles and requirements. This controlled access model ensures appropriate information security while making relevant resources available to those who need them.</p>
+<p>IRIS focuses specifically on accounting and finance domains, operating within RBC's internal environment. The system concentrates on accounting policies and standards relevant to the organization's financial reporting practices. It does not access real-time financial data or transaction systems, focusing instead on policy documents and interpretive guidance.</p>
+<h2>3.3 Model Outputs</h2>
+<p>IRIS produces text responses to user inquiries through a structured processing pipeline, with output characteristics varying based on the processing path selected for each query. This design allows the system to tailor its responses to the specific information needs of users while maintaining consistency in quality and format.</p>
+<p>For the Direct Response Path, outputs consist of text responses based solely on conversation context, structured with clear sections and appropriate headings. These responses are limited to information that can be confidently inferred from the conversation history, providing quick answers to straightforward queries without unnecessary database access.</p>
+<p>The Research Path generates more comprehensive outputs, beginning with research plans that show selected knowledge sources and providing progress updates during the research process. The final responses include citations to specific policies, standards, or guidelines, structured content with appropriate headings and sections, clear source attributions for transparency, confidence signaling based on source authority and consensus, and required disclaimers about verification and implementation. This detailed approach ensures that complex queries receive thorough, well-documented responses.</p>
+<p>For Metadata Search requests, the system produces lists of relevant documents found in selected databases, including document names and descriptions along with source database attributions. This enables users to discover and access relevant policy documents directly. Unlike research queries, metadata searches bypass the Summarizer agent, directly returning document listings without processing the full content.</p>
+<p>All IRIS outputs share common characteristics designed to ensure their utility and reliability. They are delivered in markdown format with a clear and professional tone, properly structured with organizational headings to enhance readability. The content maintains compliance with internal standards for accounting guidance while being transparent about sources and confidence levels. Each response explicitly addresses limitations and verification requirements, ensuring users understand the appropriate use context for the information provided.</p>
+<p>Performance requirements for model outputs include accurate information retrieval from appropriate knowledge sources, proper citation of relevant policies and standards, clear distinction between high and low confidence information, inclusion of all required disclaimers and verification statements, and compliance with established quality guidelines for structure and formatting. These requirements ensure that IRIS outputs consistently meet the needs of finance professionals while maintaining appropriate risk controls.</p>
+<h3>Table 5: Approved Model Outputs</h3>
+<table>
+<thead>
+<tr>
+<th>Model ID</th>
+<th>Output</th>
+<th>Detailed Description</th>
+<th>Model Use</th>
+<th>Business Purpose</th>
+<th>Region of Use</th>
+<th>User</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>IRIS-001</td>
+<td>Text Responses to Finance and Accounting Policy Inquiries</td>
+<td>Natural language responses to user inquiries, including appropriate citations, disclaimers, and structured content based on available knowledge sources</td>
+<td>Internal - Decision Support</td>
+<td>Finance and Accounting Policy Guidance</td>
+<td>Global</td>
+<td>RBC CFO Group Members</td>
+</tr>
+</tbody>
+</table>
+<h2>3.4 Compliance with Regulations, Policies, and Procedures</h2>
+<h3>3.4.1 Internal Policies</h3>
+<p>IRIS is not used for regulatory purposes but functions primarily as a search tool for users to retrieve information from documents. All outputs require verification by users based on the source references provided.</p>
+<p>As an internal knowledge retrieval and synthesis system for finance and accounting policy guidance, IRIS helps users locate information about established financial and accounting standards and principles that RBC follows, including International Financial Reporting Standards (IFRS), International Accounting Standards (IAS), IFRS Interpretations Committee (IFRIC) interpretations, Standing Interpretations Committee (SIC) interpretations, and US Generally Accepted Accounting Principles (GAAP) where applicable.</p>
+<p>The system includes built-in features to support proper information usage, including direct access to source documentation, clearly identified citations to relevant standards, required disclaimers regarding verification, and identification of queries outside its scope. These features help users efficiently locate relevant guidance while setting appropriate expectations for system outputs.</p>
+<h3>3.4.2 Access Controls and Requirements</h3>
+<p>IRIS complies with RBC's Generative AI policies and Data Loss Prevention (DLP) requirements. Access to the system is controlled through Active Directory groups, with permissions to specific databases granted based on user roles.</p>
+<p>The system adheres to RBC's guidance on Generative AI from T&amp;O, CISO, and Compliance, including the RBC CISO Directive on Generative AI.</p>
+<p>Output quality standards are maintained through structured requirements that ensure all responses include appropriate disclaimers, follow established formatting guidelines, use consistent citation formats for finance and accounting standards, and clearly indicate confidence levels based on source authority. These standards help maintain consistency and reliability across system outputs.</p>
+<p>Operational requirements include access controls based on authorized user roles, process monitoring for system performance and usage, and regular validation of knowledge sources for accuracy and currency. These controls ensure the system operates reliably while supporting the information needs of the CFO Group.</p>
+</body>
+</html>

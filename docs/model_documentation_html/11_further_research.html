@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>11_further_research</title>
+    <style>
+        /* Styles optimized for Word pasting */
+        body {
+            font-family: 'Calibri', Arial, sans-serif;
+            line-height: 1.5;
+            margin: 20px;
+            color: #333;
+        }
+        h1 {
+            font-size: 24pt;
+            margin-top: 24pt;
+            margin-bottom: 6pt;
+            font-weight: bold;
+            color: #000;
+        }
+        h2 {
+            font-size: 18pt;
+            margin-top: 18pt;
+            margin-bottom: 6pt;
+            font-weight: bold;
+            color: #000;
+        }
+        h3 {
+            font-size: 14pt;
+            margin-top: 14pt;
+            margin-bottom: 4pt;
+            font-weight: bold;
+            color: #000;
+        }
+        h4 {
+            font-size: 12pt;
+            margin-top: 12pt;
+            margin-bottom: 2pt;
+            font-weight: bold;
+            color: #000;
+        }
+        p {
+            margin-top: 2pt;
+            margin-bottom: 8pt;
+        }
+        ul, ol {
+            margin-top: 0;
+            margin-bottom: 10pt;
+            padding-left: 30px;
+        }
+        ul ul, ol ol, ul ol, ol ul {
+            margin-top: 0;
+            margin-bottom: 0;
+        }
+        li {
+            margin-bottom: 4pt;
+        }
+        table {
+            border-collapse: collapse;
+            margin: 10pt 0;
+            width: 100%;
+        }
+        th, td {
+            border: 1px solid #ccc;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+        }
+        code {
+            font-family: "Courier New", Courier, monospace;
+            background-color: #f5f5f5;
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-size: 0.9em;
+        }
+        pre {
+            background-color: #f5f5f5;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-family: "Courier New", Courier, monospace;
+            font-size: 0.9em;
+            margin: 10pt 0;
+        }
+        strong {
+            font-weight: bold;
+        }
+        em {
+            font-style: italic;
+        }
+        blockquote {
+            margin: 10pt 0;
+            padding: 10px 20px;
+            border-left: 5px solid #f2f2f2;
+            color: #555;
+        }
+    </style>
+</head>
+<body>
+    <h1>Section 11: Further Research</h1>
+<p>Based on our experience developing and testing the IRIS system, we have identified several promising avenues for further research and enhancement. These areas represent clear paths for continued development based on both the strengths and limitations observed in the current implementation.</p>
+<h2>11.1 Model Enhancement Opportunities</h2>
+<ul>
+<li>
+<p><strong>LLM Model Evaluation</strong>: Regularly assess newer LLM models alongside our current OpenAI implementations to evaluate potential performance improvements in reasoning capabilities, response quality, and processing efficiency.</p>
+</li>
+<li>
+<p><strong>Response Optimization</strong>: Further refine response generation to balance comprehensiveness with conciseness, ensuring answers directly address user queries without unnecessary detail while maintaining appropriate context and citation.</p>
+</li>
+<li>
+<p><strong>Source Conflict Resolution</strong>: Enhance the system's ability to identify, reconcile, and clearly present information when different knowledge sources contain potentially conflicting guidance, with explicit indication of source authority hierarchies.</p>
+</li>
+<li>
+<p><strong>Latency Reduction</strong>: Continue optimizing the multi-stage processing pipeline to reduce end-to-end response times while maintaining comprehensive information retrieval, particularly for complex research queries spanning multiple knowledge domains.</p>
+</li>
+</ul>
+<h2>11.2 Knowledge Base Expansion</h2>
+<ul>
+<li>
+<p><strong>Content Coverage</strong>: Systematically expand database content based on identified knowledge gaps and user feedback, prioritizing high-demand finance and accounting policy areas that currently have limited coverage.</p>
+</li>
+<li>
+<p><strong>Document Currency Management</strong>: Develop enhanced approaches for tracking and surfacing document recency information, ensuring users understand the temporal context of the information provided.</p>
+</li>
+<li>
+<p><strong>Visual Content Handling</strong>: Improve the processing and presentation of visual elements from source documents, particularly for complex financial diagrams, flowcharts, and infographics from cheat sheets and technical publications.</p>
+</li>
+<li>
+<p><strong>Reference Hyperlinking</strong>: Explore mechanisms for implementing direct hyperlinks to source documents within responses, integrated with appropriate access controls and permission management.</p>
+</li>
+</ul>
+<h2>11.3 System Architecture Improvements</h2>
+<ul>
+<li>
+<p><strong>Router Refinement</strong>: Further enhance the router component to improve database selection accuracy, particularly for queries that span multiple knowledge domains or that involve emerging finance topics.</p>
+</li>
+<li>
+<p><strong>Clarifier Enhancement</strong>: Expand the clarifier agent's capabilities to better handle ambiguous queries and identify more subtle cases where additional context is needed for accurate research.</p>
+</li>
+<li>
+<p><strong>Database Refresh Optimization</strong>: Streamline the document ingestion and refresh pipeline to support more frequent updates and larger volumes of documents while maintaining metadata quality.</p>
+</li>
+<li>
+<p><strong>Interpretability Improvements</strong>: Implement enhanced logging of intermediate reasoning steps to improve system auditability and enable more detailed analysis of decision processes.</p>
+</li>
+</ul>
+<h2>11.4 Evaluation and Monitoring Advancement</h2>
+<ul>
+<li>
+<p><strong>Automated Evaluation</strong>: Develop more sophisticated approaches for automated performance assessment to supplement manual evaluation processes, potentially incorporating LLM-based judging of response quality.</p>
+</li>
+<li>
+<p><strong>Test Suite Expansion</strong>: Create additional targeted test questions focusing on edge cases, source conflicts, and emerging finance topics to continuously verify model robustness.</p>
+</li>
+<li>
+<p><strong>User Feedback Integration</strong>: Refine mechanisms for collecting, analyzing, and acting upon user feedback data from the Maven interface, including both explicit feedback (thumbs up/down) and implicit signals.</p>
+</li>
+<li>
+<p><strong>Performance Tracking Dashboards</strong>: Implement comprehensive visualization and tracking of system performance metrics over time, enabling early identification of potential drift or degradation.</p>
+</li>
+</ul>
+<h2>11.5 User Experience Enhancements</h2>
+<ul>
+<li>
+<p><strong>Response Formatting</strong>: Continue refining the presentation of complex financial information, particularly tables, lists, and hierarchical concepts, to improve readability and comprehension.</p>
+</li>
+<li>
+<p><strong>Conversation Flow</strong>: Enhance the system's ability to maintain context across multi-turn conversations, especially for complex research topics requiring progressive refinement.</p>
+</li>
+<li>
+<p><strong>Multi-language Support</strong>: Evaluate approaches for supporting additional languages in both queries and knowledge sources, expanding accessibility for global finance teams.</p>
+</li>
+</ul>
+<p>These research directions will be pursued based on operational priorities, user feedback, and evolving business requirements. Regular assessment of the implemented enhancements will ensure continued alignment with the system's core purpose of providing accurate, comprehensive finance and accounting policy guidance.</p>
+</body>
+</html>

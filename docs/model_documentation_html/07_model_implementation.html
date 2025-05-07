@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>07_model_implementation</title>
+    <style>
+        /* Styles optimized for Word pasting */
+        body {
+            font-family: 'Calibri', Arial, sans-serif;
+            line-height: 1.5;
+            margin: 20px;
+            color: #333;
+        }
+        h1 {
+            font-size: 24pt;
+            margin-top: 24pt;
+            margin-bottom: 6pt;
+            font-weight: bold;
+            color: #000;
+        }
+        h2 {
+            font-size: 18pt;
+            margin-top: 18pt;
+            margin-bottom: 6pt;
+            font-weight: bold;
+            color: #000;
+        }
+        h3 {
+            font-size: 14pt;
+            margin-top: 14pt;
+            margin-bottom: 4pt;
+            font-weight: bold;
+            color: #000;
+        }
+        h4 {
+            font-size: 12pt;
+            margin-top: 12pt;
+            margin-bottom: 2pt;
+            font-weight: bold;
+            color: #000;
+        }
+        p {
+            margin-top: 2pt;
+            margin-bottom: 8pt;
+        }
+        ul, ol {
+            margin-top: 0;
+            margin-bottom: 10pt;
+            padding-left: 30px;
+        }
+        ul ul, ol ol, ul ol, ol ul {
+            margin-top: 0;
+            margin-bottom: 0;
+        }
+        li {
+            margin-bottom: 4pt;
+        }
+        table {
+            border-collapse: collapse;
+            margin: 10pt 0;
+            width: 100%;
+        }
+        th, td {
+            border: 1px solid #ccc;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+        }
+        code {
+            font-family: "Courier New", Courier, monospace;
+            background-color: #f5f5f5;
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-size: 0.9em;
+        }
+        pre {
+            background-color: #f5f5f5;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-family: "Courier New", Courier, monospace;
+            font-size: 0.9em;
+            margin: 10pt 0;
+        }
+        strong {
+            font-weight: bold;
+        }
+        em {
+            font-style: italic;
+        }
+        blockquote {
+            margin: 10pt 0;
+            padding: 10px 20px;
+            border-left: 5px solid #f2f2f2;
+            color: #555;
+        }
+    </style>
+</head>
+<body>
+    <h1>7. Model Implementation</h1>
+<p><strong>Model Name:</strong> IRIS (Intelligent Research and Information System)
+<strong>Model ID:</strong> IRIS-001</p>
+<h2>7.1 Software / Coding</h2>
+<p>IRIS employs a modular architecture organized around specialized agents and knowledge sources. The system implementation consists of the following main components:</p>
+<h3>7.1.1 System Architecture</h3>
+<p>The IRIS system operates through a multi-tier architecture:</p>
+<ul>
+<li><strong>Maven UI</strong>: The user-facing application that provides the interface for interacting with IRIS</li>
+<li><strong>IRIS API</strong>: Core model functionality deployed as an API service</li>
+<li><strong>Database Services</strong>: PostgreSQL database with pgvector extension for document and vector storage</li>
+<li><strong>LLM Gateway</strong>: Integration with RBC's Lumina portal for accessing large language models</li>
+</ul>
+<p>The system functions as follows:</p>
+<ol>
+<li><strong>Maven Interface</strong>: Users interact with the Maven UI, which manages:</li>
+<li>User authentication and access control through Active Directory groups</li>
+<li>Authorization for specific database access based on user role</li>
+<li>Conversation history and session management</li>
+<li>
+<p>User interface presentation and streaming of responses</p>
+</li>
+<li>
+<p><strong>IRIS Model API</strong>: The IRIS model code functions as an API and:</p>
+</li>
+<li>Receives conversation context and authorized database access from Maven</li>
+<li>Processes queries through the agent framework</li>
+<li>Returns streaming responses back to Maven</li>
+<li>
+<p>Logs process monitoring data for performance tracking</p>
+</li>
+<li>
+<p><strong>Database Management</strong>:</p>
+</li>
+<li>Separate PostgreSQL tables for knowledge retrieval and process monitoring</li>
+<li>
+<p>Database refresh occurs on a set schedule (quarterly or yearly, depending on the database)</p>
+</li>
+<li>
+<p><strong>LLM Integration</strong>:</p>
+</li>
+<li>IRIS connects to language models through RBC's Lumina portal</li>
+</ol>
+<p>Currently, the IRIS code has been implemented and deployed in Dataiku as a Dash web application demo. This same code is being integrated into the Maven UI for the production implementation. Both implementations interact with the same PostgreSQL database, with no changes being made during the transition from Dataiku to Maven.</p>
+<h3>7.1.2 Agent Framework</h3>
+<p>The agent system is implemented as a collection of Python modules, each responsible for specific aspects of query processing as described in Section 6.1:</p>
+<ul>
+<li>
+<p><strong>Router Agent</strong>: Implemented in <code>/iris/src/agents/agent_router/router.py</code>, determines the optimal processing path for each query by analyzing query intent and required knowledge sources.</p>
+</li>
+<li>
+<p><strong>Clarifier Agent</strong>: Implemented in <code>/iris/src/agents/agent_clarifier/clarifier.py</code>, ensures queries contain sufficient context before research begins by identifying and requesting missing information.</p>
+</li>
+<li>
+<p><strong>Planner Agent</strong>: Implemented in <code>/iris/src/agents/agent_planner/planner.py</code>, creates research plans by selecting appropriate knowledge sources and setting search parameters.</p>
+</li>
+<li>
+<p><strong>Database Subagents</strong>: Implemented in <code>/iris/src/agents/database_subagents/</code>, specialized modules for retrieving information from specific knowledge sources:</p>
+</li>
+<li>Internal sources (CAPM, Cheatsheets, Compliance, etc.)</li>
+<li>
+<p>External sources (EY, IASB, KPMG, PwC)</p>
+</li>
+<li>
+<p><strong>Summarizer Agent</strong>: Implemented in <code>/iris/src/agents/agent_summarizer/summarizer.py</code>, synthesizes findings into coherent, properly cited responses.</p>
+</li>
+<li>
+<p><strong>Direct Response Agent</strong>: Implemented in <code>/iris/src/agents/agent_direct_response/response_from_conversation.py</code>, generates responses based solely on conversation history without database access.</p>
+</li>
+</ul>
+<p>Data flows between agents through structured JSON messages containing the query context, research parameters, retrieved information, and synthesized responses. Each agent maintains its own state during processing and passes relevant information to downstream agents.</p>
+<h3>7.1.3 Knowledge Store Implementation</h3>
+<p>The IRIS knowledge store is implemented as a PostgreSQL database with the following structure:</p>
+<h4>Core Database Tables</h4>
+<ol>
+<li><strong>apg_catalog</strong>: Document metadata repository</li>
+<li>Document identification (source, type, name)</li>
+<li>Document description and usage information</li>
+<li>
+<p>File metadata (creation date, modification date, size, path)</p>
+</li>
+<li>
+<p><strong>apg_content</strong>: Document content storage</p>
+</li>
+<li>References to documents in apg_catalog</li>
+<li>Section-based content organization</li>
+<li>
+<p>Section summaries and full content text</p>
+</li>
+<li>
+<p><strong>iris_textbook_database</strong>: Vector-enabled document chunk storage</p>
+</li>
+<li>Document and section structural positioning (as detailed in Section 5)</li>
+<li>Chapter-level metadata with tags and summaries</li>
+<li>Section-level pagination and importance scoring</li>
+<li>Content text and 2000-dimension vector embeddings</li>
+<li>
+<p>Full-text search vector for text-based queries</p>
+</li>
+<li>
+<p><strong>process_monitor_logs</strong>: Performance tracking system</p>
+</li>
+<li>Detailed logging of each model invocation</li>
+<li>Timing and token usage metrics for each processing stage</li>
+<li>LLM call details stored as structured JSON</li>
+</ol>
+<h4>Database Connectivity</h4>
+<p>The system connects to the database through a standardized configuration layer in <code>/iris/src/initial_setup/db_config.py</code>, which:
+* Provides connection parameters for both local development and RBC environments
+* Handles connection management and error recovery
+* Verifies the existence of required tables</p>
+<h4>Database Processing Methods</h4>
+<p>The IRIS system employs five distinct approaches for knowledge retrieval (as detailed in Section 6.2):</p>
+<ol>
+<li><strong>Catalog Search - Small</strong>: Used for standard documents with simple structure</li>
+<li>Two-stage selection with catalog prioritization</li>
+<li>Document selection through LLM evaluation of metadata</li>
+<li>Full section retrieval for selected documents</li>
+<li>
+<p>Used for databases like <code>internal_par</code> and <code>internal_process_and_controls</code></p>
+</li>
+<li>
+<p><strong>Catalog Search - Large</strong>: Used for large documents with hierarchical structure</p>
+</li>
+<li>Three-stage hierarchical selection using LLM judgment</li>
+<li>Section summary evaluation for targeted content retrieval</li>
+<li>
+<p>Used for databases like <code>internal_capm</code> and <code>internal_global_finance_standards</code></p>
+</li>
+<li>
+<p><strong>Catalog Search - Excel</strong>: Used for tabular data sources</p>
+</li>
+<li>Table preprocessing with row-level document conversion</li>
+<li>Table format preservation in Markdown</li>
+<li>
+<p>Used for databases like <code>internal_wiki</code> and <code>internal_management_reporting</code></p>
+</li>
+<li>
+<p><strong>Catalog Search - Vision</strong>: Used for infographics and visual content</p>
+</li>
+<li>Image-to-text conversion using multi-pass vision transformer</li>
+<li>Multi-pass extraction of text, tables, and diagrams</li>
+<li>
+<p>Used for visual content in <code>internal_cheatsheets</code></p>
+</li>
+<li>
+<p><strong>Semantic Search - Large</strong>: Used for extensive reference materials</p>
+</li>
+<li>Vector-based similarity search with token-aware chunking</li>
+<li>Sophisticated reranking based on importance scores and vector similarity</li>
+<li>Section expansion and sequence gap filling</li>
+<li>Used for external sources like <code>external_ey</code>, <code>external_iasb</code>, <code>external_kpmg</code>, and <code>external_pwc</code></li>
+</ol>
+<p>The database subagents implement these different approaches based on the specific requirements of each knowledge source, with a central database router (<code>database_router.py</code>) directing queries to the appropriate subagent.</p>
+<h3>7.1.4 Model Integration</h3>
+<p>IRIS integrates with large language models through the RBC Lumina portal:</p>
+<ul>
+<li><strong>LLM Connector</strong>: Implemented in <code>/iris/src/llm_connectors/rbc_openai.py</code>, provides a consistent interface for agent-LLM communication.</li>
+<li><strong>Model Settings</strong>: Configuration parameters defined in <code>/iris/src/llm_connectors/rbc_openai_settings.py</code>.</li>
+</ul>
+<p>The system employs:
+* <strong>GPT-4o</strong>: For complex reasoning tasks like research synthesis, clarification, and content generation
+* <strong>GPT-4o-mini</strong>: For decision tasks like routing, database selection, and document filtering
+* <strong>text-embedding-3-large</strong>: For generating vector embeddings used in semantic search
+* <strong>Qwen2</strong>: For vision processing of infographics and other image content</p>
+<p>Each model is accessed with customized prompt engineering to ensure consistent outputs across the agent architecture.</p>
+<h3>7.1.5 Process Monitoring</h3>
+<p>The IRIS system includes comprehensive process monitoring capabilities:</p>
+<ul>
+<li><strong>Performance Tracking</strong>: Every model call is logged with detailed performance metrics</li>
+<li><strong>Process Stages</strong>: All pipeline stages are tracked with timing and token usage information</li>
+<li><strong>Error Logging</strong>: Structured logging of any issues or exceptions encountered</li>
+<li><strong>Usage Analytics</strong>: Aggregated statistics on system usage patterns</li>
+</ul>
+<p>The monitoring framework is implemented in <code>/iris/src/initial_setup/process_monitor.py</code> and records detailed information about each model invocation in the <code>process_monitor_logs</code> table. This enables:</p>
+<ol>
+<li><strong>Real-time Performance Monitoring</strong>: Active tracking of system responsiveness</li>
+<li><strong>Cost Optimization</strong>: Analysis of token usage patterns to identify optimization opportunities</li>
+<li><strong>Error Detection</strong>: Early identification of potential issues in the processing pipeline</li>
+<li><strong>Usage Pattern Analysis</strong>: Understanding of common query types and knowledge source utilization</li>
+</ol>
+<p>The monitoring system outputs can be analyzed using the Jupyter notebooks in the <code>/notebooks/</code> directory, particularly <code>process_monitor_analysis.ipynb</code>, which provides visualization and statistical analysis of system performance metrics.</p>
+<h3>7.1.6 Process Flow Diagram</h3>
+<p>The IRIS system follows a processing flow that implements the theoretical approach described in Sections 4 through 6. The data flow through the system can be conceptualized as follows:</p>
+<pre><code>User Query (Maven UI)
+      │
+      ▼
+ Conversation History
+      │
+      ▼
+  Agent Router ───────────► Direct Response Path ──► Agent Direct Response
+      │                                                      │
+      │                                                      │
+      ▼                                                      ▼
+Research Path                                          User Response
+      │
+      ▼
+Agent Clarifier
+      │
+      ▼
+ Agent Planner
+      │
+      ▼
+Database Subagents (Multiple in Parallel)
+      │
+      ▼
+Agent Summarizer
+      │
+      ▼
+ User Response
+</code></pre>
+<p>This implementation directly aligns with the agent architecture described in Section 4.1 and the model decision processes detailed in Section 6.3.</p>
+<h3>7.1.7 Development and Deployment</h3>
+<p>The IRIS code is currently running as a Python library in two environments:</p>
+<ul>
+<li><strong>Dataiku</strong>: Implemented as a Dash web application for demonstration and business user feedback. This implementation has been made available to business users who have provided feedback that has been incorporated into ongoing development.</li>
+<li><strong>Local Development</strong>: Used for ongoing development and testing</li>
+</ul>
+<p>The code is being provided to the Maven team for integration into their UI, with plans to have the functional demonstration available in the Maven development environment by June 2025. The integration will maintain the same core functionality with no changes to the underlying model code, focusing primarily on adapting the API interface to work within the Maven ecosystem. The requirements and setup are all packaged within the model code to facilitate deployment.</p>
+<h3>7.1.8 Code Quality Assurance</h3>
+<p>The IRIS development team employs several approaches to ensure code quality:</p>
+<ul>
+<li><strong>Code Formatting</strong>: Black is used to enforce consistent code formatting with an 88 character line limit</li>
+<li><strong>Linting</strong>: Pylint is used to identify potential code issues and ensure adherence to coding standards</li>
+<li><strong>Testing</strong>: The code is tested in Dataiku running as a Python library and locally for development work</li>
+<li><strong>Deployment Validation</strong>: The code will be retested once hosted in OpenShift to confirm the same working behavior</li>
+</ul>
+<p>These practices help identify and resolve potential issues, ensuring that the production system remains stable and performant.</p>
+<h3>7.1.9 Implementation Alignment with Model Design</h3>
+<p>The implementation of IRIS directly realizes the model design and approach described in the previous sections. Key points of alignment include:</p>
+<ol>
+<li>
+<p><strong>Agent-based Architecture</strong>: The implementation follows the modular agent framework described in Section 4.1, with specialized agents for different processing tasks.</p>
+</li>
+<li>
+<p><strong>Hybrid RAG Approach</strong>: The system implements the hybrid retrieval-augmented generation approach detailed in Section 4.1, using different processing pipelines based on document types.</p>
+</li>
+<li>
+<p><strong>Retrieval Methods</strong>: The five distinct retrieval methods described in Section 6.2 are directly implemented in the database subagents, with specific optimizations for each knowledge source.</p>
+</li>
+<li>
+<p><strong>Model Parameter Configuration</strong>: The implementation uses the model parameters specified in Section 6.4.1, with temperature settings and other configurations aligned with the documented approach.</p>
+</li>
+<li>
+<p><strong>Token-Aware Processing</strong>: The system implements the token-aware chunking algorithm detailed in Section 6.5.2, ensuring optimal information density while maintaining semantic coherence.</p>
+</li>
+<li>
+<p><strong>Monitoring Framework</strong>: The process monitoring system implements the metrics collection and storage approach described in Section 6.6, providing comprehensive performance tracking.</p>
+</li>
+</ol>
+<p>This direct alignment between design and implementation ensures that the theoretical approach is properly realized in the system.</p>
+<h2>7.2 Implementation Testing</h2>
+<p>The implementation of IRIS has undergone initial testing in the Dataiku environment. The system will receive comprehensive testing once integrated into the Maven UI.</p>
+<p>The Dataiku version has been made available to business users to provide feedback on functionality and response quality. This feedback has been incorporated into ongoing development efforts.</p>
+<p>Final implementation testing will be performed once the system is live in the Maven development environment, currently planned for June. This testing will validate that the system behaves as expected in the production environment and meets all business requirements.</p>
+</body>
+</html>

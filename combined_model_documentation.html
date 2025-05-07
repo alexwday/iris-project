@@ -1,64 +1,119 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Model Documentation</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Combined Model Documentation</title>
     <style>
+        /* Styles optimized for Word pasting */
         body {
-            font-family: Calibri, Arial, sans-serif;
+            font-family: 'Calibri', Arial, sans-serif;
             line-height: 1.5;
-            margin: 2em;
+            margin: 20px;
+            color: #333;
         }
         h1 {
             font-size: 24pt;
-            color: #333;
-            margin-top: 1.5em;
+            margin-top: 24pt;
+            margin-bottom: 6pt;
+            font-weight: bold;
+            color: #000;
         }
         h2 {
             font-size: 18pt;
-            color: #333;
-            margin-top: 1.2em;
+            margin-top: 18pt;
+            margin-bottom: 6pt;
+            font-weight: bold;
+            color: #000;
         }
         h3 {
             font-size: 14pt;
-            color: #333;
-            margin-top: 1em;
+            margin-top: 14pt;
+            margin-bottom: 4pt;
+            font-weight: bold;
+            color: #000;
+        }
+        h4 {
+            font-size: 12pt;
+            margin-top: 12pt;
+            margin-bottom: 2pt;
+            font-weight: bold;
+            color: #000;
         }
         p {
-            margin-bottom: 0.8em;
+            margin-top: 2pt;
+            margin-bottom: 8pt;
         }
         ul, ol {
-            margin-bottom: 1em;
+            margin-top: 0;
+            margin-bottom: 10pt;
+            padding-left: 30px;
+        }
+        ul ul, ol ol, ul ol, ol ul {
+            margin-top: 0;
+            margin-bottom: 0;
         }
         li {
-            margin-bottom: 0.5em;
+            margin-bottom: 4pt;
         }
         table {
             border-collapse: collapse;
-            margin: 1em 0;
+            margin: 10pt 0;
             width: 100%;
         }
         th, td {
-            padding: 8px;
             border: 1px solid #ccc;
+            padding: 8px;
             text-align: left;
         }
         th {
             background-color: #f2f2f2;
+            font-weight: bold;
+        }
+        code {
+            font-family: "Courier New", Courier, monospace;
+            background-color: #f5f5f5;
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-size: 0.9em;
+        }
+        pre {
+            background-color: #f5f5f5;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-family: "Courier New", Courier, monospace;
+            font-size: 0.9em;
+            margin: 10pt 0;
+        }
+        strong {
+            font-weight: bold;
+        }
+        em {
+            font-style: italic;
+        }
+        blockquote {
+            margin: 10pt 0;
+            padding: 10px 20px;
+            border-left: 5px solid #f2f2f2;
+            color: #555;
         }
         .section-divider {
-            border-top: 1px solid #ccc;
-            margin: 2em 0;
+            border-top: 2px solid #ccc;
+            margin: 30px 0;
         }
     </style>
 </head>
 <body>
-<h1>1. Model Changes and Remediation of Previously Identified Findings</h1>
+
+    <h1>1. Model Changes and Remediation of Previously Identified Findings</h1>
 <p>This is the initial documentation for the IRIS (Intelligent Research and Information System) model, which has not undergone previous validation. Therefore, there are no changes from a previously approved version to document in this section.</p>
 <p>Since this is the first version of the model being submitted for validation, there are no previously identified findings requiring remediation.</p>
 <p><em>Note: The tables specified in the template have been intentionally excluded as they do not apply to this initial model documentation.</em></p>
+
 <div class="section-divider"></div>
-<h1>2. Executive Summary</h1>
+
+    <h1>2. Executive Summary</h1>
 <p><strong>Model ID:</strong> IRIS-001</p>
 <p>IRIS (Intelligent Research and Information System) is an advanced AI-powered research and response system initially designed for RBC's Accounting Policy Group and now expanded to support the broader CFO Group. It combines a sophisticated agent-based architecture with a comprehensive knowledge base to provide intelligent, accurate responses to finance and accounting policy inquiries through a Retrieval-Augmented Generation (RAG) approach.</p>
 <h2>Business Context and Purpose</h2>
@@ -78,8 +133,8 @@
 <li><strong>Semantic Search - Large</strong>: Used for very large reference documents, employing vector-based similarity search with embedding technology</li>
 </ol>
 <p>The subagents can process queries in two distinct modes based on user intent:
-- <strong>Metadata Search</strong>: When users ask what documents are available on a topic, the system returns only document names and descriptions without retrieving full content or invoking the Summarizer
-- <strong>Research Mode</strong>: When users request specific information on a topic, the system retrieves and processes the actual document content to generate comprehensive responses</p>
+* <strong>Metadata Search</strong>: When users ask what documents are available on a topic, the system returns only document names and descriptions without retrieving full content or invoking the Summarizer
+* <strong>Research Mode</strong>: When users request specific information on a topic, the system retrieves and processes the actual document content to generate comprehensive responses</p>
 <p>For research-based queries, the Agent Summarizer synthesizes findings into coherent, cited responses. The entire system is supported by comprehensive process monitoring that tracks execution stages, token usage, and performance metrics to ensure operational reliability.</p>
 <h2>Knowledge Sources</h2>
 <p>The model accesses various knowledge sources structured in a tiered approach, with internal RBC documentation serving as primary authoritative sources. These include Corporate Accounting Policy Manuals, APG Cheat Sheet Infographics, APG Wiki Entries, Internal Accounting Memos, Project Approval Request Guidance, Internal Control over Financial Reporting Policy, and additional specialized internal knowledge bases. To supplement these, IRIS also integrates external sources including IASB Standards and Interpretations as well as guidance from select accounting firms (EY, KPMG, and PwC). This hierarchical approach ensures that internal policies take precedence while leveraging industry standards when appropriate.</p>
@@ -92,9 +147,11 @@
 <p>IRIS is not used for any regulatory purposes but functions as a search tool for users to retrieve information from documents. All outputs must be verified by users based on the source references provided. The system complies with RBC's Generative AI policies and Data Loss Prevention (DLP) requirements, ensuring appropriate handling of internal information.</p>
 <p>The system incorporates multiple safeguards to clearly indicate when information represents general guidance rather than definitive advice and recommend verification with domain specialists before implementation. It maintains confidentiality of internal policies, identifies and refuses to answer queries outside its scope, and provides appropriate confidence signaling based on source authority and consensus. These mechanisms ensure that IRIS operates within established compliance frameworks and supports proper governance of financial information.</p>
 <h2>Model Materiality and Risk Assessment</h2>
-<p>IRIS is expected to deliver significant productivity benefits by providing faster access to finance and accounting policy information across the CFO Group. By implementing robust access controls, clear usage guidelines, and comprehensive documentation practices, the system demonstrates an ACCEPTABLE risk profile for internal usage, with an overall uncertainty level of ±10.4%. The system's design prioritizes accuracy and transparency, with clear attribution to source documentation and appropriate limitations on scope. These features, combined with ongoing monitoring and regular performance assessment, ensure that IRIS delivers value while maintaining the high standards required for financial information systems within RBC.</p>
+<p>IRIS is expected to deliver significant productivity benefits by providing faster access to finance and accounting policy information across the CFO Group. By implementing robust access controls, clear usage guidelines, and comprehensive documentation practices, the system demonstrates an ACCEPTABLE risk profile for internal usage, with an overall uncertainty level of &plusmn;10.4%. The system's design prioritizes accuracy and transparency, with clear attribution to source documentation and appropriate limitations on scope. These features, combined with ongoing monitoring and regular performance assessment, ensure that IRIS delivers value while maintaining the high standards required for financial information systems within RBC.</p>
+
 <div class="section-divider"></div>
-<h1>3. Model Purpose and Scope</h1>
+
+    <h1>3. Model Purpose and Scope</h1>
 <p><strong>Model Name:</strong> IRIS (Intelligent Research and Information System)
 <strong>Model ID:</strong> IRIS-001</p>
 <h2>3.1 Model Purpose and Use</h2>
@@ -103,7 +160,24 @@
 <p>IRIS performs several key functions throughout its operational pipeline. The system begins with the Agent Router, which analyzes user inquiries to determine whether they can be answered directly from conversation history or require database research. For research-path queries, the Agent Clarifier evaluates contextual sufficiency and either requests essential missing information or creates a comprehensive research statement. The Agent Planner selects the most relevant databases to query based on the research statement. Database Subagents then access appropriate knowledge sources through one of three specialized retrieval methods tailored to document types: Catalog Search - Small, Catalog Search - Large, or Semantic Search - Large. Finally, the Agent Summarizer integrates findings from multiple sources into coherent, properly cited responses with appropriate disclaimers and source attributions.</p>
 <p>The model delivers significant value to RBC by providing centralized access to finance and accounting policy information across multiple sources, ensuring consistent, policy-compliant guidance with proper citations and disclaimers. This approach substantially reduces the time needed to retrieve relevant finance and accounting information while offering comprehensive coverage of both internal RBC finance policies and selected external standards. By streamlining information access, IRIS enhances productivity for finance professionals across the CFO Group, supporting more efficient decision-making processes while ensuring compliance with established policies and standards.</p>
 <h3>Table 4: Model Dependencies</h3>
-<p>| Base Model ID | Upstream Model(s) | Interdependent Model(s) | Downstream Model(s) | | |-------------------| |---------------------| | IRIS-001 | N/A | N/A | N/A |</p>
+<table>
+<thead>
+<tr>
+<th>Base Model ID</th>
+<th>Upstream Model(s)</th>
+<th>Interdependent Model(s)</th>
+<th>Downstream Model(s)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>IRIS-001</td>
+<td>N/A</td>
+<td>N/A</td>
+<td>N/A</td>
+</tr>
+</tbody>
+</table>
 <h2>3.2 Scope of Application</h2>
 <p>The target scope of IRIS is for use across the CFO Group within RBC. It is designed to provide information and guidance within the domains of finance and accounting policy, with content coverage spanning a comprehensive range of internal and external resources.</p>
 <p>The system's content scope encompasses internal RBC finance and accounting policies and procedures, CFO and APG-developed guides, cheatsheets, and wikis, as well as internal accounting memos and project approval requests. It also covers financial reporting and control documentation, management reporting policies and guidelines, IFRS standards and interpretations, and accounting firm guidance on IFRS application from EY, KPMG, and PwC. This diverse content base enables IRIS to address a wide range of finance and accounting information needs.</p>
@@ -118,8 +192,30 @@
 <p>All IRIS outputs share common characteristics designed to ensure their utility and reliability. They are delivered in markdown format with a clear and professional tone, properly structured with organizational headings to enhance readability. The content maintains compliance with internal standards for accounting guidance while being transparent about sources and confidence levels. Each response explicitly addresses limitations and verification requirements, ensuring users understand the appropriate use context for the information provided.</p>
 <p>Performance requirements for model outputs include accurate information retrieval from appropriate knowledge sources, proper citation of relevant policies and standards, clear distinction between high and low confidence information, inclusion of all required disclaimers and verification statements, and compliance with established quality guidelines for structure and formatting. These requirements ensure that IRIS outputs consistently meet the needs of finance professionals while maintaining appropriate risk controls.</p>
 <h3>Table 5: Approved Model Outputs</h3>
-<p>| Model ID | Output | Detailed Description | Model Use | Business Purpose | Region of Use | User | | |--------| |-----------| |---------------| |
-| IRIS-001 | Text Responses to Finance and Accounting Policy Inquiries | Natural language responses to user inquiries, including appropriate citations, disclaimers, and structured content based on available knowledge sources | Internal - Decision Support | Finance and Accounting Policy Guidance | Global | RBC CFO Group Members |</p>
+<table>
+<thead>
+<tr>
+<th>Model ID</th>
+<th>Output</th>
+<th>Detailed Description</th>
+<th>Model Use</th>
+<th>Business Purpose</th>
+<th>Region of Use</th>
+<th>User</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>IRIS-001</td>
+<td>Text Responses to Finance and Accounting Policy Inquiries</td>
+<td>Natural language responses to user inquiries, including appropriate citations, disclaimers, and structured content based on available knowledge sources</td>
+<td>Internal - Decision Support</td>
+<td>Finance and Accounting Policy Guidance</td>
+<td>Global</td>
+<td>RBC CFO Group Members</td>
+</tr>
+</tbody>
+</table>
 <h2>3.4 Compliance with Regulations, Policies, and Procedures</h2>
 <h3>3.4.1 Internal Policies</h3>
 <p>IRIS is not used for regulatory purposes but functions primarily as a search tool for users to retrieve information from documents. All outputs require verification by users based on the source references provided.</p>
@@ -130,8 +226,10 @@
 <p>The system adheres to RBC's guidance on Generative AI from T&amp;O, CISO, and Compliance, including the RBC CISO Directive on Generative AI.</p>
 <p>Output quality standards are maintained through structured requirements that ensure all responses include appropriate disclaimers, follow established formatting guidelines, use consistent citation formats for finance and accounting standards, and clearly indicate confidence levels based on source authority. These standards help maintain consistency and reliability across system outputs.</p>
 <p>Operational requirements include access controls based on authorized user roles, process monitoring for system performance and usage, and regular validation of knowledge sources for accuracy and currency. These controls ensure the system operates reliably while supporting the information needs of the CFO Group.</p>
+
 <div class="section-divider"></div>
-<h1>4. Model Structure and Approach</h1>
+
+    <h1>4. Model Structure and Approach</h1>
 <p><strong>Model Name:</strong> IRIS (Intelligent Research and Information System)
 <strong>Model ID:</strong> IRIS-001</p>
 <h2>4.1 Approach Selection</h2>
@@ -260,8 +358,47 @@
 <h2>4.3 Assumptions and Limitations (Restrictions) of Model Methodology</h2>
 <h3>Key Assumptions in the Modeling Approach</h3>
 <h4>Table 7: Model Methodology Assumptions</h4>
-<p>| Model ID | Name | Description and Rationale | Materiality (Impact on Model Outputs) | Business Driven (Qualitative) or Quantitative Methodology Driven | | |------| |--------------------------------------| |
-| IRIS-001 | Incorrect Content | Users accept that generated content might be inaccurate or false and verify important information with domain specialists | Low | Qualitative | | IRIS-001 | Source Authority | Information from internal policy documents is assumed to be accurate and authoritative | High | Business Driven | | IRIS-001 | Query Classification | The router agent can effectively categorize queries as requiring research or direct response | Medium | Quantitative Methodology Driven | | IRIS-001 | Source Selection | The planner agent can effectively identify the most relevant databases for a given query | Medium | Quantitative Methodology Driven |</p>
+<table>
+<thead>
+<tr>
+<th>Model ID</th>
+<th>Name</th>
+<th>Description and Rationale</th>
+<th>Materiality (Impact on Model Outputs)</th>
+<th>Business Driven (Qualitative) or Quantitative Methodology Driven</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>IRIS-001</td>
+<td>Incorrect Content</td>
+<td>Users accept that generated content might be inaccurate or false and verify important information with domain specialists</td>
+<td>Low</td>
+<td>Qualitative</td>
+</tr>
+<tr>
+<td>IRIS-001</td>
+<td>Source Authority</td>
+<td>Information from internal policy documents is assumed to be accurate and authoritative</td>
+<td>High</td>
+<td>Business Driven</td>
+</tr>
+<tr>
+<td>IRIS-001</td>
+<td>Query Classification</td>
+<td>The router agent can effectively categorize queries as requiring research or direct response</td>
+<td>Medium</td>
+<td>Quantitative Methodology Driven</td>
+</tr>
+<tr>
+<td>IRIS-001</td>
+<td>Source Selection</td>
+<td>The planner agent can effectively identify the most relevant databases for a given query</td>
+<td>Medium</td>
+<td>Quantitative Methodology Driven</td>
+</tr>
+</tbody>
+</table>
 <h3>Limitations of the Modeling Approach</h3>
 <p>While our generative model is chosen based on its strong reasoning capabilities, it is not without limitations. There are instances when the model may not fully grasp extremely specialized finance or accounting concepts. However, these instances are not very frequent, and users are made aware of the risks and limitations through the Maven user interface.</p>
 <h3>Assumptions and Conditions for Revisiting</h3>
@@ -278,10 +415,61 @@
 <h3>Design Approach</h3>
 <p>Our approach focused on implementing best practices from industry trends and leveraging techniques that have demonstrated success in public benchmarks and leaderboards. Rather than conducting extensive comparative testing, we selected approaches that aligned with our document types and system requirements. The hybrid approach with specialized processing pipelines required minimal tuning to achieve satisfactory results, with most adjustments focused on prompt engineering and database optimization.</p>
 <h3>Table 8: Model Methodology Limitations (Restrictions)</h3>
-<p>| Model ID | Name | Description | Impact on Business Use(s) | Monitoring Description (if applicable) | Monitoring Accountable (if applicable) | Monitoring Frequency (if applicable) | | |------| |--------------------------| |--------------------------------------| |
-| IRIS-001 | Knowledge Boundaries | The model will not have access to information beyond its available knowledge sources | Low, as the model will acknowledge when information is not found in available sources | Process monitoring tracks database search results | CFO Technology Team | Continuous | | IRIS-001 | Context Window Limitation | Each agent has a finite context window that limits the amount of information it can process at once | Low, as the model implements chunking techniques | Token usage monitoring | CFO Technology Team | Continuous | | IRIS-001 | Hallucination Risk | As with all LLM-based systems, there is a risk of generating plausible-sounding but incorrect information | Medium, mitigated by citations and verification | Random spot-checks of responses | CFO Content Team | Monthly | | IRIS-001 | Response Latency | Complex research queries that search multiple databases can take longer to process | Low, as progress updates are provided | Process monitoring of stage durations | CFO Technology Team | Continuous |</p>
+<table>
+<thead>
+<tr>
+<th>Model ID</th>
+<th>Name</th>
+<th>Description</th>
+<th>Impact on Business Use(s)</th>
+<th>Monitoring Description (if applicable)</th>
+<th>Monitoring Accountable (if applicable)</th>
+<th>Monitoring Frequency (if applicable)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>IRIS-001</td>
+<td>Knowledge Boundaries</td>
+<td>The model will not have access to information beyond its available knowledge sources</td>
+<td>Low, as the model will acknowledge when information is not found in available sources</td>
+<td>Process monitoring tracks database search results</td>
+<td>CFO Technology Team</td>
+<td>Continuous</td>
+</tr>
+<tr>
+<td>IRIS-001</td>
+<td>Context Window Limitation</td>
+<td>Each agent has a finite context window that limits the amount of information it can process at once</td>
+<td>Low, as the model implements chunking techniques</td>
+<td>Token usage monitoring</td>
+<td>CFO Technology Team</td>
+<td>Continuous</td>
+</tr>
+<tr>
+<td>IRIS-001</td>
+<td>Hallucination Risk</td>
+<td>As with all LLM-based systems, there is a risk of generating plausible-sounding but incorrect information</td>
+<td>Medium, mitigated by citations and verification</td>
+<td>Random spot-checks of responses</td>
+<td>CFO Content Team</td>
+<td>Monthly</td>
+</tr>
+<tr>
+<td>IRIS-001</td>
+<td>Response Latency</td>
+<td>Complex research queries that search multiple databases can take longer to process</td>
+<td>Low, as progress updates are provided</td>
+<td>Process monitoring of stage durations</td>
+<td>CFO Technology Team</td>
+<td>Continuous</td>
+</tr>
+</tbody>
+</table>
+
 <div class="section-divider"></div>
-<h1>5. Model Development Data</h1>
+
+    <h1>5. Model Development Data</h1>
 <h2>5.1 Data Validity and Sources</h2>
 <p>The IRIS system retrieves information from a collection of internal and external accounting and finance knowledge sources stored in a PostgreSQL database. This section describes the data used by the system, its sources, and processing methods.</p>
 <h3>Data Coverage and Scope</h3>
@@ -564,20 +752,20 @@
 <h3>Database Structure</h3>
 <p>The PostgreSQL database consists of three primary tables:</p>
 <p><strong>Table: apg_catalog</strong>
-- Purpose: Stores metadata about available knowledge sources
-- Key fields: document_source, document_name, document_type, document_description
-- Contains information about document origin, purpose, and searchable descriptions</p>
+* Purpose: Stores metadata about available knowledge sources
+* Key fields: document_source, document_name, document_type, document_description
+* Contains information about document origin, purpose, and searchable descriptions</p>
 <p><strong>Table: apg_content</strong>
-- Purpose: Stores actual document content and section summaries
-- Key fields: document_source, document_name, section_id, section_name, section_summary, section_content
-- Used primarily for catalog-based search methods</p>
+* Purpose: Stores actual document content and section summaries
+* Key fields: document_source, document_name, section_id, section_name, section_summary, section_content
+* Used primarily for catalog-based search methods</p>
 <p><strong>Table: iris_textbook_database</strong>
-- Purpose: Stores vector representations for semantic search
-- Key fields: embedding (vector), content, section_hierarchy, section_importance_score
-- Contains rich metadata at chapter and section levels to support recursive context expansion
-- Includes structural positioning data (chapter, section, part numbers)
-- Stores information about applicable standards and references
-- Utilizes PostgreSQL vector extensions for similarity searching</p>
+* Purpose: Stores vector representations for semantic search
+* Key fields: embedding (vector), content, section_hierarchy, section_importance_score
+* Contains rich metadata at chapter and section levels to support recursive context expansion
+* Includes structural positioning data (chapter, section, part numbers)
+* Stores information about applicable standards and references
+* Utilizes PostgreSQL vector extensions for similarity searching</p>
 <h3>Input Processing Flow</h3>
 <p>The IRIS agent architecture processes inputs through a sequential pipeline:</p>
 <ol>
@@ -640,11 +828,79 @@
 <h2>5.4 Data Assumptions and Limitations</h2>
 <p>The IRIS system operates under several data-related assumptions and limitations that affect its performance and usage scope.</p>
 <h3>Key Data Assumptions</h3>
-<p>| Assumption | Description | Impact | | |-------------| |
-| Document Authority | Internal RBC policies are considered more authoritative than external sources | Ensures organizational standards are prioritized | | Content Correctness | Documents in designated storage locations are assumed to be correct and authoritative | Enables efficient processing without additional validation steps | | Source Completeness | The knowledge base is assumed to contain all relevant policy documentation | Critical for providing comprehensive responses | | Document Structure | Higher-level document sections are assumed to contain more important policy statements | Influences retrieval and ranking algorithms | | Query Context | User intent is assumed to remain consistent within a conversation | Enables effective follow-up handling |</p>
+<table>
+<thead>
+<tr>
+<th>Assumption</th>
+<th>Description</th>
+<th>Impact</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Document Authority</td>
+<td>Internal RBC policies are considered more authoritative than external sources</td>
+<td>Ensures organizational standards are prioritized</td>
+</tr>
+<tr>
+<td>Content Correctness</td>
+<td>Documents in designated storage locations are assumed to be correct and authoritative</td>
+<td>Enables efficient processing without additional validation steps</td>
+</tr>
+<tr>
+<td>Source Completeness</td>
+<td>The knowledge base is assumed to contain all relevant policy documentation</td>
+<td>Critical for providing comprehensive responses</td>
+</tr>
+<tr>
+<td>Document Structure</td>
+<td>Higher-level document sections are assumed to contain more important policy statements</td>
+<td>Influences retrieval and ranking algorithms</td>
+</tr>
+<tr>
+<td>Query Context</td>
+<td>User intent is assumed to remain consistent within a conversation</td>
+<td>Enables effective follow-up handling</td>
+</tr>
+</tbody>
+</table>
 <h3>Data Limitations</h3>
-<p>| Limitation | Description | Impact on Usage | | |-------------| |
-| Content Currency | Lag between document updates and database refresh | Responses may not reflect very recent policy changes | | Visual Content Processing | Limited ability to fully capture complex tables, charts, and financial diagrams | Some visual information may be simplified or summarized | | Information Boundaries | System can only access information in its knowledge base | Cannot leverage information beyond processed documents | | Calculation Handling | Unable to execute or validate accounting calculations in source materials | Cannot verify calculation results or run new scenarios | | Language Support | Optimized for English content with limited multilingual capabilities | May not fully process non-English segments in documents |</p>
+<table>
+<thead>
+<tr>
+<th>Limitation</th>
+<th>Description</th>
+<th>Impact on Usage</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Content Currency</td>
+<td>Lag between document updates and database refresh</td>
+<td>Responses may not reflect very recent policy changes</td>
+</tr>
+<tr>
+<td>Visual Content Processing</td>
+<td>Limited ability to fully capture complex tables, charts, and financial diagrams</td>
+<td>Some visual information may be simplified or summarized</td>
+</tr>
+<tr>
+<td>Information Boundaries</td>
+<td>System can only access information in its knowledge base</td>
+<td>Cannot leverage information beyond processed documents</td>
+</tr>
+<tr>
+<td>Calculation Handling</td>
+<td>Unable to execute or validate accounting calculations in source materials</td>
+<td>Cannot verify calculation results or run new scenarios</td>
+</tr>
+<tr>
+<td>Language Support</td>
+<td>Optimized for English content with limited multilingual capabilities</td>
+<td>May not fully process non-English segments in documents</td>
+</tr>
+</tbody>
+</table>
 <h3>Future Improvements</h3>
 <p>The IRIS system is designed for continuous improvement through several planned enhancements:</p>
 <ol>
@@ -660,8 +916,10 @@
 <li>Better preservation of document relationships and cross-references</li>
 </ol>
 <p>The system's modular design allows for component-level improvements without requiring complete system redesign.</p>
+
 <div class="section-divider"></div>
-<h1>Model Specification</h1>
+
+    <h1>Model Specification</h1>
 <p>This section describes the IRIS model methodologies and processing components, focusing on the agent-based architecture, query processing mechanisms, and mathematical foundations of information retrieval and synthesis.</p>
 <h2>6.1 Agent Architecture</h2>
 <p>The IRIS system implements a modular, pipeline-based architecture consisting of specialized AI agents that process user queries through a structured workflow. The overall architecture contains two primary processing paths managed by a central model orchestration engine:</p>
@@ -681,8 +939,47 @@
 <li>Implements a comprehensive retrieval-augmented generation approach</li>
 </ol>
 <h3>6.1.2 Agent Components and Functions</h3>
-<p>| Agent | Function | Mathematical/Algorithm Basis | | |----------| |
-| Router Agent | Determines processing path based on query analysis | Classification algorithm using transformer-based embeddings with context-aware decision boundary | | Clarifier Agent | Assesses query context sufficiency and creates research statements | Information-theoretic query expansion with controlled relevance parameters | | Planner Agent | Selects optimal databases for query execution | Multi-class relevance scoring with database-specific prior weightings | | Database Subagents | Retrieve and pre-process information from various data sources | Implemented through five distinct processing methodologies (detailed in Section 6.2) | | Summarizer Agent | Integrates findings and generates coherent responses | Multi-document extraction-abstraction mechanism with attention-based relevance weighting | | Direct Response Agent | Generates responses using only conversation history | Constrained inference with context-window utilization optimization |</p>
+<table>
+<thead>
+<tr>
+<th>Agent</th>
+<th>Function</th>
+<th>Mathematical/Algorithm Basis</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Router Agent</td>
+<td>Determines processing path based on query analysis</td>
+<td>Classification algorithm using transformer-based embeddings with context-aware decision boundary</td>
+</tr>
+<tr>
+<td>Clarifier Agent</td>
+<td>Assesses query context sufficiency and creates research statements</td>
+<td>Information-theoretic query expansion with controlled relevance parameters</td>
+</tr>
+<tr>
+<td>Planner Agent</td>
+<td>Selects optimal databases for query execution</td>
+<td>Multi-class relevance scoring with database-specific prior weightings</td>
+</tr>
+<tr>
+<td>Database Subagents</td>
+<td>Retrieve and pre-process information from various data sources</td>
+<td>Implemented through five distinct processing methodologies (detailed in Section 6.2)</td>
+</tr>
+<tr>
+<td>Summarizer Agent</td>
+<td>Integrates findings and generates coherent responses</td>
+<td>Multi-document extraction-abstraction mechanism with attention-based relevance weighting</td>
+</tr>
+<tr>
+<td>Direct Response Agent</td>
+<td>Generates responses using only conversation history</td>
+<td>Constrained inference with context-window utilization optimization</td>
+</tr>
+</tbody>
+</table>
 <h3>6.1.3 System Integration</h3>
 <p>The central chat model orchestration component (<code>model.py</code>) serves as the integration hub, managing:</p>
 <ol>
@@ -696,10 +993,10 @@
 <p>The IRIS system implements five distinct database retrieval methodologies, each optimized for different types of source documents:</p>
 <h3>6.2.1 Catalog Search - Small</h3>
 <p><strong>Mathematical Specification:</strong>
-- Two-stage selection with catalog prioritization
-- Document assessment function: $R_{LLM}(d, q) \rightarrow {d_1, d_2, ..., d_n}$ representing LLM-selected documents
-- Document selection is modeled as: $D_{selected} = LLM_{select}(catalog, q)$ where the LLM selects documents based on title and description
-- Response synthesis: $R_{synthesis} = LLM_{synthesize}({content(d) | d \in D_{selected}}, q)$</p>
+* Two-stage selection with catalog prioritization
+* Document assessment function: $R_{LLM}(d, q) \rightarrow {d_1, d_2, ..., d_n}$ representing LLM-selected documents
+* Document selection is modeled as: $D_{selected} = LLM_{select}(catalog, q)$ where the LLM selects documents based on title and description
+* Response synthesis: $R_{synthesis} = LLM_{synthesize}({content(d) | d \in D_{selected}}, q)$</p>
 <p><strong>Implementation:</strong>
 1. <strong>Catalog Retrieval</strong>: Query PostgreSQL for document metadata using SQL:
    <code>sql
@@ -708,10 +1005,10 @@
    WHERE document_source = 'internal_par'
    ORDER BY document_name</code>
 2. <strong>Document Selection</strong>: LLM-based selection (GPT-4o-mini with temperature 0.2):
-   - Format catalog with document IDs, names, and descriptions
-   - Pass to LLM with selection prompt
-   - Parse returned JSON list of document IDs
-   - Fallback regex extraction if JSON parsing fails
+   * Format catalog with document IDs, names, and descriptions
+   * Pass to LLM with selection prompt
+   * Parse returned JSON list of document IDs
+   * Fallback regex extraction if JSON parsing fails
 3. <strong>Content Retrieval</strong>: Fetch complete document content for selected IDs:
    <code>sql
    SELECT section_id, section_name, section_content
@@ -720,23 +1017,23 @@
    AND document_name = %s
    ORDER BY section_id</code>
 4. <strong>Response Synthesis</strong>: Generate research report using tool call (GPT-4o with temperature 0.2):
-   - Format documents with hierarchical structure: <code># Document Name</code> → <code>## Section Name</code> → Content
-   - Tool call returns both <code>status_summary</code> and <code>detailed_research</code>
-   - Citations include document name and section name</p>
+   * Format documents with hierarchical structure: <code># Document Name</code> → <code>## Section Name</code> → Content
+   * Tool call returns both <code>status_summary</code> and <code>detailed_research</code>
+   * Citations include document name and section name</p>
 <p><strong>Application:</strong>
-- Used for standard documents (PDF, DOCX) with simple structure
-- Example databases: <code>internal_par</code>, <code>internal_process_and_controls</code></p>
+* Used for standard documents (PDF, DOCX) with simple structure
+* Example databases: <code>internal_par</code>, <code>internal_process_and_controls</code></p>
 <h3>6.2.2 Catalog Search - Large</h3>
 <p><strong>Mathematical Specification:</strong>
-- Three-stage hierarchical selection using LLM judgment
-- Document selection: $D_{selected} = LLM_{select}(catalog, q)$ where the LLM selects relevant documents
-- Section selection: $S_{selected,d} = LLM_{select}(sections(d), q)$ for each $d \in D_{selected}$
-- Final synthesis: $R_{synthesis} = LLM_{synthesize}({content(s) | s \in \bigcup_{d \in D_{selected}} S_{selected,d}}, q)$</p>
+* Three-stage hierarchical selection using LLM judgment
+* Document selection: $D_{selected} = LLM_{select}(catalog, q)$ where the LLM selects relevant documents
+* Section selection: $S_{selected,d} = LLM_{select}(sections(d), q)$ for each $d \in D_{selected}$
+* Final synthesis: $R_{synthesis} = LLM_{synthesize}({content(s) | s \in \bigcup_{d \in D_{selected}} S_{selected,d}}, q)$</p>
 <p><strong>Implementation:</strong>
 1. <strong>Catalog Retrieval</strong>: Same SQL query pattern as Catalog Search - Small but for CAPM sources
 2. <strong>Document Selection</strong>: LLM-based selection (GPT-4o-mini with temperature 0.2):
-   - Same process as Catalog Search - Small
-   - Returns list of document IDs from the catalog
+   * Same process as Catalog Search - Small
+   * Returns list of document IDs from the catalog
 3. <strong>Section Summary Retrieval</strong>: Additional intermediate step:
    <code>sql
    SELECT section_id, section_name, section_summary
@@ -745,9 +1042,9 @@
    AND document_name = %s
    ORDER BY section_id</code>
 4. <strong>Section Selection</strong>: LLM-based selection of specific sections (GPT-4o-mini):
-   - Format document sections and their summaries
-   - LLM selects specific section IDs for each document based on relevance to query
-   - Returns dictionary mapping document names to lists of section IDs
+   * Format document sections and their summaries
+   * LLM selects specific section IDs for each document based on relevance to query
+   * Returns dictionary mapping document names to lists of section IDs
 5. <strong>Content Retrieval</strong>: Fetch only selected sections:
    <code>sql
    SELECT section_id, section_name, section_content
@@ -758,54 +1055,54 @@
    ORDER BY section_id</code>
 6. <strong>Response Synthesis</strong>: Same tool-calling approach as Catalog Search - Small</p>
 <p><strong>Application:</strong>
-- Used for large documents with distinct sections/chapters
-- Example databases: <code>internal_capm</code>, <code>internal_global_finance_standards</code></p>
+* Used for large documents with distinct sections/chapters
+* Example databases: <code>internal_capm</code>, <code>internal_global_finance_standards</code></p>
 <h3>6.2.3 Catalog Search - Excel</h3>
 <p><strong>Mathematical Specification:</strong>
-- Table preprocessing with row-level document conversion
-- Each row/grouping $r$ is transformed to document $d_r$ by function $T_{excel}(r) = d_r$
-- Document selection through LLM assessment: $D_{selected} = LLM_{select}(catalog, q)$ where each catalog entry represents a processed row/table</p>
+* Table preprocessing with row-level document conversion
+* Each row/grouping $r$ is transformed to document $d_r$ by function $T_{excel}(r) = d_r$
+* Document selection through LLM assessment: $D_{selected} = LLM_{select}(catalog, q)$ where each catalog entry represents a processed row/table</p>
 <p><strong>Implementation:</strong>
 1. <strong>Pre-Processing</strong>: Excel files are processed during database creation:
-   - Excel content is extracted and converted to Markdown format
-   - Each table or logical row grouping becomes a separate document
-   - Tables are preserved with Markdown formatting
+   * Excel content is extracted and converted to Markdown format
+   * Each table or logical row grouping becomes a separate document
+   * Tables are preserved with Markdown formatting
 2. <strong>Database Query</strong>: After pre-processing, same implementation as Catalog Search - Small:
-   - Document selection via LLM from catalog
-   - Content retrieval for selected documents
-   - Response synthesis using GPT-4o tool call</p>
+   * Document selection via LLM from catalog
+   * Content retrieval for selected documents
+   * Response synthesis using GPT-4o tool call</p>
 <p><strong>Application:</strong>
-- Used for Excel spreadsheets and tabular data
-- Example databases: <code>internal_wiki</code>, <code>internal_management_reporting</code></p>
+* Used for Excel spreadsheets and tabular data
+* Example databases: <code>internal_wiki</code>, <code>internal_management_reporting</code></p>
 <h3>6.2.4 Catalog Search - Vision</h3>
 <p><strong>Mathematical Specification:</strong>
-- Image-to-text conversion using multi-pass vision transformer
-- Image content extraction: $T_{vision}(i) = d_i$ where $i$ is an image and $d_i$ is the extracted text document
-- Document selection through LLM assessment: $D_{selected} = LLM_{select}(catalog, q)$ </p>
+* Image-to-text conversion using multi-pass vision transformer
+* Image content extraction: $T_{vision}(i) = d_i$ where $i$ is an image and $d_i$ is the extracted text document
+* Document selection through LLM assessment: $D_{selected} = LLM_{select}(catalog, q)$ </p>
 <p><strong>Implementation:</strong>
 1. <strong>Pre-Processing</strong>: Infographics are processed during database creation:
-   - Images are processed via Qwen2 vision model in multi-pass mode
-   - Multiple extraction passes: text, tables, charts, diagrams
-   - Content is converted to structured Markdown format
-   - Each infographic becomes a document in the database
+   * Images are processed via Qwen2 vision model in multi-pass mode
+   * Multiple extraction passes: text, tables, charts, diagrams
+   * Content is converted to structured Markdown format
+   * Each infographic becomes a document in the database
 2. <strong>Database Query</strong>: After pre-processing, identical implementation to Catalog Search - Small:
-   - Document selection via LLM from catalog (GPT-4o-mini)
-   - Content retrieval for selected documents
-   - Response synthesis using GPT-4o tool call (temperature 0.2)</p>
+   * Document selection via LLM from catalog (GPT-4o-mini)
+   * Content retrieval for selected documents
+   * Response synthesis using GPT-4o tool call (temperature 0.2)</p>
 <p><strong>Application:</strong>
-- Used for infographics and image-based documents
-- Example database: <code>internal_cheatsheets</code></p>
+* Used for infographics and image-based documents
+* Example database: <code>internal_cheatsheets</code></p>
 <h3>6.2.5 Semantic Search - Large</h3>
 <p><strong>Mathematical Specification:</strong>
-- Vector-based similarity search with token-aware chunking
-- Chunk embedding: $E(c) = \vec{v_c}$ where $c$ is a chunk and $\vec{v_c}$ is its embedding vector
-- Query embedding: $E(q) = \vec{v_q}$
-- Initial similarity scoring: $sim(c, q) = 1 - (c.embedding &lt;=&gt; q.embedding)$ using the PostgreSQL vector operator
-- Initial chunk selection: $C_{initial}(q) = top_k(C, sim, k)$ where $k = 20$ (INITIAL_K constant)
-- Relevance filtering: $C_{filtered} = {c \in C_{initial} | LLM_{relevance}(c.summary, q) = 1}$
-- Importance reranking: $score(c) = sim(c, q) \cdot (1 + IMPORTANCE_FACTOR \cdot c.importance_score)$ where $IMPORTANCE_FACTOR = 0.2$
-- Section expansion: Expand sections with tokens $\leq THRESHOLD$ (with different thresholds based on rank)
-- Gap filling: Fill sequence gaps where $0 &lt; gap \leq MAX_SEQUENCE_GAP$ (where $MAX_SEQUENCE_GAP = 8$)</p>
+* Vector-based similarity search with token-aware chunking
+* Chunk embedding: $E(c) = \vec{v_c}$ where $c$ is a chunk and $\vec{v_c}$ is its embedding vector
+* Query embedding: $E(q) = \vec{v_q}$
+* Initial similarity scoring: $sim(c, q) = 1 - (c.embedding &lt;=&gt; q.embedding)$ using the PostgreSQL vector operator
+* Initial chunk selection: $C_{initial}(q) = top_k(C, sim, k)$ where $k = 20$ (INITIAL_K constant)
+* Relevance filtering: $C_{filtered} = {c \in C_{initial} | LLM_{relevance}(c.summary, q) = 1}$
+* Importance reranking: $score(c) = sim(c, q) \cdot (1 + IMPORTANCE_FACTOR \cdot c.importance_score)$ where $IMPORTANCE_FACTOR = 0.2$
+* Section expansion: Expand sections with tokens $\leq THRESHOLD$ (with different thresholds based on rank)
+* Gap filling: Fill sequence gaps where $0 &lt; gap \leq MAX_SEQUENCE_GAP$ (where $MAX_SEQUENCE_GAP = 8$)</p>
 <p><strong>Implementation:</strong>
 1. <strong>Query embedding generation</strong>: Using text-embedding-3-large (2000 dimensions) to create a dense vector representation of the query
 2. <strong>Initial vector similarity search</strong>: Retrieval of top-20 (INITIAL_K) most similar chunks by cosine similarity using PostgreSQL vector extension with the query:
@@ -816,34 +1113,34 @@
    ORDER BY vector_score DESC
    LIMIT %s;</code>
 3. <strong>Summary relevance filtering</strong>: LLM-based classification of chunk summaries as relevant (1) or irrelevant (0):
-   - Uses GPT-4o-mini (temperature 0.2) to classify each chunk's summary
-   - Removes chunks classified as irrelevant (0)
-   - Keeps original rank order from vector similarity
+   * Uses GPT-4o-mini (temperature 0.2) to classify each chunk's summary
+   * Removes chunks classified as irrelevant (0)
+   * Keeps original rank order from vector similarity
 4. <strong>Importance-based reranking</strong>:
-   - Applies formula: $score = vector_score \cdot (1 + 0.2 \cdot section_importance_score)$
-   - Sorts results by new score (descending)
-   - Assigns new rank based on this ordering
+   * Applies formula: $score = vector_score \cdot (1 + 0.2 \cdot section_importance_score)$
+   * Sorts results by new score (descending)
+   * Assigns new rank based on this ordering
 5. <strong>Section expansion by token count</strong>:
-   - For top 5 ranked chunks: Expands if section token count ≤ 8000 tokens
-   - For other chunks: Expands if section token count ≤ 4000 tokens
-   - Fetches all chunks from the same section when expansion criteria are met
-   - Groups chunks from the same section together
+   * For top 5 ranked chunks: Expands if section token count ≤ 8000 tokens
+   * For other chunks: Expands if section token count ≤ 4000 tokens
+   * Fetches all chunks from the same section when expansion criteria are met
+   * Groups chunks from the same section together
 6. <strong>Sequence gap filling</strong>:
-   - Identifies sequence gaps between consecutive chunks ≤ 8 sequence numbers
-   - Fills these gaps by retrieving the intermediate chunks
-   - Assigns importance scores based on averaging adjacent chunks
+   * Identifies sequence gaps between consecutive chunks ≤ 8 sequence numbers
+   * Fills these gaps by retrieving the intermediate chunks
+   * Assigns importance scores based on averaging adjacent chunks
 7. <strong>Card formatting and response synthesis</strong>:
-   - Formats all chunks into "cards" with metadata and content
-   - Generates comprehensive research report using GPT-4o (temperature 0.7)
-   - Synthesis must include inline citations from the source material</p>
+   * Formats all chunks into "cards" with metadata and content
+   * Generates comprehensive research report using GPT-4o (temperature 0.7)
+   * Synthesis must include inline citations from the source material</p>
 <p><strong>Application:</strong>
-- Used for very large documents and external sources
-- Example databases: <code>external_ey</code>, <code>external_iasb</code>, <code>external_kpmg</code>, <code>external_pwc</code></p>
+* Used for very large documents and external sources
+* Example databases: <code>external_ey</code>, <code>external_iasb</code>, <code>external_kpmg</code>, <code>external_pwc</code></p>
 <h2>6.3 Model Decision Processes</h2>
 <h3>6.3.1 Router Decision</h3>
 <p><strong>Mathematical Specification:</strong>
-- Binary classification: $f_{route}(q, c) \in {direct, research}$
-- Where $q$ is the query and $c$ is the conversation context</p>
+* Binary classification: $f_{route}(q, c) \in {direct, research}$
+* Where $q$ is the query and $c$ is the conversation context</p>
 <p><strong>Implementation:</strong>
 1. Input: User query and conversation history
 2. Process: LLM-based analysis using GPT-4o-mini with structured tool output
@@ -851,19 +1148,19 @@
 4. Parameters: temperature=0.1 (low randomness to ensure consistency)</p>
 <h3>6.3.2 Clarifier Decision</h3>
 <p><strong>Mathematical Specification:</strong>
-- Context sufficiency assessment: $sufficiency(q, c) \in [0, 1]$
-- Research formulation: $r = formulate(q, c)$ if $sufficiency(q, c) &gt; \theta_{context}$</p>
+* Context sufficiency assessment: $sufficiency(q, c) \in [0, 1]$
+* Research formulation: $r = formulate(q, c)$ if $sufficiency(q, c) &gt; \theta_{context}$</p>
 <p><strong>Implementation:</strong>
 1. Input: User query, conversation history, and router decision
 2. Process: LLM-based analysis using GPT-4o with structured output
 3. Output:
-   - Context questions (if insufficient context)
-   - Research statement (if sufficient context)
-   - Research scope (<code>metadata</code> or <code>research</code>)</p>
+   * Context questions (if insufficient context)
+   * Research statement (if sufficient context)
+   * Research scope (<code>metadata</code> or <code>research</code>)</p>
 <h3>6.3.3 Database Selection</h3>
 <p><strong>Mathematical Specification:</strong>
-- Multi-class relevance scoring: $relevance(db, r) \in [0, 1]$ for each database $db$
-- Selection: $DB_{selected} = {db \in DB | relevance(db, r) &gt; \theta_{relevance}}$</p>
+* Multi-class relevance scoring: $relevance(db, r) \in [0, 1]$ for each database $db$
+* Selection: $DB_{selected} = {db \in DB | relevance(db, r) &gt; \theta_{relevance}}$</p>
 <p><strong>Implementation:</strong>
 1. Input: Research statement from clarifier
 2. Process: LLM-based analysis using GPT-4o-mini with structured output
@@ -871,8 +1168,8 @@
 4. Parameters: temperature=0.2 (low randomness with slight variability)</p>
 <h3>6.3.4 Response Synthesis</h3>
 <p><strong>Mathematical Specification:</strong>
-- Multi-document extraction-abstraction: $synthesis(retrieved_content, r)$
-- Where $retrieved_content$ represents the aggregated results from database queries</p>
+* Multi-document extraction-abstraction: $synthesis(retrieved_content, r)$
+* Where $retrieved_content$ represents the aggregated results from database queries</p>
 <p><strong>Implementation:</strong>
 1. Input: Detailed research from multiple database subagents
 2. Process: LLM-based synthesis using GPT-4o
@@ -883,22 +1180,116 @@
 <h3>6.4.1 Language Model Parameters</h3>
 <h4>GPT-4o-mini</h4>
 <p><strong>Parameters:</strong>
-- Used for: Router Agent, Planner Agent, Direct Response Agent, Document/Section Selection
-- Temperature: 0.1-0.2 (low randomness for consistent decision-making)
-- Primary Application: Classification, decision-making, and selection tasks</p>
+* Used for: Router Agent, Planner Agent, Direct Response Agent, Document/Section Selection
+* Temperature: 0.1-0.2 (low randomness for consistent decision-making)
+* Primary Application: Classification, decision-making, and selection tasks</p>
 <h4>GPT-4o</h4>
 <p><strong>Parameters:</strong>
-- Used for: Clarifier Agent, Summarizer Agent, Database Subagent content synthesis
-- Temperature: 0.3-0.7 (task-dependent, higher for creative synthesis)
-- Primary Application: Complex reasoning and content generation tasks</p>
+* Used for: Clarifier Agent, Summarizer Agent, Database Subagent content synthesis
+* Temperature: 0.3-0.7 (task-dependent, higher for creative synthesis)
+* Primary Application: Complex reasoning and content generation tasks</p>
 <h4>Text-Embedding-3-Large</h4>
 <p><strong>Parameters:</strong>
-- Used for: Vector embeddings in semantic search methodology
-- Dimensions: 2,000 (high-dimensional for accurate similarity matching)
-- Primary Application: Vector database search and similarity matching</p>
+* Used for: Vector embeddings in semantic search methodology
+* Dimensions: 2,000 (high-dimensional for accurate similarity matching)
+* Primary Application: Vector database search and similarity matching</p>
 <h3>6.4.2 Retrieval Parameters</h3>
-<p>| Retrieval Method | Parameter | Implementation Approach | | |-----------| |
-| <strong>Catalog Search - Small</strong> | Document Selection | LLM-based relevance assessment of document summaries using GPT-4o-mini | | | Selection Guidance | Prompted with specific criteria for relevance, prioritizing documents directly addressing the query | | | Max Documents | Explicitly limited to 5 documents maximum per prompt instruction | | <strong>Catalog Search - Large</strong> | Document Selection | LLM-based two-stage selection process (documents, then sections) | | | Selection Guidance | Prompted to select based on document descriptions with specific evaluation criteria | | | Max Documents | Explicitly limited to 5 documents maximum per prompt instruction | | <strong>Catalog Search - Excel</strong> | Row/Table Selection | LLM-based relevance assessment of tabular data summaries | | | Selection Guidance | Prompted with dual criteria: 5 document max for specific queries, up to 15 for general listing queries | | | Format Preservation | Preserves table structure in Markdown format for synthesis | | <strong>Catalog Search - Vision</strong> | Image Selection | LLM-based selection of infographics based on extracted text summaries | | | Selection Guidance | Prompted with specific relevance criteria prioritizing documents addressing the query directly | | | Max Documents | Explicitly limited to 5 documents maximum per prompt instruction | | | Visual Content Handling | Multi-pass vision processing with selective extraction of text, tables and figures | | <strong>Semantic Search - Large</strong> | Initial Vector Search | Document-specific vector searches with exact per-source thresholds:<br>• IASB: IAS (20), IFRS (20), IFRICS (10), SIC (10)<br>• EY: Single search (20)<br>• KPMG: Single search (20)<br>• PwC: Single search (20) | | | Reranking Method | Multi-factor reranking combining vector similarity with content importance (importance_factor=0.2) | | | Final Selection | Per-document selection and processing before final aggregation:<br>• Relevance filtering of summaries<br>• Section expansion (top 5 ranks ≤ 8000 tokens, others ≤ 4000 tokens)<br>• Sequence gap filling (gaps ≤ 8) | | | Token Budget | Dynamic adjustment based on content relevance (typically 4,000-8,000 tokens) |</p>
+<table>
+<thead>
+<tr>
+<th>Retrieval Method</th>
+<th>Parameter</th>
+<th>Implementation Approach</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Catalog Search - Small</strong></td>
+<td>Document Selection</td>
+<td>LLM-based relevance assessment of document summaries using GPT-4o-mini</td>
+</tr>
+<tr>
+<td></td>
+<td>Selection Guidance</td>
+<td>Prompted with specific criteria for relevance, prioritizing documents directly addressing the query</td>
+</tr>
+<tr>
+<td></td>
+<td>Max Documents</td>
+<td>Explicitly limited to 5 documents maximum per prompt instruction</td>
+</tr>
+<tr>
+<td><strong>Catalog Search - Large</strong></td>
+<td>Document Selection</td>
+<td>LLM-based two-stage selection process (documents, then sections)</td>
+</tr>
+<tr>
+<td></td>
+<td>Selection Guidance</td>
+<td>Prompted to select based on document descriptions with specific evaluation criteria</td>
+</tr>
+<tr>
+<td></td>
+<td>Max Documents</td>
+<td>Explicitly limited to 5 documents maximum per prompt instruction</td>
+</tr>
+<tr>
+<td><strong>Catalog Search - Excel</strong></td>
+<td>Row/Table Selection</td>
+<td>LLM-based relevance assessment of tabular data summaries</td>
+</tr>
+<tr>
+<td></td>
+<td>Selection Guidance</td>
+<td>Prompted with dual criteria: 5 document max for specific queries, up to 15 for general listing queries</td>
+</tr>
+<tr>
+<td></td>
+<td>Format Preservation</td>
+<td>Preserves table structure in Markdown format for synthesis</td>
+</tr>
+<tr>
+<td><strong>Catalog Search - Vision</strong></td>
+<td>Image Selection</td>
+<td>LLM-based selection of infographics based on extracted text summaries</td>
+</tr>
+<tr>
+<td></td>
+<td>Selection Guidance</td>
+<td>Prompted with specific relevance criteria prioritizing documents addressing the query directly</td>
+</tr>
+<tr>
+<td></td>
+<td>Max Documents</td>
+<td>Explicitly limited to 5 documents maximum per prompt instruction</td>
+</tr>
+<tr>
+<td></td>
+<td>Visual Content Handling</td>
+<td>Multi-pass vision processing with selective extraction of text, tables and figures</td>
+</tr>
+<tr>
+<td><strong>Semantic Search - Large</strong></td>
+<td>Initial Vector Search</td>
+<td>Document-specific vector searches with exact per-source thresholds:<br>• IASB: IAS (20), IFRS (20), IFRICS (10), SIC (10)<br>• EY: Single search (20)<br>• KPMG: Single search (20)<br>• PwC: Single search (20)</td>
+</tr>
+<tr>
+<td></td>
+<td>Reranking Method</td>
+<td>Multi-factor reranking combining vector similarity with content importance (importance_factor=0.2)</td>
+</tr>
+<tr>
+<td></td>
+<td>Final Selection</td>
+<td>Per-document selection and processing before final aggregation:<br>• Relevance filtering of summaries<br>• Section expansion (top 5 ranks ≤ 8000 tokens, others ≤ 4000 tokens)<br>• Sequence gap filling (gaps ≤ 8)</td>
+</tr>
+<tr>
+<td></td>
+<td>Token Budget</td>
+<td>Dynamic adjustment based on content relevance (typically 4,000-8,000 tokens)</td>
+</tr>
+</tbody>
+</table>
 <p>The catalog search methods (small, large, excel, vision) rely on LLM-driven selection from document/section summaries without explicit numerical thresholds, instead using comparative relevance assessment through prompt engineering. The semantic search method combines explicit vector similarity search with additional reranking and selection parameters optimized through empirical testing.</p>
 <h2>6.5 Numerical Methods and Approximations</h2>
 <h3>6.5.1 Tokenization</h3>
@@ -912,13 +1303,13 @@
 <h3>6.5.2 Token-Aware Chunking Algorithm</h3>
 <p>Section-aware chunking implements a numerical approximation for optimal information density through a hierarchical sectional chunking process:</p>
 <p><strong>Mathematical Formulation:</strong>
-- Let $D$ represent a document consisting of sections $S = {s_1, s_2, ..., s_n}$
-- For each section $s_i$, calculate token count $T(s_i)$
-- Define threshold parameters $T_{min} = 250$ and $T_{max} = 750$
-- The chunking process can be expressed as a sequence of operations:
-  - If $T(s_i) &lt; T_{min}$: Merge with adjacent section $s_{i+1}$ if $T(s_i) + T(s_{i+1}) \leq T_{max}$
-  - If $T(s_i) &gt; T_{max}$: Split into subsections ${s_{i,1}, s_{i,2}, ..., s_{i,k}}$ such that $T_{min} \leq T(s_{i,j}) \leq T_{max}$ for all $j \in {1,2,...,k}$
-  - If $T_{min} \leq T(s_i) \leq T_{max}$: Maintain as a standalone chunk</p>
+* Let $D$ represent a document consisting of sections $S = {s_1, s_2, ..., s_n}$
+* For each section $s_i$, calculate token count $T(s_i)$
+* Define threshold parameters $T_{min} = 250$ and $T_{max} = 750$
+* The chunking process can be expressed as a sequence of operations:
+  * If $T(s_i) &lt; T_{min}$: Merge with adjacent section $s_{i+1}$ if $T(s_i) + T(s_{i+1}) \leq T_{max}$
+  * If $T(s_i) &gt; T_{max}$: Split into subsections ${s_{i,1}, s_{i,2}, ..., s_{i,k}}$ such that $T_{min} \leq T(s_{i,j}) \leq T_{max}$ for all $j \in {1,2,...,k}$
+  * If $T_{min} \leq T(s_i) \leq T_{max}$: Maintain as a standalone chunk</p>
 <p><strong>Implementation Process:</strong>
 1. The system traverses the document structure hierarchically, beginning with major sections
 2. For each section, the tokenizer calculates precise token counts using tiktoken
@@ -931,11 +1322,11 @@
 <h3>6.5.3 Embedding Batch Processing</h3>
 <p>To optimize embedding generation, the system implements vector batch processing through a parallelized computation architecture:</p>
 <p><strong>Mathematical Formulation:</strong>
-- Given a set of chunks $C = {c_1, c_2, ..., c_m}$
-- Define batch size $B = 50$
-- Partition $C$ into batch sets $B_i = {c_{i \cdot B + 1}, c_{i \cdot B + 2}, ..., c_{min((i+1) \cdot B, m)}}$ for $i \in {0, 1, ..., \lceil m/B \rceil - 1}$
-- Apply embedding function $E$ to each batch: $E(B_i) = {E(c) | c \in B_i}$
-- The complete embedding set is the union: $E(C) = \bigcup_{i=0}^{\lceil m/B \rceil - 1} E(B_i)$</p>
+* Given a set of chunks $C = {c_1, c_2, ..., c_m}$
+* Define batch size $B = 50$
+* Partition $C$ into batch sets $B_i = {c_{i \cdot B + 1}, c_{i \cdot B + 2}, ..., c_{min((i+1) \cdot B, m)}}$ for $i \in {0, 1, ..., \lceil m/B \rceil - 1}$
+* Apply embedding function $E$ to each batch: $E(B_i) = {E(c) | c \in B_i}$
+* The complete embedding set is the union: $E(C) = \bigcup_{i=0}^{\lceil m/B \rceil - 1} E(B_i)$</p>
 <p><strong>Implementation Process:</strong>
 1. The system divides the total chunk collection into batches of 50 chunks each
 2. Each batch is submitted to the embedding API as a single request
@@ -946,7 +1337,7 @@
 <p>This batched approach significantly improves throughput by reducing API overhead while maintaining embedding quality and consistency.</p>
 <h3>6.5.4 Similarity Scoring</h3>
 <p>Vector similarity is calculated using cosine similarity:</p>
-<p>$$sim(v_1, v_2) = \frac{v_1 \cdot v_2}{| |v_1| | \cdot | |v_2| |}$$</p>
+<p>$$sim(v_1, v_2) = \frac{v_1 \cdot v_2}{||v_1|| \cdot ||v_2||}$$</p>
 <p>Where $v_1$ and $v_2$ are embedding vectors for chunks or queries.</p>
 <h2>6.6 Process Monitoring and Metrics</h2>
 <p>The system implements comprehensive process monitoring to track performance:</p>
@@ -973,8 +1364,10 @@
 <li>Correlation of success/failure rates with specific query types</li>
 <li>Fine-tuning of model parameters based on performance metrics</li>
 </ol>
+
 <div class="section-divider"></div>
-<h1>7. Model Implementation</h1>
+
+    <h1>7. Model Implementation</h1>
 <p><strong>Model Name:</strong> IRIS (Intelligent Research and Information System)
 <strong>Model ID:</strong> IRIS-001</p>
 <h2>7.1 Software / Coding</h2>
@@ -1082,9 +1475,9 @@
 </ol>
 <h4>Database Connectivity</h4>
 <p>The system connects to the database through a standardized configuration layer in <code>/iris/src/initial_setup/db_config.py</code>, which:
-- Provides connection parameters for both local development and RBC environments
-- Handles connection management and error recovery
-- Verifies the existence of required tables</p>
+* Provides connection parameters for both local development and RBC environments
+* Handles connection management and error recovery
+* Verifies the existence of required tables</p>
 <h4>Database Processing Methods</h4>
 <p>The IRIS system employs five distinct approaches for knowledge retrieval (as detailed in Section 6.2):</p>
 <ol>
@@ -1135,10 +1528,10 @@
 <li><strong>Model Settings</strong>: Configuration parameters defined in <code>/iris/src/llm_connectors/rbc_openai_settings.py</code>.</li>
 </ul>
 <p>The system employs:
-- <strong>GPT-4o</strong>: For complex reasoning tasks like research synthesis, clarification, and content generation
-- <strong>GPT-4o-mini</strong>: For decision tasks like routing, database selection, and document filtering
-- <strong>text-embedding-3-large</strong>: For generating vector embeddings used in semantic search
-- <strong>Qwen2</strong>: For vision processing of infographics and other image content</p>
+* <strong>GPT-4o</strong>: For complex reasoning tasks like research synthesis, clarification, and content generation
+* <strong>GPT-4o-mini</strong>: For decision tasks like routing, database selection, and document filtering
+* <strong>text-embedding-3-large</strong>: For generating vector embeddings used in semantic search
+* <strong>Qwen2</strong>: For vision processing of infographics and other image content</p>
 <p>Each model is accessed with customized prompt engineering to ensure consistent outputs across the agent architecture.</p>
 <h3>7.1.5 Process Monitoring</h3>
 <p>The IRIS system includes comprehensive process monitoring capabilities:</p>
@@ -1229,8 +1622,10 @@ Agent Summarizer
 <p>The implementation of IRIS has undergone initial testing in the Dataiku environment. The system will receive comprehensive testing once integrated into the Maven UI.</p>
 <p>The Dataiku version has been made available to business users to provide feedback on functionality and response quality. This feedback has been incorporated into ongoing development efforts.</p>
 <p>Final implementation testing will be performed once the system is live in the Maven development environment, currently planned for June. This testing will validate that the system behaves as expected in the production environment and meets all business requirements.</p>
+
 <div class="section-divider"></div>
-<h1>8. Model Testing</h1>
+
+    <h1>8. Model Testing</h1>
 <p><strong>Model Name:</strong> IRIS (Intelligent Research and Information System)
 <strong>Model ID:</strong> IRIS-001</p>
 <p>This section documents the testing methodology and results used to validate the IRIS system. The testing focused on evaluating the system's ability to retrieve relevant information from knowledge sources and generate appropriate responses across a range of finance and accounting policy queries.</p>
@@ -1571,8 +1966,10 @@ Agent Summarizer
 </li>
 </ol>
 <p>Based on the testing results, the IRIS system is considered suitable for deployment as a finance and accounting policy guidance tool, with the understanding that human oversight remains essential for verifying responses on critical matters. The feedback collection mechanism and ongoing monitoring will support continuous improvement as the system is used in practice.</p>
+
 <div class="section-divider"></div>
-<h1>Section 9: Ongoing Monitoring Design</h1>
+
+    <h1>Section 9: Ongoing Monitoring Design</h1>
 <h2>9.1 Performance Monitoring</h2>
 <p>The IRIS model will implement a comprehensive performance monitoring approach based on the successful quantitative evaluation methodology used during initial non-APG testing. Our strategy includes:</p>
 <h3>Quarterly Evaluation Using Original Test Set</h3>
@@ -1612,8 +2009,75 @@ Agent Summarizer
 <p><strong>Note:</strong> Quarterly monitoring reports are stored in the SharePoint folder: <code>https://rbcds.sharepoint.com/sites/IRISProject/Shared Documents/OngoingMonitoring/QuarterlyReports/</code></p>
 </blockquote>
 <h3>Table 11: Model Performance Tracking Metrics</h3>
-<p>| Model ID | Metric # | Metric Category | Metric Description | Metric Threshold | Monitoring Frequency | Monitoring Accountable | | |----------| |-------------------| |---------------------| |
-| IRIS-001 | PM-01    | Database Selection | Percentage of queries with correct database selection | ≥ 95% | Quarterly | Model Owner | | IRIS-001 | PM-02    | Document Selection | Percentage of queries with correct document selection | ≥ 95% | Quarterly | Model Owner | | IRIS-001 | PM-03    | Answer Accuracy    | Percentage accuracy of answer content | ≥ 90% | Quarterly | Model Owner | | IRIS-001 | PM-04    | Overall Performance | Combined performance score across all dimensions | ≥ 85% | Quarterly | Model Owner | | IRIS-001 | PM-05    | Edge Case Handling | Performance on edge case queries | ≥ 80% | Quarterly | Model Owner | | IRIS-001 | PM-06    | User Feedback   | Aggregated positive feedback rate from Maven interface | ≥ 80% | Monthly | Model Owner |</p>
+<table>
+<thead>
+<tr>
+<th>Model ID</th>
+<th>Metric #</th>
+<th>Metric Category</th>
+<th>Metric Description</th>
+<th>Metric Threshold</th>
+<th>Monitoring Frequency</th>
+<th>Monitoring Accountable</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>IRIS-001</td>
+<td>PM-01</td>
+<td>Database Selection</td>
+<td>Percentage of queries with correct database selection</td>
+<td>≥ 95%</td>
+<td>Quarterly</td>
+<td>Model Owner</td>
+</tr>
+<tr>
+<td>IRIS-001</td>
+<td>PM-02</td>
+<td>Document Selection</td>
+<td>Percentage of queries with correct document selection</td>
+<td>≥ 95%</td>
+<td>Quarterly</td>
+<td>Model Owner</td>
+</tr>
+<tr>
+<td>IRIS-001</td>
+<td>PM-03</td>
+<td>Answer Accuracy</td>
+<td>Percentage accuracy of answer content</td>
+<td>≥ 90%</td>
+<td>Quarterly</td>
+<td>Model Owner</td>
+</tr>
+<tr>
+<td>IRIS-001</td>
+<td>PM-04</td>
+<td>Overall Performance</td>
+<td>Combined performance score across all dimensions</td>
+<td>≥ 85%</td>
+<td>Quarterly</td>
+<td>Model Owner</td>
+</tr>
+<tr>
+<td>IRIS-001</td>
+<td>PM-05</td>
+<td>Edge Case Handling</td>
+<td>Performance on edge case queries</td>
+<td>≥ 80%</td>
+<td>Quarterly</td>
+<td>Model Owner</td>
+</tr>
+<tr>
+<td>IRIS-001</td>
+<td>PM-06</td>
+<td>User Feedback</td>
+<td>Aggregated positive feedback rate from Maven interface</td>
+<td>≥ 80%</td>
+<td>Monthly</td>
+<td>Model Owner</td>
+</tr>
+</tbody>
+</table>
 <h3>Real-World Question Incorporation</h3>
 <ul>
 <li>As the model operates in production, a selection of actual user questions will be collected through the Maven interface</li>
@@ -1659,8 +2123,66 @@ Agent Summarizer
 <li>Process monitoring notebook scripts enable detailed analysis of performance trends</li>
 </ul>
 <h3>Table 12: Process Monitoring Metrics</h3>
-<p>| Model ID | Metric # | Metric Category | Metric Description | Metric Threshold | Monitoring Frequency | Monitoring Accountable | | |----------| |-------------------| |---------------------| |
-| IRIS-001 | PR-01    | Response Time   | End-to-end query response time | ≤ baseline + 20% | Continuous | Operations Team | | IRIS-001 | PR-02    | Process Flow    | All expected process stages completed | 100% completion | Continuous | Operations Team | | IRIS-001 | PR-03    | Resource Usage  | Token consumption per query | ≤ baseline + 15% | Daily | Operations Team | | IRIS-001 | PR-04    | Error Rate      | Failed queries or process stages | ≤ 1% | Continuous | Operations Team | | IRIS-001 | PR-05    | System Uptime   | Model availability for queries | ≥ 99.5% | Monthly | Operations Team |</p>
+<table>
+<thead>
+<tr>
+<th>Model ID</th>
+<th>Metric #</th>
+<th>Metric Category</th>
+<th>Metric Description</th>
+<th>Metric Threshold</th>
+<th>Monitoring Frequency</th>
+<th>Monitoring Accountable</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>IRIS-001</td>
+<td>PR-01</td>
+<td>Response Time</td>
+<td>End-to-end query response time</td>
+<td>≤ baseline + 20%</td>
+<td>Continuous</td>
+<td>Operations Team</td>
+</tr>
+<tr>
+<td>IRIS-001</td>
+<td>PR-02</td>
+<td>Process Flow</td>
+<td>All expected process stages completed</td>
+<td>100% completion</td>
+<td>Continuous</td>
+<td>Operations Team</td>
+</tr>
+<tr>
+<td>IRIS-001</td>
+<td>PR-03</td>
+<td>Resource Usage</td>
+<td>Token consumption per query</td>
+<td>≤ baseline + 15%</td>
+<td>Daily</td>
+<td>Operations Team</td>
+</tr>
+<tr>
+<td>IRIS-001</td>
+<td>PR-04</td>
+<td>Error Rate</td>
+<td>Failed queries or process stages</td>
+<td>≤ 1%</td>
+<td>Continuous</td>
+<td>Operations Team</td>
+</tr>
+<tr>
+<td>IRIS-001</td>
+<td>PR-05</td>
+<td>System Uptime</td>
+<td>Model availability for queries</td>
+<td>≥ 99.5%</td>
+<td>Monthly</td>
+<td>Operations Team</td>
+</tr>
+</tbody>
+</table>
 <h3>Remediation Process</h3>
 <p>In the event of threshold breaches, the following escalation and remediation process will be followed:</p>
 <ol>
@@ -1674,8 +2196,10 @@ Agent Summarizer
 <li>Quarterly review of all incidents to identify patterns requiring model updates</li>
 </ol>
 <p>This comprehensive monitoring approach combines both performance evaluation (accuracy and quality of responses) with process monitoring (operational health) to ensure the IRIS model functions as expected over time. By leveraging the same quantitative methodology used in initial testing, we maintain consistency in evaluation criteria while adapting to evolving usage patterns and requirements.</p>
+
 <div class="section-divider"></div>
-<h1>Section 10: Evaluation of Model Uncertainty</h1>
+
+    <h1>Section 10: Evaluation of Model Uncertainty</h1>
 <h2>10.1 Uncertainty Assessment Approach</h2>
 <p>For the IRIS model, we have conducted a structured uncertainty assessment to quantify the level of uncertainty in model outputs and determine whether this uncertainty is acceptable given the model's intended use as a finance and accounting policy guidance tool.</p>
 <p>Our assessment combines quantitative metrics from our testing results with qualitative analysis of uncertainty management mechanisms built into the system. This approach aligns with the requirements for models of medium materiality, focusing on:</p>
@@ -1705,12 +2229,86 @@ Agent Summarizer
 <h2>10.2 Quantitative Uncertainty Assessment</h2>
 <p>Based on our comprehensive testing with both APG and non-APG databases, we have derived the following uncertainty measures:</p>
 <h3>10.2.1 Core Component Uncertainty</h3>
-<p>| Component | Metric | Result | Uncertainty Estimate | Interpretation | | |--------| |---------------------| |
-| Database Selection | Accuracy Rate | 99.4% | ±0.6% | Very low uncertainty in determining relevant knowledge sources | | Document Retrieval | Accuracy Rate | 97.7% | ±2.3% | Low uncertainty in identifying relevant documents within databases | | Answer Content | Accuracy Rate | 94.2% | ±5.8% | Low-moderate uncertainty in synthesizing accurate responses | | Overall Performance | Combined Score | 89.6% | ±10.4% | Acceptable overall uncertainty for the intended use case |</p>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Metric</th>
+<th>Result</th>
+<th>Uncertainty Estimate</th>
+<th>Interpretation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Database Selection</td>
+<td>Accuracy Rate</td>
+<td>99.4%</td>
+<td>&plusmn;0.6%</td>
+<td>Very low uncertainty in determining relevant knowledge sources</td>
+</tr>
+<tr>
+<td>Document Retrieval</td>
+<td>Accuracy Rate</td>
+<td>97.7%</td>
+<td>&plusmn;2.3%</td>
+<td>Low uncertainty in identifying relevant documents within databases</td>
+</tr>
+<tr>
+<td>Answer Content</td>
+<td>Accuracy Rate</td>
+<td>94.2%</td>
+<td>&plusmn;5.8%</td>
+<td>Low-moderate uncertainty in synthesizing accurate responses</td>
+</tr>
+<tr>
+<td>Overall Performance</td>
+<td>Combined Score</td>
+<td>89.6%</td>
+<td>&plusmn;10.4%</td>
+<td>Acceptable overall uncertainty for the intended use case</td>
+</tr>
+</tbody>
+</table>
 <h3>10.2.2 Edge Case and Uncertainty Expression</h3>
-<p>| Uncertainty Dimension | Measurement | Result | Interpretation | | |------------| |----------------| | Knowledge Boundary Recognition | Appropriate refusal rate for out-of-scope queries | &gt;95% | Low uncertainty in boundary recognition | | Ambiguity Recognition | Rate of appropriate clarification requests | &gt;90% | Low uncertainty in ambiguity detection | | Confidence Expression | Alignment between expressed confidence and accuracy | &gt;85% | Moderate uncertainty in confidence calibration | | Source Conflict Resolution | Accuracy of prioritizing authoritative sources | &gt;95% | Low uncertainty in conflict resolution |</p>
+<table>
+<thead>
+<tr>
+<th>Uncertainty Dimension</th>
+<th>Measurement</th>
+<th>Result</th>
+<th>Interpretation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Knowledge Boundary Recognition</td>
+<td>Appropriate refusal rate for out-of-scope queries</td>
+<td>&gt;95%</td>
+<td>Low uncertainty in boundary recognition</td>
+</tr>
+<tr>
+<td>Ambiguity Recognition</td>
+<td>Rate of appropriate clarification requests</td>
+<td>&gt;90%</td>
+<td>Low uncertainty in ambiguity detection</td>
+</tr>
+<tr>
+<td>Confidence Expression</td>
+<td>Alignment between expressed confidence and accuracy</td>
+<td>&gt;85%</td>
+<td>Moderate uncertainty in confidence calibration</td>
+</tr>
+<tr>
+<td>Source Conflict Resolution</td>
+<td>Accuracy of prioritizing authoritative sources</td>
+<td>&gt;95%</td>
+<td>Low uncertainty in conflict resolution</td>
+</tr>
+</tbody>
+</table>
 <h3>10.2.3 Overall Uncertainty Assessment</h3>
-<p>Based on the quantitative measures above, the IRIS model demonstrates an overall uncertainty range of ±10.4%, with higher certainty in upstream components (database and document selection) and slightly lower certainty in response synthesis.</p>
+<p>Based on the quantitative measures above, the IRIS model demonstrates an overall uncertainty range of &plusmn;10.4%, with higher certainty in upstream components (database and document selection) and slightly lower certainty in response synthesis.</p>
 <p>Given that the model is used as a research and guidance tool with explicit verification requirements rather than for direct decision-making, this level of uncertainty is assessed as <strong>ACCEPTABLE</strong> for the intended business purpose.</p>
 <h2>10.3 Uncertainty Management Mechanisms</h2>
 <p>The IRIS system implements several mechanisms to appropriately manage and communicate uncertainty:</p>
@@ -1758,7 +2356,7 @@ Agent Summarizer
 <h3>10.4.2 Conclusion on Uncertainty</h3>
 <p>Based on the quantitative uncertainty estimates and the model's intended use, we conclude that:</p>
 <ol>
-<li>The overall uncertainty level of ±10.4% is ACCEPTABLE for the model's business purpose</li>
+<li>The overall uncertainty level of &plusmn;10.4% is ACCEPTABLE for the model's business purpose</li>
 <li>The uncertainty is appropriately managed through built-in mechanisms</li>
 <li>The uncertainty is transparently communicated to users</li>
 <li>Ongoing monitoring will ensure uncertainty remains within acceptable bounds</li>
@@ -1772,8 +2370,10 @@ Agent Summarizer
 <li>User feedback from the Maven interface provides real-world validation of appropriate confidence signaling</li>
 </ul>
 <p>By maintaining consistent evaluation metrics between the initial testing and ongoing monitoring, we will track any changes in the system's uncertainty over time, ensuring it remains within acceptable bounds for its intended use.</p>
+
 <div class="section-divider"></div>
-<h1>Section 11: Further Research</h1>
+
+    <h1>Section 11: Further Research</h1>
 <p>Based on our experience developing and testing the IRIS system, we have identified several promising avenues for further research and enhancement. These areas represent clear paths for continued development based on both the strengths and limitations observed in the current implementation.</p>
 <h2>11.1 Model Enhancement Opportunities</h2>
 <ul>
@@ -1848,6 +2448,7 @@ Agent Summarizer
 </li>
 </ul>
 <p>These research directions will be pursued based on operational priorities, user feedback, and evolving business requirements. Regular assessment of the implemented enhancements will ensure continued alignment with the system's core purpose of providing accurate, comprehensive finance and accounting policy guidance.</p>
+
 
 </body>
 </html>
