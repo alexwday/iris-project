@@ -9,6 +9,7 @@ import logging
 import os
 from typing import Dict, List, Any, Optional
 from datetime import datetime
+import re
 
 # Get module logger
 logger = logging.getLogger(__name__)
@@ -48,6 +49,93 @@ def generate_html_report(
     except Exception as e:
         logger.error(f"Error saving HTML report: {str(e)}")
         raise
+
+
+def _markdown_to_html(markdown_text):
+    """
+    Convert markdown text to HTML.
+    This is a simple conversion for headings, lists, and basic formatting.
+    """
+    if not markdown_text:
+        return ""
+    
+    # Convert headers (# Header -> <h1>Header</h1>, etc.)
+    html = re.sub(r'^# (.*?)$', r'<h1>\1</h1>', markdown_text, flags=re.MULTILINE)
+    html = re.sub(r'^## (.*?)$', r'<h2>\1</h2>', html, flags=re.MULTILINE)
+    html = re.sub(r'^### (.*?)$', r'<h3>\1</h3>', html, flags=re.MULTILINE)
+    html = re.sub(r'^#### (.*?)$', r'<h4>\1</h4>', html, flags=re.MULTILINE)
+    
+    # Convert unordered lists
+    list_items = re.findall(r'^- (.*?)$', html, flags=re.MULTILINE)
+    if list_items:
+        html_list = '<ul>\n'
+        for item in list_items:
+            html_list += f'  <li>{item}</li>\n'
+        html_list += '</ul>'
+        html = re.sub(r'(?:^- .*?$\n)+', html_list, html, flags=re.MULTILINE)
+    
+    # Convert ordered lists
+    ordered_list_pattern = r'^(\d+)\. (.*?)$'
+    ordered_items = re.findall(ordered_list_pattern, html, flags=re.MULTILINE)
+    if ordered_items:
+        ol_sections = re.finditer(r'(?:^\d+\. .*?$\n)+', html, flags=re.MULTILINE)
+        for section in ol_sections:
+            section_text = section.group(0)
+            items = re.findall(ordered_list_pattern, section_text, flags=re.MULTILINE)
+            html_list = '<ol>\n'
+            for _, item in items:
+                html_list += f'  <li>{item}</li>\n'
+            html_list += '</ol>'
+            html = html.replace(section_text, html_list)
+    
+    # Convert bold (**text** -> <strong>text</strong>)
+    html = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', html)
+    
+    # Convert italic (*text* -> <em>text</em>)
+    html = re.sub(r'\*(.*?)\*', r'<em>\1</em>', html)
+    
+    # Convert paragraphs (blank lines separate paragraphs)
+    paragraphs = html.split('\n\n')
+    html = ''
+    for p in paragraphs:
+        if not p.strip():
+            continue
+        if not (p.startswith('<h') or p.startswith('<ul') or p.startswith('<ol')):
+            html += f'<p>{p}</p>\n'
+        else:
+            html += p + '\n'
+    
+    # Convert tables
+    if '|' in markdown_text:
+        table_sections = re.finditer(r'((?:^\|.*\|$\n)+)', markdown_text, flags=re.MULTILINE)
+        for section in table_sections:
+            table_text = section.group(0)
+            rows = table_text.strip().split('\n')
+            html_table = '<table class="md-table">\n'
+            
+            for i, row in enumerate(rows):
+                if not row.strip():
+                    continue
+                
+                cells = [cell.strip() for cell in row.split('|')[1:-1]]
+                if i == 0:  # Header row
+                    html_table += '  <thead>\n    <tr>\n'
+                    for cell in cells:
+                        html_table += f'      <th>{cell}</th>\n'
+                    html_table += '    </tr>\n  </thead>\n  <tbody>\n'
+                elif i == 1 and all(c.strip().startswith('-') for c in cells):
+                    # Skip the separator row
+                    continue
+                else:  # Data rows
+                    html_table += '    <tr>\n'
+                    for cell in cells:
+                        html_table += f'      <td>{cell}</td>\n'
+                    html_table += '    </tr>\n'
+            
+            html_table += '  </tbody>\n</table>\n'
+            html = html.replace(table_text, html_table)
+    
+    return html
 
 
 def _generate_html_content(
@@ -134,6 +222,7 @@ def _generate_html_content(
             display: flex;
             justify-content: space-between;
             flex-wrap: wrap;
+            margin-bottom: 20px;
         }}
         .score-box {{
             background-color: #f8f9fa;
@@ -169,7 +258,104 @@ def _generate_html_content(
             padding-left: 10px;
             border-left: 3px solid #ddd;
         }}
+        .md-table {{
+            width: 100%;
+            margin: 20px 0;
+        }}
+        .md-table th {{
+            background-color: #eef1f5;
+        }}
+        .collapsible {{
+            background-color: #f1f1f1;
+            color: #444;
+            cursor: pointer;
+            padding: 18px;
+            width: 100%;
+            border: none;
+            text-align: left;
+            outline: none;
+            font-size: 15px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }}
+        .active, .collapsible:hover {{
+            background-color: #e1e6f0;
+        }}
+        .content {{
+            padding: 0 18px;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.2s ease-out;
+            background-color: #fafbfc;
+            border-radius: 0 0 5px 5px;
+            margin-bottom: 20px;
+        }}
+        .collapsible-indicators {{
+            display: flex;
+            gap: 10px;
+        }}
+        .indicator {{
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            display: inline-block;
+        }}
+        .indicator-green {{
+            background-color: #28a745;
+        }}
+        .indicator-yellow {{
+            background-color: #ffc107;
+        }}
+        .indicator-red {{
+            background-color: #dc3545;
+        }}
+        .indicator-none {{
+            background-color: #6c757d;
+        }}
+        .executive-summary-score-container {{
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+            margin: 20px 0;
+            background-color: #eef8fc;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }}
+        .executive-score-box {{
+            background-color: white;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 10px;
+            min-width: 180px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            text-align: center;
+        }}
+        .executive-score-value {{
+            font-size: 2em;
+            font-weight: bold;
+            color: #0056b3;
+        }}
     </style>
+    <script>
+        window.onload = function() {
+            var coll = document.getElementsByClassName("collapsible");
+            for (var i = 0; i < coll.length; i++) {
+                coll[i].addEventListener("click", function() {
+                    this.classList.toggle("active");
+                    var content = this.nextElementSibling;
+                    if (content.style.maxHeight) {
+                        content.style.maxHeight = null;
+                    } else {
+                        content.style.maxHeight = content.scrollHeight + "px";
+                    }
+                });
+            }
+        }
+    </script>
 </head>
 <body>
     <h1>IRIS Test Evaluation Report</h1>
@@ -180,21 +366,79 @@ def _generate_html_content(
     </div>
     """
     
-    # Add summary section if available
+    # Extract average scores from evaluations for executive summary
+    overall_pct_scores = []
+    db_pct_scores = []
+    doc_pct_scores = []
+    answer_pct_scores = []
+    
+    for eval_data in evaluations:
+        if not eval_data:
+            continue
+        
+        percentage_scores = eval_data.get('percentage_score', {})
+        
+        if percentage_scores.get('overall_pct') is not None:
+            overall_pct_scores.append(percentage_scores.get('overall_pct'))
+        if percentage_scores.get('database_selection_pct') is not None:
+            db_pct_scores.append(percentage_scores.get('database_selection_pct'))
+        if percentage_scores.get('document_selection_pct') is not None:
+            doc_pct_scores.append(percentage_scores.get('document_selection_pct'))
+        if percentage_scores.get('answer_accuracy_pct') is not None:
+            answer_pct_scores.append(percentage_scores.get('answer_accuracy_pct'))
+    
+    # Calculate averages if we have scores
+    avg_overall = round(sum(overall_pct_scores) / len(overall_pct_scores), 1) if overall_pct_scores else None
+    avg_db = round(sum(db_pct_scores) / len(db_pct_scores), 1) if db_pct_scores else None
+    avg_doc = round(sum(doc_pct_scores) / len(doc_pct_scores), 1) if doc_pct_scores else None
+    avg_answer = round(sum(answer_pct_scores) / len(answer_pct_scores), 1) if answer_pct_scores else None
+    
+    # Color function for percentage scores
+    def get_score_class(score):
+        if score is None:
+            return ""
+        if score >= 80:
+            return "high-score"
+        elif score >= 60:
+            return "medium-score"
+        else:
+            return "low-score"
+    
+    # Add executive summary section if available
     if summary and 'summary' in summary:
         html += f"""
     <h2>Executive Summary</h2>
+    
+    <div class="executive-summary-score-container">
+        <div class="executive-score-box {get_score_class(avg_overall)}">
+            <div class="executive-score-value">{avg_overall if avg_overall is not None else 'N/A'}%</div>
+            <div class="score-label">Overall Score</div>
+        </div>
+        <div class="executive-score-box {get_score_class(avg_db)}">
+            <div class="executive-score-value">{avg_db if avg_db is not None else 'N/A'}%</div>
+            <div class="score-label">Database Selection</div>
+        </div>
+        <div class="executive-score-box {get_score_class(avg_doc)}">
+            <div class="executive-score-value">{avg_doc if avg_doc is not None else 'N/A'}%</div>
+            <div class="score-label">Document Selection</div>
+        </div>
+        <div class="executive-score-box {get_score_class(avg_answer)}">
+            <div class="executive-score-value">{avg_answer if avg_answer is not None else 'N/A'}%</div>
+            <div class="score-label">Answer Accuracy</div>
+        </div>
+    </div>
+    
     <div class="summary-container">
-        {summary['summary']}
+        {_markdown_to_html(summary['summary'])}
     </div>
     """
     
-    # Add detailed evaluations section
+    # Add detailed evaluations section with collapsible items
     html += """
     <h2>Individual Test Evaluations</h2>
     """
     
-    # Add each evaluation
+    # Add each evaluation as a collapsible section
     for idx, eval_data in enumerate(evaluations):
         if not eval_data:
             continue
@@ -204,76 +448,96 @@ def _generate_html_content(
         sheet_info = eval_data.get('sheet', '')
         title = f"{file_info}" + (f" - Sheet: {sheet_info}" if sheet_info else "")
         
-        # Color function for percentage scores
-        def get_score_class(score):
-            if score is None:
-                return ""
-            if score >= 80:
-                return "high-score"
-            elif score >= 60:
-                return "medium-score"
-            else:
-                return "low-score"
-        
-        # Extract relevant scores
+        # Extract relevant scores for indicators
         percentage_scores = eval_data.get('percentage_score', {})
         overall_pct = percentage_scores.get('overall_pct')
         db_pct = percentage_scores.get('database_selection_pct')
         doc_pct = percentage_scores.get('document_selection_pct')
         answer_pct = percentage_scores.get('answer_accuracy_pct')
         
-        # Extract reviewer score
+        # Determine indicators based on scores
+        def get_indicator_class(score):
+            if score is None:
+                return "indicator-none"
+            if score >= 80:
+                return "indicator-green"
+            elif score >= 60:
+                return "indicator-yellow"
+            else:
+                return "indicator-red"
+        
+        # Format overall percentage score
+        overall_display = f"{overall_pct}%" if overall_pct is not None else "N/A"
+        
+        # Create collapsible button with indicators
+        html += f"""
+    <button class="collapsible">
+        <span>{title} - Overall Score: {overall_display}</span>
+        <div class="collapsible-indicators">
+            <span class="indicator {get_indicator_class(db_pct)}" title="Database Selection"></span>
+            <span class="indicator {get_indicator_class(doc_pct)}" title="Document Selection"></span>
+            <span class="indicator {get_indicator_class(answer_pct)}" title="Answer Accuracy"></span>
+        </div>
+    </button>
+    <div class="content">
+        <div class="evaluation-card">
+            <div class="score-container">
+                <div class="score-box {get_score_class(overall_pct)}">
+                    <div class="score-value">{overall_pct if overall_pct is not None else 'N/A'}%</div>
+                    <div class="score-label">Overall</div>
+                </div>
+                <div class="score-box {get_score_class(db_pct)}">
+                    <div class="score-value">{db_pct if db_pct is not None else 'N/A'}%</div>
+                    <div class="score-label">Database Selection</div>
+                </div>
+                <div class="score-box {get_score_class(doc_pct)}">
+                    <div class="score-value">{doc_pct if doc_pct is not None else 'N/A'}%</div>
+                    <div class="score-label">Document Selection</div>
+                </div>
+                <div class="score-box {get_score_class(answer_pct)}">
+                    <div class="score-value">{answer_pct if answer_pct is not None else 'N/A'}%</div>
+                    <div class="score-label">Answer Accuracy</div>
+                </div>
+    """
+        
+        # Add reviewer score if available
         reviewer_score = eval_data.get('reviewer_overall_score', {})
         score_value = reviewer_score.get('score')
         max_score = reviewer_score.get('max_score', 5)
         
-        # Format score display
-        score_display = f"{score_value}/{max_score}" if score_value is not None else "N/A"
+        if score_value is not None:
+            # Format score display
+            score_display = f"{score_value}/{max_score}"
+            reviewer_pct = (score_value / max_score) * 100 if max_score else 0
+            
+            html += f"""
+                <div class="score-box {get_score_class(reviewer_pct)}">
+                    <div class="score-value">{score_display}</div>
+                    <div class="score-label">Reviewer Score</div>
+                </div>
+    """
         
-        # Add evaluation card
+        # Close the score container and add details
         html += f"""
-    <div class="evaluation-card">
-        <h3>{title}</h3>
-        
-        <div class="score-container">
-            <div class="score-box {get_score_class(overall_pct)}">
-                <div class="score-value">{overall_pct}%</div>
-                <div class="score-label">Overall</div>
             </div>
-            <div class="score-box {get_score_class(db_pct)}">
-                <div class="score-value">{db_pct}%</div>
-                <div class="score-label">Database Selection</div>
-            </div>
-            <div class="score-box {get_score_class(doc_pct)}">
-                <div class="score-value">{doc_pct}%</div>
-                <div class="score-label">Document Selection</div>
-            </div>
-            <div class="score-box {get_score_class(answer_pct)}">
-                <div class="score-value">{answer_pct}%</div>
-                <div class="score-label">Answer Accuracy</div>
-            </div>
-            <div class="score-box">
-                <div class="score-value">{score_display}</div>
-                <div class="score-label">Reviewer Score</div>
-            </div>
+            
+            <h4 class="metric-header">Database Selection</h4>
+            <p><strong>Correct:</strong> {eval_data.get('database_selection', {}).get('correct')}</p>
+            <div class="comments">{eval_data.get('database_selection', {}).get('comments', 'No comments provided')}</div>
+            
+            <h4 class="metric-header">Document Selection</h4>
+            <p><strong>Correct:</strong> {eval_data.get('document_selection', {}).get('correct')}</p>
+            <div class="comments">{eval_data.get('document_selection', {}).get('comments', 'No comments provided')}</div>
+            
+            <h4 class="metric-header">Answer Accuracy</h4>
+            <p><strong>Score:</strong> {eval_data.get('answer_accuracy', {}).get('score')}</p>
+            <div class="comments">{eval_data.get('answer_accuracy', {}).get('comments', 'No comments provided')}</div>
+            
+            <h4 class="metric-header">Overall Assessment</h4>
+            <div class="comments">{eval_data.get('overall_assessment', 'No assessment provided')}</div>
         </div>
-        
-        <h4 class="metric-header">Database Selection</h4>
-        <p><strong>Correct:</strong> {eval_data.get('database_selection', {}).get('correct')}</p>
-        <div class="comments">{eval_data.get('database_selection', {}).get('comments', 'No comments provided')}</div>
-        
-        <h4 class="metric-header">Document Selection</h4>
-        <p><strong>Correct:</strong> {eval_data.get('document_selection', {}).get('correct')}</p>
-        <div class="comments">{eval_data.get('document_selection', {}).get('comments', 'No comments provided')}</div>
-        
-        <h4 class="metric-header">Answer Accuracy</h4>
-        <p><strong>Score:</strong> {eval_data.get('answer_accuracy', {}).get('score')}</p>
-        <div class="comments">{eval_data.get('answer_accuracy', {}).get('comments', 'No comments provided')}</div>
-        
-        <h4 class="metric-header">Overall Assessment</h4>
-        <div class="comments">{eval_data.get('overall_assessment', 'No assessment provided')}</div>
     </div>
-        """
+    """
     
     # Close the HTML
     html += """
@@ -309,7 +573,7 @@ def json_to_html(
         
         # Determine if this is a summary file or individual evaluation
         if isinstance(data, dict) and 'summary' in data:
-            # This is a summary file
+            # This is a summary file with content
             return generate_html_report(data, [], output_file)
         elif isinstance(data, dict) and 'results_by_sheet' in data:
             # This is a file with results by sheet
