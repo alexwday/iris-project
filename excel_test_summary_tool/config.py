@@ -6,16 +6,16 @@ import logging
 # Get module logger
 logger = logging.getLogger(__name__)
 
-# Environment configuration
-IS_RBC_ENV = os.environ.get("IS_RBC_ENV", "0").lower() in ["1", "true"]
-USE_OAUTH = os.environ.get("USE_OAUTH", "1").lower() in ["1", "true"]
-USE_SSL = os.environ.get("USE_SSL", "1").lower() in ["1", "true"]
+# Environment configuration - hardcoded settings
+IS_RBC_ENV = True  # Set to True for RBC environment, False for local
+USE_OAUTH = True   # Set to True to use OAuth authentication
+USE_SSL = True     # Set to True to use SSL certificate
 
 # API configuration
-BASE_URL = os.environ.get("OPENAI_API_BASE", "https://api.openai.com/v1")
-MAX_RETRY_ATTEMPTS = int(os.environ.get("MAX_RETRY_ATTEMPTS", "3"))
-RETRY_DELAY_SECONDS = int(os.environ.get("RETRY_DELAY_SECONDS", "2"))
-REQUEST_TIMEOUT = int(os.environ.get("REQUEST_TIMEOUT", "180"))
+BASE_URL = "https://api.openai.com/v1"
+MAX_RETRY_ATTEMPTS = 3
+RETRY_DELAY_SECONDS = 2
+REQUEST_TIMEOUT = 180
 TOKEN_PREVIEW_LENGTH = 7
 
 # Excel processing configuration
@@ -24,8 +24,8 @@ MARKDOWN_OUTPUT_DIR = "results/markdown"
 SUMMARY_OUTPUT_DIR = "results/summaries"
 
 # LLM configuration
-LLM_MODEL = os.environ.get("LLM_MODEL", "gpt-4")
-LLM_TEMPERATURE = float(os.environ.get("LLM_TEMPERATURE", "0.1"))
+LLM_MODEL = "gpt-4"
+LLM_TEMPERATURE = 0.1
 
 # Individual test case summary prompt
 TEST_CASE_SUMMARY_PROMPT = """
