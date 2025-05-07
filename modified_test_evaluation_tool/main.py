@@ -18,7 +18,7 @@ from typing import Dict, List, Any, Optional
 
 from .config import IS_RBC_ENV, USE_SSL, USE_OAUTH, DEFAULT_MODEL
 from .excel_processing import excel_to_markdown, save_markdown_to_file, extract_test_cases
-from .summarizer import summarize_test_case, aggregate_summaries
+from .summarizer import summarize_test_case, aggregate_summaries, summarize_sheet_test_cases
 from .oauth import setup_oauth
 from .ssl import setup_ssl
 from .utils import setup_logging, find_excel_files
@@ -38,7 +38,7 @@ def process_excel_file(
 ) -> Dict[str, Any]:
     """
     Process a single Excel file: extract test cases, summarize with LLM.
-    Processes each test case separately and aggregates results.
+    Processes all test cases from each sheet in a single LLM call.
 
     Args:
         excel_file (str): Path to Excel file
@@ -59,11 +59,14 @@ def process_excel_file(
         file_output_dir = os.path.join(output_dir, filename)
         os.makedirs(file_output_dir, exist_ok=True)
 
-        # Extract test cases from Excel
-        test_cases = extract_test_cases(excel_file, sheet_name=sheet_name)
-        logger.info(f"Extracted {len(test_cases)} test cases from {excel_file}")
+        # Extract test cases from Excel, grouped by sheet
+        test_cases_by_sheet = extract_test_cases(excel_file, sheet_name=sheet_name, group_by_sheet=True)
         
-        if not test_cases:
+        # Count total test cases
+        total_test_cases = sum(len(cases) for cases in test_cases_by_sheet.values())
+        logger.info(f"Extracted {total_test_cases} test cases from {len(test_cases_by_sheet)} sheets in {excel_file}")
+        
+        if not test_cases_by_sheet:
             logger.warning(f"No test cases found in {excel_file}")
             return {
                 "file": excel_file,
@@ -72,57 +75,65 @@ def process_excel_file(
                 "test_cases_count": 0
             }
         
-        # Process each test case
-        summaries = []
-        for idx, test_case in enumerate(test_cases):
-            logger.info(f"Processing test case {idx+1}/{len(test_cases)}: {test_case.get('test_case_name', 'Unknown')}")
-            
-            sheet_name = test_case.get("sheet_name", "Unknown")
-            test_case_number = test_case.get("test_case_number", f"{idx+1}")
+        # Process each sheet with a batch call
+        all_summaries = []
+        
+        for sheet_name, sheet_test_cases in test_cases_by_sheet.items():
+            logger.info(f"Processing sheet '{sheet_name}' with {len(sheet_test_cases)} test cases")
             
             # Create sheet-specific directory
             sheet_dir = os.path.join(file_output_dir, f"sheet_{sheet_name}")
             os.makedirs(sheet_dir, exist_ok=True)
             
-            # Save markdown if requested
+            # Save markdown files if requested
             if save_intermediate:
-                md_file_path = os.path.join(sheet_dir, f"test_case_{test_case_number}.md")
-                save_markdown_to_file(test_case.get("markdown", ""), md_file_path)
+                for test_case in sheet_test_cases:
+                    test_case_number = test_case.get("test_case_number", "unknown")
+                    md_file_path = os.path.join(sheet_dir, f"test_case_{test_case_number}.md")
+                    save_markdown_to_file(test_case.get("markdown", ""), md_file_path)
             
             try:
-                # Summarize the test case
-                logger.info(f"Summarizing test case: {test_case.get('test_case_name', 'Unknown')}")
-                summary = summarize_test_case(
-                    test_case=test_case,
+                # Summarize all test cases in the sheet with a single LLM call
+                logger.info(f"Batch summarizing {len(sheet_test_cases)} test cases from sheet '{sheet_name}'")
+                sheet_summaries = summarize_sheet_test_cases(
+                    sheet_name=sheet_name,
+                    test_cases=sheet_test_cases,
                     oauth_token=oauth_token,
-                    model=model,
-                    save_result=True,
-                    output_dir=sheet_dir
+                    model=model
                 )
-                summaries.append(summary)
-                logger.info(f"Summary complete for test case: {test_case.get('test_case_name', 'Unknown')}")
-            
+                
+                # Save individual summaries
+                for summary in sheet_summaries:
+                    test_case_number = summary.get("test_case_number", "unknown")
+                    summary_path = os.path.join(sheet_dir, f"test_case_{test_case_number}_summary.json")
+                    with open(summary_path, "w") as f:
+                        json.dump(summary, f, indent=2)
+                
+                all_summaries.extend(sheet_summaries)
+                logger.info(f"Batch summarization complete for sheet '{sheet_name}'")
+                
             except Exception as e:
-                logger.error(f"Error summarizing test case {test_case.get('test_case_name', 'Unknown')}: {str(e)}")
-                # Create a minimal summary with error information
-                error_summary = {
-                    "sheet_name": test_case.get("sheet_name", "Unknown"),
-                    "test_case_number": test_case.get("test_case_number", f"{idx+1}"),
-                    "test_case_name": test_case.get("test_case_name", "Unknown"),
-                    "error": str(e),
-                    "status": "failed"
-                }
-                summaries.append(error_summary)
+                logger.error(f"Error batch summarizing sheet '{sheet_name}': {str(e)}")
+                # Create minimal summaries with error information for all test cases in the sheet
+                for test_case in sheet_test_cases:
+                    error_summary = {
+                        "sheet_name": sheet_name,
+                        "test_case_number": test_case.get("test_case_number", "unknown"),
+                        "test_case_name": test_case.get("test_case_name", "Unknown"),
+                        "error": str(e),
+                        "status": "failed"
+                    }
+                    all_summaries.append(error_summary)
             
-            # Short delay between API calls to avoid rate limiting
-            if idx < len(test_cases) - 1:
-                time.sleep(0.5)
+            # Short delay between processing sheets to avoid rate limiting
+            if len(test_cases_by_sheet) > 1:
+                time.sleep(1)
         
         # Aggregate all test case summaries
         try:
             logger.info("Aggregating test case summaries")
             # Filter out failed summaries
-            valid_summaries = [s for s in summaries if "status" not in s or s["status"] != "failed"]
+            valid_summaries = [s for s in all_summaries if "status" not in s or s["status"] != "failed"]
             
             if valid_summaries:
                 analysis = aggregate_summaries(
@@ -153,7 +164,7 @@ def process_excel_file(
             html_file = os.path.join(file_output_dir, f"{filename}_test_summary.html")
             generate_test_summary_report(
                 test_suite_analysis=analysis,
-                test_case_summaries=summaries,
+                test_case_summaries=all_summaries,
                 output_file=html_file
             )
             logger.info(f"HTML report generated: {html_file}")
@@ -163,11 +174,11 @@ def process_excel_file(
         # Create an overall results summary
         summary = {
             "file": excel_file,
-            "test_cases_count": len(test_cases),
-            "successful_summaries": sum(1 for s in summaries if "status" not in s or s["status"] != "failed"),
-            "sheets": list(set(s.get("sheet_name", "Unknown") for s in summaries)),
+            "test_cases_count": total_test_cases,
+            "successful_summaries": sum(1 for s in all_summaries if "status" not in s or s["status"] != "failed"),
+            "sheets": list(test_cases_by_sheet.keys()),
             "analysis": analysis,
-            "summaries": summaries
+            "summaries": all_summaries
         }
         
         # Save summary to file

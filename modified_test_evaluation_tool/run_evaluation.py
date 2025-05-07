@@ -24,7 +24,7 @@ def main():
     parser = argparse.ArgumentParser(description="Test Case Analysis Tool")
     parser.add_argument("excel_dir", help="Directory containing Excel test case files")
     parser.add_argument("--output_dir", default="./results", help="Directory to save results")
-    parser.add_argument("--model", default="gpt-4", help="LLM model to use")
+    parser.add_argument("--model", default="gpt-4-turbo", help="LLM model to use (default: gpt-4-turbo)")
     parser.add_argument("--recursive", action="store_true", help="Search subdirectories for Excel files")
     parser.add_argument("--sheet", help="Specific sheet name to process")
     parser.add_argument("--no_html", action="store_true", help="Skip HTML report generation")

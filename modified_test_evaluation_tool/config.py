@@ -15,7 +15,7 @@ USE_SSL = False     # Set to True if using SSL
 USE_OAUTH = False   # Set to True if using OAuth
 
 # LLM Model settings
-DEFAULT_MODEL = "gpt-4"
+DEFAULT_MODEL = "gpt-4-turbo"  # Using the latest available model
 BASE_URL = "https://api.openai.com/v1"  # Default OpenAI URL
 
 # RBC environment URL - uncomment and modify if using RBC environment

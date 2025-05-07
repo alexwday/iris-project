@@ -185,8 +185,9 @@ def _convert_sheet_to_markdown(
 
 def extract_test_cases(
     file_path: str,
-    sheet_name: Optional[Union[str, int]] = None
-) -> List[Dict[str, any]]:
+    sheet_name: Optional[Union[str, int]] = None,
+    group_by_sheet: bool = False
+) -> Union[List[Dict[str, any]], Dict[str, List[Dict[str, any]]]]:
     """
     Extract individual test cases from Excel sheets.
     
@@ -197,9 +198,14 @@ def extract_test_cases(
         file_path (str): Path to the Excel file
         sheet_name (str|int, optional): Sheet name or index to process. 
                                        If None, processes all sheets.
+        group_by_sheet (bool, optional): If True, returns test cases grouped by sheet name.
+                                        If False, returns a flat list of all test cases.
     
     Returns:
-        List[Dict[str, any]]: List of test cases with their metadata and content
+        If group_by_sheet is False:
+            List[Dict[str, any]]: List of test cases with their metadata and content
+        If group_by_sheet is True:
+            Dict[str, List[Dict[str, any]]]: Dictionary with sheet names as keys and lists of test cases as values
     """
     # Check if file exists
     if not os.path.exists(file_path):
@@ -217,8 +223,10 @@ def extract_test_cases(
         sheet_names = xl.sheet_names
         logger.info(f"Found sheets: {sheet_names}")
         
-        # List to hold all test cases
+        # Container for test cases
         all_test_cases = []
+        # For grouped results
+        sheet_test_cases = {}
         
         if sheet_name is not None:
             # Process a single sheet
@@ -235,6 +243,10 @@ def extract_test_cases(
         # Process each sheet
         for sheet in process_sheets:
             logger.info(f"Extracting test cases from sheet: {sheet}")
+            
+            # Initialize list for this sheet's test cases if grouping
+            if group_by_sheet:
+                sheet_test_cases[str(sheet)] = []
             
             # Convert sheet to markdown
             sheet_md = _convert_sheet_to_markdown(xl, sheet)
@@ -286,7 +298,7 @@ def extract_test_cases(
                     # Combine to create markdown for this test case
                     test_case_md = f"{header_md}\n{separator_md}\n{row_md}"
                     
-                    # Add test case to list
+                    # Create test case dictionary
                     test_case = {
                         "sheet_name": str(sheet),
                         "test_case_number": test_case_number,
@@ -296,7 +308,12 @@ def extract_test_cases(
                         "full_sheet_markdown": sheet_md  # Include full sheet for context
                     }
                     
-                    all_test_cases.append(test_case)
+                    # Add test case to appropriate container
+                    if group_by_sheet:
+                        sheet_test_cases[str(sheet)].append(test_case)
+                    else:
+                        all_test_cases.append(test_case)
+                    
                     logger.debug(f"Extracted test case: {test_case_number} - {test_case_name}")
                     
                 except Exception as row_error:
@@ -304,8 +321,16 @@ def extract_test_cases(
                     # Continue with next row
                     continue
         
-        logger.info(f"Extracted {len(all_test_cases)} test cases from {len(process_sheets)} sheets")
-        return all_test_cases
+        # Return test cases in the appropriate format
+        if group_by_sheet:
+            # Remove any empty sheets
+            sheet_test_cases = {sheet: cases for sheet, cases in sheet_test_cases.items() if cases}
+            total_cases = sum(len(cases) for cases in sheet_test_cases.values())
+            logger.info(f"Extracted {total_cases} test cases from {len(sheet_test_cases)} sheets (grouped by sheet)")
+            return sheet_test_cases
+        else:
+            logger.info(f"Extracted {len(all_test_cases)} test cases from {len(process_sheets)} sheets")
+            return all_test_cases
     
     except Exception as e:
         logger.error(f"Error extracting test cases from Excel: {str(e)}")
