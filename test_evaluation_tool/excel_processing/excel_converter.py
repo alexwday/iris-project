@@ -14,7 +14,8 @@ from typing import Dict, List, Optional, Tuple, Union
 
 import pandas as pd
 
-from ..config import EXCEL_CELL_COLUMNS, EXCEL_CELL_MAX_ROWS
+# Import config but don't rely on specific variables that were removed
+from .. import config
 
 # Get module logger
 logger = logging.getLogger(__name__)
