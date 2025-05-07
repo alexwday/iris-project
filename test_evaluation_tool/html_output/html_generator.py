@@ -73,27 +73,38 @@ def _markdown_to_html(markdown_text):
     html = re.sub(r'^### (.*?)$', r'<h3>\1</h3>', html, flags=re.MULTILINE)
     html = re.sub(r'^#### (.*?)$', r'<h4>\1</h4>', html, flags=re.MULTILINE)
     
-    # Convert unordered lists
-    list_items = re.findall(r'^- (.*?)$', html, flags=re.MULTILINE)
-    if list_items:
-        html_list = '<ul>\n'
-        for item in list_items:
-            html_list += f'  <li>{item}</li>\n'
-        html_list += '</ul>'
-        html = re.sub(r'(?:^- .*?$\n)+', html_list, html, flags=re.MULTILINE)
+    # Convert unordered lists - improved to handle multiple separate lists properly
+    # Find all continuous blocks of list items
+    list_blocks = re.finditer(r'(?:^- .*?$\n?)+', html, flags=re.MULTILINE)
     
-    # Convert ordered lists
+    for block in list_blocks:
+        block_text = block.group(0)
+        list_items = re.findall(r'^- (.*?)$', block_text, flags=re.MULTILINE)
+        
+        if list_items:
+            html_list = '<ul>\n'
+            for item in list_items:
+                html_list += f'  <li>{item}</li>\n'
+            html_list += '</ul>'
+            # Replace this specific block with its HTML equivalent
+            html = html.replace(block_text, html_list)
+    
+    # Convert ordered lists - improved to handle multiple separate lists properly
     ordered_list_pattern = r'^(\d+)\. (.*?)$'
-    ordered_items = re.findall(ordered_list_pattern, html, flags=re.MULTILINE)
-    if ordered_items:
-        ol_sections = re.finditer(r'(?:^\d+\. .*?$\n)+', html, flags=re.MULTILINE)
-        for section in ol_sections:
-            section_text = section.group(0)
-            items = re.findall(ordered_list_pattern, section_text, flags=re.MULTILINE)
+    ol_sections = re.finditer(r'(?:^\d+\. .*?$\n?)+', html, flags=re.MULTILINE)
+    
+    # Process each ordered list block separately
+    for section in ol_sections:
+        section_text = section.group(0)
+        items = re.findall(ordered_list_pattern, section_text, flags=re.MULTILINE)
+        
+        if items:
             html_list = '<ol>\n'
             for _, item in items:
                 html_list += f'  <li>{item}</li>\n'
             html_list += '</ol>'
+            
+            # Replace only this specific block
             html = html.replace(section_text, html_list)
     
     # Handle **bold** sections with proper HTML
@@ -149,9 +160,9 @@ def _markdown_to_html(markdown_text):
     for i, code in enumerate(code_blocks):
         html = html.replace(f"CODE_BLOCK_{i}", f'<pre><code>{code}</code></pre>')
     
-    # Add more specific styling for key sections
-    html = html.replace('<strong>Key Strengths:</strong>', '<strong class="key-section strengths">Key Strengths:</strong>')
-    html = html.replace('<strong>Areas for Improvement:</strong>', '<strong class="key-section improvements">Areas for Improvement:</strong>')
+    # Add more specific styling for key sections - use regex for more flexible matching
+    html = re.sub(r'<strong>\s*Key\s+Strengths:\s*</strong>', '<strong class="key-section strengths">Key Strengths:</strong>', html)
+    html = re.sub(r'<strong>\s*Areas\s+for\s+Improvement:\s*</strong>', '<strong class="key-section improvements">Areas for Improvement:</strong>', html)
     
     return html
 
