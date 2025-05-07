@@ -186,8 +186,13 @@ def process_excel_file(
         }
 
 
-def main():
-    """Main entry point for the Test Case Analysis Tool."""
+def main(args=None):
+    """
+    Main entry point for the Test Case Analysis Tool.
+    
+    Args:
+        args (list, optional): Command line arguments as a list. If None, uses sys.argv.
+    """
     parser = argparse.ArgumentParser(description="Test Case Analysis Tool")
     parser.add_argument("--excel_dir", required=True, help="Directory containing Excel test case files")
     parser.add_argument("--output_dir", default="./results", help="Directory to save results")
@@ -203,7 +208,7 @@ def main():
     parser.add_argument("--no_html", action="store_true", help="Skip HTML report generation")
     parser.add_argument("--html_only", action="store_true", help="Convert existing JSON to HTML without running summarization")
     
-    args = parser.parse_args()
+    args = parser.parse_args(args)
     
     # Update configuration from arguments
     import sys
