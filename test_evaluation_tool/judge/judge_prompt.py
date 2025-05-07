@@ -101,9 +101,13 @@ Based on the collection of test evaluations provided, generate a comprehensive s
 Structure your response as a formal assessment report with clear sections for each area mentioned above. 
 
 1. Begin with an "Executive Summary" that provides the key metrics and findings at a glance
+   - This should be 3-5 paragraphs of concise, well-structured text
+   - Include a high-level overview of overall performance
+   - Highlight 2-3 key strengths and 2-3 key areas for improvement
+   - End with 1-2 specific, actionable recommendations
 2. Include percentage scores for all metrics
 3. Use tables to present numerical data clearly
 4. Include both qualitative insights and quantitative measures
 5. Focus on actionable findings that could guide future improvements to the system
-6. Conclude with specific recommendations based on the data
+6. After the executive summary, provide detailed sections for each evaluation dimension
 """

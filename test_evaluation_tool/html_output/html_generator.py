@@ -188,6 +188,8 @@ def _generate_html_content(
             border-left: 4px solid #3498db;
             padding: 15px;
             margin-bottom: 30px;
+            line-height: 1.6;
+            font-size: 1.05em;
         }}
         table {{
             width: 100%;
@@ -359,6 +361,19 @@ def _generate_html_content(
             font-weight: bold;
             color: #0056b3;
         }}
+        .executive-text-summary {{
+            margin-top: 30px;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }}
+        .executive-text-summary h3 {{
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }}
     </style>
     <script>
         window.onload = function() {{
@@ -448,8 +463,11 @@ def _generate_html_content(
         </div>
     </div>
     
-    <div class="summary-container">
-        {_markdown_to_html(summary['summary'])}
+    <div class="executive-text-summary">
+        <h3>Key Findings and Recommendations</h3>
+        <div class="summary-container">
+            {_markdown_to_html(summary['summary'])}
+        </div>
     </div>
     """
     
