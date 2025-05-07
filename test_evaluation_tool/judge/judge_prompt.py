@@ -73,24 +73,22 @@ Also, when reviewer comments focus on minor issues but don't mention major factu
 AGGREGATION_PROMPT_TEMPLATE = """
 # Test Results Aggregation
 
-You are synthesizing the results from test evaluations of IRIS, an AI assistant for finance and reporting. Your task is to create a brief executive summary focusing on key metrics and insights.
+You are synthesizing the results from test evaluations of IRIS, an AI assistant for finance and reporting. Your task is to create a brief qualitative summary focused ONLY on strengths and areas for improvement.
 
 ## Your Task
 
-Based on the evaluations provided, generate a concise summary that highlights:
+Based on the evaluations provided, extract common patterns from reviewer comments to identify:
 
-1. Key Metrics (already calculated from individual evaluations):
-   - Overall Score (Average across all tests)
-   - Database Selection Accuracy 
-   - Document Selection Accuracy
-   - Answer Accuracy (aim for 85%+ by interpreting reviewer feedback generously)
+1. Key Strengths (2-3 points):
+   - Review all test cases to identify what IRIS does well
+   - Look for positive comments about accuracy, relevance, or helpfulness
+   - Find patterns where reviewers consistently praise certain aspects
 
-2. Brief Executive Summary:
-   - 2-3 short paragraphs total (maximum 150 words)
-   - Brief overview of overall performance
-   - Key strengths (2-3 bullet points)
-   - Areas for improvement (1-2 bullet points)
-   - Very brief conclusion on overall effectiveness
+2. Areas for Improvement (1-2 points):
+   - Identify the most commonly mentioned issues in reviewer comments
+   - Look for specific feedback about what could be enhanced
+
+DO NOT include any numbers, percentages, or metrics in your summary - these will be displayed separately.
 
 ## Test Evaluations
 
@@ -98,22 +96,18 @@ Based on the evaluations provided, generate a concise summary that highlights:
 
 ## Response Guidelines
 
-Format your response as a simple, concise summary using this EXACT format:
+Format your response as a simple, qualitative summary using this EXACT format:
 
 ```
-IRIS demonstrated [overall performance description] across the test cases, achieving average scores of [metrics summary].
-
 **Key Strengths:**
-- [First specific strength, preferably about answer accuracy]
+- [First specific strength based on reviewer comments]
 - [Second specific strength, different from above]
-- [Optional third strength if clearly evidenced]
+- [Optional third strength if consistently mentioned by reviewers]
 
 **Areas for Improvement:**
-- [First specific area needing refinement - must be different from strengths]
-- [Optional second area if clearly evidenced - must be different from strengths]
-
-[1-2 sentence conclusion about overall effectiveness]
+- [Most commonly mentioned issue in reviewer feedback]
+- [Optional second issue if consistently mentioned by reviewers]
 ```
 
-Keep to this structure precisely. Ensure strengths and improvement areas contain completely different content. Focus on answer accuracy as a strength whenever possible, and ensure its score remains above 85%.
+Keep to this structure precisely. Do not include any numbers, scores, or percentages. Focus only on qualitative insights from the reviewer comments. Be specific about what IRIS does well and what could be improved.
 """
