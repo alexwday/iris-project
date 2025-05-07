@@ -1,0 +1,148 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Document</title>
+<script type="text/javascript" async
+  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/MathJax.js?config=TeX-MML-AM_CHTML">
+</script>
+<style>
+    body {
+        font-family: sans-serif;
+        line-height: 1.6;
+        margin: 20px;
+    }
+    h1, h2, h3, h4, h5, h6 {
+        margin-top: 1.5em;
+        margin-bottom: 0.5em;
+        line-height: 1.3;
+    }
+    p {
+        margin-bottom: 1em;
+    }
+    table {
+        border-collapse: collapse;
+        margin-bottom: 1em;
+        width: auto; /* Changed from 100% to auto for better Word compatibility */
+        border: 1px solid #ddd; /* Added border for table */
+    }
+    th, td {
+        border: 1px solid #ddd;
+        padding: 8px;
+        text-align: left;
+    }
+    th {
+        background-color: #f2f2f2;
+    }
+    pre {
+        background-color: #f8f8f8;
+        border: 1px solid #ddd;
+        padding: 10px;
+        overflow-x: auto;
+        font-family: monospace;
+        white-space: pre-wrap; /* Allow wrapping for long lines in code blocks */
+        word-wrap: break-word; /* Break long words if necessary */
+    }
+    code {
+        font-family: monospace;
+        background-color: #f0f0f0; /* Light background for inline code */
+        padding: 2px 4px;
+        border-radius: 3px;
+    }
+    blockquote {
+        border-left: 4px solid #ddd;
+        padding-left: 10px;
+        color: #555;
+        margin-left: 0;
+    }
+    ul, ol {
+        margin-bottom: 1em;
+        padding-left: 20px;
+    }
+    img {
+        max-width: 100%;
+        height: auto;
+    }
+    /* MathJax specific styling if needed, though default usually works well */
+    .MathJax_Display { 
+        display: block; 
+        text-align: center; 
+        margin: 1em 0; 
+        overflow-x: auto; /* Add scroll for very wide equations */
+    }
+</style>
+</head>
+<body>
+<h1>7. Model Implementation</h1>
+<p><strong>Model Name:</strong> IRIS (Intelligent Research and Information System)
+<strong>Model ID:</strong> IRIS-001</p>
+<h2>7.1 Software / Coding</h2>
+<p>IRIS employs a modular architecture organized around specialized agents and knowledge sources. The system implementation consists of the following main components:</p>
+<h3>7.1.1 System Architecture</h3>
+<p>The IRIS system operates through a multi-tier architecture. This includes the <strong>Maven UI</strong>, which is the user-facing application providing the interface for interacting with IRIS; the <strong>IRIS API</strong>, which encompasses the core model functionality deployed as an API service; <strong>Database Services</strong>, consisting of a PostgreSQL database with the pgvector extension for document and vector storage; and an <strong>LLM Gateway</strong> for integration with RBC's Lumina portal to access large language models.</p>
+<p>The system functions through a coordinated process. Users interact with the <strong>Maven Interface</strong>, which manages user authentication and access control via Active Directory groups, authorizes specific database access based on user roles, handles conversation history and session management, and is responsible for user interface presentation and the streaming of responses. The <strong>IRIS Model API</strong> receives conversation context and authorized database access from Maven, processes queries through its agent framework, returns streaming responses back to Maven, and logs process monitoring data for performance tracking. <strong>Database Management</strong> involves separate PostgreSQL tables for knowledge retrieval and process monitoring, with database refreshes occurring on a set schedule (quarterly or yearly, depending on the database). <strong>LLM Integration</strong> is achieved by IRIS connecting to language models through RBC's Lumina portal.</p>
+<p>Currently, the IRIS code has been implemented and deployed in Dataiku as a Dash web application demo. This same code is being integrated into the Maven UI for the production implementation. Both implementations interact with the same PostgreSQL database, with no changes being made during the transition from Dataiku to Maven.</p>
+<h3>7.1.2 Agent Framework</h3>
+<p>The agent system is implemented as a collection of Python modules, each responsible for specific aspects of query processing as described in Section 6.1. The <strong>Router Agent</strong>, implemented in <code>/iris/src/agents/agent_router/router.py</code>, determines the optimal processing path for each query by analyzing query intent and required knowledge sources. The <strong>Clarifier Agent</strong>, found in <code>/iris/src/agents/agent_clarifier/clarifier.py</code>, ensures queries contain sufficient context before research begins by identifying and requesting missing information. The <strong>Planner Agent</strong>, located in <code>/iris/src/agents/agent_planner/planner.py</code>, creates research plans by selecting appropriate knowledge sources and setting search parameters. <strong>Database Subagents</strong>, implemented in <code>/iris/src/agents/database_subagents/</code>, are specialized modules for retrieving information from specific internal sources (CAPM, Cheatsheets, Compliance, etc.) and external sources (EY, IASB, KPMG, PwC). The <strong>Summarizer Agent</strong>, implemented in <code>/iris/src/agents/agent_summarizer/summarizer.py</code>, synthesizes findings into coherent, properly cited responses. Finally, the <strong>Direct Response Agent</strong>, found in <code>/iris/src/agents/agent_direct_response/response_from_conversation.py</code>, generates responses based solely on conversation history without database access.</p>
+<p>Data flows between agents through structured JSON messages containing the query context, research parameters, retrieved information, and synthesized responses. Each agent maintains its own state during processing and passes relevant information to downstream agents.</p>
+<h3>7.1.3 Knowledge Store Implementation</h3>
+<p>The IRIS knowledge store is implemented as a PostgreSQL database.</p>
+<h4>Core Database Tables</h4>
+<p>The database includes several core tables. The <strong>apg_catalog</strong> table serves as a document metadata repository, containing document identification details (source, type, name), document description and usage information, and file metadata (creation date, modification date, size, path). The <strong>apg_content</strong> table is for document content storage, holding references to documents in <code>apg_catalog</code>, section-based content organization, and both section summaries and full content text. The <strong>iris_textbook_database</strong> is a vector-enabled document chunk storage table, featuring document and section structural positioning (as detailed in Section 5), chapter-level metadata with tags and summaries, section-level pagination and importance scoring, content text, 2000-dimension vector embeddings, and a full-text search vector for text-based queries. Lastly, the <strong>process_monitor_logs</strong> table acts as a performance tracking system, logging detailed information for each model invocation, including timing and token usage metrics for each processing stage, and LLM call details stored as structured JSON.</p>
+<h4>Database Connectivity</h4>
+<p>The system connects to the database through a standardized configuration layer in <code>/iris/src/initial_setup/db_config.py</code>. This layer provides connection parameters for both local development and RBC environments, handles connection management and error recovery, and verifies the existence of required tables.</p>
+<h4>Database Processing Methods</h4>
+<p>The IRIS system employs five distinct approaches for knowledge retrieval, as detailed in Section 6.2. <strong>Catalog Search - Small</strong> is used for standard documents with simple structure (e.g., <code>internal_par</code>, <code>internal_process_and_controls</code>), involving a two-stage selection with catalog prioritization, LLM evaluation of metadata for document selection, and full section retrieval for selected documents. <strong>Catalog Search - Large</strong> is applied to large documents with hierarchical structure (e.g., <code>internal_capm</code>, <code>internal_global_finance_standards</code>), utilizing a three-stage hierarchical selection with LLM judgment and section summary evaluation for targeted content retrieval. <strong>Catalog Search - Excel</strong> is designed for tabular data sources (e.g., <code>internal_wiki</code>, <code>internal_management_reporting</code>), featuring table preprocessing with row-level document conversion and preservation of table format in Markdown. <strong>Catalog Search - Vision</strong> handles infographics and visual content (e.g., <code>internal_cheatsheets</code>), using an image-to-text conversion via a multi-pass vision transformer with multi-pass extraction of text, tables, and diagrams. Finally, <strong>Semantic Search - Large</strong> is for extensive reference materials (e.g., external sources like <code>external_ey</code>, <code>external_iasb</code>, <code>external_kpmg</code>, <code>external_pwc</code>), employing vector-based similarity search with token-aware chunking, sophisticated reranking based on importance scores and vector similarity, along with section expansion and sequence gap filling.</p>
+<p>The database subagents implement these different approaches based on the specific requirements of each knowledge source, with a central database router (<code>database_router.py</code>) directing queries to the appropriate subagent.</p>
+<h3>7.1.4 Model Integration</h3>
+<p>IRIS integrates with large language models through the RBC Lumina portal. An <strong>LLM Connector</strong>, implemented in <code>/iris/src/llm_connectors/rbc_openai.py</code>, provides a consistent interface for agent-LLM communication, with configuration parameters defined in <code>/iris/src/llm_connectors/rbc_openai_settings.py</code>.</p>
+<p>The system employs several models: <strong>GPT-4o</strong> for complex reasoning tasks like research synthesis, clarification, and content generation; <strong>GPT-4o-mini</strong> for decision tasks such as routing, database selection, and document filtering; <strong>text-embedding-3-large</strong> for generating vector embeddings used in semantic search; and <strong>Qwen2</strong> for vision processing of infographics and other image content.</p>
+<p>Each model is accessed with customized prompt engineering to ensure consistent outputs across the agent architecture.</p>
+<h3>7.1.5 Process Monitoring</h3>
+<p>The IRIS system includes comprehensive process monitoring capabilities. This involves <strong>Performance Tracking</strong>, where every model call is logged with detailed performance metrics. All <strong>Process Stages</strong> in the pipeline are tracked with timing and token usage information. <strong>Error Logging</strong> provides structured logging of any issues or exceptions encountered. Additionally, <strong>Usage Analytics</strong> offer aggregated statistics on system usage patterns.</p>
+<p>The monitoring framework is implemented in <code>/iris/src/initial_setup/process_monitor.py</code> and records detailed information about each model invocation in the <code>process_monitor_logs</code> table. This enables real-time performance monitoring by actively tracking system responsiveness, cost optimization through analysis of token usage patterns, early error detection for potential issues in the processing pipeline, and usage pattern analysis to understand common query types and knowledge source utilization.</p>
+<p>The monitoring system outputs can be analyzed using the Jupyter notebooks in the <code>/notebooks/</code> directory, particularly <code>process_monitor_analysis.ipynb</code>, which provides visualization and statistical analysis of system performance metrics.</p>
+<h3>7.1.6 Process Flow Diagram</h3>
+<p>The IRIS system follows a processing flow that implements the theoretical approach described in Sections 4 through 6. The data flow through the system can be conceptualized as follows:</p>
+<pre><code>User Query (Maven UI)
+      │
+      ▼
+ Conversation History
+      │
+      ▼
+  Agent Router ───────────► Direct Response Path ──► Agent Direct Response
+      │                                                      │
+      │                                                      │
+      ▼                                                      ▼
+Research Path                                          User Response
+      │
+      ▼
+Agent Clarifier
+      │
+      ▼
+ Agent Planner
+      │
+      ▼
+Database Subagents (Multiple in Parallel)
+      │
+      ▼
+Agent Summarizer
+      │
+      ▼
+ User Response
+</code></pre>
+<p>This implementation directly aligns with the agent architecture described in Section 4.1 and the model decision processes detailed in Section 6.3.</p>
+<h3>7.1.7 Development and Deployment</h3>
+<p>The IRIS code is currently running as a Python library in two environments: in <strong>Dataiku</strong>, it is implemented as a Dash web application for demonstration and business user feedback, which has been incorporated into ongoing development; and in <strong>Local Development</strong> environments for ongoing development and testing.</p>
+<p>The code is being provided to the Maven team for integration into their UI, with plans to have the functional demonstration available in the Maven development environment by June 2025. The integration will maintain the same core functionality with no changes to the underlying model code, focusing primarily on adapting the API interface to work within the Maven ecosystem. The requirements and setup are all packaged within the model code to facilitate deployment.</p>
+<h3>7.1.8 Code Quality Assurance</h3>
+<p>The IRIS development team employs several approaches to ensure code quality. <strong>Code Formatting</strong> is enforced using Black with an 88 character line limit. <strong>Linting</strong> is performed with Pylint to identify potential code issues and ensure adherence to coding standards. <strong>Testing</strong> occurs in Dataiku, where the code runs as a Python library, and locally during development. Finally, <strong>Deployment Validation</strong> will involve retesting the code once hosted in OpenShift to confirm consistent working behavior.</p>
+<p>These practices help identify and resolve potential issues, ensuring that the production system remains stable and performant.</p>
+<h3>7.1.9 Implementation Alignment with Model Design</h3>
+<p>The implementation of IRIS directly realizes the model design and approach described in the previous sections. Key points of alignment include the agent-based architecture, which follows the modular agent framework with specialized agents for different processing tasks. The system implements the hybrid RAG approach, using different processing pipelines based on document types. The five distinct retrieval methods are directly implemented in the database subagents with specific optimizations. Model parameter configurations align with the documented approach, including temperature settings. The system also implements the token-aware chunking algorithm for optimal information density and the monitoring framework for comprehensive performance tracking.</p>
+<p>This direct alignment between design and implementation ensures that the theoretical approach is properly realized in the system.</p>
+<h2>7.2 Implementation Testing</h2>
+<p>The implementation of IRIS has undergone initial testing in the Dataiku environment. The system will receive comprehensive testing once integrated into the Maven UI.</p>
+<p>The Dataiku version has been made available to business users to provide feedback on functionality and response quality. This feedback has been incorporated into ongoing development efforts.</p>
+<p>Final implementation testing will be performed once the system is live in the Maven development environment, currently planned for June. This testing will validate that the system behaves as expected in the production environment and meets all business requirements.</p></body></html>

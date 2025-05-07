@@ -1,0 +1,325 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Document</title>
+<script type="text/javascript" async
+  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/MathJax.js?config=TeX-MML-AM_CHTML">
+</script>
+<style>
+    body {
+        font-family: sans-serif;
+        line-height: 1.6;
+        margin: 20px;
+    }
+    h1, h2, h3, h4, h5, h6 {
+        margin-top: 1.5em;
+        margin-bottom: 0.5em;
+        line-height: 1.3;
+    }
+    p {
+        margin-bottom: 1em;
+    }
+    table {
+        border-collapse: collapse;
+        margin-bottom: 1em;
+        width: auto; /* Changed from 100% to auto for better Word compatibility */
+        border: 1px solid #ddd; /* Added border for table */
+    }
+    th, td {
+        border: 1px solid #ddd;
+        padding: 8px;
+        text-align: left;
+    }
+    th {
+        background-color: #f2f2f2;
+    }
+    pre {
+        background-color: #f8f8f8;
+        border: 1px solid #ddd;
+        padding: 10px;
+        overflow-x: auto;
+        font-family: monospace;
+        white-space: pre-wrap; /* Allow wrapping for long lines in code blocks */
+        word-wrap: break-word; /* Break long words if necessary */
+    }
+    code {
+        font-family: monospace;
+        background-color: #f0f0f0; /* Light background for inline code */
+        padding: 2px 4px;
+        border-radius: 3px;
+    }
+    blockquote {
+        border-left: 4px solid #ddd;
+        padding-left: 10px;
+        color: #555;
+        margin-left: 0;
+    }
+    ul, ol {
+        margin-bottom: 1em;
+        padding-left: 20px;
+    }
+    img {
+        max-width: 100%;
+        height: auto;
+    }
+    /* MathJax specific styling if needed, though default usually works well */
+    .MathJax_Display { 
+        display: block; 
+        text-align: center; 
+        margin: 1em 0; 
+        overflow-x: auto; /* Add scroll for very wide equations */
+    }
+</style>
+</head>
+<body>
+<h1>6. Model Specification</h1>
+<p>This section describes the IRIS model methodologies and processing components, focusing on the agent-based architecture, query processing mechanisms, and mathematical foundations of information retrieval and synthesis.</p>
+<h2>6.1 Agent Architecture</h2>
+<p>The IRIS system implements a modular, pipeline-based architecture consisting of specialized AI agents that process user queries through a structured workflow. The overall architecture contains two primary processing paths managed by a central model orchestration engine.</p>
+<h3>6.1.1 Processing Pathways</h3>
+<p>IRIS features two main processing pathways. The <strong>Direct Response Path</strong> is employed for queries that can be answered using only conversation history. Its processing sequence is <code>agent_router</code> → <code>agent_direct_response</code>, and it is optimized for contextual queries that do not require additional research. The <strong>Research Path</strong> is utilized for queries requiring database research. Its processing sequence is <code>agent_router</code> → <code>agent_clarifier</code> → <code>agent_planner</code> → <code>database_subagents</code> → <code>agent_summarizer</code>, implementing a comprehensive retrieval-augmented generation approach.</p>
+<h3>6.1.2 Agent Components and Functions</h3>
+<table>
+<thead>
+<tr>
+<th>Agent</th>
+<th>Function</th>
+<th>Mathematical/Algorithm Basis</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Router Agent</td>
+<td>Determines processing path based on query analysis</td>
+<td>Classification algorithm using transformer-based embeddings with context-aware decision boundary</td>
+</tr>
+<tr>
+<td>Clarifier Agent</td>
+<td>Assesses query context sufficiency and creates research statements</td>
+<td>Information-theoretic query expansion with controlled relevance parameters</td>
+</tr>
+<tr>
+<td>Planner Agent</td>
+<td>Selects optimal databases for query execution</td>
+<td>Multi-class relevance scoring with database-specific prior weightings</td>
+</tr>
+<tr>
+<td>Database Subagents</td>
+<td>Retrieve and pre-process information from various data sources</td>
+<td>Implemented through five distinct processing methodologies (detailed in Section 6.2)</td>
+</tr>
+<tr>
+<td>Summarizer Agent</td>
+<td>Integrates findings and generates coherent responses</td>
+<td>Multi-document extraction-abstraction mechanism with attention-based relevance weighting</td>
+</tr>
+<tr>
+<td>Direct Response Agent</td>
+<td>Generates responses using only conversation history</td>
+<td>Constrained inference with context-window utilization optimization</td>
+</tr>
+</tbody>
+</table>
+<h3>6.1.3 System Integration</h3>
+<p>The central chat model orchestration component (<code>model.py</code>) serves as the integration hub. It manages system initialization and configuration, query routing based on router agent decisions, and both sequential and parallel agent execution flow. Additionally, it handles result aggregation and presentation, as well as process monitoring and error handling.</p>
+<h2>6.2 Database Retrieval Methodologies</h2>
+<p>The IRIS system implements five distinct database retrieval methodologies, each optimized for different types of source documents.</p>
+<h3>6.2.1 Catalog Search - Small</h3>
+<p>The <strong>Mathematical Specification</strong> for Catalog Search - Small involves a two-stage selection with catalog prioritization. The document assessment function is <span class="arithmatex">\(R_{LLM}(d, q) \rightarrow \{d_1, d_2, ..., d_n\}\)</span>, representing LLM-selected documents. Document selection is modeled as <span class="arithmatex">\(D_{selected} = LLM_{select}(catalog, q)\)</span>, where the LLM selects documents based on title and description. Response synthesis is defined as <span class="arithmatex">\(R_{synthesis} = LLM_{synthesize}(\{content(d) | d \in D_{selected}\}, q)\)</span>.</p>
+<p><strong>Implementation</strong> begins with <strong>Catalog Retrieval</strong>, querying PostgreSQL for document metadata using SQL like:</p>
+<pre><code class="language-sql">SELECT id, document_name, document_description
+FROM apg_catalog
+WHERE document_source = 'internal_par'
+ORDER BY document_name;
+</code></pre>
+<p>Next is <strong>Document Selection</strong>, an LLM-based selection process (GPT-4o-mini with temperature 0.2) where the catalog is formatted with document IDs, names, and descriptions, passed to the LLM with a selection prompt, and a JSON list of document IDs is parsed (with fallback regex extraction if JSON parsing fails). <strong>Content Retrieval</strong> then fetches complete document content for selected IDs using SQL:</p>
+<pre><code class="language-sql">SELECT section_id, section_name, section_content
+FROM apg_content
+WHERE document_source = 'internal_par'
+AND document_name = %s
+ORDER BY section_id;
+</code></pre>
+<p>Finally, <strong>Response Synthesis</strong> generates a research report using a tool call (GPT-4o with temperature 0.2). Documents are formatted with a hierarchical structure (<code># Document Name</code> → <code>## Section Name</code> → Content), and the tool call returns both <code>status_summary</code> and <code>detailed_research</code>, with citations including document name and section name.</p>
+<p>This methodology is <strong>applied</strong> to standard documents (PDF, DOCX) with simple structures, such as those in the <code>internal_par</code> and <code>internal_process_and_controls</code> example databases.</p>
+<h3>6.2.2 Catalog Search - Large</h3>
+<p>The <strong>Mathematical Specification</strong> for Catalog Search - Large employs a three-stage hierarchical selection using LLM judgment. Document selection is <span class="arithmatex">\(D_{selected} = LLM_{select}(catalog, q)\)</span>, where the LLM selects relevant documents. Section selection for each <span class="arithmatex">\(d \in D_{selected}\)</span> is <span class="arithmatex">\(S_{selected,d} = LLM_{select}(sections(d), q)\)</span>. Final synthesis is <span class="arithmatex">\(R_{synthesis} = LLM_{synthesize}(\{content(s) | s \in \bigcup_{d \in D_{selected}} S_{selected,d}\}, q)\)</span>.</p>
+<p><strong>Implementation</strong> starts with <strong>Catalog Retrieval</strong> using the same SQL query pattern as Catalog Search - Small, but for CAPM sources. <strong>Document Selection</strong> is also LLM-based (GPT-4o-mini with temperature 0.2), following the same process as Catalog Search - Small to return a list of document IDs. An additional intermediate step is <strong>Section Summary Retrieval</strong>:</p>
+<pre><code class="language-sql">SELECT section_id, section_name, section_summary
+FROM apg_content
+WHERE document_source = 'internal_capm'
+AND document_name = %s
+ORDER BY section_id;
+</code></pre>
+<p><strong>Section Selection</strong> is then performed by an LLM (GPT-4o-mini) to choose specific sections by formatting document sections and their summaries; the LLM selects specific section IDs for each document based on relevance to the query, returning a dictionary mapping document names to lists of section IDs. <strong>Content Retrieval</strong> fetches only these selected sections:</p>
+<pre><code class="language-sql">SELECT section_id, section_name, section_content
+FROM apg_content
+WHERE document_source = 'internal_capm'
+AND document_name = %s
+AND section_id IN (%s, %s, ...)
+ORDER BY section_id;
+</code></pre>
+<p><strong>Response Synthesis</strong> uses the same tool-calling approach as Catalog Search - Small.</p>
+<p>This method is <strong>applied</strong> to large documents with distinct sections/chapters, for example, databases like <code>internal_capm</code> and <code>internal_global_finance_standards</code>.</p>
+<h3>6.2.3 Catalog Search - Excel</h3>
+<p>The <strong>Mathematical Specification</strong> for Catalog Search - Excel involves table preprocessing with row-level document conversion. Each row or grouping <span class="arithmatex">\(r\)</span> is transformed into a document <span class="arithmatex">\(d_r\)</span> by the function <span class="arithmatex">\(T_{excel}(r) = d_r\)</span>. Document selection occurs through LLM assessment: <span class="arithmatex">\(D_{selected} = LLM_{select}(catalog, q)\)</span>, where each catalog entry represents a processed row or table.</p>
+<p><strong>Implementation</strong> involves <strong>Pre-Processing</strong> where Excel files are processed during database creation: Excel content is extracted and converted to Markdown format, with each table or logical row grouping becoming a separate document, and tables preserved with Markdown formatting. After pre-processing, the <strong>Database Query</strong> implementation is the same as Catalog Search - Small, involving document selection via LLM from the catalog and content retrieval for selected documents, followed by response synthesis using a GPT-4o tool call.</p>
+<p>This methodology is <strong>applied</strong> to Excel spreadsheets and tabular data, such as in the <code>internal_wiki</code> and <code>internal_management_reporting</code> example databases.</p>
+<h3>6.2.4 Catalog Search - Vision</h3>
+<p>The <strong>Mathematical Specification</strong> for Catalog Search - Vision uses image-to-text conversion via a multi-pass vision transformer. Image content extraction is <span class="arithmatex">\(T_{vision}(i) = d_i\)</span>, where <span class="arithmatex">\(i\)</span> is an image and <span class="arithmatex">\(d_i\)</span> is the extracted text document. Document selection is through LLM assessment: <span class="arithmatex">\(D_{selected} = LLM_{select}(catalog, q)\)</span>.</p>
+<p><strong>Implementation</strong> includes <strong>Pre-Processing</strong> where infographics are processed during database creation. Images are processed via the Qwen2 vision model in multi-pass mode, with multiple extraction passes for text, tables, charts, and diagrams. Content is converted to structured Markdown format, and each infographic becomes a document in the database. After pre-processing, the <strong>Database Query</strong> implementation is identical to Catalog Search - Small: document selection via LLM from the catalog (GPT-4o-mini), content retrieval for selected documents, and response synthesis using a GPT-4o tool call (temperature 0.2).</p>
+<p>This approach is <strong>applied</strong> to infographics and image-based documents, with <code>internal_cheatsheets</code> being an example database.</p>
+<h3>6.2.5 Semantic Search - Large</h3>
+<p>The <strong>Mathematical Specification</strong> for Semantic Search - Large involves vector-based similarity search with token-aware chunking. Chunk embedding is <span class="arithmatex">\(E(c) = \vec{v_c}\)</span>, where <span class="arithmatex">\(c\)</span> is a chunk and <span class="arithmatex">\(\vec{v_c}\)</span> is its embedding vector. Query embedding is <span class="arithmatex">\(E(q) = \vec{v_q}\)</span>. Initial similarity scoring is <span class="arithmatex">\(sim(c, q) = 1 - (c.embedding &lt;=&gt; q.embedding)\)</span> using the PostgreSQL vector operator. Initial chunk selection is <span class="arithmatex">\(C_{initial}(q) = top\_k(C, sim, k)\)</span>, where <span class="arithmatex">\(k = 20\)</span> (INITIAL_K constant). Relevance filtering is <span class="arithmatex">\(C_{filtered} = \{c \in C_{initial} | LLM_{relevance}(c.summary, q) = 1\}\)</span>. Importance reranking uses the score <span class="arithmatex">\(score(c) = sim(c, q) \cdot (1 + IMPORTANCE\_FACTOR \cdot c.importance\_score)\)</span>, where <span class="arithmatex">\(IMPORTANCE\_FACTOR = 0.2\)</span>. Section expansion occurs for sections with tokens <span class="arithmatex">\(\leq THRESHOLD\)</span> (with different thresholds based on rank). Gap filling addresses sequence gaps where <span class="arithmatex">\(0 &lt; gap \leq MAX\_SEQUENCE\_GAP\)</span> (where <span class="arithmatex">\(MAX\_SEQUENCE\_GAP = 8\)</span>).</p>
+<p><strong>Implementation</strong> starts with <strong>Query embedding generation</strong> using text-embedding-3-large (2000 dimensions) to create a dense vector representation of the query. This is followed by an <strong>Initial vector similarity search</strong> to retrieve the top-20 (INITIAL_K) most similar chunks by cosine similarity using the PostgreSQL vector extension with the query:</p>
+<pre><code class="language-sql">SELECT c.*, 1 - (c.embedding &lt;=&gt; %s::vector) AS vector_score
+FROM iris_textbook_database c
+WHERE c.document_id = %s
+ORDER BY vector_score DESC
+LIMIT %s;
+</code></pre>
+<p>Next, <strong>Summary relevance filtering</strong> involves LLM-based classification (GPT-4o-mini, temperature 0.2) of chunk summaries as relevant (1) or irrelevant (0), removing irrelevant chunks while keeping the original rank order. <strong>Importance-based reranking</strong> applies the formula <span class="arithmatex">\(score = vector\_score \cdot (1 + 0.2 \cdot section\_importance\_score)\)</span>, sorts results by this new score, and assigns a new rank. <strong>Section expansion by token count</strong> expands sections if their token count is ≤ 8000 tokens for the top 5 ranked chunks, or ≤ 4000 tokens for other chunks, fetching all chunks from the same section and grouping them. <strong>Sequence gap filling</strong> identifies and fills sequence gaps between consecutive chunks ≤ 8 sequence numbers by retrieving intermediate chunks and assigning importance scores based on averaging adjacent chunks. Finally, <strong>Card formatting and response synthesis</strong> formats all chunks into "cards" with metadata and content, and generates a comprehensive research report using GPT-4o (temperature 0.7), ensuring inline citations from the source material.</p>
+<p>This method is <strong>applied</strong> to very large documents and external sources, such as the <code>external_ey</code>, <code>external_iasb</code>, <code>external_kpmg</code>, and <code>external_pwc</code> example databases.</p>
+<h2>6.3 Model Decision Processes</h2>
+<h3>6.3.1 Router Decision</h3>
+<p>The <strong>Mathematical Specification</strong> for the Router Decision is a binary classification: <span class="arithmatex">\(f_{route}(q, c) \in \{direct, research\}\)</span>, where <span class="arithmatex">\(q\)</span> is the query and <span class="arithmatex">\(c\)</span> is the conversation context.
+<strong>Implementation</strong> takes the user query and conversation history as input. The process involves LLM-based analysis using GPT-4o-mini with structured tool output, at a temperature of 0.1 (low randomness for consistency). The output is the function name to invoke (<code>response_from_conversation</code> or <code>research_from_database</code>).</p>
+<h3>6.3.2 Clarifier Decision</h3>
+<p>The <strong>Mathematical Specification</strong> for the Clarifier Decision involves a context sufficiency assessment: <span class="arithmatex">\(sufficiency(q, c) \in [0, 1]\)</span>, and research formulation: <span class="arithmatex">\(r = formulate(q, c)\)</span> if <span class="arithmatex">\(sufficiency(q, c) &gt; \theta_{context}\)</span>.
+<strong>Implementation</strong> uses the user query, conversation history, and router decision as input. The process is an LLM-based analysis using GPT-4o with structured output. The output can be context questions (if context is insufficient), a research statement (if context is sufficient), and the research scope (<code>metadata</code> or <code>research</code>).</p>
+<h3>6.3.3 Database Selection</h3>
+<p>The <strong>Mathematical Specification</strong> for Database Selection uses multi-class relevance scoring: <span class="arithmatex">\(relevance(db, r) \in [0, 1]\)</span> for each database <span class="arithmatex">\(db\)</span>. Selection is <span class="arithmatex">\(DB_{selected} = \{db \in DB | relevance(db, r) &gt; \theta_{relevance}\}\)</span>.
+<strong>Implementation</strong> takes the research statement from the clarifier as input. The process is an LLM-based analysis using GPT-4o-mini with structured output, at a temperature of 0.2 (low randomness with slight variability). The output is a list of selected databases to query.</p>
+<h3>6.3.4 Response Synthesis</h3>
+<p>The <strong>Mathematical Specification</strong> for Response Synthesis is a multi-document extraction-abstraction: <span class="arithmatex">\(synthesis(retrieved\_content, r)\)</span>, where <span class="arithmatex">\(retrieved\_content\)</span> represents the aggregated results from database queries.
+<strong>Implementation</strong> uses the detailed research from multiple database subagents as input. The process is an LLM-based synthesis using GPT-4o, with a temperature of 0.4 (balanced between creativity and consistency). The output is a coherent, cited research summary.</p>
+<h2>6.4 Model Parameters and Retrieval Specifications</h2>
+<p>The IRIS system utilizes specific model configurations and retrieval parameters tailored to optimize performance across different agent functions.</p>
+<h3>6.4.1 Language Model Parameters</h3>
+<p>For <strong>GPT-4o-mini</strong>, parameters include its use for the Router Agent, Planner Agent, Direct Response Agent, and Document/Section Selection tasks. The temperature is set between 0.1-0.2 for low randomness to ensure consistent decision-making. Its primary application is for classification, decision-making, and selection tasks.</p>
+<p>For <strong>GPT-4o</strong>, parameters dictate its use for the Clarifier Agent, Summarizer Agent, and Database Subagent content synthesis. The temperature is task-dependent, ranging from 0.3-0.7, with higher values for creative synthesis. Its primary application is for complex reasoning and content generation tasks.</p>
+<p>For <strong>Text-Embedding-3-Large</strong>, parameters specify its use for vector embeddings in the semantic search methodology. It employs 2,000 dimensions for high-dimensional, accurate similarity matching. Its primary application is vector database search and similarity matching.</p>
+<h3>6.4.2 Retrieval Parameters</h3>
+<table>
+<thead>
+<tr>
+<th>Retrieval Method</th>
+<th>Parameter</th>
+<th>Implementation Approach</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Catalog Search - Small</strong></td>
+<td>Document Selection</td>
+<td>LLM-based relevance assessment of document summaries using GPT-4o-mini</td>
+</tr>
+<tr>
+<td></td>
+<td>Selection Guidance</td>
+<td>Prompted with specific criteria for relevance, prioritizing documents directly addressing the query</td>
+</tr>
+<tr>
+<td></td>
+<td>Max Documents</td>
+<td>Explicitly limited to 5 documents maximum per prompt instruction</td>
+</tr>
+<tr>
+<td><strong>Catalog Search - Large</strong></td>
+<td>Document Selection</td>
+<td>LLM-based two-stage selection process (documents, then sections)</td>
+</tr>
+<tr>
+<td></td>
+<td>Selection Guidance</td>
+<td>Prompted to select based on document descriptions with specific evaluation criteria</td>
+</tr>
+<tr>
+<td></td>
+<td>Max Documents</td>
+<td>Explicitly limited to 5 documents maximum per prompt instruction</td>
+</tr>
+<tr>
+<td><strong>Catalog Search - Excel</strong></td>
+<td>Row/Table Selection</td>
+<td>LLM-based relevance assessment of tabular data summaries</td>
+</tr>
+<tr>
+<td></td>
+<td>Selection Guidance</td>
+<td>Prompted with dual criteria: 5 document max for specific queries, up to 15 for general listing queries</td>
+</tr>
+<tr>
+<td></td>
+<td>Format Preservation</td>
+<td>Preserves table structure in Markdown format for synthesis</td>
+</tr>
+<tr>
+<td><strong>Catalog Search - Vision</strong></td>
+<td>Image Selection</td>
+<td>LLM-based selection of infographics based on extracted text summaries</td>
+</tr>
+<tr>
+<td></td>
+<td>Selection Guidance</td>
+<td>Prompted with specific relevance criteria prioritizing documents addressing the query directly</td>
+</tr>
+<tr>
+<td></td>
+<td>Max Documents</td>
+<td>Explicitly limited to 5 documents maximum per prompt instruction</td>
+</tr>
+<tr>
+<td></td>
+<td>Visual Content Handling</td>
+<td>Multi-pass vision processing with selective extraction of text, tables and figures</td>
+</tr>
+<tr>
+<td><strong>Semantic Search - Large</strong></td>
+<td>Initial Vector Search</td>
+<td>Document-specific vector searches with exact per-source thresholds:<br>• IASB: IAS (20), IFRS (20), IFRICS (10), SIC (10)<br>• EY: Single search (20)<br>• KPMG: Single search (20)<br>• PwC: Single search (20)</td>
+</tr>
+<tr>
+<td></td>
+<td>Reranking Method</td>
+<td>Multi-factor reranking combining vector similarity with content importance (importance_factor=0.2)</td>
+</tr>
+<tr>
+<td></td>
+<td>Final Selection</td>
+<td>Per-document selection and processing before final aggregation:<br>• Relevance filtering of summaries<br>• Section expansion (top 5 ranks ≤ 8000 tokens, others ≤ 4000 tokens)<br>• Sequence gap filling (gaps ≤ 8)</td>
+</tr>
+<tr>
+<td></td>
+<td>Token Budget</td>
+<td>Dynamic adjustment based on content relevance (typically 4,000-8,000 tokens)</td>
+</tr>
+</tbody>
+</table>
+<p>The catalog search methods (small, large, excel, vision) rely on LLM-driven selection from document/section summaries without explicit numerical thresholds, instead using comparative relevance assessment through prompt engineering. The semantic search method combines explicit vector similarity search with additional reranking and selection parameters optimized through empirical testing.</p>
+<h2>6.5 Numerical Methods and Approximations</h2>
+<h3>6.5.1 Tokenization</h3>
+<p>IRIS uses the <code>tiktoken</code> (cl100k_base) tokenizer. Token thresholds are managed for context window optimization through dynamic truncation. Chat history maintains the last 10 messages within the token limit, and document chunking aims for 250-750 tokens per chunk, depending on semantic boundaries.</p>
+<h3>6.5.2 Token-Aware Chunking Algorithm</h3>
+<p>Section-aware chunking implements a numerical approximation for optimal information density through a hierarchical sectional chunking process.
+The <strong>Mathematical Formulation</strong> considers a document <span class="arithmatex">\(D\)</span> with sections <span class="arithmatex">\(S = \{s_1, s_2, ..., s_n\}\)</span>. For each section <span class="arithmatex">\(s_i\)</span>, its token count is <span class="arithmatex">\(T(s_i)\)</span>. Threshold parameters are <span class="arithmatex">\(T_{min} = 250\)</span> and <span class="arithmatex">\(T_{max} = 750\)</span>. The chunking process involves merging sections <span class="arithmatex">\(s_i\)</span> with <span class="arithmatex">\(s_{i+1}\)</span> if <span class="arithmatex">\(T(s_i) &lt; T_{min}\)</span> and <span class="arithmatex">\(T(s_i) + T(s_{i+1}) \leq T_{max}\)</span>. If <span class="arithmatex">\(T(s_i) &gt; T_{max}\)</span>, it's split into subsections <span class="arithmatex">\(\{s_{i,1}, ..., s_{i,k}\}\)</span> such that <span class="arithmatex">\(T_{min} \leq T(s_{i,j}) \leq T_{max}\)</span>. If <span class="arithmatex">\(T_{min} \leq T(s_i) \leq T_{max}\)</span>, it's maintained as a standalone chunk.</p>
+<p>The <strong>Implementation Process</strong> involves the system traversing the document structure hierarchically, calculating precise token counts with <code>tiktoken</code> for each section. Section boundaries are preserved where possible for semantic coherence. When sections exceed the maximum token threshold, splitting occurs at paragraph boundaries. Sections below the minimum threshold are merged with adjacent sections, with merged sections continuously evaluated against the maximum threshold. The final chunking preserves the document's logical flow while maintaining optimal chunk sizes.</p>
+<p>This approach balances information density with semantic coherence, ensuring that related content remains together while maintaining manageable chunk sizes for embedding and retrieval.</p>
+<h3>6.5.3 Embedding Batch Processing</h3>
+<p>To optimize embedding generation, the system implements vector batch processing through a parallelized computation architecture.
+The <strong>Mathematical Formulation</strong> takes a set of chunks <span class="arithmatex">\(C = \{c_1, ..., c_m\}\)</span> and a batch size <span class="arithmatex">\(B = 50\)</span>. <span class="arithmatex">\(C\)</span> is partitioned into batch sets <span class="arithmatex">\(B_i = \{c_{i \cdot B + 1}, ..., c_{min((i+1) \cdot B, m)}\}\)</span>. The embedding function <span class="arithmatex">\(E\)</span> is applied to each batch: <span class="arithmatex">\(E(B_i) = \{E(c) | c \in B_i\}\)</span>. The complete embedding set is <span class="arithmatex">\(E(C) = \bigcup E(B_i)\)</span>.</p>
+<p>The <strong>Implementation Process</strong> divides the total chunk collection into batches of 50. Each batch is submitted to the embedding API as a single request. The text-embedding-3-large model processes each chunk in the batch. Returned embeddings are stored with their corresponding chunk IDs. The system monitors embedding generation for quality and consistency, and embeddings are stored in the PostgreSQL database using the pgvector extension.</p>
+<p>This batched approach significantly improves throughput by reducing API overhead while maintaining embedding quality and consistency.</p>
+<h3>6.5.4 Similarity Scoring</h3>
+<p>Vector similarity is calculated using cosine similarity:</p>
+<div class="arithmatex">\[sim(v_1, v_2) = \frac{v_1 \cdot v_2}{||v_1|| \cdot ||v_2||}\]</div>
+<p>Where <span class="arithmatex">\(v_1\)</span> and <span class="arithmatex">\(v_2\)</span> are embedding vectors for chunks or queries.</p>
+<h2>6.6 Process Monitoring and Metrics</h2>
+<p>The system implements comprehensive process monitoring to track performance.</p>
+<h3>6.6.1 Metrics Collection</h3>
+<p>Metrics collected include stage-based timing metrics for each component in the processing pipeline, token usage statistics for cost analysis, API response times, and completion rates and error conditions.</p>
+<h3>6.6.2 Metric Storage</h3>
+<p>All metrics are stored in the PostgreSQL database in the <code>process_monitor_logs</code> table. This allows for historical analysis, performance optimization, cost attribution, and system reliability monitoring.</p>
+<h3>6.6.3 Performance Optimization Feedback Loop</h3>
+<p>The process monitoring system enables continuous system refinement. This is achieved through the identification of bottlenecks in the processing pipeline, analysis of token usage patterns to optimize costs, correlation of success/failure rates with specific query types, and fine-tuning of model parameters based on performance metrics.</p></body></html>

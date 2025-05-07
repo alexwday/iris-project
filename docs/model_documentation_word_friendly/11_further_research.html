@@ -1,0 +1,89 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Document</title>
+<script type="text/javascript" async
+  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/MathJax.js?config=TeX-MML-AM_CHTML">
+</script>
+<style>
+    body {
+        font-family: sans-serif;
+        line-height: 1.6;
+        margin: 20px;
+    }
+    h1, h2, h3, h4, h5, h6 {
+        margin-top: 1.5em;
+        margin-bottom: 0.5em;
+        line-height: 1.3;
+    }
+    p {
+        margin-bottom: 1em;
+    }
+    table {
+        border-collapse: collapse;
+        margin-bottom: 1em;
+        width: auto; /* Changed from 100% to auto for better Word compatibility */
+        border: 1px solid #ddd; /* Added border for table */
+    }
+    th, td {
+        border: 1px solid #ddd;
+        padding: 8px;
+        text-align: left;
+    }
+    th {
+        background-color: #f2f2f2;
+    }
+    pre {
+        background-color: #f8f8f8;
+        border: 1px solid #ddd;
+        padding: 10px;
+        overflow-x: auto;
+        font-family: monospace;
+        white-space: pre-wrap; /* Allow wrapping for long lines in code blocks */
+        word-wrap: break-word; /* Break long words if necessary */
+    }
+    code {
+        font-family: monospace;
+        background-color: #f0f0f0; /* Light background for inline code */
+        padding: 2px 4px;
+        border-radius: 3px;
+    }
+    blockquote {
+        border-left: 4px solid #ddd;
+        padding-left: 10px;
+        color: #555;
+        margin-left: 0;
+    }
+    ul, ol {
+        margin-bottom: 1em;
+        padding-left: 20px;
+    }
+    img {
+        max-width: 100%;
+        height: auto;
+    }
+    /* MathJax specific styling if needed, though default usually works well */
+    .MathJax_Display { 
+        display: block; 
+        text-align: center; 
+        margin: 1em 0; 
+        overflow-x: auto; /* Add scroll for very wide equations */
+    }
+</style>
+</head>
+<body>
+<h1>Section 11: Further Research</h1>
+<p>Based on our experience developing and testing the IRIS system, we have identified several promising avenues for further research and enhancement. These areas represent clear paths for continued development based on both the strengths and limitations observed in the current implementation.</p>
+<h2>11.1 Model Enhancement Opportunities</h2>
+<p>Several opportunities exist for model enhancement. <strong>LLM Model Evaluation</strong> involves regularly assessing newer LLM models alongside our current OpenAI implementations to evaluate potential performance improvements in reasoning capabilities, response quality, and processing efficiency. <strong>Response Optimization</strong> aims to further refine response generation to balance comprehensiveness with conciseness, ensuring answers directly address user queries without unnecessary detail while maintaining appropriate context and citation. <strong>Source Conflict Resolution</strong> focuses on enhancing the system's ability to identify, reconcile, and clearly present information when different knowledge sources contain potentially conflicting guidance, with explicit indication of source authority hierarchies. Lastly, <strong>Latency Reduction</strong> will continue optimizing the multi-stage processing pipeline to reduce end-to-end response times while maintaining comprehensive information retrieval, particularly for complex research queries spanning multiple knowledge domains.</p>
+<h2>11.2 Knowledge Base Expansion</h2>
+<p>Expansion of the knowledge base presents several avenues. <strong>Content Coverage</strong> will be systematically expanded based on identified knowledge gaps and user feedback, prioritizing high-demand finance and accounting policy areas that currently have limited coverage. <strong>Document Currency Management</strong> will involve developing enhanced approaches for tracking and surfacing document recency information, ensuring users understand the temporal context of the information provided. <strong>Visual Content Handling</strong> aims to improve the processing and presentation of visual elements from source documents, particularly for complex financial diagrams, flowcharts, and infographics from cheat sheets and technical publications. Additionally, <strong>Reference Hyperlinking</strong> will explore mechanisms for implementing direct hyperlinks to source documents within responses, integrated with appropriate access controls and permission management.</p>
+<h2>11.3 System Architecture Improvements</h2>
+<p>Improvements to the system architecture are also planned. <strong>Router Refinement</strong> will further enhance the router component to improve database selection accuracy, particularly for queries that span multiple knowledge domains or that involve emerging finance topics. <strong>Clarifier Enhancement</strong> will expand the clarifier agent's capabilities to better handle ambiguous queries and identify more subtle cases where additional context is needed for accurate research. <strong>Database Refresh Optimization</strong> will streamline the document ingestion and refresh pipeline to support more frequent updates and larger volumes of documents while maintaining metadata quality. Finally, <strong>Interpretability Improvements</strong> will focus on implementing enhanced logging of intermediate reasoning steps to improve system auditability and enable more detailed analysis of decision processes.</p>
+<h2>11.4 Evaluation and Monitoring Advancement</h2>
+<p>Advancements in evaluation and monitoring are key. <strong>Automated Evaluation</strong> will involve developing more sophisticated approaches for automated performance assessment to supplement manual evaluation processes, potentially incorporating LLM-based judging of response quality. <strong>Test Suite Expansion</strong> will create additional targeted test questions focusing on edge cases, source conflicts, and emerging finance topics to continuously verify model robustness. <strong>User Feedback Integration</strong> will refine mechanisms for collecting, analyzing, and acting upon user feedback data from the Maven interface, including both explicit feedback (thumbs up/down) and implicit signals. <strong>Performance Tracking Dashboards</strong> will implement comprehensive visualization and tracking of system performance metrics over time, enabling early identification of potential drift or degradation.</p>
+<h2>11.5 User Experience Enhancements</h2>
+<p>Enhancing the user experience is an ongoing goal. <strong>Response Formatting</strong> will continue refining the presentation of complex financial information, particularly tables, lists, and hierarchical concepts, to improve readability and comprehension. <strong>Conversation Flow</strong> improvements will enhance the system's ability to maintain context across multi-turn conversations, especially for complex research topics requiring progressive refinement. Lastly, <strong>Multi-language Support</strong> will evaluate approaches for supporting additional languages in both queries and knowledge sources, expanding accessibility for global finance teams.</p>
+<p>These research directions will be pursued based on operational priorities, user feedback, and evolving business requirements. Regular assessment of the implemented enhancements will ensure continued alignment with the system's core purpose of providing accurate, comprehensive finance and accounting policy guidance.</p></body></html>
