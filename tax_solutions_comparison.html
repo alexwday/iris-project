@@ -94,6 +94,7 @@
         .rating-table td {
             text-align: center;
             vertical-align: middle;
+            padding: 12px 8px;
         }
         .rating-value {
             display: inline-block;
@@ -104,6 +105,7 @@
             text-align: center;
             font-weight: bold;
             color: white;
+            margin-bottom: 8px;
         }
         .rating-5 {
             background-color: #27ae60;
@@ -119,6 +121,14 @@
         }
         .rating-1 {
             background-color: #e74c3c;
+        }
+        .rating-desc {
+            display: block;
+            font-size: 12px;
+            text-align: center;
+            color: #666;
+            max-width: 120px;
+            margin: 0 auto;
         }
         .summary-card {
             background-color: #f8f9fa;
@@ -163,6 +173,40 @@
             border-radius: 5px;
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
+        .legend {
+            margin: 20px 0;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-around;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin: 5px 10px;
+        }
+        .decision-drivers {
+            margin-top: 15px;
+            padding: 10px;
+            background-color: #e8f4fc;
+            border-radius: 4px;
+            border-left: 4px solid #3498db;
+        }
+        .recommendation-box {
+            border: 2px solid #3498db;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 20px 0;
+            background-color: #f0f9ff;
+        }
+        .recommendation-title {
+            font-size: 18px;
+            color: #3498db;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
@@ -174,6 +218,29 @@
     
     <div class="executive-summary">
         <p>The global tax technology landscape has evolved dramatically, with five major platforms now dominating the enterprise space: Oracle EPM Tax Reporting, Thomson Reuters ONESOURCE, Longview Tax (insightsoftware), OneStream, and SAP tax solutions. Based on extensive analysis across seven critical dimensions, Oracle EPM and Thomson Reuters ONESOURCE lead in dedicated tax functionality, while OneStream offers superior finance integration, SAP excels in ERP alignment, and Longview provides exceptional Excel usability. For most enterprises, the right choice depends on existing technology ecosystems, tax complexity, and organizational structure rather than product capabilities alone.</p>
+    </div>
+
+    <div class="legend">
+        <div class="legend-item">
+            <span class="rating-value rating-5">5</span>
+            <span style="margin-left: 8px;">Exceptional - Industry-leading capability</span>
+        </div>
+        <div class="legend-item">
+            <span class="rating-value rating-4">4</span>
+            <span style="margin-left: 8px;">Strong - Above average implementation</span>
+        </div>
+        <div class="legend-item">
+            <span class="rating-value rating-3">3</span>
+            <span style="margin-left: 8px;">Adequate - Meets standard requirements</span>
+        </div>
+        <div class="legend-item">
+            <span class="rating-value rating-2">2</span>
+            <span style="margin-left: 8px;">Limited - Below average capability</span>
+        </div>
+        <div class="legend-item">
+            <span class="rating-value rating-1">1</span>
+            <span style="margin-left: 8px;">Minimal - Significant limitations</span>
+        </div>
     </div>
 
     <!-- Comprehensive Comparison Matrix -->
@@ -193,86 +260,224 @@
         <tbody>
             <tr>
                 <td><strong>Tax Provision Strength</strong></td>
-                <td><span class="rating-value rating-5">5</span></td>
-                <td><span class="rating-value rating-5">5</span></td>
-                <td><span class="rating-value rating-4">4</span></td>
-                <td><span class="rating-value rating-4">4</span></td>
-                <td><span class="rating-value rating-3">3</span></td>
+                <td>
+                    <span class="rating-value rating-5">5</span>
+                    <span class="rating-desc">Best-in-class for GAAP/IFRS compliance and disclosures</span>
+                </td>
+                <td>
+                    <span class="rating-value rating-5">5</span>
+                    <span class="rating-desc">Used by 100% of Fortune 100, comprehensive coverage</span>
+                </td>
+                <td>
+                    <span class="rating-value rating-4">4</span>
+                    <span class="rating-desc">Strong Excel integration with real-time consolidation</span>
+                </td>
+                <td>
+                    <span class="rating-value rating-4">4</span>
+                    <span class="rating-desc">Unified platform with finance, eliminating reconciliation</span>
+                </td>
+                <td>
+                    <span class="rating-value rating-3">3</span>
+                    <span class="rating-desc">Better for transaction tax than provision, often needs third-party</span>
+                </td>
             </tr>
             <tr>
                 <td><strong>Regulatory Reporting</strong></td>
-                <td><span class="rating-value rating-4">4</span></td>
-                <td><span class="rating-value rating-5">5</span></td>
-                <td><span class="rating-value rating-3">3</span></td>
-                <td><span class="rating-value rating-3">3</span></td>
-                <td><span class="rating-value rating-4">4</span></td>
+                <td>
+                    <span class="rating-value rating-4">4</span>
+                    <span class="rating-desc">Strong CbCR and Pillar Two capabilities</span>
+                </td>
+                <td>
+                    <span class="rating-value rating-5">5</span>
+                    <span class="rating-desc">Coverage in 180+ countries, templates for 45+ jurisdictions</span>
+                </td>
+                <td>
+                    <span class="rating-value rating-3">3</span>
+                    <span class="rating-desc">Focus on BEPS 2.0, fewer automated statutory reports</span>
+                </td>
+                <td>
+                    <span class="rating-value rating-3">3</span>
+                    <span class="rating-desc">Adequate statutory reporting, not specialized</span>
+                </td>
+                <td>
+                    <span class="rating-value rating-4">4</span>
+                    <span class="rating-desc">Excels in real-time reporting to authorities (40+ countries)</span>
+                </td>
             </tr>
             <tr>
                 <td><strong>Process Automation</strong></td>
-                <td><span class="rating-value rating-4">4</span></td>
-                <td><span class="rating-value rating-4">4</span></td>
-                <td><span class="rating-value rating-3">3</span></td>
-                <td><span class="rating-value rating-5">5</span></td>
-                <td><span class="rating-value rating-4">4</span></td>
+                <td>
+                    <span class="rating-value rating-4">4</span>
+                    <span class="rating-desc">Configurable task lists and workflows</span>
+                </td>
+                <td>
+                    <span class="rating-value rating-4">4</span>
+                    <span class="rating-desc">WorkFlow Manager with centralized calendar</span>
+                </td>
+                <td>
+                    <span class="rating-value rating-3">3</span>
+                    <span class="rating-desc">Excel integration automates some processes</span>
+                </td>
+                <td>
+                    <span class="rating-value rating-5">5</span>
+                    <span class="rating-desc">Guided workflows with certification processes</span>
+                </td>
+                <td>
+                    <span class="rating-value rating-4">4</span>
+                    <span class="rating-desc">ML capabilities for tax issue resolution</span>
+                </td>
             </tr>
             <tr>
                 <td><strong>Deployment Flexibility</strong></td>
-                <td><span class="rating-value rating-2">2</span></td>
-                <td><span class="rating-value rating-5">5</span></td>
-                <td><span class="rating-value rating-5">5</span></td>
-                <td><span class="rating-value rating-5">5</span></td>
-                <td><span class="rating-value rating-5">5</span></td>
+                <td>
+                    <span class="rating-value rating-2">2</span>
+                    <span class="rating-desc">SaaS-only, no on-premise option</span>
+                </td>
+                <td>
+                    <span class="rating-value rating-5">5</span>
+                    <span class="rating-desc">Cloud-first with on-premise and hybrid options</span>
+                </td>
+                <td>
+                    <span class="rating-value rating-5">5</span>
+                    <span class="rating-desc">Flexible deployment models (SaaS, on-prem, hybrid)</span>
+                </td>
+                <td>
+                    <span class="rating-value rating-5">5</span>
+                    <span class="rating-desc">Choice of cloud (Azure), on-prem, or hybrid</span>
+                </td>
+                <td>
+                    <span class="rating-value rating-5">5</span>
+                    <span class="rating-desc">Supports all deployment models, including co-deployment</span>
+                </td>
             </tr>
             <tr>
                 <td><strong>ERP Integration</strong></td>
-                <td><span class="rating-value rating-5">5</span></td>
-                <td><span class="rating-value rating-4">4</span></td>
-                <td><span class="rating-value rating-4">4</span></td>
-                <td><span class="rating-value rating-5">5</span></td>
-                <td><span class="rating-value rating-5">5</span></td>
+                <td>
+                    <span class="rating-value rating-5">5</span>
+                    <span class="rating-desc">Seamless with Oracle Fusion Cloud apps</span>
+                </td>
+                <td>
+                    <span class="rating-value rating-4">4</span>
+                    <span class="rating-desc">12 certified SAP integrations, 200+ tech solutions</span>
+                </td>
+                <td>
+                    <span class="rating-value rating-4">4</span>
+                    <span class="rating-desc">200+ data sources including major ERPs</span>
+                </td>
+                <td>
+                    <span class="rating-value rating-5">5</span>
+                    <span class="rating-desc">Direct connectors for 250+ GL/ERP systems</span>
+                </td>
+                <td>
+                    <span class="rating-value rating-5">5</span>
+                    <span class="rating-desc">Native S/4HANA and ECC integration</span>
+                </td>
             </tr>
             <tr>
                 <td><strong>User Experience</strong></td>
-                <td><span class="rating-value rating-4">4</span></td>
-                <td><span class="rating-value rating-3">3</span></td>
-                <td><span class="rating-value rating-5">5</span></td>
-                <td><span class="rating-value rating-4">4</span></td>
-                <td><span class="rating-value rating-3">3</span></td>
+                <td>
+                    <span class="rating-value rating-4">4</span>
+                    <span class="rating-desc">Role-specific views, customizable dashboards</span>
+                </td>
+                <td>
+                    <span class="rating-value rating-3">3</span>
+                    <span class="rating-desc">Tree layout, can be complex for new users</span>
+                </td>
+                <td>
+                    <span class="rating-value rating-5">5</span>
+                    <span class="rating-desc">Excel-centric UI familiar to tax professionals</span>
+                </td>
+                <td>
+                    <span class="rating-value rating-4">4</span>
+                    <span class="rating-desc">Guided workflows, configurable dashboards</span>
+                </td>
+                <td>
+                    <span class="rating-value rating-3">3</span>
+                    <span class="rating-desc">Fiori interface, steep learning curve</span>
+                </td>
             </tr>
             <tr>
                 <td><strong>Implementation Speed</strong></td>
-                <td><span class="rating-value rating-3">3</span></td>
-                <td><span class="rating-value rating-3">3</span></td>
-                <td><span class="rating-value rating-4">4</span></td>
-                <td><span class="rating-value rating-3">3</span></td>
-                <td><span class="rating-value rating-2">2</span></td>
-            </tr>
-            <tr>
-                <td><strong>Multi-national Support</strong></td>
-                <td><span class="rating-value rating-4">4</span></td>
-                <td><span class="rating-value rating-5">5</span></td>
-                <td><span class="rating-value rating-4">4</span></td>
-                <td><span class="rating-value rating-4">4</span></td>
-                <td><span class="rating-value rating-5">5</span></td>
+                <td>
+                    <span class="rating-value rating-3">3</span>
+                    <span class="rating-desc">6-9 months typical, Fast Track option available</span>
+                </td>
+                <td>
+                    <span class="rating-value rating-3">3</span>
+                    <span class="rating-desc">3-6 months for standard, up to 12 for complex</span>
+                </td>
+                <td>
+                    <span class="rating-value rating-4">4</span>
+                    <span class="rating-desc">6-8 weeks for out-of-box implementation</span>
+                </td>
+                <td>
+                    <span class="rating-value rating-3">3</span>
+                    <span class="rating-desc">3-6 months depending on complexity</span>
+                </td>
+                <td>
+                    <span class="rating-value rating-2">2</span>
+                    <span class="rating-desc">6-18+ months, complex implementation cycle</span>
+                </td>
             </tr>
             <tr>
                 <td><strong>Excel Integration</strong></td>
-                <td><span class="rating-value rating-4">4</span></td>
-                <td><span class="rating-value rating-4">4</span></td>
-                <td><span class="rating-value rating-5">5</span></td>
-                <td><span class="rating-value rating-3">3</span></td>
-                <td><span class="rating-value rating-3">3</span></td>
+                <td>
+                    <span class="rating-value rating-4">4</span>
+                    <span class="rating-desc">Smart View for Office integration</span>
+                </td>
+                <td>
+                    <span class="rating-value rating-4">4</span>
+                    <span class="rating-desc">Strong Excel interface for data entry/analysis</span>
+                </td>
+                <td>
+                    <span class="rating-value rating-5">5</span>
+                    <span class="rating-desc">Excel write-back functionality, seamless interface</span>
+                </td>
+                <td>
+                    <span class="rating-value rating-3">3</span>
+                    <span class="rating-desc">Adequate Excel integration</span>
+                </td>
+                <td>
+                    <span class="rating-value rating-3">3</span>
+                    <span class="rating-desc">Basic Excel connectivity</span>
+                </td>
             </tr>
             <tr>
-                <td><strong>SMB Suitability</strong></td>
-                <td><span class="rating-value rating-2">2</span></td>
-                <td><span class="rating-value rating-3">3</span></td>
-                <td><span class="rating-value rating-3">3</span></td>
-                <td><span class="rating-value rating-2">2</span></td>
-                <td><span class="rating-value rating-4">4</span></td>
+                <td><strong>Multinational Support</strong></td>
+                <td>
+                    <span class="rating-value rating-4">4</span>
+                    <span class="rating-desc">Strong GAAP/IFRS support, consolidation capabilities</span>
+                </td>
+                <td>
+                    <span class="rating-value rating-5">5</span>
+                    <span class="rating-desc">180+ countries, multilingual support, global access</span>
+                </td>
+                <td>
+                    <span class="rating-value rating-4">4</span>
+                    <span class="rating-desc">Robust for multinationals, BEPS 2.0 support</span>
+                </td>
+                <td>
+                    <span class="rating-value rating-4">4</span>
+                    <span class="rating-desc">Good multinational capabilities</span>
+                </td>
+                <td>
+                    <span class="rating-value rating-5">5</span>
+                    <span class="rating-desc">120+ countries with pre-built content</span>
+                </td>
             </tr>
         </tbody>
     </table>
+
+    <div class="decision-drivers">
+        <strong>Executive Decision Drivers:</strong>
+        <ul>
+            <li><strong>Oracle EPM</strong>: Best for organizations deeply invested in Oracle ecosystem seeking tight financial consolidation</li>
+            <li><strong>ONESOURCE</strong>: Optimal for global multinationals needing comprehensive tax discipline coverage</li>
+            <li><strong>Longview</strong>: Ideal when tax department wants control with minimal IT dependency and Excel familiarity</li>
+            <li><strong>OneStream</strong>: Superior when finance-tax integration is a priority to eliminate reconciliation</li>
+            <li><strong>SAP</strong>: Best choice for SAP-centric organizations focused on transaction tax and compliance</li>
+        </ul>
+    </div>
 
     <h2>Core functionality: Who handles what best</h2>
     
@@ -289,6 +494,7 @@
                 <th>Key Strength</th>
                 <th>Standout Feature</th>
                 <th>Ideal Use Case</th>
+                <th>Business Impact</th>
             </tr>
         </thead>
         <tbody>
@@ -297,30 +503,35 @@
                 <td>Consolidated tax disclosures</td>
                 <td>Built-in compliance with global accounting standards</td>
                 <td>Multinational companies reporting under both GAAP and IFRS</td>
+                <td>Reduces risk of compliance errors in SEC filings and global reporting</td>
             </tr>
             <tr>
                 <td><strong>ONESOURCE</strong></td>
                 <td>Breadth of tax discipline coverage</td>
                 <td>Global Access module with multilingual support</td>
                 <td>Fortune 100 companies with complex multinational operations</td>
+                <td>Streamlines tax data collection across global enterprises</td>
             </tr>
             <tr>
                 <td><strong>Longview</strong></td>
                 <td>Excel integration with write-back functionality</td>
                 <td>Real-time consolidation capabilities</td>
                 <td>Organizations with strong Excel dependency</td>
+                <td>Reduces change management friction with tax professionals</td>
             </tr>
             <tr>
                 <td><strong>OneStream</strong></td>
                 <td>Unified platform approach</td>
                 <td>Pre-configured tax cubes with standard calculations</td>
                 <td>Companies seeking integration between finance and tax</td>
+                <td>Eliminates reconciliation efforts between systems</td>
             </tr>
             <tr>
                 <td><strong>SAP</strong></td>
                 <td>Transaction-level tax determination</td>
                 <td>Pre-built content for 120+ countries</td>
                 <td>Organizations with extensive SAP ecosystem</td>
+                <td>Ensures accuracy of transaction tax across global operations</td>
             </tr>
         </tbody>
     </table>
@@ -341,43 +552,118 @@
         <tbody>
             <tr>
                 <td><strong>Oracle EPM</strong></td>
-                <td class="star-rating">★★★★</td>
-                <td class="star-rating">★★★★</td>
-                <td class="star-rating">★★★★★</td>
-                <td class="star-rating">★★★</td>
-                <td class="star-rating">★★★★</td>
+                <td class="star-rating">
+                    ★★★★
+                    <span class="rating-desc">Global standard support</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★
+                    <span class="rating-desc">Automated template creation</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★★
+                    <span class="rating-desc">Built-in CbCR and Pillar Two</span>
+                </td>
+                <td class="star-rating">
+                    ★★★
+                    <span class="rating-desc">Not a core focus area</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★
+                    <span class="rating-desc">Strong GAAP/IFRS focus</span>
+                </td>
             </tr>
             <tr>
                 <td><strong>ONESOURCE</strong></td>
-                <td class="star-rating">★★★★★</td>
-                <td class="star-rating">★★★★★</td>
-                <td class="star-rating">★★★★</td>
-                <td class="star-rating">★★★★</td>
-                <td class="star-rating">★★★★★</td>
+                <td class="star-rating">
+                    ★★★★★
+                    <span class="rating-desc">180+ countries supported</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★★
+                    <span class="rating-desc">45+ country templates</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★
+                    <span class="rating-desc">Comprehensive reporting tools</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★
+                    <span class="rating-desc">Growing capabilities</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★★
+                    <span class="rating-desc">Broadest regulatory coverage</span>
+                </td>
             </tr>
             <tr>
                 <td><strong>Longview</strong></td>
-                <td class="star-rating">★★★</td>
-                <td class="star-rating">★★★</td>
-                <td class="star-rating">★★★★★</td>
-                <td class="star-rating">★★★</td>
-                <td class="star-rating">★★★</td>
+                <td class="star-rating">
+                    ★★★
+                    <span class="rating-desc">More limited jurisdictions</span>
+                </td>
+                <td class="star-rating">
+                    ★★★
+                    <span class="rating-desc">Some manual processes needed</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★★
+                    <span class="rating-desc">Leading BEPS 2.0 solution</span>
+                </td>
+                <td class="star-rating">
+                    ★★★
+                    <span class="rating-desc">Basic capabilities</span>
+                </td>
+                <td class="star-rating">
+                    ★★★
+                    <span class="rating-desc">Focused on specific requirements</span>
+                </td>
             </tr>
             <tr>
                 <td><strong>OneStream</strong></td>
-                <td class="star-rating">★★★</td>
-                <td class="star-rating">★★★</td>
-                <td class="star-rating">★★★</td>
-                <td class="star-rating">★★★★</td>
-                <td class="star-rating">★★★</td>
+                <td class="star-rating">
+                    ★★★
+                    <span class="rating-desc">Adequate international support</span>
+                </td>
+                <td class="star-rating">
+                    ★★★
+                    <span class="rating-desc">Standard capabilities</span>
+                </td>
+                <td class="star-rating">
+                    ★★★
+                    <span class="rating-desc">Developing solutions</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★
+                    <span class="rating-desc">Good dashboard monitoring</span>
+                </td>
+                <td class="star-rating">
+                    ★★★
+                    <span class="rating-desc">Not primary strength</span>
+                </td>
             </tr>
             <tr>
                 <td><strong>SAP</strong></td>
-                <td class="star-rating">★★★★</td>
-                <td class="star-rating">★★★★</td>
-                <td class="star-rating">★★★</td>
-                <td class="star-rating">★★★★★</td>
-                <td class="star-rating">★★★★</td>
+                <td class="star-rating">
+                    ★★★★
+                    <span class="rating-desc">Strong geographic coverage</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★
+                    <span class="rating-desc">Integration with local portals</span>
+                </td>
+                <td class="star-rating">
+                    ★★★
+                    <span class="rating-desc">Via third-party solutions</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★★
+                    <span class="rating-desc">350+ scenarios in 40+ countries</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★
+                    <span class="rating-desc">Excels in real-time compliance</span>
+                </td>
             </tr>
         </tbody>
     </table>
@@ -390,6 +676,7 @@
                 <th>Platform</th>
                 <th>Key Automation Capabilities</th>
                 <th>Unique Feature</th>
+                <th>Business Impact</th>
             </tr>
         </thead>
         <tbody>
@@ -397,26 +684,31 @@
                 <td><strong>Oracle EPM</strong></td>
                 <td>Strong workflow management with configurable task lists</td>
                 <td>Sequential and logically grouped tasks for tax preparation</td>
+                <td>35% faster close times with structured process management</td>
             </tr>
             <tr>
                 <td><strong>ONESOURCE</strong></td>
                 <td>WorkFlow Manager with unified document and task tracking</td>
                 <td>Centralized calendar for tracking due dates and filing status</td>
+                <td>Reduces missed deadlines and penalties with proactive alerts</td>
             </tr>
             <tr>
                 <td><strong>Longview</strong></td>
                 <td>Automated data integration with Excel Add-in</td>
                 <td>Default symbols functionality streamlining repetitive tasks</td>
+                <td>Leverages familiar Excel interface while maintaining data integrity</td>
             </tr>
             <tr>
                 <td><strong>OneStream</strong></td>
                 <td>Guided workflows for provisioning phases</td>
                 <td>Formal sign-off and certification processes for tax data</td>
+                <td>Strong audit trail and governance for SOX compliance</td>
             </tr>
             <tr>
                 <td><strong>SAP</strong></td>
                 <td>Machine learning capabilities for tax issue resolution</td>
                 <td>Automated distribution of remediation tasks</td>
+                <td>Predicts and prevents tax issues before they arise</td>
             </tr>
         </tbody>
     </table>
@@ -498,43 +790,118 @@
         <tbody>
             <tr>
                 <td><strong>Oracle EPM</strong></td>
-                <td class="star-rating">★★★★★</td>
-                <td class="star-rating">★★★</td>
-                <td class="star-rating">★★★</td>
-                <td class="star-rating">★★★</td>
-                <td class="star-rating">★★★★</td>
+                <td class="star-rating">
+                    ★★★★★
+                    <span class="rating-desc">Native integration with Oracle ecosystem</span>
+                </td>
+                <td class="star-rating">
+                    ★★★
+                    <span class="rating-desc">Standard connectors</span>
+                </td>
+                <td class="star-rating">
+                    ★★★
+                    <span class="rating-desc">Basic integration</span>
+                </td>
+                <td class="star-rating">
+                    ★★★
+                    <span class="rating-desc">Data import capabilities</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★
+                    <span class="rating-desc">REST APIs available</span>
+                </td>
             </tr>
             <tr>
                 <td><strong>ONESOURCE</strong></td>
-                <td class="star-rating">★★★★</td>
-                <td class="star-rating">★★★★★</td>
-                <td class="star-rating">★★★★</td>
-                <td class="star-rating">★★★★</td>
-                <td class="star-rating">★★★★</td>
+                <td class="star-rating">
+                    ★★★★
+                    <span class="rating-desc">Strong connectors</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★★
+                    <span class="rating-desc">12 certified SAP integrations</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★
+                    <span class="rating-desc">Good Dynamics support</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★
+                    <span class="rating-desc">200+ tech solutions</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★
+                    <span class="rating-desc">Extensive APIs</span>
+                </td>
             </tr>
             <tr>
                 <td><strong>Longview</strong></td>
-                <td class="star-rating">★★★★</td>
-                <td class="star-rating">★★★★</td>
-                <td class="star-rating">★★★★</td>
-                <td class="star-rating">★★★★</td>
-                <td class="star-rating">★★★</td>
+                <td class="star-rating">
+                    ★★★★
+                    <span class="rating-desc">E-Business Suite integration</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★
+                    <span class="rating-desc">Strong SAP connectivity</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★
+                    <span class="rating-desc">Good Dynamics support</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★
+                    <span class="rating-desc">200+ data sources</span>
+                </td>
+                <td class="star-rating">
+                    ★★★
+                    <span class="rating-desc">Basic API coverage</span>
+                </td>
             </tr>
             <tr>
                 <td><strong>OneStream</strong></td>
-                <td class="star-rating">★★★★</td>
-                <td class="star-rating">★★★★</td>
-                <td class="star-rating">★★★★★</td>
-                <td class="star-rating">★★★★★</td>
-                <td class="star-rating">★★★★★</td>
+                <td class="star-rating">
+                    ★★★★
+                    <span class="rating-desc">Solid Oracle connectors</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★
+                    <span class="rating-desc">Strong S/4HANA support</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★★
+                    <span class="rating-desc">Azure platform advantage</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★★
+                    <span class="rating-desc">250+ GL/ERP connectors</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★★
+                    <span class="rating-desc">Modern API architecture</span>
+                </td>
             </tr>
             <tr>
                 <td><strong>SAP</strong></td>
-                <td class="star-rating">★★★</td>
-                <td class="star-rating">★★★★★</td>
-                <td class="star-rating">★★★</td>
-                <td class="star-rating">★★★</td>
-                <td class="star-rating">★★★★</td>
+                <td class="star-rating">
+                    ★★★
+                    <span class="rating-desc">Limited Oracle support</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★★
+                    <span class="rating-desc">Seamless SAP native integration</span>
+                </td>
+                <td class="star-rating">
+                    ★★★
+                    <span class="rating-desc">Basic Microsoft integration</span>
+                </td>
+                <td class="star-rating">
+                    ★★★
+                    <span class="rating-desc">Requires custom development</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★
+                    <span class="rating-desc">Strong APIs for S/4HANA</span>
+                </td>
             </tr>
         </tbody>
     </table>
@@ -548,6 +915,7 @@
                 <th>Key Integration Strength</th>
                 <th>Finance-Tax Integration</th>
                 <th>Excel Integration</th>
+                <th>Executive Value</th>
             </tr>
         </thead>
         <tbody>
@@ -556,255 +924,45 @@
                 <td>Seamless integration with Oracle FCCS</td>
                 <td>Strong</td>
                 <td>Good (Smart View)</td>
+                <td>Streamlined close process by eliminating data silos</td>
             </tr>
             <tr>
                 <td><strong>ONESOURCE</strong></td>
                 <td>Automated connections between tax modules</td>
                 <td>Good</td>
                 <td>Very Good</td>
+                <td>$2.6M savings from reduced invoice error rates</td>
             </tr>
             <tr>
                 <td><strong>Longview</strong></td>
                 <td>Excel integration with write-back functionality</td>
                 <td>Good</td>
                 <td>Excellent</td>
+                <td>25-50% time savings on tax reporting processes</td>
             </tr>
             <tr>
                 <td><strong>OneStream</strong></td>
                 <td>Unified data model eliminating reconciliation</td>
                 <td>Excellent</td>
                 <td>Good</td>
+                <td>Elimination of 75+ Excel spreadsheets at Guardian Industries</td>
             </tr>
             <tr>
                 <td><strong>SAP</strong></td>
                 <td>Real-time parallel ledger valuations</td>
                 <td>Very Good</td>
                 <td>Fair</td>
-            </tr>
-        </tbody>
-    </table>
-
-    <h2>User experience: Working with the system</h2>
-    
-    <h3>Interface approach comparison</h3>
-    
-    <table>
-        <thead>
-            <tr>
-                <th>Platform</th>
-                <th>Interface Type</th>
-                <th>Key UX Features</th>
-                <th>Mobile Support</th>
-                <th>Learning Curve</th>
-            </tr>
-        </thead>
-        <tbody>
-            <tr>
-                <td><strong>Oracle EPM</strong></td>
-                <td>Web-based with customizable dashboards</td>
-                <td>Role-specific views</td>
-                <td>Yes</td>
-                <td>Steep</td>
-            </tr>
-            <tr>
-                <td><strong>ONESOURCE</strong></td>
-                <td>Centralized application portal</td>
-                <td>Tree layout for tax structures</td>
-                <td>Limited</td>
-                <td>Moderate</td>
-            </tr>
-            <tr>
-                <td><strong>Longview</strong></td>
-                <td>Role-based with Excel integration</td>
-                <td>Symbol selector system</td>
-                <td>Limited</td>
-                <td>Moderate</td>
-            </tr>
-            <tr>
-                <td><strong>OneStream</strong></td>
-                <td>Role-based with guided workflows</td>
-                <td>Configurable dashboards with drill-down</td>
-                <td>Yes</td>
-                <td>Steep</td>
-            </tr>
-            <tr>
-                <td><strong>SAP</strong></td>
-                <td>SAP Fiori design principles</td>
-                <td>Unified worklist</td>
-                <td>Yes</td>
-                <td>Very Steep</td>
-            </tr>
-        </tbody>
-    </table>
-
-    <h3>Workflow management capabilities</h3>
-    
-    <table class="rating-table">
-        <thead>
-            <tr>
-                <th>Platform</th>
-                <th>Task Management</th>
-                <th>Approval Process</th>
-                <th>Status Monitoring</th>
-                <th>Collaboration Tools</th>
-                <th>Overall Workflow</th>
-            </tr>
-        </thead>
-        <tbody>
-            <tr>
-                <td><strong>Oracle EPM</strong></td>
-                <td class="star-rating">★★★★★</td>
-                <td class="star-rating">★★★★★</td>
-                <td class="star-rating">★★★★</td>
-                <td class="star-rating">★★★★</td>
-                <td class="star-rating">★★★★★</td>
-            </tr>
-            <tr>
-                <td><strong>ONESOURCE</strong></td>
-                <td class="star-rating">★★★★★</td>
-                <td class="star-rating">★★★★</td>
-                <td class="star-rating">★★★★★</td>
-                <td class="star-rating">★★★★</td>
-                <td class="star-rating">★★★★★</td>
-            </tr>
-            <tr>
-                <td><strong>Longview</strong></td>
-                <td class="star-rating">★★★★</td>
-                <td class="star-rating">★★★★</td>
-                <td class="star-rating">★★★★</td>
-                <td class="star-rating">★★★</td>
-                <td class="star-rating">★★★★</td>
-            </tr>
-            <tr>
-                <td><strong>OneStream</strong></td>
-                <td class="star-rating">★★★★★</td>
-                <td class="star-rating">★★★★★</td>
-                <td class="star-rating">★★★★★</td>
-                <td class="star-rating">★★★★</td>
-                <td class="star-rating">★★★★★</td>
-            </tr>
-            <tr>
-                <td><strong>SAP</strong></td>
-                <td class="star-rating">★★★★</td>
-                <td class="star-rating">★★★★</td>
-                <td class="star-rating">★★★★</td>
-                <td class="star-rating">★★★</td>
-                <td class="star-rating">★★★★</td>
-            </tr>
-        </tbody>
-    </table>
-
-    <h2>Implementation journey: Getting up and running</h2>
-    
-    <h3>Implementation timeframes comparison</h3>
-    
-    <table>
-        <thead>
-            <tr>
-                <th>Platform</th>
-                <th>Typical Timeframe</th>
-                <th>Fast-Track Option</th>
-                <th>Complex Implementation</th>
-                <th>Implementation Approach</th>
-            </tr>
-        </thead>
-        <tbody>
-            <tr>
-                <td><strong>Oracle EPM</strong></td>
-                <td>6-9 months</td>
-                <td>6 weeks (Deloitte Fast Track)</td>
-                <td>12+ months</td>
-                <td>Phased implementation recommended</td>
-            </tr>
-            <tr>
-                <td><strong>ONESOURCE</strong></td>
-                <td>3-6 months</td>
-                <td>3 months</td>
-                <td>12 months</td>
-                <td>Certified Implementer Program (CIP)</td>
-            </tr>
-            <tr>
-                <td><strong>Longview</strong></td>
-                <td>6-8 weeks</td>
-                <td>6 weeks</td>
-                <td>3 months</td>
-                <td>Structured implementation stages</td>
-            </tr>
-            <tr>
-                <td><strong>OneStream</strong></td>
-                <td>3-6 months</td>
-                <td>3 months</td>
-                <td>9 months</td>
-                <td>Phased approach possible</td>
-            </tr>
-            <tr>
-                <td><strong>SAP</strong></td>
-                <td>6-12 months</td>
-                <td>4 months</td>
-                <td>18+ months</td>
-                <td>SAP Activate methodology</td>
-            </tr>
-        </tbody>
-    </table>
-
-    <h3>Support ecosystem comparison</h3>
-    
-    <table class="rating-table">
-        <thead>
-            <tr>
-                <th>Platform</th>
-                <th>Documentation</th>
-                <th>Training Resources</th>
-                <th>Community Support</th>
-                <th>Partner Network</th>
-                <th>24/7 Support</th>
-            </tr>
-        </thead>
-        <tbody>
-            <tr>
-                <td><strong>Oracle EPM</strong></td>
-                <td class="star-rating">★★★★★</td>
-                <td class="star-rating">★★★★★</td>
-                <td class="star-rating">★★★★</td>
-                <td class="star-rating">★★★★★</td>
-                <td class="star-rating">★★★★</td>
-            </tr>
-            <tr>
-                <td><strong>ONESOURCE</strong></td>
-                <td class="star-rating">★★★★</td>
-                <td class="star-rating">★★★★</td>
-                <td class="star-rating">★★★★</td>
-                <td class="star-rating">★★★★</td>
-                <td class="star-rating">★★★★★</td>
-            </tr>
-            <tr>
-                <td><strong>Longview</strong></td>
-                <td class="star-rating">★★★★</td>
-                <td class="star-rating">★★★</td>
-                <td class="star-rating">★★★</td>
-                <td class="star-rating">★★★</td>
-                <td class="star-rating">★★★★</td>
-            </tr>
-            <tr>
-                <td><strong>OneStream</strong></td>
-                <td class="star-rating">★★★★</td>
-                <td class="star-rating">★★★★</td>
-                <td class="star-rating">★★★★</td>
-                <td class="star-rating">★★★★★</td>
-                <td class="star-rating">★★★★★</td>
-            </tr>
-            <tr>
-                <td><strong>SAP</strong></td>
-                <td class="star-rating">★★★★★</td>
-                <td class="star-rating">★★★★★</td>
-                <td class="star-rating">★★★★★</td>
-                <td class="star-rating">★★★★★</td>
-                <td class="star-rating">★★★★★</td>
+                <td>Reduced tax compliance risks through integration</td>
             </tr>
         </tbody>
     </table>
 
     <h2>Cost considerations: Investment and ROI</h2>
+    
+    <div class="recommendation-box">
+        <div class="recommendation-title">Executive Insight: TCO Considerations</div>
+        <p>When evaluating enterprise tax platforms, look beyond license fees to consider implementation costs, integration expenses, training requirements, and maintenance needs. ONESOURCE typically delivers the strongest ROI metrics with documented $3.8M in benefits over three years against $1.74M in costs per the Forrester TEI study. For Oracle EPM, focus on infrastructure savings from cloud deployment and resource optimization. With Longview, highlight the 25-50% time savings for tax processes. OneStream delivers value through eliminated reconciliation activities and reduced Excel dependency. SAP's value proposition centers on reduced compliance risks and audit costs when integrated with existing SAP infrastructure.</p>
+    </div>
     
     <h3>Licensing models comparison</h3>
     
@@ -919,38 +1077,98 @@
         <tbody>
             <tr>
                 <td><strong>Oracle EPM</strong></td>
-                <td class="star-rating">★</td>
-                <td class="star-rating">★★★</td>
-                <td class="star-rating">★★★★★</td>
-                <td class="star-rating">★★★★★</td>
+                <td class="star-rating">
+                    ★
+                    <span class="rating-desc">Oversized for small businesses</span>
+                </td>
+                <td class="star-rating">
+                    ★★★
+                    <span class="rating-desc">Can work but expensive</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★★
+                    <span class="rating-desc">Ideal for large enterprises</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★★
+                    <span class="rating-desc">Strong multinational support</span>
+                </td>
             </tr>
             <tr>
                 <td><strong>ONESOURCE</strong></td>
-                <td class="star-rating">★★</td>
-                <td class="star-rating">★★★</td>
-                <td class="star-rating">★★★★★</td>
-                <td class="star-rating">★★★★★</td>
+                <td class="star-rating">
+                    ★★
+                    <span class="rating-desc">Modular approach possible</span>
+                </td>
+                <td class="star-rating">
+                    ★★★
+                    <span class="rating-desc">Viable with selective modules</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★★
+                    <span class="rating-desc">Used by 100% of Fortune 100</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★★
+                    <span class="rating-desc">Perfect for global operations</span>
+                </td>
             </tr>
             <tr>
                 <td><strong>Longview</strong></td>
-                <td class="star-rating">★★</td>
-                <td class="star-rating">★★★</td>
-                <td class="star-rating">★★★★★</td>
-                <td class="star-rating">★★★★</td>
+                <td class="star-rating">
+                    ★★
+                    <span class="rating-desc">Cost may be prohibitive</span>
+                </td>
+                <td class="star-rating">
+                    ★★★
+                    <span class="rating-desc">Can work for Excel-focused firms</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★★
+                    <span class="rating-desc">Designed for $1B+ companies</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★
+                    <span class="rating-desc">Good multinational capabilities</span>
+                </td>
             </tr>
             <tr>
                 <td><strong>OneStream</strong></td>
-                <td class="star-rating">★</td>
-                <td class="star-rating">★★★</td>
-                <td class="star-rating">★★★★★</td>
-                <td class="star-rating">★★★★</td>
+                <td class="star-rating">
+                    ★
+                    <span class="rating-desc">Too complex for SMBs</span>
+                </td>
+                <td class="star-rating">
+                    ★★★
+                    <span class="rating-desc">Possible with dedicated resources</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★★
+                    <span class="rating-desc">Ideal for large enterprises</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★
+                    <span class="rating-desc">Strong but not specialized for global tax</span>
+                </td>
             </tr>
             <tr>
                 <td><strong>SAP</strong></td>
-                <td class="star-rating">★★★</td>
-                <td class="star-rating">★★★★</td>
-                <td class="star-rating">★★★★★</td>
-                <td class="star-rating">★★★★★</td>
+                <td class="star-rating">
+                    ★★★
+                    <span class="rating-desc">Entry-level solutions available</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★
+                    <span class="rating-desc">Targeted packages for mid-market</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★★
+                    <span class="rating-desc">Comprehensive enterprise solutions</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★★
+                    <span class="rating-desc">Global regulatory coverage</span>
+                </td>
             </tr>
         </tbody>
     </table>
@@ -972,48 +1190,138 @@
         <tbody>
             <tr>
                 <td><strong>Oracle EPM</strong></td>
-                <td class="star-rating">★★★★★</td>
-                <td class="star-rating">★★★★</td>
-                <td class="star-rating">★★★★</td>
-                <td class="star-rating">★★★★★</td>
-                <td class="star-rating">★★★★</td>
-                <td class="star-rating">★★★★</td>
+                <td class="star-rating">
+                    ★★★★★
+                    <span class="rating-desc">Regulatory expertise</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★
+                    <span class="rating-desc">Good for global ops</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★
+                    <span class="rating-desc">Solid capabilities</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★★
+                    <span class="rating-desc">IP considerations</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★
+                    <span class="rating-desc">Strong support</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★
+                    <span class="rating-desc">Compliance focus</span>
+                </td>
             </tr>
             <tr>
                 <td><strong>ONESOURCE</strong></td>
-                <td class="star-rating">★★★★★</td>
-                <td class="star-rating">★★★★★</td>
-                <td class="star-rating">★★★★★</td>
-                <td class="star-rating">★★★★</td>
-                <td class="star-rating">★★★★★</td>
-                <td class="star-rating">★★★★</td>
+                <td class="star-rating">
+                    ★★★★★
+                    <span class="rating-desc">Deep expertise</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★★
+                    <span class="rating-desc">Cross-border strengths</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★★
+                    <span class="rating-desc">Sales tax automation</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★
+                    <span class="rating-desc">Good support</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★★
+                    <span class="rating-desc">Specialized features</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★
+                    <span class="rating-desc">Solid compliance</span>
+                </td>
             </tr>
             <tr>
                 <td><strong>Longview</strong></td>
-                <td class="star-rating">★★★★</td>
-                <td class="star-rating">★★★★★</td>
-                <td class="star-rating">★★★</td>
-                <td class="star-rating">★★★★</td>
-                <td class="star-rating">★★★★</td>
-                <td class="star-rating">★★★</td>
+                <td class="star-rating">
+                    ★★★★
+                    <span class="rating-desc">Used by Deloitte</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★★
+                    <span class="rating-desc">BMW, Samsung clients</span>
+                </td>
+                <td class="star-rating">
+                    ★★★
+                    <span class="rating-desc">Limited features</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★
+                    <span class="rating-desc">Good adoption</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★
+                    <span class="rating-desc">Shell is a client</span>
+                </td>
+                <td class="star-rating">
+                    ★★★
+                    <span class="rating-desc">Basic support</span>
+                </td>
             </tr>
             <tr>
                 <td><strong>OneStream</strong></td>
-                <td class="star-rating">★★★★★</td>
-                <td class="star-rating">★★★★★</td>
-                <td class="star-rating">★★★★</td>
-                <td class="star-rating">★★★★</td>
-                <td class="star-rating">★★★★★</td>
-                <td class="star-rating">★★★★★</td>
+                <td class="star-rating">
+                    ★★★★★
+                    <span class="rating-desc">Regulatory strengths</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★★
+                    <span class="rating-desc">Victaulic success case</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★
+                    <span class="rating-desc">Good capabilities</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★
+                    <span class="rating-desc">Solid support</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★★
+                    <span class="rating-desc">Complex reporting</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★★
+                    <span class="rating-desc">Compliance excellence</span>
+                </td>
             </tr>
             <tr>
                 <td><strong>SAP</strong></td>
-                <td class="star-rating">★★★★★</td>
-                <td class="star-rating">★★★★★</td>
-                <td class="star-rating">★★★★★</td>
-                <td class="star-rating">★★★★</td>
-                <td class="star-rating">★★★★★</td>
-                <td class="star-rating">★★★★</td>
+                <td class="star-rating">
+                    ★★★★★
+                    <span class="rating-desc">Transaction expertise</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★★
+                    <span class="rating-desc">Excise tax specialty</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★★
+                    <span class="rating-desc">Multi-channel tax</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★
+                    <span class="rating-desc">Good capabilities</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★★
+                    <span class="rating-desc">Industry solutions</span>
+                </td>
+                <td class="star-rating">
+                    ★★★★
+                    <span class="rating-desc">Compliance-focused</span>
+                </td>
             </tr>
         </tbody>
     </table>
@@ -1132,6 +1440,7 @@
                 <th>Platform</th>
                 <th>Ideal For</th>
                 <th>Best Scenario</th>
+                <th>Key Decision Factor</th>
             </tr>
         </thead>
         <tbody>
@@ -1146,6 +1455,7 @@
                     </ul>
                 </td>
                 <td>Large multinational with Oracle ERP already in place</td>
+                <td>Existing Oracle ecosystem and desire for unified finance-tax platform</td>
             </tr>
             <tr>
                 <td><strong>ONESOURCE</strong></td>
@@ -1158,6 +1468,7 @@
                     </ul>
                 </td>
                 <td>Global Fortune 500 company with complex cross-border operations</td>
+                <td>Breadth of tax discipline coverage and global jurisdictional support</td>
             </tr>
             <tr>
                 <td><strong>Longview</strong></td>
@@ -1170,6 +1481,7 @@
                     </ul>
                 </td>
                 <td>Excel-centric tax department seeking system control with minimal IT</td>
+                <td>Tax team desire for control and Excel familiarity</td>
             </tr>
             <tr>
                 <td><strong>OneStream</strong></td>
@@ -1182,6 +1494,7 @@
                     </ul>
                 </td>
                 <td>Company implementing new consolidation and tax systems simultaneously</td>
+                <td>Single platform for financial consolidation and tax provision</td>
             </tr>
             <tr>
                 <td><strong>SAP</strong></td>
@@ -1194,6 +1507,7 @@
                     </ul>
                 </td>
                 <td>Large SAP-centric organization with S/4HANA implementation</td>
+                <td>Existing SAP investment and focus on transaction-level tax determination</td>
             </tr>
         </tbody>
     </table>
