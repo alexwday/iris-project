@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>IRIS Project - Data Dictionary</title>
+<style>
+    body {
+        font-family: sans-serif;
+        line-height: 1.6;
+        margin: 20px;
+    }
+    h1, h2, h3, h4, h5, h6 {
+        margin-top: 1.5em;
+        margin-bottom: 0.5em;
+        line-height: 1.3;
+    }
+    p {
+        margin-bottom: 1em;
+    }
+    table {
+        border-collapse: collapse;
+        margin-bottom: 1em;
+        width: auto;
+        border: 1px solid #ddd;
+    }
+    th, td {
+        border: 1px solid #ddd;
+        padding: 8px;
+        text-align: left;
+    }
+    th {
+        background-color: #f2f2f2;
+    }
+</style>
+</head>
+<body>
+<h1>IRIS Project - Data Dictionary</h1>
+
+<h2>1. Data Terminology, Acronyms, and Abbreviations</h2>
+
+<table>
+<thead>
+<tr>
+<th>Term/Acronym</th>
+<th>Definition</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Agent Architecture</td>
+<td>A modular system design pattern where specialized components (agents) perform specific tasks in the processing pipeline</td>
+</tr>
+<tr>
+<td>Agent Clarifier</td>
+<td>Component that assesses query context sufficiency and creates research statements</td>
+</tr>
+<tr>
+<td>Agent Direct Response</td>
+<td>Component that generates responses using only conversation history</td>
+</tr>
+<tr>
+<td>Agent Planner</td>
+<td>Component that selects optimal databases for query execution</td>
+</tr>
+<tr>
+<td>Agent Router</td>
+<td>Component that determines processing path based on query analysis</td>
+</tr>
+<tr>
+<td>Agent Summarizer</td>
+<td>Component that integrates findings from multiple sources into coherent, properly cited responses</td>
+</tr>
+<tr>
+<td>Catalog Search - Excel</td>
+<td>Specialized pipeline for processing Excel spreadsheets containing tabular data</td>
+</tr>
+<tr>
+<td>Catalog Search - Large</td>
+<td>Retrieval method for large documents with distinct sections, implementing section-level selection</td>
+</tr>
+<tr>
+<td>Catalog Search - Small</td>
+<td>Standard retrieval method for documents with simple structures, processing entire documents as single units</td>
+</tr>
+<tr>
+<td>Catalog Search - Vision</td>
+<td>Specialized pipeline for processing infographics and visual content</td>
+</tr>
+<tr>
+<td>Conversation History</td>
+<td>Complete record of user-system interactions in a session</td>
+</tr>
+<tr>
+<td>Database Subagents</td>
+<td>Components that retrieve and pre-process information from various knowledge sources</td>
+</tr>
+<tr>
+<td>Direct Response Path</td>
+<td>Processing pathway for queries answerable using only conversation history</td>
+</tr>
+<tr>
+<td>Document Refresh Pipeline</td>
+<td>Process that runs on a scheduled basis to process finance inputs and transform them into database content</td>
+</tr>
+<tr>
+<td>GPT-4o</td>
+<td>Large language model used for complex reasoning tasks and final response generation</td>
+</tr>
+<tr>
+<td>GPT-4o-mini</td>
+<td>Large language model used for efficient processing of routine decisions</td>
+</tr>
+<tr>
+<td>Knowledge Boundaries</td>
+<td>Limitations defining what information the model can access and provide</td>
+</tr>
+<tr>
+<td>Maven</td>
+<td>User interface platform that hosts the IRIS system</td>
+</tr>
+<tr>
+<td>Metadata Search</td>
+<td>Query mode returning only document names and descriptions</td>
+</tr>
+<tr>
+<td>Process Monitoring</td>
+<td>System tracking execution stages, token usage, and performance metrics</td>
+</tr>
+<tr>
+<td>Qwen2 7B VL</td>
+<td>Vision language model used for extracting text and visual elements from image content</td>
+</tr>
+<tr>
+<td>RAG (Retrieval-Augmented Generation)</td>
+<td>Framework combining retrieval of information with language model generation to produce grounded responses</td>
+</tr>
+<tr>
+<td>Research Path</td>
+<td>Processing pathway for complex queries requiring database research</td>
+</tr>
+<tr>
+<td>Semantic Search - Large</td>
+<td>Vector-based similarity search methodology for reference documents</td>
+</tr>
+<tr>
+<td>text-embedding-3-large</td>
+<td>Model used for generating vector representations (embeddings) in semantic search</td>
+</tr>
+<tr>
+<td>Token-Aware Chunking</td>
+<td>Algorithm that segments documents by optimizing information density while preserving semantic structure</td>
+</tr>
+</tbody>
+</table>
+
+<h2>2. Data Field Definitions</h2>
+
+<table>
+<thead>
+<tr>
+<th>Field Name</th>
+<th>Definition</th>
+<th>Data Type</th>
+<th>Location/Table</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Run UUID</td>
+<td>Unique identifier for each model invocation</td>
+<td>String</td>
+<td>process_monitor_logs</td>
+</tr>
+<tr>
+<td>Stage Name</td>
+<td>Name of the processing stage (router, clarifier, planner, etc.)</td>
+<td>String</td>
+<td>process_monitor_logs</td>
+</tr>
+<tr>
+<td>Start Time</td>
+<td>Timestamp when a processing stage begins</td>
+<td>DateTime</td>
+<td>process_monitor_logs</td>
+</tr>
+<tr>
+<td>End Time</td>
+<td>Timestamp when a processing stage completes</td>
+<td>DateTime</td>
+<td>process_monitor_logs</td>
+</tr>
+<tr>
+<td>Duration</td>
+<td>Time taken to complete a processing stage</td>
+<td>Float</td>
+<td>process_monitor_logs</td>
+</tr>
+<tr>
+<td>Prompt Tokens</td>
+<td>Count of tokens in the input to LLM</td>
+<td>Integer</td>
+<td>process_monitor_logs</td>
+</tr>
+<tr>
+<td>Completion Tokens</td>
+<td>Count of tokens in the output from LLM</td>
+<td>Integer</td>
+<td>process_monitor_logs</td>
+</tr>
+<tr>
+<td>Token Cost</td>
+<td>Estimated cost of token usage</td>
+<td>Float</td>
+<td>process_monitor_logs</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>Processing status (success, error, etc.)</td>
+<td>String</td>
+<td>process_monitor_logs</td>
+</tr>
+<tr>
+<td>Error Information</td>
+<td>Details about any errors encountered</td>
+<td>Text</td>
+<td>process_monitor_logs</td>
+</tr>
+<tr>
+<td>Decision Details</td>
+<td>Key outputs from each processing stage</td>
+<td>JSON</td>
+<td>process_monitor_logs</td>
+</tr>
+<tr>
+<td>Document ID</td>
+<td>Unique identifier for a document in the database</td>
+<td>String</td>
+<td>apg_documents</td>
+</tr>
+<tr>
+<td>Document Name</td>
+<td>Title of the document</td>
+<td>String</td>
+<td>apg_documents</td>
+</tr>
+<tr>
+<td>Document Description</td>
+<td>Summary of document content and purpose</td>
+<td>Text</td>
+<td>apg_documents</td>
+</tr>
+<tr>
+<td>Document Source</td>
+<td>Origin database of the document</td>
+<td>String</td>
+<td>apg_documents</td>
+</tr>
+<tr>
+<td>Document Type</td>
+<td>Classification of document format/structure</td>
+<td>String</td>
+<td>apg_documents</td>
+</tr>
+<tr>
+<td>Last Updated</td>
+<td>Timestamp of when document was last refreshed</td>
+<td>DateTime</td>
+<td>apg_documents</td>
+</tr>
+<tr>
+<td>Content ID</td>
+<td>Unique identifier for a content chunk</td>
+<td>String</td>
+<td>apg_content</td>
+</tr>
+<tr>
+<td>Content Text</td>
+<td>Actual text content of a document or chunk</td>
+<td>Text</td>
+<td>apg_content</td>
+</tr>
+<tr>
+<td>Document ID (FK)</td>
+<td>Foreign key reference to parent document</td>
+<td>String</td>
+<td>apg_content</td>
+</tr>
+<tr>
+<td>Section ID</td>
+<td>Identifier for a section within a large document</td>
+<td>String</td>
+<td>apg_sections</td>
+</tr>
+<tr>
+<td>Section Name</td>
+<td>Title of a document section</td>
+<td>String</td>
+<td>apg_sections</td>
+</tr>
+<tr>
+<td>Section Summary</td>
+<td>Description of section content</td>
+<td>Text</td>
+<td>apg_sections</td>
+</tr>
+<tr>
+<td>Importance Score</td>
+<td>Indicator of section importance (0-1)</td>
+<td>Float</td>
+<td>apg_sections</td>
+</tr>
+<tr>
+<td>Document ID (FK)</td>
+<td>Foreign key reference to parent document</td>
+<td>String</td>
+<td>apg_sections</td>
+</tr>
+<tr>
+<td>Vector ID</td>
+<td>Unique identifier for a vector embedding</td>
+<td>String</td>
+<td>apg_vectors</td>
+</tr>
+<tr>
+<td>Vector Embedding</td>
+<td>2000-dimensional vector representation of content</td>
+<td>Vector</td>
+<td>apg_vectors</td>
+</tr>
+<tr>
+<td>Content ID (FK)</td>
+<td>Foreign key reference to associated content</td>
+<td>String</td>
+<td>apg_vectors</td>
+</tr>
+<tr>
+<td>Database Selection Accuracy</td>
+<td>Percentage of queries with correct database selection</td>
+<td>Float</td>
+<td>Performance Metrics</td>
+</tr>
+<tr>
+<td>Document Selection Accuracy</td>
+<td>Percentage of queries with correct document selection</td>
+<td>Float</td>
+<td>Performance Metrics</td>
+</tr>
+<tr>
+<td>Answer Accuracy</td>
+<td>Percentage accuracy of answer content</td>
+<td>Float</td>
+<td>Performance Metrics</td>
+</tr>
+<tr>
+<td>Overall Performance Score</td>
+<td>Combined performance score across all dimensions</td>
+<td>Float</td>
+<td>Performance Metrics</td>
+</tr>
+<tr>
+<td>Edge Case Handling</td>
+<td>Performance score on edge case queries</td>
+<td>Float</td>
+<td>Performance Metrics</td>
+</tr>
+<tr>
+<td>User Feedback</td>
+<td>Aggregated positive feedback rate from Maven interface</td>
+<td>Float</td>
+<td>Performance Metrics</td>
+</tr>
+</tbody>
+</table>
+
+</body>
+</html>
