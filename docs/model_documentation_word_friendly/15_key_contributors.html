@@ -17,48 +17,19 @@
     p {
         margin-bottom: 1em;
     }
-    table {
-        border-collapse: collapse;
-        margin-bottom: 1em;
-        width: auto; /* Changed from 100% to auto for better Word compatibility */
-        border: 1px solid #ddd; /* Added border for table */
-    }
-    th, td {
-        border: 1px solid #ddd;
-        padding: 8px;
-        text-align: left;
-    }
-    th {
-        background-color: #f2f2f2;
-    }
-    pre {
-        background-color: #f8f8f8;
-        border: 1px solid #ddd;
-        padding: 10px;
-        overflow-x: auto;
-        font-family: monospace;
-        white-space: pre-wrap; /* Allow wrapping for long lines in code blocks */
-        word-wrap: break-word; /* Break long words if necessary */
-    }
-    code {
-        font-family: monospace;
-        background-color: #f0f0f0; /* Light background for inline code */
-        padding: 2px 4px;
-        border-radius: 3px;
-    }
-    blockquote {
-        border-left: 4px solid #ddd;
-        padding-left: 10px;
-        color: #555;
-        margin-left: 0;
-    }
     ul, ol {
         margin-bottom: 1em;
         padding-left: 20px;
     }
-    img {
-        max-width: 100%;
-        height: auto;
+    .contributor {
+        margin-bottom: 0.5em;
+    }
+    .contributor-name {
+        font-weight: bold;
+    }
+    .contributor-title {
+        font-style: italic;
+        color: #555;
     }
 </style>
 </head>
@@ -67,161 +38,105 @@
 
 <h2>Development Team</h2>
 
-<table>
-<thead>
-<tr>
-<th>Role</th>
-<th>Name</th>
-<th>Title</th>
-<th>Responsibilities</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Lead Developer</td>
-<td>[DEVELOPER NAME]</td>
-<td>Senior AI Developer, Digital Ecosystem & AI</td>
-<td>System architecture design, agent implementation, database schema design, core code development</td>
-</tr>
-<tr>
-<td>Testing/Validation</td>
-<td>[TESTER NAME]</td>
-<td>AI Developer, Digital Ecosystem & AI</td>
-<td>Test plan development, performance testing, validation of model outputs, documentation of test results</td>
-</tr>
-<tr>
-<td>Project Manager</td>
-<td>[MANAGER NAME]</td>
-<td>Manager, Digital Ecosystem & AI</td>
-<td>Project oversight, resource allocation, timeline management, stakeholder communication</td>
-</tr>
-<tr>
-<td>Technical Approver</td>
-<td>[APPROVER NAME]</td>
-<td>Director, Digital Ecosystem & AI</td>
-<td>Technical review and approval, ensuring compliance with RBC standards and policies</td>
-</tr>
-</tbody>
-</table>
+<ul>
+    <li class="contributor">
+        <span class="contributor-name">[DEVELOPER NAME]</span>, 
+        <span class="contributor-title">Senior AI Developer, Digital Ecosystem & AI</span> - 
+        Lead Developer responsible for system architecture design, agent implementation, database schema design, and core code development
+    </li>
+    <li class="contributor">
+        <span class="contributor-name">[TESTER NAME]</span>, 
+        <span class="contributor-title">AI Developer, Digital Ecosystem & AI</span> - 
+        Testing/Validation lead responsible for test plan development, performance testing, validation of model outputs, and documentation of test results
+    </li>
+    <li class="contributor">
+        <span class="contributor-name">[MANAGER NAME]</span>, 
+        <span class="contributor-title">Manager, Digital Ecosystem & AI</span> - 
+        Project Manager overseeing project coordination, resource allocation, timeline management, and stakeholder communication
+    </li>
+    <li class="contributor">
+        <span class="contributor-name">[APPROVER NAME]</span>, 
+        <span class="contributor-title">Director, Digital Ecosystem & AI</span> - 
+        Technical Approver providing final review and approval, ensuring compliance with RBC standards and policies
+    </li>
+</ul>
 
 <h2>Accounting Policy Group (APG) Subject Matter Experts</h2>
 
-<table>
-<thead>
-<tr>
-<th>Role</th>
-<th>Name</th>
-<th>Title</th>
-<th>Expertise Areas</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>APG Lead</td>
-<td>[APG LEAD NAME]</td>
-<td>Senior Manager, Accounting Policy</td>
-<td>Overall accounting policy oversight, final SME signoff</td>
-</tr>
-<tr>
-<td>CAPM Expert</td>
-<td>[CAPM EXPERT NAME]</td>
-<td>Manager, Corporate Accounting Policy</td>
-<td>Corporate Accounting Policy Manuals, internal policy guidelines</td>
-</tr>
-<tr>
-<td>IFRS Specialist</td>
-<td>[IFRS SPECIALIST NAME]</td>
-<td>Senior Accounting Policy Advisor</td>
-<td>IFRS standards, international accounting requirements</td>
-</tr>
-<tr>
-<td>Financial Reporting Expert</td>
-<td>[FR EXPERT NAME]</td>
-<td>Manager, Financial Reporting</td>
-<td>Reporting policies, disclosure requirements</td>
-</tr>
-<tr>
-<td>End User Representative</td>
-<td>[END USER REP NAME]</td>
-<td>Finance Professional</td>
-<td>User experience testing, practical usage scenarios</td>
-</tr>
-</tbody>
-</table>
+<ul>
+    <li class="contributor">
+        <span class="contributor-name">[APG LEAD NAME]</span>, 
+        <span class="contributor-title">Senior Manager, Accounting Policy</span> - 
+        APG Lead providing overall accounting policy oversight and final SME signoff
+    </li>
+    <li class="contributor">
+        <span class="contributor-name">[CAPM EXPERT NAME]</span>, 
+        <span class="contributor-title">Manager, Corporate Accounting Policy</span> - 
+        CAPM Expert specializing in Corporate Accounting Policy Manuals and internal policy guidelines
+    </li>
+    <li class="contributor">
+        <span class="contributor-name">[IFRS SPECIALIST NAME]</span>, 
+        <span class="contributor-title">Senior Accounting Policy Advisor</span> - 
+        IFRS Specialist with expertise in IFRS standards and international accounting requirements
+    </li>
+    <li class="contributor">
+        <span class="contributor-name">[FR EXPERT NAME]</span>, 
+        <span class="contributor-title">Manager, Financial Reporting</span> - 
+        Financial Reporting Expert knowledgeable in reporting policies and disclosure requirements
+    </li>
+    <li class="contributor">
+        <span class="contributor-name">[END USER REP NAME]</span>, 
+        <span class="contributor-title">Finance Professional</span> - 
+        End User Representative conducting user experience testing and providing practical usage scenarios
+    </li>
+</ul>
 
 <h2>Maven Integration Team</h2>
 
-<table>
-<thead>
-<tr>
-<th>Role</th>
-<th>Name</th>
-<th>Title</th>
-<th>Responsibilities</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Integration Lead</td>
-<td>[MAVEN LEAD NAME]</td>
-<td>Technical Lead, Maven Platform</td>
-<td>Overall integration architecture, platform compatibility</td>
-</tr>
-<tr>
-<td>Backend Developer</td>
-<td>[BACKEND DEV NAME]</td>
-<td>Senior Developer, Maven Platform</td>
-<td>API integration, database connectivity, authentication</td>
-</tr>
-<tr>
-<td>Frontend Developer</td>
-<td>[FRONTEND DEV NAME]</td>
-<td>UI Developer, Maven Platform</td>
-<td>User interface implementation, response formatting</td>
-</tr>
-<tr>
-<td>DevOps Engineer</td>
-<td>[DEVOPS NAME]</td>
-<td>DevOps Engineer, Maven Platform</td>
-<td>Deployment pipeline, monitoring setup, performance optimization</td>
-</tr>
-</tbody>
-</table>
+<ul>
+    <li class="contributor">
+        <span class="contributor-name">[MAVEN LEAD NAME]</span>, 
+        <span class="contributor-title">Technical Lead, Maven Platform</span> - 
+        Integration Lead managing overall integration architecture and platform compatibility
+    </li>
+    <li class="contributor">
+        <span class="contributor-name">[BACKEND DEV NAME]</span>, 
+        <span class="contributor-title">Senior Developer, Maven Platform</span> - 
+        Backend Developer implementing API integration, database connectivity, and authentication
+    </li>
+    <li class="contributor">
+        <span class="contributor-name">[FRONTEND DEV NAME]</span>, 
+        <span class="contributor-title">UI Developer, Maven Platform</span> - 
+        Frontend Developer creating user interface implementation and response formatting
+    </li>
+    <li class="contributor">
+        <span class="contributor-name">[DEVOPS NAME]</span>, 
+        <span class="contributor-title">DevOps Engineer, Maven Platform</span> - 
+        DevOps Engineer responsible for deployment pipeline, monitoring setup, and performance optimization
+    </li>
+</ul>
 
 <h2>Additional Contributors</h2>
 
-<table>
-<thead>
-<tr>
-<th>Role</th>
-<th>Name</th>
-<th>Title</th>
-<th>Contributions</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>RBC Lumina Support</td>
-<td>[LUMINA SUPPORT NAME]</td>
-<td>AI Platform Specialist</td>
-<td>LLM integration support, model optimization advice</td>
-</tr>
-<tr>
-<td>Database Administrator</td>
-<td>[DBA NAME]</td>
-<td>Senior Database Administrator</td>
-<td>PostgreSQL configuration, vector search optimization</td>
-</tr>
-<tr>
-<td>Documentation Specialist</td>
-<td>[DOC SPECIALIST NAME]</td>
-<td>Technical Writer</td>
-<td>Model documentation, user guide development</td>
-</tr>
-</tbody>
-</table>
+<ul>
+    <li class="contributor">
+        <span class="contributor-name">[LUMINA SUPPORT NAME]</span>, 
+        <span class="contributor-title">AI Platform Specialist</span> - 
+        RBC Lumina Support providing LLM integration support and model optimization advice
+    </li>
+    <li class="contributor">
+        <span class="contributor-name">[DBA NAME]</span>, 
+        <span class="contributor-title">Senior Database Administrator</span> - 
+        Database Administrator configuring PostgreSQL and optimizing vector search capabilities
+    </li>
+    <li class="contributor">
+        <span class="contributor-name">[DOC SPECIALIST NAME]</span>, 
+        <span class="contributor-title">Technical Writer</span> - 
+        Documentation Specialist developing model documentation and user guides
+    </li>
+</ul>
 
-<p><strong>Note:</strong> This document identifies key contributors to the IRIS project across multiple teams. The placeholder names [IN BRACKETS] should be replaced with the actual names of the individuals who served in these roles during the project development. The tables can be expanded as needed to include additional contributors who made significant contributions to the project.</p>
+<p><strong>Note:</strong> This document identifies key contributors to the IRIS project across multiple teams. The placeholder names [IN BRACKETS] should be replaced with the actual names of the individuals who served in these roles during project development.</p>
 
 </body>
 </html>
