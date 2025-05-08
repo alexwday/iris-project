@@ -75,34 +75,23 @@
 <body>
 <h1>Section 11: Further Research</h1>
 
-<p>Based on our development and testing of the IRIS system, we have identified several key areas for further research.</p>
+<p>Based on our development and testing of the IRIS system, we have identified several key areas for further research:</p>
 
-<h2>Next Steps Based on Findings</h2>
+<ol>
+    <li><strong>On-Premises Model Integration</strong> - Explore the use of on-premises LLM alternatives to replace the current dependency on GPT models, particularly focusing on models that can be deployed within RBC's security perimeter.</li>
+    
+    <li><strong>Advanced Vision Model Integration</strong> - Test alternative vision models to improve the preprocessing of infographics in financial documents, enhancing the system's ability to extract and represent visual information.</li>
+    
+    <li><strong>Complex Table Preservation</strong> - Investigate methods for maintaining the structure and relationships in complex tables when converting from source documents to usable formats within the IRIS system.</li>
+    
+    <li><strong>Markdown Conversion Alternatives</strong> - Evaluate alternatives to Azure Document Intelligence for converting documents to markdown, looking at both accuracy improvements and cost efficiency.</li>
+    
+    <li><strong>Alternative Retrieval Methods</strong> - Test new retrieval approaches beyond the current catalog and semantic search methods, particularly exploring hybrid retrievers and re-ranking approaches.</li>
+    
+    <li><strong>Multilingual Capabilities</strong> - Assess and implement support for multilingual queries and document ingestion, expanding IRIS's accessibility to non-English financial documentation and user queries.</li>
+</ol>
 
-<ul>
-    <li><strong>Response Speed Improvement</strong> - Implement parallel database querying to reduce the response time for complex queries that currently take >30 seconds.</li>
-    <li><strong>Source Conflict Resolution</strong> - Enhance the system's ability to resolve conflicts when different knowledge sources contain contradictory information by implementing clearer authority hierarchies.</li>
-    <li><strong>Confidence Indication</strong> - Improve how the system communicates its confidence level in responses, particularly for questions with limited information available.</li>
-</ul>
-
-<h2>Logical Development Areas</h2>
-
-<ul>
-    <li><strong>Visual Content Processing</strong> - Enhance handling of diagrams and flowcharts in financial documents to better preserve their informational value.</li>
-    <li><strong>Maven UI Integration</strong> - Complete the planned integration with the Maven interface while maintaining full functionality.</li>
-    <li><strong>Knowledge Base Expansion</strong> - Systematically incorporate additional finance and accounting policy documents based on user request patterns.</li>
-</ul>
-
-<h2>Implementation Timeline</h2>
-
-<ul>
-    <li>Q1 2025: Source conflict resolution improvements</li>
-    <li>Q2 2025: Maven UI integration completion</li>
-    <li>Q3 2025: Response speed optimization</li>
-    <li>Q4 2025: Visual content processing enhancement</li>
-</ul>
-
-<p>We will prioritize these research directions based on user feedback and operational impact, focusing first on improvements that directly affect response accuracy and reliability.</p>
+<p>These research directions will be prioritized based on business requirements and technical feasibility, with implementation planned over the next 12-18 months.</p>
 
 </body>
 </html>
