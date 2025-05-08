@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html>
 <head>
@@ -75,217 +74,162 @@
 </head>
 <body>
 <h1>5. Model Development Data</h1>
+
 <h2>5.1 Data Validity and Sources</h2>
+
 <p>The IRIS system retrieves information from a collection of internal and external accounting and finance knowledge sources stored in a PostgreSQL database. This section describes the data used by the system, its sources, and processing methods.</p>
-<h3>Data Coverage and Scope</h3>
-<p>IRIS accesses data covering several key domains. These include <strong>Internal RBC Policies</strong>, such as Corporate Accounting Policy Manuals (CAPMs), process documentation, and control frameworks. The scope also extends to <strong>Accounting Guidelines</strong>, encompassing CFO and APG-developed guides, cheatsheets, and wiki entries. Furthermore, <strong>Internal Documentation</strong> like accounting memos, project approval requests, and finance-related guidance is covered. The system also processes information related to <strong>Financial Reporting</strong>, including management reporting policies and external reporting requirements. Finally, it incorporates <strong>Accounting Standards</strong>, such as IFRS standards and interpretations from select accounting firms (EY, KPMG, PwC). This domain-focused coverage enables IRIS to address finance and accounting inquiries relevant to the CFO Group.</p>
-<h3>Data Storage and Management</h3>
-<p>The system stores processed documents in a PostgreSQL database with a structured schema designed to support both catalog-based and semantic search approaches. The database consists of several primary tables.</p>
-<p>First, the <strong>apg_catalog</strong> table serves as a Document Metadata Repository.</p>
-<pre><code class="language-sql">CREATE TABLE apg_catalog (
-    -- System Fields
-    id SERIAL PRIMARY KEY,                        -- Auto-incrementing unique identifier
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), -- When the record was added to the database
 
-    -- Document Identification Fields
-    document_source VARCHAR(100) NOT NULL,        -- Source of the document (e.g., 'internal_capm', 'external_iasb')
-    document_type VARCHAR(100) NOT NULL,          -- Type of document (e.g., 'capm', 'infographic', 'memo')
-    document_name VARCHAR(255) NOT NULL,          -- Formatted document name (e.g., 'IFRS 9 - Financial Instruments')
+<p>IRIS accesses data covering several key domains including Internal RBC Policies, Accounting Guidelines developed by RBC Finance, Internal Documentation like accounting memos and project approval requests, Financial Reporting information, and Accounting Standards from external sources. This domain-focused coverage enables IRIS to address finance and accounting inquiries relevant to RBC Finance.</p>
 
-    -- Scope Fields
-    document_description TEXT,                    -- Original AI-generated description of document usage/scope
-    document_usage TEXT,                          -- Field for LLM selection/usage guidance
+<p>The system stores processed documents in a PostgreSQL database with a structured schema designed to support both catalog-based and semantic search approaches. The database schema is defined in the <code>postgres_schema.sql</code> file and includes tables for document metadata, content storage, vector embeddings, and performance monitoring.</p>
 
-    -- Refresh Metadata Fields
-    date_created TIMESTAMP WITH TIME ZONE,        -- Original document creation date
-    date_last_modified TIMESTAMP WITH TIME ZONE,  -- Date the document was last modified
-    file_name VARCHAR(255),                       -- Full filename with extension (e.g., 'IFRS9_Financial_Instruments.pdf')
-    file_type VARCHAR(50),                        -- File extension/type (e.g., '.pdf', '.docx', '.xlsx')
-    file_size BIGINT,                             -- Size of the file in bytes
-    file_path VARCHAR(1000),                      -- Full system path to the original file
-    file_link VARCHAR(1000)                       -- URL or NAS path to the file
-)
-</code></pre>
-<p>Second, the <strong>apg_content</strong> table is used for Document Content Storage.</p>
-<pre><code class="language-sql">CREATE TABLE apg_content (
-    -- System Fields
-    id SERIAL PRIMARY KEY,                        -- Auto-incrementing unique identifier
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), -- When the record was added to the database
+<p>The document processing framework transforms source documents into formats optimized for different retrieval methods through several steps: Source Identification from designated storage locations, Format Conversion from various formats to standardized markdown, Structure Preservation to maintain document hierarchies, Metadata Generation including summaries and contextual information, and Storage Optimization for efficient retrieval.</p>
 
-    -- Document Reference Fields (matching catalog)
-    document_source VARCHAR(100) NOT NULL,        -- Source of the document (matches apg_catalog)
-    document_type VARCHAR(100) NOT NULL,          -- Type of document (matches apg_catalog)
-    document_name VARCHAR(255) NOT NULL,          -- Document name (matches apg_catalog)
+<p>Each processing pipeline employs specialized metadata generation approaches tailored to document types. For standard documents, document-level summaries and descriptions are created. For larger documents with sections, both document and section-level summaries are generated. For Excel files, tabular structure is preserved in the metadata. Visual content is processed using the Qwen2 vision model to extract and describe visual elements. For large reference materials, comprehensive recursive metadata is generated at both chapter and section levels to support sophisticated retrieval.</p>
 
-    -- Content Fields
-    section_id INTEGER NOT NULL,                  -- Ordered sequence number within the document
-    section_name VARCHAR(500),                    -- Title of the section/chapter
-    section_summary TEXT,                         -- AI-generated summary of the section
-    section_content TEXT NOT NULL                 -- The actual content of the section
-)
-</code></pre>
-<p>Third, the <strong>iris_textbook_database</strong> table functions as a Vector Embeddings Store.</p>
-<pre><code class="language-sql">CREATE TABLE iris_textbook_database (
-  -- SYSTEM FIELDS
-  id SERIAL PRIMARY KEY,  -- Unique identifier for each chunk
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),  -- Record creation timestamp
-
-  -- STRUCTURAL POSITIONING FIELDS
-  document_id TEXT,                 -- E.g., &quot;IFRS_Handbook_2023&quot; or &quot;EY_GAAP_Guide_2024&quot;
-  chapter_number INT,              -- E.g., 4
-  section_number INT,              -- E.g., 2
-  part_number INT,                 -- E.g., 1
-  sequence_number INT,             -- E.g., 14 (position in chunk order)
-
-  -- CHAPTER-LEVEL METADATA
-  chapter_name TEXT,               -- E.g., &quot;Leases&quot; or &quot;Revenue Recognition&quot;
-  chapter_tags TEXT[],             -- E.g., {&quot;Financial_Instruments&quot;, &quot;Disclosure_Requirements&quot;}
-  chapter_summary TEXT,            -- E.g., &quot;This chapter explains revenue recognition...&quot;
-  chapter_token_count INT,         -- Total token count across the full chapter
-
-  -- SECTION-LEVEL PAGINATION &amp; IMPORTANCE
-  section_start_page INT,          -- E.g., 142 (start page of section)
-  section_end_page INT,            -- E.g., 143 (end page of section)
-  section_importance_score FLOAT,  -- E.g., 0.85 (importance of this section)
-  section_token_count INT,         -- Total token count for this section
-
-  -- SECTION-LEVEL METADATA
-  section_hierarchy TEXT,          -- E.g., &quot;Chapter 4 &gt; Section 4.2 &gt; Subsection 4.2.3&quot;
-  section_title TEXT,              -- E.g., &quot;Identification of Separate Performance Obligations&quot;
-  section_standard TEXT,           -- E.g., &quot;IFRS&quot;, &quot;US_GAAP&quot;, &quot;AASB&quot;
-  section_standard_codes TEXT[],   -- E.g., {&quot;IFRS 16&quot;, &quot;IAS 17&quot;, &quot;IFRS 9&quot;}
-  section_references TEXT[],       -- E.g., {&quot;Section 3.4&quot;, &quot;IAS 36 Para 12-15&quot;}
-
-  -- CONTENT &amp; EMBEDDING
-  content TEXT NOT NULL,           -- The actual textbook content in this chunk
-  embedding VECTOR(2000),          -- OpenAI's text-embedding-3-large model vector
-  text_search_vector TSVECTOR GENERATED ALWAYS AS (to_tsvector('english', content)) STORED
-)
-</code></pre>
-<p>Finally, the <strong>process_monitor_logs</strong> table is a Performance Monitoring and Logging System.</p>
-<pre><code class="language-sql">CREATE TABLE process_monitor_logs (
-    -- Core Fields
-    log_id BIGSERIAL PRIMARY KEY,                -- Auto-incrementing unique ID for each log entry
-    run_uuid UUID NOT NULL,                      -- Unique ID generated for each model invocation
-    model_name VARCHAR(100) NOT NULL,            -- Identifier for the model
-    stage_name VARCHAR(100) NOT NULL,            -- Name of the specific process stage
-    stage_start_time TIMESTAMPTZ NOT NULL,       -- Timestamp when the stage began
-    stage_end_time TIMESTAMPTZ,                  -- Timestamp when the stage ended
-    duration_ms INT,                             -- Duration of the stage in milliseconds
-    llm_calls JSONB,                             -- JSON array storing details for LLM calls
-    total_tokens INT,                            -- Sum of total tokens from all llm_calls
-    total_cost DECIMAL(12, 6),                   -- Sum of costs from all llm_calls
-    status VARCHAR(255),                         -- Outcome/Status of the stage
-    decision_details TEXT,                       -- Specific outputs or decisions
-    error_message TEXT,                          -- Detailed error message if the stage failed
-    log_timestamp TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP -- Timestamp when log row was created
-)
-</code></pre>
-<p>This <code>process_monitor_logs</code> table serves as an output destination where the model automatically logs performance metrics after each component execution, rather than an input source for the model.</p>
-<h3>Data Processing Framework</h3>
-<p>The document processing framework transforms source documents into formats optimized for the different retrieval methods. This involves several steps: <strong>Source Identification</strong>, where documents are identified and retrieved from designated Network Attached Storage (NAS) locations; <strong>Format Conversion</strong>, where documents from various formats (PDF, Word, Excel, images) are converted to standardized markdown text; <strong>Structure Preservation</strong>, ensuring document hierarchies, sections, and relationships are maintained during processing; <strong>Metadata Generation</strong>, where document and section summaries are created to support retrieval decisions; and <strong>Storage Optimization</strong>, where content is stored in appropriate database tables based on document type.</p>
-<h4>Metadata Generation Process</h4>
-<p>Each pipeline type employs a specialized metadata generation approach. For <strong>Catalog Search - Small</strong>, GPT-4o is used to generate document usage summaries and descriptions, creating concise overviews of document purpose and applicability. This focuses on document-level metadata to support catalog selection and produces standardized metadata fields for consistent retrieval. The <strong>Catalog Search - Large</strong> pipeline includes all metadata generation from Catalog Search Small and additionally generates summaries for each defined section and chapter. This creates hierarchical metadata reflecting document structure and enables more granular selection by allowing LLMs to refine searches to specific sections. Both <strong>Catalog Search - Excel &amp; Vision</strong> pipelines follow the same metadata generation approach as Catalog Search Small. For Excel, tabular structure is preserved with appropriate metadata, and for Vision, the Qwen2 model is used to extract and describe visual content before metadata generation. The <strong>Semantic Search - Large</strong> pipeline employs an extensive recursive metadata generation process. It first generates comprehensive metadata at the chapter level, including chapter summaries, applicable accounting standards, and key concepts and terminology. This chapter-level context is then used to recursively generate metadata for individual sections, such as section summaries, contextual tags, importance scores, and hierarchical positioning. This rich metadata supports vector search, reranking, and context expansion operations.</p>
-<p>For documents requiring semantic search capabilities, additional processing generates vector embeddings using the text-embedding-3-large model (3072 dimensions) to support similarity-based retrieval.</p>
 <h2>5.2 Document Processing Pipelines</h2>
+
 <p>IRIS uses five specialized document processing pipelines, each optimized for specific document types and formats. These pipelines transform source documents into formats suitable for efficient retrieval.</p>
-<h3>Document Processing Approaches</h3>
-<p>The <strong>Catalog Search - Small</strong> pipeline is designed for standard documents (e.g., Project Approval Requests). It converts documents to markdown format, keeps documents whole without chunking, and generates document-level summaries for catalog selection. This approach is suitable for documents under 10,000 tokens.</p>
-<p>The <strong>Catalog Search - Large</strong> pipeline is intended for large documents with distinct sections (e.g., Corporate Accounting Policy Manuals). It converts documents to markdown format, splits documents into logical sections based on headings, and creates both document-level and section-level summaries. This enables a two-stage retrieval process involving document selection followed by section selection.</p>
-<p>For Excel spreadsheets (e.g., Wiki entries), the <strong>Catalog Search - Excel</strong> pipeline converts spreadsheet content to markdown while preserving table structures. It processes each relevant row or group of rows as a separate entry and standardizes formatting for numerical data and table layouts.</p>
-<p>The <strong>Catalog Search - Vision</strong> pipeline handles infographics and visual content (e.g., cheatsheets). It uses the Qwen2 vision model to process image content into structured markdown, extracting text, visual elements, and structural information. These results are combined into a single structured document with proper formatting.</p>
-<p>Lastly, the <strong>Semantic Search - Large</strong> pipeline is for very large reference materials (e.g., IFRS Standards). It extracts text while preserving document structure and identifies chapters and sections with hierarchical relationships. The pipeline creates optimally sized chunks for semantic search and generates comprehensive metadata at the chapter level, including summaries, key concepts, applicable accounting standards, and usage guidance. This chapter-level metadata is then used as context to recursively generate section-level metadata such as summaries, contextual tags, importance scores, and hierarchical positioning information. Vector embeddings are generated using the text-embedding-3-large model configured for 2000 dimensions, and both content and metadata are stored to support reranking and context expansion.</p>
-<h3>Document Transformation Process</h3>
-<p>The document processing workflow includes several key transformation steps. <strong>Format Standardization</strong> involves converting diverse document formats into consistent markdown text, preserving essential formatting elements like headings, tables, and lists, and ensuring consistent rendering across different document types. <strong>Structure Preservation</strong> focuses on maintaining document hierarchies and section relationships, preserving heading levels to reflect document organization, and retaining connections between related document sections. <strong>Metadata Enrichment</strong> includes extracting and storing document and section metadata, generating AI-powered summaries using GPT-4o for retrieval optimization, preserving source information and hierarchical relationships, creating recursive metadata structures for semantic search documents, and building cross-referencing systems between related content sections. Finally, <strong>Retrieval Optimization</strong> tailors the process for different search types. For catalog-based retrieval, it generates high-quality document descriptions and usage summaries, creates section-level summaries for large documents to enable refined selection, and structures metadata fields to support LLM-based document selection. For semantic search, it creates vector embeddings of document chunks using text-embedding-3-large, generates positional and hierarchical metadata for reranking and context expansion, implements importance scoring to prioritize more relevant sections, preserves parent-child relationships between document sections, and pre-calculates token counts to optimize context usage.</p>
+
+<p>The <strong>Catalog Search - Small</strong> pipeline is designed for standard documents such as Project Approval Requests. It converts documents to markdown format, keeps documents whole without chunking, and generates document-level summaries for catalog selection. This streamlined approach is suitable for documents under 10,000 tokens, providing efficient retrieval without unnecessary complexity.</p>
+
+<p>For large documents with distinct sections, like Corporate Accounting Policy Manuals, the <strong>Catalog Search - Large</strong> pipeline splits documents into logical sections based on headings and creates both document-level and section-level summaries. This enables a sophisticated two-stage retrieval process where the system first selects relevant documents and then identifies specific sections within those documents, providing more precise information access.</p>
+
+<p>The <strong>Catalog Search - Excel</strong> pipeline is specialized for handling spreadsheet content from sources like Wiki entries. It preserves table structures while converting content to markdown format, processing each row or logical group of rows as a separate document entry. This approach maintains the structural integrity of tabular data, ensuring that important financial information presented in tables remains coherent and usable.</p>
+
+<p>For visual content like infographics and cheatsheets, the <strong>Catalog Search - Vision</strong> pipeline uses the Qwen2 vision model to extract text, diagrams, and visual elements into structured markdown. This multi-pass approach ensures that important visual representations of financial concepts are properly captured and made accessible through text-based search, bridging the gap between visual and textual information.</p>
+
+<p>Very large reference materials such as IFRS Standards are processed through the <strong>Semantic Search - Large</strong> pipeline. This sophisticated approach preserves hierarchical document structure while creating optimally sized chunks for semantic search. It generates comprehensive metadata including summaries, applicable standards, and contextual information to support vector-based similarity search with advanced reranking and context expansion capabilities.</p>
+
+<p>The document transformation process includes several key steps: Format Standardization across diverse document types, Structure Preservation to maintain hierarchical relationships, Metadata Enrichment to support sophisticated retrieval, and Retrieval Optimization tailored to different search approaches. These carefully designed processes ensure that financial information from diverse sources remains accessible, coherent, and contextually relevant.</p>
+
 <h2>5.3 System Inputs and Database Structure</h2>
-<p>IRIS operates primarily on conversation history and content retrieved from its database structure. This section details the database design and inputs used by the system.</p>
-<h3>Database Structure</h3>
-<p>The PostgreSQL database consists of three primary tables that store the knowledge IRIS uses.</p>
-<p>The <strong>apg_catalog</strong> table stores metadata about available knowledge sources. Its purpose is to hold information about document origin, purpose, and searchable descriptions. Key fields include <code>document_source</code>, <code>document_name</code>, <code>document_type</code>, and <code>document_description</code>.</p>
-<p>The <strong>apg_content</strong> table stores the actual document content and section summaries. It is used primarily for catalog-based search methods. Key fields are <code>document_source</code>, <code>document_name</code>, <code>section_id</code>, <code>section_name</code>, <code>section_summary</code>, and <code>section_content</code>.</p>
-<p>The <strong>iris_textbook_database</strong> table stores vector representations for semantic search. It contains rich metadata at chapter and section levels to support recursive context expansion, including structural positioning data (chapter, section, part numbers), and information about applicable standards and references. Key fields include <code>embedding</code> (vector), <code>content</code>, <code>section_hierarchy</code>, and <code>section_importance_score</code>. This table utilizes PostgreSQL vector extensions for similarity searching.</p>
-<h3>Input Processing Flow</h3>
-<p>The IRIS agent architecture processes inputs through a sequential pipeline. The <strong>Initial Input</strong> to the system is the complete conversation history, including the current user query and all previous exchanges. During <strong>Router Processing</strong>, the Agent Router analyzes the conversation to determine whether to use only conversation context (Direct Response path) or to retrieve information from databases (Research path). For the <strong>Research Processing</strong> path, the system evaluates context sufficiency using the Agent Clarifier, determines relevant knowledge sources via the Agent Planner, retrieves information using appropriate search methods through Database Subagents, and finally synthesizes findings into coherent responses with the Agent Summarizer. Throughout this flow, <strong>Specialized Prompting</strong> is employed, where each agent uses carefully designed system prompts customized for its specific function, guiding the LLM's behavior and output format.</p>
-<h3>Model-Specific Inputs</h3>
-<p>The IRIS system primarily processes three types of inputs. First is the <strong>Conversation History</strong>, which includes complete user-system interaction records, the current query, all previous exchanges, session context, and follow-up information. Second are the <strong>PostgreSQL Database Tables</strong>, providing structured document content from <code>apg_content</code>, document metadata from <code>apg_catalog</code>, and vector embeddings with rich metadata from <code>iris_textbook_database</code>. Third, <strong>Specialized Prompts</strong> are used, which are system prompts customized for each agent, containing specific function-oriented instructions and response format guidelines.</p>
-<p>Each component in the IRIS pipeline processes these inputs in specialized ways. The Agent Router processes conversation history to determine the processing path. The Agent Clarifier analyzes conversation context to ensure sufficient information. The Agent Planner evaluates research needs to select appropriate knowledge sources. Database Subagents query PostgreSQL tables using specialized retrieval methods. The Agent Summarizer integrates database findings into coherent responses.</p>
-<p>For semantic search capabilities, the embedding generation process uses the text-embedding-3-large model configured to generate 2000-dimensional vectors (rather than its maximum 3072 dimensions) to fit PostgreSQL database limits, creating efficient vector representations of document chunks for similarity-based retrieval.</p>
+
+<p>IRIS operates primarily on conversation history and content retrieved from its database structure. The system processes user queries through a sequential pipeline, beginning with the complete conversation history as the initial input. The Agent Router analyzes this history to determine whether to use only conversation context (Direct Response path) or to retrieve information from databases (Research path).</p>
+
+<p>For queries following the Research path, the system performs additional processing: evaluating context sufficiency through the Agent Clarifier, selecting relevant knowledge sources via the Agent Planner, retrieving information using specialized methods through Database Subagents, and synthesizing findings with the Agent Summarizer. Throughout this process, specialized system prompts guide each component's behavior.</p>
+
+<p>The system primarily processes three types of inputs: Conversation History containing complete user-system interaction records, PostgreSQL Database Tables providing structured document content and metadata, and Specialized Prompts containing function-oriented instructions for each agent component. Each component in the pipeline processes these inputs differently based on its specific role in the system.</p>
+
+<p>For semantic search capabilities, the system uses the text-embedding-3-large model configured to generate 2000-dimensional vectors (rather than its maximum 3072 dimensions) to fit PostgreSQL database limits. This creates efficient vector representations of document chunks that enable sophisticated similarity-based retrieval while working within database constraints.</p>
+
 <h2>5.4 Data Assumptions and Limitations</h2>
-<p>The IRIS system operates under several data-related assumptions and limitations that affect its performance and usage scope.</p>
+
 <h3>Key Data Assumptions</h3>
+
 <table>
 <thead>
 <tr>
-<th>Assumption</th>
-<th>Description</th>
-<th>Impact</th>
+<th>Model ID</th>
+<th>Name</th>
+<th>Description and Rationale</th>
+<th>Materiality (Impact on Model Outputs)</th>
+<th>Business Driven (Qualitative) or Quantitative Methodology Driven</th>
 </tr>
 </thead>
 <tbody>
 <tr>
+<td>IRIS-001</td>
 <td>Document Authority</td>
-<td>Internal RBC policies are considered more authoritative than external sources</td>
-<td>Ensures organizational standards are prioritized</td>
+<td>Internal RBC policies are considered more authoritative than external sources. This assumption ensures organizational standards are prioritized in responses.</td>
+<td>High</td>
+<td>Business Driven</td>
 </tr>
 <tr>
+<td>IRIS-001</td>
 <td>Content Correctness</td>
-<td>Documents in designated storage locations are assumed to be correct and authoritative</td>
-<td>Enables efficient processing without additional validation steps</td>
+<td>Documents in designated storage locations are assumed to be correct and authoritative. This enables efficient processing without additional validation steps.</td>
+<td>High</td>
+<td>Business Driven</td>
 </tr>
 <tr>
+<td>IRIS-001</td>
 <td>Source Completeness</td>
-<td>The knowledge base is assumed to contain all relevant policy documentation</td>
-<td>Critical for providing comprehensive responses</td>
+<td>The knowledge base is assumed to contain all relevant policy documentation. This is critical for providing comprehensive responses.</td>
+<td>Medium</td>
+<td>Business Driven</td>
 </tr>
 <tr>
+<td>IRIS-001</td>
 <td>Document Structure</td>
-<td>Higher-level document sections are assumed to contain more important policy statements</td>
-<td>Influences retrieval and ranking algorithms</td>
+<td>Higher-level document sections are assumed to contain more important policy statements. This influences retrieval and ranking algorithms.</td>
+<td>Medium</td>
+<td>Quantitative Methodology Driven</td>
 </tr>
 <tr>
+<td>IRIS-001</td>
 <td>Query Context</td>
-<td>User intent is assumed to remain consistent within a conversation</td>
-<td>Enables effective follow-up handling</td>
+<td>User intent is assumed to remain consistent within a conversation. This enables effective follow-up handling and conversation continuity.</td>
+<td>Low</td>
+<td>Quantitative Methodology Driven</td>
 </tr>
 </tbody>
 </table>
+
 <h3>Data Limitations</h3>
+
 <table>
 <thead>
 <tr>
-<th>Limitation</th>
+<th>Model ID</th>
+<th>Name</th>
 <th>Description</th>
-<th>Impact on Usage</th>
+<th>Impact on Business Use(s)</th>
+<th>Monitoring Description (if applicable)</th>
+<th>Monitoring Accountable (if applicable)</th>
+<th>Monitoring Frequency (if applicable)</th>
 </tr>
 </thead>
 <tbody>
 <tr>
+<td>IRIS-001</td>
 <td>Content Currency</td>
 <td>Lag between document updates and database refresh</td>
-<td>Responses may not reflect very recent policy changes</td>
+<td>Medium, responses may not reflect very recent policy changes</td>
+<td>Database refresh tracking</td>
+<td>RBC Technology Team</td>
+<td>Quarterly</td>
 </tr>
 <tr>
+<td>IRIS-001</td>
 <td>Visual Content Processing</td>
 <td>Limited ability to fully capture complex tables, charts, and financial diagrams</td>
-<td>Some visual information may be simplified or summarized</td>
+<td>Low, some visual information may be simplified or summarized</td>
+<td>Quality assessment of processed visual content</td>
+<td>RBC Technology Team</td>
+<td>Quarterly</td>
 </tr>
 <tr>
+<td>IRIS-001</td>
 <td>Information Boundaries</td>
 <td>System can only access information in its knowledge base</td>
-<td>Cannot leverage information beyond processed documents</td>
+<td>Low, cannot leverage information beyond processed documents</td>
+<td>Knowledge gap identification from user queries</td>
+<td>RBC Content Team</td>
+<td>Quarterly</td>
 </tr>
 <tr>
+<td>IRIS-001</td>
 <td>Calculation Handling</td>
 <td>Unable to execute or validate accounting calculations in source materials</td>
-<td>Cannot verify calculation results or run new scenarios</td>
+<td>Low, cannot verify calculation results or run new scenarios</td>
+<td>User feedback on calculation needs</td>
+<td>RBC Content Team</td>
+<td>Quarterly</td>
 </tr>
 <tr>
+<td>IRIS-001</td>
 <td>Language Support</td>
 <td>Optimized for English content with limited multilingual capabilities</td>
-<td>May not fully process non-English segments in documents</td>
+<td>Low, may not fully process non-English segments in documents</td>
+<td>Language-related query failure tracking</td>
+<td>RBC Technology Team</td>
+<td>Quarterly</td>
 </tr>
 </tbody>
 </table>
-<h3>Future Improvements</h3>
-<p>The IRIS system is designed for continuous improvement. Planned enhancements include regular <strong>Documentation Updates</strong>, such as refresh cycles to incorporate policy changes and expansion of the knowledge base to cover additional finance domains. Additionally, <strong>Processing Enhancements</strong> are planned, focusing on improvements to visual content processing for complex financial diagrams and better preservation of document relationships and cross-references.</p>
-<p>The system's modular design allows for component-level improvements without requiring complete system redesign.</p></body></html>
+
+<p>The IRIS system is designed for continuous improvement through regular documentation updates and processing enhancements. Documentation updates include scheduled refresh cycles to incorporate policy changes and expansion of the knowledge base to cover additional finance domains. Processing enhancements focus on improvements to visual content processing for complex financial diagrams and better preservation of document relationships and cross-references. The system's modular design allows for component-level improvements without requiring complete system redesign.</p>
+
+</body>
+</html>
