@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html>
 <head>
@@ -75,15 +74,99 @@
 </head>
 <body>
 <h1>Section 11: Further Research</h1>
-<p>Based on our experience developing and testing the IRIS system, we have identified several promising avenues for further research and enhancement. These areas represent clear paths for continued development based on both the strengths and limitations observed in the current implementation.</p>
-<h2>11.1 Model Enhancement Opportunities</h2>
-<p>Several opportunities exist for model enhancement. <strong>LLM Model Evaluation</strong> involves regularly assessing newer LLM models alongside our current OpenAI implementations to evaluate potential performance improvements in reasoning capabilities, response quality, and processing efficiency. <strong>Response Optimization</strong> aims to further refine response generation to balance comprehensiveness with conciseness, ensuring answers directly address user queries without unnecessary detail while maintaining appropriate context and citation. <strong>Source Conflict Resolution</strong> focuses on enhancing the system's ability to identify, reconcile, and clearly present information when different knowledge sources contain potentially conflicting guidance, with explicit indication of source authority hierarchies. Lastly, <strong>Latency Reduction</strong> will continue optimizing the multi-stage processing pipeline to reduce end-to-end response times while maintaining comprehensive information retrieval, particularly for complex research queries spanning multiple knowledge domains.</p>
-<h2>11.2 Knowledge Base Expansion</h2>
-<p>Expansion of the knowledge base presents several avenues. <strong>Content Coverage</strong> will be systematically expanded based on identified knowledge gaps and user feedback, prioritizing high-demand finance and accounting policy areas that currently have limited coverage. <strong>Document Currency Management</strong> will involve developing enhanced approaches for tracking and surfacing document recency information, ensuring users understand the temporal context of the information provided. <strong>Visual Content Handling</strong> aims to improve the processing and presentation of visual elements from source documents, particularly for complex financial diagrams, flowcharts, and infographics from cheat sheets and technical publications. Additionally, <strong>Reference Hyperlinking</strong> will explore mechanisms for implementing direct hyperlinks to source documents within responses, integrated with appropriate access controls and permission management.</p>
-<h2>11.3 System Architecture Improvements</h2>
-<p>Improvements to the system architecture are also planned. <strong>Router Refinement</strong> will further enhance the router component to improve database selection accuracy, particularly for queries that span multiple knowledge domains or that involve emerging finance topics. <strong>Clarifier Enhancement</strong> will expand the clarifier agent's capabilities to better handle ambiguous queries and identify more subtle cases where additional context is needed for accurate research. <strong>Database Refresh Optimization</strong> will streamline the document ingestion and refresh pipeline to support more frequent updates and larger volumes of documents while maintaining metadata quality. Finally, <strong>Interpretability Improvements</strong> will focus on implementing enhanced logging of intermediate reasoning steps to improve system auditability and enable more detailed analysis of decision processes.</p>
-<h2>11.4 Evaluation and Monitoring Advancement</h2>
-<p>Advancements in evaluation and monitoring are key. <strong>Automated Evaluation</strong> will involve developing more sophisticated approaches for automated performance assessment to supplement manual evaluation processes, potentially incorporating LLM-based judging of response quality. <strong>Test Suite Expansion</strong> will create additional targeted test questions focusing on edge cases, source conflicts, and emerging finance topics to continuously verify model robustness. <strong>User Feedback Integration</strong> will refine mechanisms for collecting, analyzing, and acting upon user feedback data from the Maven interface, including both explicit feedback (thumbs up/down) and implicit signals. <strong>Performance Tracking Dashboards</strong> will implement comprehensive visualization and tracking of system performance metrics over time, enabling early identification of potential drift or degradation.</p>
-<h2>11.5 User Experience Enhancements</h2>
-<p>Enhancing the user experience is an ongoing goal. <strong>Response Formatting</strong> will continue refining the presentation of complex financial information, particularly tables, lists, and hierarchical concepts, to improve readability and comprehension. <strong>Conversation Flow</strong> improvements will enhance the system's ability to maintain context across multi-turn conversations, especially for complex research topics requiring progressive refinement. Lastly, <strong>Multi-language Support</strong> will evaluate approaches for supporting additional languages in both queries and knowledge sources, expanding accessibility for global finance teams.</p>
-<p>These research directions will be pursued based on operational priorities, user feedback, and evolving business requirements. Regular assessment of the implemented enhancements will ensure continued alignment with the system's core purpose of providing accurate, comprehensive finance and accounting policy guidance.</p></body></html>
+
+<p>Based on our experience developing and testing the IRIS system, we have identified several promising avenues for further research and enhancement. These areas represent tactical and strategic priorities for improving the model, with associated timelines for testing and implementation.</p>
+
+<h2>Identified Limitations and Research Priorities</h2>
+
+<table>
+<thead>
+<tr>
+<th>Research Area</th>
+<th>Limitation Identified</th>
+<th>Proposed Solution</th>
+<th>Timeline</th>
+<th>Impact Assessment</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Response Latency</td>
+<td>Complex queries with multiple database searches can take >30 seconds to respond</td>
+<td>Implement parallel database querying and optimize token usage in prompts</td>
+<td>Q3 2025</td>
+<td>Medium - Will improve user experience but not affect accuracy</td>
+</tr>
+<tr>
+<td>Visual Content Handling</td>
+<td>Limited ability to process and present complex financial diagrams and flowcharts</td>
+<td>Enhance vision model integration and implement structured representation of visual elements</td>
+<td>Q4 2025</td>
+<td>Medium-High - Improves comprehensiveness for visually-oriented content</td>
+</tr>
+<tr>
+<td>Source Conflict Resolution</td>
+<td>When sources contain conflicting guidance, resolution logic could be improved</td>
+<td>Develop enhanced source prioritization framework with clearer authority hierarchies</td>
+<td>Q2 2025</td>
+<td>High - Critical for ensuring correct information precedence</td>
+</tr>
+<tr>
+<td>Multi-language Support</td>
+<td>System currently supports only English queries and content</td>
+<td>Evaluate approaches for supporting additional languages in both queries and responses</td>
+<td>2026</td>
+<td>Low - Currently not a business requirement but may be in future</td>
+</tr>
+</tbody>
+</table>
+
+<h2>Implementation Plans</h2>
+
+<h3>Near-Term Priorities (Next 6 Months)</h3>
+
+<p>The most immediate research priority is improving source conflict resolution. Our tactical plan includes:</p>
+
+<ol>
+    <li>Analyzing the test cases where conflicting information was present to identify patterns (Q1 2025)</li>
+    <li>Developing an enhanced source authority framework with clear hierarchies for different document types (Q1 2025)</li>
+    <li>Implementing and testing improved prompting techniques for the Summarizer agent to better handle conflicting information (Q2 2025)</li>
+    <li>Conducting targeted testing with scenarios specifically designed to include conflicting guidance (Q2 2025)</li>
+</ol>
+
+<p>Expected outcome: Improved ability to identify and resolve conflicts between different information sources, with explicit indication of which source takes precedence and why.</p>
+
+<h3>Medium-Term Priorities (6-12 Months)</h3>
+
+<p>Response latency improvement represents our second-highest priority. Our approach will include:</p>
+
+<ol>
+    <li>Implementing parallel database querying to reduce sequential processing time (Q3 2025)</li>
+    <li>Optimizing prompt structures to reduce token usage while maintaining effectiveness (Q3 2025)</li>
+    <li>Exploring two-pass approach where preliminary results are shown while more comprehensive research continues (Q4 2025)</li>
+</ol>
+
+<p>Visual content handling will be addressed in parallel, with a focus on:</p>
+
+<ol>
+    <li>Enhancing the vision model integration to better process complex financial diagrams (Q3 2025)</li>
+    <li>Developing structured representation methods for visual information in text-based responses (Q4 2025)</li>
+    <li>Testing with visually rich documents like cheat sheets and technical publications (Q4 2025)</li>
+</ol>
+
+<h3>Long-Term Research (Beyond 12 Months)</h3>
+
+<p>Multi-language support remains a longer-term research direction, contingent on business requirements evolving to necessitate this capability. Initial explorations will focus on evaluating the feasibility and potential approaches rather than immediate implementation.</p>
+
+<h2>Materiality and Impact Assessment</h2>
+
+<p>Among the identified research areas, source conflict resolution has the highest potential impact on model performance. When different knowledge sources contain conflicting guidance (e.g., between IASB standards and internal policies), ensuring the system correctly prioritizes the more authoritative source is critical for maintaining response accuracy. Our testing indicates this issue affects approximately 5% of queries but could have significant implications when it occurs.</p>
+
+<p>Response latency improvements will enhance user experience but do not directly impact response accuracy. However, reduced latency may increase user adoption and satisfaction, indirectly improving the model's business value.</p>
+
+<p>Visual content handling improvements will have a moderate to high impact on certain document types, particularly cheat sheets and process flows, which rely heavily on visual elements to convey complex information.</p>
+
+<p>All research directions will be pursued with a focus on maintaining or enhancing the current high levels of accuracy demonstrated in our testing, while improving user experience and expanding the model's capabilities.</p>
+
+</body>
+</html>
