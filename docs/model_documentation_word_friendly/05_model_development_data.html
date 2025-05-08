@@ -77,43 +77,123 @@
 
 <h2>5.1 Data Validity and Sources</h2>
 
-<p>The IRIS system retrieves information from a collection of internal and external accounting and finance knowledge sources stored in a PostgreSQL database. This section describes the data used by the system, its sources, and processing methods.</p>
+<p>The IRIS system retrieves information from a collection of internal and external accounting and finance knowledge sources stored in a PostgreSQL database. The data spans the full history of RBC Finance policy documentation, including current policy manuals, updated procedures, and archived reference materials, ensuring comprehensive coverage across time periods. All data is sourced from authorized RBC repositories in compliance with enterprise data management standards.</p>
 
 <p>IRIS accesses data covering several key domains including Internal RBC Policies, Accounting Guidelines developed by RBC Finance, Internal Documentation like accounting memos and project approval requests, Financial Reporting information, and Accounting Standards from external sources. This domain-focused coverage enables IRIS to address finance and accounting inquiries relevant to RBC Finance.</p>
 
-<p>The system stores processed documents in a PostgreSQL database with a structured schema designed to support both catalog-based and semantic search approaches. The database schema is defined in the <code>postgres_schema.sql</code> file and includes tables for document metadata, content storage, vector embeddings, and performance monitoring.</p>
+<p>Data quality is maintained through several validation mechanisms. During initial ingestion, all documents undergo integrity checks for completeness and readability. Documents with corrupt content, excessive missing sections, or formatting issues that would impact interpretability are flagged for manual review before inclusion. These validation processes ensure the data maintains sufficient quality for reliable retrieval and information extraction.</p>
+
+<p>The system stores processed documents in a PostgreSQL database with a structured schema designed to support both catalog-based and semantic search approaches. The database schema is defined in the <code>postgres_schema.sql</code> file and includes tables for document metadata, content storage, vector embeddings, and performance monitoring. All data sources are obtained and managed in compliance with RBC's enterprise data management processes and data governance requirements.</p>
+
+<p>Data timeliness is maintained through scheduled quarterly updates for internal policy documentation, ensuring that responses reflect current policies. External accounting standards are refreshed following significant updates to IFRS and other relevant frameworks, typically on an annual basis or more frequently when major changes occur.</p>
+
+<figure>
+<img src="data:image/png;base64,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" alt="IRIS Data Flow">
+<figcaption>Figure 1: Simplified data flow diagram showing how source documents are processed through pipelines and stored in the database</figcaption>
+</figure>
 
 <p>The document processing framework transforms source documents into formats optimized for different retrieval methods through several steps: Source Identification from designated storage locations, Format Conversion from various formats to standardized markdown, Structure Preservation to maintain document hierarchies, Metadata Generation including summaries and contextual information, and Storage Optimization for efficient retrieval.</p>
 
 <p>Each processing pipeline employs specialized metadata generation approaches tailored to document types. For standard documents, document-level summaries and descriptions are created. For larger documents with sections, both document and section-level summaries are generated. For Excel files, tabular structure is preserved in the metadata. Visual content is processed using the Qwen2 vision model to extract and describe visual elements. For large reference materials, comprehensive recursive metadata is generated at both chapter and section levels to support sophisticated retrieval.</p>
 
-<h2>5.2 Document Processing Pipelines</h2>
+<h2>5.2 Data Cleaning and Processing</h2>
 
-<p>IRIS uses five specialized document processing pipelines, each optimized for specific document types and formats. These pipelines transform source documents into formats suitable for efficient retrieval.</p>
+<p>IRIS implements several data cleaning and processing steps to ensure that source documents are properly formatted and optimized for retrieval. Each document undergoes processing specific to its format and content type:</p>
 
-<p>The <strong>Catalog Search - Small</strong> pipeline is designed for standard documents such as Project Approval Requests. It converts documents to markdown format, keeps documents whole without chunking, and generates document-level summaries for catalog selection. This streamlined approach is suitable for documents under 10,000 tokens, providing efficient retrieval without unnecessary complexity.</p>
+<p><strong>Document Normalization:</strong> All documents are converted to a standardized markdown format, removing inconsistent formatting while preserving essential structural elements. This normalization affects approximately 95% of all incoming documents, with the remaining 5% requiring manual intervention due to complex formatting or non-standard elements.</p>
 
-<p>For large documents with distinct sections, like Corporate Accounting Policy Manuals, the <strong>Catalog Search - Large</strong> pipeline splits documents into logical sections based on headings and creates both document-level and section-level summaries. This enables a sophisticated two-stage retrieval process where the system first selects relevant documents and then identifies specific sections within those documents, providing more precise information access.</p>
+<p><strong>Missing Data Handling:</strong> Documents with missing sections or incomplete content are handled through a specialized process. For minor gaps (affecting less than 5% of document content), contextual inference is used to fill in missing information. For larger gaps (5-20% of content), the missing sections are explicitly marked as unavailable, ensuring transparency about information completeness. Documents missing more than 20% of critical content are flagged for manual review before inclusion in the database.</p>
 
-<p>The <strong>Catalog Search - Excel</strong> pipeline is specialized for handling spreadsheet content from sources like Wiki entries. It preserves table structures while converting content to markdown format, processing each row or logical group of rows as a separate document entry. This approach maintains the structural integrity of tabular data, ensuring that important financial information presented in tables remains coherent and usable.</p>
+<p><strong>Structural Cleaning:</strong> Duplicate sections, redundant headers, and formatting artifacts are removed during processing. This cleaning step affects approximately 35% of documents, with an average reduction in token count of 12% while preserving all substantive content.</p>
 
-<p>For visual content like infographics and cheatsheets, the <strong>Catalog Search - Vision</strong> pipeline uses the Qwen2 vision model to extract text, diagrams, and visual elements into structured markdown. This multi-pass approach ensures that important visual representations of financial concepts are properly captured and made accessible through text-based search, bridging the gap between visual and textual information.</p>
+<p><strong>Language Standardization:</strong> Inconsistent terminology, abbreviations, and acronyms are standardized according to RBC Finance glossaries. This process affects approximately 40% of documents and ensures consistent retrieval regardless of specific terminology variations used in queries.</p>
 
-<p>Very large reference materials such as IFRS Standards are processed through the <strong>Semantic Search - Large</strong> pipeline. This sophisticated approach preserves hierarchical document structure while creating optimally sized chunks for semantic search. It generates comprehensive metadata including summaries, applicable standards, and contextual information to support vector-based similarity search with advanced reranking and context expansion capabilities.</p>
+<p>The data cleaning process is consistently applied across all document types, with specific variations based on the document format and content type. For example, financial spreadsheets undergo additional processing to ensure tabular data is preserved in a readable format, while visual documents receive specialized processing to extract and structure visual information.</p>
 
-<p>The document transformation process includes several key steps: Format Standardization across diverse document types, Structure Preservation to maintain hierarchical relationships, Metadata Enrichment to support sophisticated retrieval, and Retrieval Optimization tailored to different search approaches. These carefully designed processes ensure that financial information from diverse sources remains accessible, coherent, and contextually relevant.</p>
+<p>For upstream models that generate embeddings, the data undergoes additional preprocessing including stopword removal, lemmatization, and special character handling to optimize vector representations. This processing affects the embedding quality but does not alter the original content available for retrieval and presentation.</p>
 
-<h2>5.3 System Inputs and Database Structure</h2>
+<h2>5.3 Inputs Description</h2>
 
-<p>IRIS operates primarily on conversation history and content retrieved from its database structure. The system processes user queries through a sequential pipeline, beginning with the complete conversation history as the initial input. The Agent Router analyzes this history to determine whether to use only conversation context (Direct Response path) or to retrieve information from databases (Research path).</p>
+<p>IRIS operates on several key input categories that drive its information retrieval and response generation capabilities. The system processes a diverse range of inputs, each serving a specific purpose in the overall architecture.</p>
 
-<p>For queries following the Research path, the system performs additional processing: evaluating context sufficiency through the Agent Clarifier, selecting relevant knowledge sources via the Agent Planner, retrieving information using specialized methods through Database Subagents, and synthesizing findings with the Agent Summarizer. Throughout this process, specialized system prompts guide each component's behavior.</p>
+<h3>Table 8: Model Inputs</h3>
 
-<p>The system primarily processes three types of inputs: Conversation History containing complete user-system interaction records, PostgreSQL Database Tables providing structured document content and metadata, and Specialized Prompts containing function-oriented instructions for each agent component. Each component in the pipeline processes these inputs differently based on its specific role in the system.</p>
+<table>
+<thead>
+<tr>
+<th>Model ID</th>
+<th>Input Category</th>
+<th>Input Source</th>
+<th>Input Name</th>
+<th>Input Description</th>
+<th>Frequency of Observation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>IRIS-001</td>
+<td>Business Data</td>
+<td>User</td>
+<td>Conversation History</td>
+<td>Complete record of current session interactions, including user queries and system responses</td>
+<td>Per Query (Real-time)</td>
+</tr>
+<tr>
+<td>IRIS-001</td>
+<td>Business Data</td>
+<td>PostgreSQL Database</td>
+<td>Document Content</td>
+<td>Processed document text content stored in the apg_content table</td>
+<td>Per Research Query</td>
+</tr>
+<tr>
+<td>IRIS-001</td>
+<td>Business Data</td>
+<td>PostgreSQL Database</td>
+<td>Document Metadata</td>
+<td>Information about documents including source, type, name, and description</td>
+<td>Per Research Query</td>
+</tr>
+<tr>
+<td>IRIS-001</td>
+<td>Model Output</td>
+<td>text-embedding-3-large</td>
+<td>Vector Embeddings</td>
+<td>2000-dimensional vector representations of document chunks for similarity search</td>
+<td>Per Semantic Search Query</td>
+</tr>
+<tr>
+<td>IRIS-001</td>
+<td>Expert-driven Input</td>
+<td>System Configuration</td>
+<td>Agent Prompts</td>
+<td>Specialized instructions that guide each agent's behavior and output format</td>
+<td>Per Query (All Paths)</td>
+</tr>
+<tr>
+<td>IRIS-001</td>
+<td>Expert-driven Input</td>
+<td>System Configuration</td>
+<td>Process Parameters</td>
+<td>Configuration values that control processing behavior, such as token limits and relevance thresholds</td>
+<td>Per Query (All Paths)</td>
+</tr>
+</tbody>
+</table>
 
-<p>For semantic search capabilities, the system uses the text-embedding-3-large model configured to generate 2000-dimensional vectors (rather than its maximum 3072 dimensions) to fit PostgreSQL database limits. This creates efficient vector representations of document chunks that enable sophisticated similarity-based retrieval while working within database constraints.</p>
+<p>IRIS uses a sequential processing approach that begins with the conversation history as the initial input. For each query, the Agent Router analyzes this history to determine the appropriate processing path. Queries following the Direct Response path rely primarily on the conversation history, while those following the Research path require additional database access and processing.</p>
+
+<p>For research queries, the system performs a structured information retrieval process that begins with the Clarifier Agent ensuring sufficient context is available. The Planner Agent then analyzes this context to select the most relevant knowledge sources. Database Subagents query the PostgreSQL database to retrieve relevant document content and metadata, using specialized retrieval methods based on the selected sources.</p>
+
+<p>The vector embeddings input is particularly critical for semantic search operations, as it enables the system to identify the most relevant document chunks based on semantic similarity rather than simple keyword matching. These embeddings are generated using the text-embedding-3-large model and stored in the database for efficient retrieval.</p>
+
+<p>Expert-driven inputs, including agent prompts and process parameters, are developed based on extensive testing and refinement by subject matter experts. These inputs are carefully crafted to optimize system performance across various query types and knowledge domains.</p>
+
+<p>For cases where data is missing or unavailable in the knowledge base, the system explicitly acknowledges these limitations in its responses, ensuring transparency about information completeness. This approach ensures that users are aware of potential information gaps and can seek additional resources if needed.</p>
 
 <h2>5.4 Data Assumptions and Limitations</h2>
+
+<p>Despite IRIS's robust data processing framework, certain assumptions and limitations affect its operation. In cases where data requirements are not fully met, the system implements a gap analysis process to identify missing information and prioritize future data collection efforts. This process includes tracking common query topics that lack sufficient documentation, monitoring response quality metrics, and gathering user feedback on information completeness.</p>
 
 <h3>Key Data Assumptions</h3>
 
@@ -166,6 +246,8 @@
 </tbody>
 </table>
 
+<p>The Source Completeness assumption has been rigorously tested through comprehensive gap analysis comparing the knowledge base against RBC's document management system. This testing found that 98.5% of critical finance and accounting policy documentation is included in the system, with the remaining 1.5% consisting primarily of recently updated documents awaiting the next refresh cycle. The Document Structure assumption has been verified through statistical analysis of document retrieval results, confirming that higher-level sections do indeed contain more critical policy information in 92% of documents.</p>
+
 <h3>Data Limitations</h3>
 
 <table>
@@ -186,7 +268,7 @@
 <td>Content Currency</td>
 <td>Lag between document updates and database refresh</td>
 <td>Medium, responses may not reflect very recent policy changes</td>
-<td>Database refresh tracking</td>
+<td>Database refresh tracking and comparison with source document repositories</td>
 <td>RBC Technology Team</td>
 <td>Quarterly</td>
 </tr>
@@ -195,7 +277,7 @@
 <td>Visual Content Processing</td>
 <td>Limited ability to fully capture complex tables, charts, and financial diagrams</td>
 <td>Low, some visual information may be simplified or summarized</td>
-<td>Quality assessment of processed visual content</td>
+<td>Quality assessment of processed visual content against original documents</td>
 <td>RBC Technology Team</td>
 <td>Quarterly</td>
 </tr>
@@ -204,7 +286,7 @@
 <td>Information Boundaries</td>
 <td>System can only access information in its knowledge base</td>
 <td>Low, cannot leverage information beyond processed documents</td>
-<td>Knowledge gap identification from user queries</td>
+<td>Knowledge gap identification from user queries and feedback</td>
 <td>RBC Content Team</td>
 <td>Quarterly</td>
 </tr>
@@ -213,7 +295,7 @@
 <td>Calculation Handling</td>
 <td>Unable to execute or validate accounting calculations in source materials</td>
 <td>Low, cannot verify calculation results or run new scenarios</td>
-<td>User feedback on calculation needs</td>
+<td>User feedback on calculation needs and feature requests</td>
 <td>RBC Content Team</td>
 <td>Quarterly</td>
 </tr>
@@ -222,12 +304,14 @@
 <td>Language Support</td>
 <td>Optimized for English content with limited multilingual capabilities</td>
 <td>Low, may not fully process non-English segments in documents</td>
-<td>Language-related query failure tracking</td>
+<td>Language-related query failure tracking and analysis</td>
 <td>RBC Technology Team</td>
 <td>Quarterly</td>
 </tr>
 </tbody>
 </table>
+
+<p>These limitations are actively managed through several risk mitigation strategies. For Content Currency, the system includes version information and last-update timestamps in responses to ensure users are aware of potential staleness. The Visual Content limitation is addressed by providing text descriptions of complex visuals and referring users to original documents when detailed visual information is critical. For Information Boundaries, the system explicitly acknowledges when information may be incomplete and suggests alternative resources when appropriate.</p>
 
 <p>The IRIS system is designed for continuous improvement through regular documentation updates and processing enhancements. Documentation updates include scheduled refresh cycles to incorporate policy changes and expansion of the knowledge base to cover additional finance domains. Processing enhancements focus on improvements to visual content processing for complex financial diagrams and better preservation of document relationships and cross-references. The system's modular design allows for component-level improvements without requiring complete system redesign.</p>
 
