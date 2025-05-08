@@ -81,7 +81,7 @@
 
 <p>The IRIS model will implement a comprehensive performance monitoring approach based on the successful quantitative evaluation methodology used during initial non-APG testing. Our strategy includes several key components.</p>
 
-<h3>9.1.1 Key Performance Metrics and Thresholds</h3>
+<h3>Key Performance Metrics and Thresholds</h3>
 
 <p>The same quantitative scoring methodology used in the initial non-APG testing will be applied. This includes the following baseline metrics and targets:</p>
 
@@ -94,7 +94,7 @@
 
 <p>All results will be documented in standardized Excel templates for consistent evaluation. Tracking results over time will identify performance trends and potential degradation, ensuring direct comparability with baseline performance established during initial testing.</p>
 
-<h3>9.1.2 Monitoring Process and Frequency</h3>
+<h3>Monitoring Process and Frequency</h3>
 
 <p>A subset of 50 questions from the original model testing dataset of 100 questions will be evaluated quarterly. These questions will cover both APG and non-APG database queries to ensure comprehensive monitoring. Each question will be evaluated using the same structured approach as the initial testing, focusing on database selection accuracy (Did the system select the right database?), document selection accuracy (Did the system retrieve the relevant documents?), response quality (Overall scoring of the generated response), and detailed paragraph-level feedback and comments on specific issues. The test question subset used for ongoing monitoring is available in the SharePoint folder: <code>https://rbcds.sharepoint.com/sites/IRISProject/Shared Documents/OngoingMonitoring/QuarterlyTestSet/</code>.</p>
 
@@ -102,7 +102,7 @@
 
 <p>As the model operates in production, a selection of actual user questions will be collected through the Maven interface. These real-world questions will gradually supplement the original test set, ensuring evaluation remains relevant to actual usage patterns. Edge cases and complex queries encountered in production will be deliberately included in the evaluation set. Production user feedback from thumbs up/down interactions will also be incorporated into the monitoring analysis. APG team members will be involved in the quarterly reviews to ensure alignment with current accounting policies and standards.</p>
 
-<h3>9.1.3 Model Performance Tracking Metrics</h3>
+<h3>Model Performance Tracking Metrics</h3>
 
 <p>The table below outlines the specific performance metrics that will be tracked as part of ongoing monitoring:</p>
 
@@ -176,7 +176,7 @@
 </tbody>
 </table>
 
-<h3>9.1.4 Performance Tracking Results</h3>
+<h3>Performance Tracking Results</h3>
 
 <p>As this is a new model implementation, performance tracking results will be populated once the system has been in production for at least one monitoring period. Initial monitoring results will establish comparisons against the baseline performance metrics established during testing.</p>
 
@@ -184,17 +184,17 @@
 
 <p>IRIS implements comprehensive process monitoring through an automated system that tracks operational performance metrics across the entire query processing pipeline.</p>
 
-<h3>9.2.1 Process Verification</h3>
+<h3>Process Verification</h3>
 
 <p>The existing process monitor database (<code>process_monitor_logs</code>) will continue to be used for tracking detailed operational metrics. Each stage of query processing is logged with comprehensive performance data, including the Run UUID (unique identifier for each model invocation), stage name (router, clarifier, planner, database subagents, summarizer), timing metrics (start time, end time, duration), LLM call details (model used, prompt tokens, completion tokens, cost), decision details (key outputs from each stage), and status and error information. This data enables both real-time monitoring and historical performance analysis.</p>
 
 <p>Jupyter notebooks in the <code>/notebooks/</code> directory, particularly <code>process_monitor_analysis.ipynb</code>, provide visualization and statistical analysis of system performance metrics. These notebooks will be run on a monthly basis to identify trends in response times for different query types, token usage patterns, cost per query, error rates by component, and database usage frequency.</p>
 
-<h3>9.2.2 Baseline Operational Metrics</h3>
+<h3>Baseline Operational Metrics</h3>
 
 <p>During initial Maven deployment, baseline process metrics will be established for different query types. These baselines will include expected response times, token usage ranges, and process flow patterns. Thresholds will be set based on these baselines to identify potential operational issues.</p>
 
-<h3>9.2.3 Process Monitoring Metrics</h3>
+<h3>Process Monitoring Metrics</h3>
 
 <p>In production, all queries will be compared against baseline metrics. Automated alerts will trigger when metrics fall outside of established thresholds. Process monitoring notebook scripts enable detailed analysis of performance trends.</p>
 
@@ -259,11 +259,11 @@
 </tbody>
 </table>
 
-<h3>9.2.4 Remediation Process</h3>
+<h3>Remediation Process</h3>
 
 <p>In the event of threshold breaches, a defined escalation and remediation process will be followed. Automated alerts will notify the operations team of potential issues. An investigation using process monitoring tools will be conducted to identify root causes. Depending on severity, minor issues will be addressed by the operations team, significant issues will be escalated to the model owner, and critical issues will trigger immediate model suspension and emergency review. All incidents will be documented with resolution steps and preventative measures. A quarterly review of all incidents will be performed to identify patterns requiring model updates.</p>
 
-<h3>9.2.5 Summary of Process Monitoring</h3>
+<h3>Summary of Process Monitoring</h3>
 
 <p>This comprehensive monitoring approach combines both performance evaluation (accuracy and quality of responses) with process monitoring (operational health) to ensure the IRIS model functions as expected over time. By leveraging the same quantitative methodology used in initial testing, we maintain consistency in evaluation criteria while adapting to evolving usage patterns and requirements.</p>
 
