@@ -118,11 +118,11 @@ Agent Summarizer
 
 <p>Information retrieval operates through three primary Python-implemented methodologies: Catalog Search - Small uses Python dictionary lookups, Catalog Search - Large implements hierarchical selection algorithms in Python, and Semantic Search - Large employs Python's numerical computing capabilities for vector comparisons. Python's concurrent.futures library enables parallel execution of database subagents when querying multiple sources.</p>
 
-<p>Quality assurance is maintained through Python-specific tools. Code formatting uses Black with Python style guidelines. Linting employs Pylint configured for Python best practices. Testing leverages Python's unittest framework in both local development and Dataiku environments. This Python-centric implementation allows for consistent functionality across deployment environments while maintaining high code quality standards.</p>
+<p>Quality assurance is maintained through Python-specific tools. Code formatting uses Black with Python style guidelines. Linting employs Pylint configured for Python best practices. Manual testing is performed in both local development and Dataiku environments. This Python-centric implementation allows for consistent functionality across deployment environments while maintaining high code quality standards.</p>
 
 <h2>Implementation Testing</h2>
 
-<p>IRIS implementation testing follows a comprehensive multi-stage approach to ensure the system meets all business requirements and functions correctly in its target environment. Testing begins with the development team conducting unit testing during local Python development, using Python's unittest framework to validate individual components and their interactions. This is followed by integration testing to verify that the assembled system functions as expected when all components operate together.</p>
+<p>IRIS implementation testing follows a comprehensive multi-stage approach to ensure the system meets all business requirements and functions correctly in its target environment. Testing begins with the development team performing functional testing during local Python development to validate core functionality and behavior. This is followed by integration testing to verify that the assembled system functions as expected when all components operate together.</p>
 
 <p>The implementation first deploys to Dataiku as a Python + Dash web application, where it undergoes functional testing by the development team to ensure all components work correctly in this environment. The Dataiku implementation is then made available to business users for user acceptance testing (UAT), which has provided valuable feedback on functionality, response quality, and usability. This feedback is incorporated into the system through an iterative development process, with each iteration undergoing regression testing to ensure existing functionality remains intact.</p>
 
@@ -142,16 +142,6 @@ Agent Summarizer
 
 <h2>Change Controls and Security</h2>
 
-<p>IRIS implements comprehensive change control processes and security measures to maintain system integrity and protect sensitive information. All code changes follow a structured review and deployment process that ensures quality, consistency, and proper validation before reaching production. The change control workflow begins with local development and testing, followed by code review through a pull request process that requires approval from at least one senior team member. Approved changes are implemented in development, UAT, and production environments in sequence, with explicit verification required before proceeding to each subsequent stage.</p>
-
 <p>For ongoing maintenance and enhancements, a formal change process has been established. First, changes are developed and tested locally in the Python codebase. When validated, these changes are provided to the Maven team for implementation in the development environment, where the Digital Ecosystem & AI team verifies they're working as expected. The Maven team then pushes these changes to the UAT SAI environment for further testing before creating a formal change request to move the approved code to production. This structured approach ensures all changes are properly documented, tested, and approved.</p>
-
-<p>System security is implemented through multiple layers of protection. Access control is managed through Maven's authentication framework, with Active Directory integration determining user access rights. Permissions are role-based, controlling both system access and visibility of specific knowledge sources based on user responsibilities. The LLM connection is secured through RBC's Lumina portal, which provides enterprise-grade security for model access including encryption of all communications, API key management, and usage logging.</p>
-
-<p>Database security includes encrypted connections, role-based access controls, prepared statements to prevent SQL injection, and audit logging of all access attempts. The system implements data protection through automatic redaction of sensitive information from logs using pattern matching, ensuring compliance with data protection requirements. All user queries and system responses are logged with user identification for accountability and audit purposes.</p>
-
-<p>Code repositories are protected with access controls that limit modification rights to authorized development team members. Branch protection rules enforce code review requirements before changes can be merged, preventing unauthorized or unreviewed code from entering the codebase. Regular security reviews and vulnerability assessments are conducted as part of RBC's standard security protocols, ensuring ongoing protection as the system evolves.</p>
-
-<p>These combined change control and security measures create a robust framework that maintains system integrity while enabling controlled evolution to meet changing business needs. By clearly documenting and enforcing these processes, the system can continue to develop and improve while maintaining consistent security standards and operational stability.</p>
 </body>
 </html>
