@@ -623,14 +623,13 @@ def query_database_sync(
                 f"Returning {len(selected_items)} selected External Reporting and Disclosure metadata items."
             )
             
-            # Collect file links from selected items
+            # Collect file links from selected items (including blank ones)
             file_links = []
             for item in selected_items:
-                if item.get("file_link"):
-                    file_links.append({
-                        "file_link": item["file_link"],
-                        "document_name": item.get("document_name", "Unknown")
-                    })
+                file_links.append({
+                    "file_link": item.get("file_link", ""),  # Use empty string if None
+                    "document_name": item.get("document_name", "Unknown")
+                })
             
             # Add details to process monitor before returning
             if process_monitor:
@@ -642,12 +641,12 @@ def query_database_sync(
             return selected_items, selected_doc_ids, file_links  # Return metadata, IDs, and file links
             
         elif scope == "research":
-            # Collect file links from catalog before fetching content
+            # Collect file links from catalog before fetching content (including blank ones)
             file_links = []
             for item in catalog:
-                if item.get("id") in selected_doc_ids and item.get("file_link"):
+                if item.get("id") in selected_doc_ids:
                     file_links.append({
-                        "file_link": item["file_link"],
+                        "file_link": item.get("file_link", ""),  # Use empty string if None
                         "document_name": item.get("document_name", "Unknown")
                     })
             

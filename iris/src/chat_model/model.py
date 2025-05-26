@@ -451,10 +451,16 @@ def _model_generator(
                                 file_link = link_info.get("file_link")
                                 document_name = link_info.get("document_name", "Unknown Document")
                                 logger.debug(f"Processing link: {file_link} for document: {document_name}")
-                                if file_link and file_link not in seen_links:
-                                    seen_links.add(file_link)
+                                # Include all documents, even with blank file links
+                                link_key = f"{file_link}|{document_name}"  # Unique key for link+doc combo
+                                if link_key not in seen_links:
+                                    seen_links.add(link_key)
                                     # Generate the HTML link in the specified format
-                                    html_link = f'<a class="chatbot-link" href=\'javascript:window.maven.openPdf("{file_link}")\'>📄 {document_name}</a>\n'
+                                    if not file_link:
+                                        # For blank links, use empty string or placeholder
+                                        html_link = f'<a class="chatbot-link" href=\'javascript:window.maven.openPdf("")\'>📄 {document_name}</a>\n\n'
+                                    else:
+                                        html_link = f'<a class="chatbot-link" href=\'javascript:window.maven.openPdf("{file_link}")\'>📄 {document_name}</a>\n\n'
                                     logger.info(f"Yielding HTML link: {html_link.strip()}")
                                     yield html_link
                             yield "\n"

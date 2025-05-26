@@ -785,26 +785,25 @@ def query_database_sync(
             selected_items = [item for item in catalog if item.get("id") in selected_doc_ids]
             logger.info(f"Returning {len(selected_items)} selected CAPM metadata items.")
             
-            # Collect file links from selected items
+            # Collect file links from selected items (including blank ones)
             file_links = []
             for item in selected_items:
-                if item.get("file_link"):
-                    file_links.append({
-                        "file_link": item["file_link"],
-                        "document_name": item.get("document_name", "Unknown")
-                    })
+                file_links.append({
+                    "file_link": item.get("file_link", ""),  # Use empty string if None
+                    "document_name": item.get("document_name", "Unknown")
+                })
             
             if process_monitor:
                 process_monitor.add_stage_details(stage_name, result_count=len(selected_items), document_ids=selected_doc_ids)
             return selected_items, selected_doc_ids, file_links
 
         elif scope == "research":
-            # Collect file links from catalog before proceeding
+            # Collect file links from catalog before proceeding (including blank ones)
             file_links = []
             for item in catalog:
-                if item.get("id") in selected_doc_ids and item.get("file_link"):
+                if item.get("id") in selected_doc_ids:
                     file_links.append({
-                        "file_link": item["file_link"],
+                        "file_link": item.get("file_link", ""),  # Use empty string if None
                         "document_name": item.get("document_name", "Unknown")
                     })
             
