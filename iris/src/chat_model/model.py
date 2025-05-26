@@ -121,10 +121,17 @@ def _execute_query_worker(
             f"Thread executing query {query_index + 1}/{total_queries} for database: {db_name}"
         )
         # Assume route_query_sync handles its own LLM calls and logging internally
-        # It now returns a tuple: (result, doc_ids)
+        # It now returns a tuple: (result, doc_ids, file_links)
         # Pass the process_monitor instance and the specific stage name to the router
         result_tuple = route_query_sync(db_name, query_text, scope, token, process_monitor=process_monitor, query_stage_name=query_stage_name) # ADDED query_stage_name
-        result, doc_ids = result_tuple # Unpack the tuple
+        
+        # Handle both 2-element and 3-element tuples for backward compatibility
+        if len(result_tuple) == 3:
+            result, doc_ids, file_links = result_tuple
+        else:
+            # Old format: (result, doc_ids)
+            result, doc_ids = result_tuple
+            file_links = None
         logger.info(f"Thread completed query for database: {db_name}")
         # End the stage for this specific query worker instance successfully
         process_monitor.end_stage(query_stage_name) # RESTORED end_stage call here
@@ -166,6 +173,7 @@ def _execute_query_worker(
         "total_queries": total_queries,
         "result": result,
         "exception": task_exception,
+        "file_links": file_links if 'file_links' in locals() else None,
     }
 
 
@@ -354,6 +362,7 @@ def _model_generator(
                     aggregated_detailed_research = {}
                     metadata_results_by_db: Dict[str, List[Dict[str, Any]]] = {}
                     total_metadata_items = 0
+                    all_file_links = []  # Collect all file links from all databases
                     futures = []
 
                     with concurrent.futures.ThreadPoolExecutor() as executor:
@@ -373,6 +382,7 @@ def _model_generator(
                             task_exception = result_data["exception"]
                             result = result_data["result"]
                             scope = result_data["scope"]
+                            file_links = result_data.get("file_links", None)
 
                             # --- Legacy Debug Block Removed ---
 
@@ -391,6 +401,11 @@ def _model_generator(
                                     if isinstance(result, list):
                                         metadata_results_by_db.setdefault(db_name, []).extend(result); total_metadata_items += len(result); status_summary = f"✅ Found {len(result)} items."
                                     else: status_summary = "❌ Error: Unexpected result format."; metadata_results_by_db.setdefault(db_name, []).append({"error": "Unexpected format"})
+                            
+                            # Collect file links if available
+                            if file_links:
+                                all_file_links.extend(file_links)
+                                
                             status_block = f"**Database:** {db_display_name}\n**Status:** {status_summary}\n---\n"
                             yield status_block
 
@@ -423,6 +438,21 @@ def _model_generator(
                             process_monitor.add_stage_details("summary", error=str(summary_exc))
                         # --- Legacy Debug Block Removed ---
                         yield "\n\n---"
+                        
+                        # Stream file links if available
+                        if all_file_links:
+                            yield "\n\n## 📎 Referenced Documents\n\n"
+                            seen_links = set()  # Avoid duplicates
+                            for link_info in all_file_links:
+                                file_link = link_info.get("file_link")
+                                document_name = link_info.get("document_name", "Unknown Document")
+                                if file_link and file_link not in seen_links:
+                                    seen_links.add(file_link)
+                                    # Generate the HTML link in the specified format
+                                    html_link = f'<a class="chatbot-link" href=\'javascript:window.maven.openPdf("{file_link}")\'>📄 {document_name}</a>\n'
+                                    yield html_link
+                            yield "\n"
+                            
                     completion_message = f"\nCompleted processing {len(selected_databases)} database queries for scope '{scope}'.\n"
                     yield completion_message
                     logger.info(f"Completed process for scope '{scope}'")

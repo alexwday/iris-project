@@ -21,7 +21,9 @@ MetadataResponse = List[Dict[str, Any]]
 # ResearchResponse is now a dictionary containing detailed research and status
 ResearchResponse = Dict[str, str]
 DatabaseResponse = Union[MetadataResponse, ResearchResponse]
-SubagentResult = Tuple[DatabaseResponse, Optional[List[str]]]  # Define a tuple for result + doc_ids
+# Updated to include file links
+FileLink = Dict[str, str]  # Contains 'file_link' and 'document_name'
+SubagentResult = Tuple[DatabaseResponse, Optional[List[str]], Optional[List[FileLink]]]  # result + doc_ids + file_links
 
 from ....chat_model.model_settings import ENVIRONMENT, get_model_config
 from ....initial_setup.db_config import connect_to_db
@@ -134,7 +136,7 @@ def fetch_capm_catalog() -> List[Dict[str, Any]]:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT id, document_name, document_description
+                SELECT id, document_name, document_description, file_link
                 FROM apg_catalog
                 WHERE document_source = 'internal_capm'
                 ORDER BY document_name
@@ -146,6 +148,7 @@ def fetch_capm_catalog() -> List[Dict[str, Any]]:
                         "id": str(row[0]),
                         "document_name": row[1],
                         "document_description": row[2],
+                        "file_link": row[3] if row[3] else None,
                     }
                 )
         logger.info(
@@ -745,6 +748,7 @@ def query_database_sync(
     database_name = "internal_capm"
     default_error_status = "❌ Error during query processing."
     selected_doc_ids: Optional[List[str]] = None
+    file_links: Optional[List[FileLink]] = None  # Initialize file links
     # Use the passed-in stage name if available, otherwise default
     stage_name = query_stage_name or f"db_query_{database_name}_unknown"
     logger.debug(f"Using process monitor stage name: {stage_name}")
@@ -759,7 +763,7 @@ def query_database_sync(
                 "detailed_research": "No documents found in the Internal CAPM database catalog.",
                 "status_summary": "📄 No documents found in catalog.",
             }
-            return response, None
+            return response, None, None  # Return None for both doc_ids and file_links
 
         # 2. Select Relevant Documents
         selected_doc_ids = select_relevant_documents(
@@ -774,17 +778,36 @@ def query_database_sync(
             }
             if process_monitor:
                 process_monitor.add_stage_details(stage_name, result_count=0, document_ids=[])
-            return response, [] # Return empty list for doc IDs
+            return response, [], None  # Return empty list for doc IDs and None for file_links
 
         # 3. Process based on scope
         if scope == "metadata":
             selected_items = [item for item in catalog if item.get("id") in selected_doc_ids]
             logger.info(f"Returning {len(selected_items)} selected CAPM metadata items.")
+            
+            # Collect file links from selected items
+            file_links = []
+            for item in selected_items:
+                if item.get("file_link"):
+                    file_links.append({
+                        "file_link": item["file_link"],
+                        "document_name": item.get("document_name", "Unknown")
+                    })
+            
             if process_monitor:
                 process_monitor.add_stage_details(stage_name, result_count=len(selected_items), document_ids=selected_doc_ids)
-            return selected_items, selected_doc_ids
+            return selected_items, selected_doc_ids, file_links
 
         elif scope == "research":
+            # Collect file links from catalog before proceeding
+            file_links = []
+            for item in catalog:
+                if item.get("id") in selected_doc_ids and item.get("file_link"):
+                    file_links.append({
+                        "file_link": item["file_link"],
+                        "document_name": item.get("document_name", "Unknown")
+                    })
+            
             # 4. Fetch Sections and Summaries for Selected Documents
             documents_with_summaries = fetch_document_sections_and_summaries(selected_doc_ids)
             if not documents_with_summaries:
@@ -794,7 +817,7 @@ def query_database_sync(
                 }
                 if process_monitor:
                     process_monitor.add_stage_details(stage_name, error="Could not retrieve document sections", document_ids=selected_doc_ids)
-                return response, selected_doc_ids
+                return response, selected_doc_ids, file_links
 
             # 5. Select Relevant Sections based on Summaries
             section_selections = select_relevant_sections(
@@ -814,7 +837,7 @@ def query_database_sync(
                 }
                 if process_monitor:
                      process_monitor.add_stage_details(stage_name, error="No relevant sections selected", document_ids=selected_doc_ids)
-                return response, selected_doc_ids
+                return response, selected_doc_ids, file_links
 
             # 6. Fetch Full Content for Selected Sections
             documents_with_content = fetch_section_content(valid_section_selections)
@@ -825,7 +848,7 @@ def query_database_sync(
                 }
                 if process_monitor:
                     process_monitor.add_stage_details(stage_name, error="Could not retrieve section content", document_ids=selected_doc_ids)
-                return response, selected_doc_ids
+                return response, selected_doc_ids, file_links
 
             # 7. Synthesize Final Response
             research_result = synthesize_response_and_status(
@@ -840,7 +863,7 @@ def query_database_sync(
                     document_ids=selected_doc_ids, # Original selected doc IDs
                     status_summary=research_result.get("status_summary", "")
                 )
-            return research_result, selected_doc_ids
+            return research_result, selected_doc_ids, file_links
 
         else:
             logger.error(f"Invalid scope provided to internal_capm subagent: {scope}")
@@ -855,4 +878,4 @@ def query_database_sync(
         }
         if process_monitor:
             process_monitor.add_stage_details(stage_name, error=str(e), document_ids=selected_doc_ids)
-        return response, selected_doc_ids
+        return response, selected_doc_ids, file_links

@@ -21,7 +21,9 @@ MetadataResponse = List[Dict[str, Any]]
 # ResearchResponse is now a dictionary containing detailed research and status
 ResearchResponse = Dict[str, str]
 DatabaseResponse = Union[MetadataResponse, ResearchResponse]
-SubagentResult = Tuple[DatabaseResponse, Optional[List[str]]]  # Define a tuple for result + doc_ids
+# Updated to include file links
+FileLink = Dict[str, str]  # Contains 'file_link' and 'document_name'
+SubagentResult = Tuple[DatabaseResponse, Optional[List[str]], Optional[List[FileLink]]]  # result + doc_ids + file_links
 
 from ....chat_model.model_settings import ENVIRONMENT, get_model_config
 from ....initial_setup.db_config import connect_to_db
@@ -84,7 +86,7 @@ def fetch_esg_catalog() -> List[Dict[str, Any]]:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT id, document_name, document_description
+                SELECT id, document_name, document_description, file_link
                 FROM apg_catalog
                 WHERE document_source = 'internal_esg'
                 ORDER BY document_name
@@ -96,6 +98,7 @@ def fetch_esg_catalog() -> List[Dict[str, Any]]:
                         "id": str(row[0]),
                         "document_name": row[1],
                         "document_description": row[2],
+                        "file_link": row[3] if row[3] else None,
                     }
                 )
         logger.info(
@@ -556,7 +559,8 @@ def query_database_sync(
                                           provided by the caller (e.g., worker).
         
     Returns:
-        Tuple containing the main database response and a list of selected document IDs (or None).
+        Tuple containing the main database response, a list of selected document IDs (or None),
+        and a list of file links (or None).
     """
     logger.info(
         f"Querying Internal ESG database (sync): '{query}' with scope: {scope}"
@@ -564,6 +568,7 @@ def query_database_sync(
     database_name = "internal_esg" # Set database name
     default_error_status = "❌ Error during query processing."
     selected_doc_ids: Optional[List[str]] = None  # Initialize
+    file_links: Optional[List[FileLink]] = None  # Initialize file links
     # Use the passed-in stage name if available, otherwise default
     stage_name = query_stage_name or f"db_query_{database_name}_unknown"
     logger.debug(f"Using process monitor stage name: {stage_name}")
@@ -582,7 +587,7 @@ def query_database_sync(
                     "detailed_research": "No documents found in the Internal ESG database catalog.",
                     "status_summary": "📄 No documents found in catalog.",
                 }
-            return response, selected_doc_ids  # Return empty response and None IDs
+            return response, selected_doc_ids, file_links  # Return empty response and None IDs/links
 
         # Select documents using the updated helper function
         selected_doc_ids = select_relevant_documents(
@@ -609,7 +614,7 @@ def query_database_sync(
                     document_ids=selected_doc_ids
                 )
                 
-            return response, selected_doc_ids  # Return empty response and empty IDs list
+            return response, selected_doc_ids, file_links  # Return empty response and empty IDs list/links
 
         # Process based on scope
         if scope == "metadata":
@@ -618,6 +623,15 @@ def query_database_sync(
                 f"Returning {len(selected_items)} selected ESG metadata items."
             )
             
+            # Collect file links from selected items
+            file_links = []
+            for item in selected_items:
+                if item.get("file_link"):
+                    file_links.append({
+                        "file_link": item["file_link"],
+                        "document_name": item.get("document_name", "Unknown")
+                    })
+            
             # Add details to process monitor before returning
             if process_monitor:
                 process_monitor.add_stage_details(stage_name, 
@@ -625,9 +639,18 @@ def query_database_sync(
                     document_ids=selected_doc_ids
                 )
                 
-            return selected_items, selected_doc_ids  # Return metadata and IDs
+            return selected_items, selected_doc_ids, file_links  # Return metadata, IDs, and file links
             
         elif scope == "research":
+            # Collect file links from catalog before fetching content
+            file_links = []
+            for item in catalog:
+                if item.get("id") in selected_doc_ids and item.get("file_link"):
+                    file_links.append({
+                        "file_link": item["file_link"],
+                        "document_name": item.get("document_name", "Unknown")
+                    })
+            
             # Fetch content and synthesize
             documents = fetch_document_content(selected_doc_ids) # Use esg function
             logger.info(
@@ -648,7 +671,7 @@ def query_database_sync(
                     status_summary=research_result.get("status_summary", "")
                 )
             
-            return research_result, selected_doc_ids  # Return research result and IDs
+            return research_result, selected_doc_ids, file_links  # Return research result, IDs, and file links
             
         else:
             logger.error(f"Invalid scope provided to internal_esg subagent: {scope}")
@@ -673,5 +696,6 @@ def query_database_sync(
                 document_ids=selected_doc_ids # Keep doc IDs if available
             )
             
-        # Return error response and potentially selected IDs if selection succeeded before error
+        # Return error response and potentially selected IDs/links if selection succeeded before error
+        return response, selected_doc_ids, file_links
         return response, selected_doc_ids
