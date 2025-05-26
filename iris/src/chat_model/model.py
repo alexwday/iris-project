@@ -404,7 +404,10 @@ def _model_generator(
                             
                             # Collect file links if available
                             if file_links:
+                                logger.info(f"Collected {len(file_links)} file links from {db_name}")
                                 all_file_links.extend(file_links)
+                            else:
+                                logger.debug(f"No file links returned from {db_name}")
                                 
                             status_block = f"**Database:** {db_display_name}\n**Status:** {status_summary}\n---\n"
                             yield status_block
@@ -440,18 +443,23 @@ def _model_generator(
                         yield "\n\n---"
                         
                         # Stream file links if available
+                        logger.info(f"Checking file links: all_file_links has {len(all_file_links)} items")
                         if all_file_links:
                             yield "\n\n## 📎 Referenced Documents\n\n"
                             seen_links = set()  # Avoid duplicates
                             for link_info in all_file_links:
                                 file_link = link_info.get("file_link")
                                 document_name = link_info.get("document_name", "Unknown Document")
+                                logger.debug(f"Processing link: {file_link} for document: {document_name}")
                                 if file_link and file_link not in seen_links:
                                     seen_links.add(file_link)
                                     # Generate the HTML link in the specified format
                                     html_link = f'<a class="chatbot-link" href=\'javascript:window.maven.openPdf("{file_link}")\'>📄 {document_name}</a>\n'
+                                    logger.info(f"Yielding HTML link: {html_link.strip()}")
                                     yield html_link
                             yield "\n"
+                        else:
+                            logger.warning("No file links collected from any database")
                             
                     completion_message = f"\nCompleted processing {len(selected_databases)} database queries for scope '{scope}'.\n"
                     yield completion_message
