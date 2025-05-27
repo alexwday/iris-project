@@ -49,6 +49,13 @@ AVAILABLE_DATABASES = {
         "content_type": "policy guidance / interpretations",
         "use_when": "Tier 1 (Domain Specific): Project Approval Requests Policy questions. **Strategy:** Query if statement relates to PAR; treat as primary within domain. **Query:** Use RBC terms, reference PAR processes/workflows.",
     },
+    "internal_aio": {
+        "name": "Auditor Independence Office Policy Documents",
+        "description": "Internal RBC AIO (Auditor Independence Office) policy documents, procedures, and FAQs.",
+        "query_type": "semantic search",
+        "content_type": "policy documents / procedures / FAQs",
+        "use_when": "Tier 1 (Domain Specific): Auditor Independence Office questions. **Strategy:** Query if statement relates to AIO policies, procedures, or FAQs; treat as primary within domain. **Query:** Use RBC terms, reference AIO processes/workflows.",
+    },
     "internal_icfr": {
         "name": "Internal Control over Financial Reporting Policy",
         "description": "RBC guidelines for financial reporting controls (ICFR): identification, evaluation, documentation, responsibilities.",
