@@ -458,9 +458,9 @@ def _model_generator(
                                     # Generate the HTML link in the specified format
                                     if not file_link:
                                         # For blank links, use empty string or placeholder
-                                        html_link = f'<a class="chatbot-link" href=\'javascript:window.maven.openPdf("")\'>📄 {document_name}</a>\n\n'
+                                        html_link = f'<a class="chatbot-link" href=\'javascript:window.maven.openPdf("")\'>📄 {document_name}</a>\n'
                                     else:
-                                        html_link = f'<a class="chatbot-link" href=\'javascript:window.maven.openPdf("{file_link}")\'>📄 {document_name}</a>\n\n'
+                                        html_link = f'<a class="chatbot-link" href=\'javascript:window.maven.openPdf("{file_link}")\'>📄 {document_name}</a>\n'
                                     logger.info(f"Yielding HTML link: {html_link.strip()}")
                                     yield html_link
                             yield "\n"
