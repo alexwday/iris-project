@@ -6,9 +6,9 @@
 
 ## Progress Summary
 - **Total Files:** 89
-- **Completed:** 19
-- **Files with Logging:** 13
-- **Total Logging Statements:** 205
+- **Completed:** 31
+- **Files with Logging:** 20
+- **Total Logging Statements:** 265
 - **Security Issues:** 0
 
 ---
@@ -393,99 +393,160 @@
 - **Security Assessment:** SAFE - Provides detailed internal monitoring logs including warnings, info, and errors; no sensitive data exposed
 - **Notes:** Tracks execution stages, timings, database logging, and control-flow for process monitoring.
 
-#### [ ] iris/src/initial_setup/ssl_setup.py
-- **Status:** PENDING
-- **Has Logging:** TBD
-- **Logging Statements:** TBD
-- **Security Assessment:** TBD
-- **Notes:** TBD
+#### [x] iris/src/initial_setup/ssl_setup.py
+- **Status:** COMPLETED
+- **Has Logging:** YES
+- **Logging Statements:** 
+  - Line 21: `import logging`
+  - Line 65: `logger.warning("Cryptography library not available, skipping certificate expiry check")`
+  - Line 71: `logger.info(f"Checking certificate expiry for: {cert_path}")`
+  - Line 88: `logger.error(f"Certificate expired on {expiry_date.strftime('%Y-%m-%d')}")`
+  - Line 94: `logger.warning(f"Certificate will expire in {days_until_expiry} days (on {expiry_date.strftime('%Y-%m-%d')})")`
+  - Line 100: `logger.info(f"Certificate valid until {expiry_date.strftime('%Y-%m-%d')}")`
+  - Line 104: `logger.error(f"Error checking certificate expiry: {str(e)}")`
+  - Line 126: `logger.info(f"SSL setup starting with settings from: {__file__}")`
+  - Line 127: `logger.info(f"Using certificate directory: {SSL_CERT_DIR}")`
+  - Line 128: `logger.info(f"Using certificate filename: {SSL_CERT_FILENAME}")`
+  - Line 129: `logger.info(f"Full certificate path: {SSL_CERT_PATH}")`
+  - Line 137: `logger.info(f"Certificate file exists at {SSL_CERT_PATH}")`
+  - Line 142: `logger.warning(f"Certificate expiry check failed: {str(e)}")`
+  - Line 146: `logger.info("Certificate expiry check disabled")`
+  - Line 152: `logger.info(f"SSL environment configured successfully. Certificate path: {SSL_CERT_PATH}")`
+- **Security Assessment:** SAFE - Logs certificate validation, expiry warnings, and setup flow; no sensitive data exposed
+- **Notes:** Ensures SSL certificate integrity and environment configuration, providing operational insights without exposing secrets.
 
 ### LLM CONNECTORS
 
-#### [ ] iris/src/llm_connectors/__init__.py
-- **Status:** PENDING
-- **Has Logging:** TBD
-- **Logging Statements:** TBD
-- **Security Assessment:** TBD
-- **Notes:** TBD
+#### [x] iris/src/llm_connectors/__init__.py
+- **Status:** COMPLETED
+- **Has Logging:** NO
+- **Logging Statements:** None found
+- **Security Assessment:** N/A - No logging statements present
+- **Notes:** Standard package initialization file with no logging.
 
-#### [ ] iris/src/llm_connectors/rbc_openai.py
-- **Status:** PENDING
-- **Has Logging:** TBD
-- **Logging Statements:** TBD
-- **Security Assessment:** TBD
-- **Notes:** TBD
+#### [x] iris/src/llm_connectors/rbc_openai.py
+- **Status:** COMPLETED
+- **Has Logging:** YES
+- **Logging Statements:** 
+  - Line 20: `import logging`
+  - Line 36: `logger = logging.getLogger(__name__)`
+  - Line 134: `logger.info(f"Using OAuth token: {token_preview}")`
+  - Line 135: `logger.info(f"Using API base URL: {api_base_url}")`
+  - Line 153: `logger.info(f"Making {'streaming' if is_streaming else 'non-streaming'} call to model: {model_name}{' with tools' if has_tools else ''} in RBC environment")`
+  - Line 163: `logger.info(f"Attempt {attempts}/{MAX_RETRY_ATTEMPTS}: Sending request to OpenAI API")`
+  - Line 174: `logger.info(f"API call parameters (excluding message/input content): {safe_params}")`
+  - Line 189: `logger.info(f"Calling embeddings endpoint with params: {embedding_params}")`
+  - Line 194: `logger.info("Received embedding response.")`
+  - Line 200: `logger.info(f"Received {'initial stream chunk' if is_streaming else 'response'} for attempt {attempts} in {attempt_response_time_ms} ms")`
+  - Line 229: `logger.info(f"Non-streaming usage: {usage_details}")`
+  - Line 241: `logger.warning(f"Call attempt {attempts} failed after {attempt_time_secs:.2f} seconds: {str(e)}")`
+  - Line 246: `logger.info(f"Retrying in {RETRY_DELAY_SECONDS} seconds...")`
+  - Line 250: `logger.error(f"Failed to complete call after {attempts} attempts")`
+  - Line 296: `logger.info(f"Stream finished. Final usage: {usage_details}")`
+  - Line 300: `logger.warning("Stream finished, but no usage data found in the final chunk. Cannot report usage.")`
+- **Security Assessment:** SAFE - Logs operational flow, error and retry information with partial token preview; sensitive values (full token) not exposed
+- **Notes:** Provides robust visibility into API calls, retries, performance metrics, and streaming usage without leaking credentials.
 
 ### AGENTS
 
-#### [ ] iris/src/agents/__init__.py
-- **Status:** PENDING
-- **Has Logging:** TBD
-- **Logging Statements:** TBD
-- **Security Assessment:** TBD
-- **Notes:** TBD
+#### [x] iris/src/agents/__init__.py
+- **Status:** COMPLETED
+- **Has Logging:** NO
+- **Logging Statements:** None found
+- **Security Assessment:** N/A - No logging statements present
+- **Notes:** Standard package initialization file with no logging.
 
 ### AGENT CLARIFIER
 
-#### [ ] iris/src/agents/agent_clarifier/__init__.py
-- **Status:** PENDING
-- **Has Logging:** TBD
-- **Logging Statements:** TBD
-- **Security Assessment:** TBD
-- **Notes:** TBD
+#### [x] iris/src/agents/agent_clarifier/__init__.py
+- **Status:** COMPLETED
+- **Has Logging:** NO
+- **Logging Statements:** None found
+- **Security Assessment:** N/A - No logging statements present
+- **Notes:** Standard Python package initialization file with no logging.
 
-#### [ ] iris/src/agents/agent_clarifier/clarifier.py
-- **Status:** PENDING
-- **Has Logging:** TBD
-- **Logging Statements:** TBD
-- **Security Assessment:** TBD
-- **Notes:** TBD
+#### [x] iris/src/agents/agent_clarifier/clarifier.py
+- **Status:** COMPLETED
+- **Has Logging:** YES
+- **Logging Statements:** 
+  - Line 19: `import logging`
+  - Line 32: `logger = logging.getLogger(__name__)`
+  - Line 75: `logger.info(f"Clarifying research needs using model: {MODEL_NAME}")`
+  - Line 76: `logger.info("Initiating Clarifier API call")`
+  - Line 103: `logger.warning(f"Expected tool call but received content: {content_returned[:100]}...")`
+  - Line 144: `logger.warning(f"Scope '{scope}' provided but action is '{action}'. Scope will be ignored.")`
+  - Line 150: `logger.info(f"Clarifier decision: {action}")`
+  - Line 152: `logger.info(f"Determined scope: {scope}")`
+  - Line 153: `logger.info(f"Is continuation: {is_continuation}")`
+  - Line 167: `logger.error(f"Error clarifying research needs: {str(e)}", exc_info=True)`
+- **Security Assessment:** SAFE - Logs process steps, decisions, and errors without exposing sensitive data
+- **Notes:** Provides visibility into clarifier decision-making and error handling for debugging context assessment.
 
-#### [ ] iris/src/agents/agent_clarifier/clarifier_settings.py
-- **Status:** PENDING
-- **Has Logging:** TBD
-- **Logging Statements:** TBD
-- **Security Assessment:** TBD
-- **Notes:** TBD
+#### [x] iris/src/agents/agent_clarifier/clarifier_settings.py
+- **Status:** COMPLETED
+- **Has Logging:** YES
+- **Logging Statements:** 
+  - Line 18: `import logging`
+  - Line 23: `logger = logging.getLogger(__name__)`
+- **Security Assessment:** SAFE - Only sets up module logger; no sensitive data or runtime logging calls
+- **Notes:** Defines clarifier agent model and prompt settings; module-level logger configuration only.
 
 ### AGENT DIRECT RESPONSE
 
-#### [ ] iris/src/agents/agent_direct_response/__init__.py
-- **Status:** PENDING
-- **Has Logging:** TBD
-- **Logging Statements:** TBD
-- **Security Assessment:** TBD
-- **Notes:** TBD
+#### [x] iris/src/agents/agent_direct_response/__init__.py
+- **Status:** COMPLETED
+- **Has Logging:** NO
+- **Logging Statements:** None found
+- **Security Assessment:** N/A - No logging statements present
+- **Notes:** Standard Python package initialization file with no logging.
 
-#### [ ] iris/src/agents/agent_direct_response/response_from_conversation.py
-- **Status:** PENDING
-- **Has Logging:** TBD
-- **Logging Statements:** TBD
-- **Security Assessment:** TBD
-- **Notes:** TBD
+#### [x] iris/src/agents/agent_direct_response/response_from_conversation.py
+- **Status:** COMPLETED
+- **Has Logging:** YES
+- **Logging Statements:** 
+  - Line 17: `import logging`
+  - Line 25: `logger = logging.getLogger(__name__)`
+  - Line 71: `logger.info(f"Generating direct response using model: {MODEL_NAME}")`
+  - Line 72: `logger.info("Initiating Direct Response stream API call")`
+  - Line 102: `logger.info("Direct response stream finished.")`
+  - Line 109: `logger.warning("Usage details not found in direct response stream.")`
+  - Line 114: `logger.error(f"Error generating direct response: {str(e)}", exc_info=True)`
+- **Security Assessment:** SAFE - Only logs operation flow, warnings, and errors without exposing sensitive data
+- **Notes:** Provides visibility into direct response streaming, completion, and error handling for debugging and monitoring.
 
-#### [ ] iris/src/agents/agent_direct_response/response_settings.py
-- **Status:** PENDING
-- **Has Logging:** TBD
-- **Logging Statements:** TBD
-- **Security Assessment:** TBD
-- **Notes:** TBD
+#### [x] iris/src/agents/agent_direct_response/response_settings.py
+- **Status:** COMPLETED
+- **Has Logging:** YES
+- **Logging Statements:** 
+  - Line 21: `import logging`
+  - Line 29: `logger = logging.getLogger(__name__)`
+  - Line 236: `logger.debug("Direct response agent settings initialized")`
+- **Security Assessment:** SAFE - Only logs initial module setup without sensitive data
+- **Notes:** Sets up module logger for direct response agent; debug log confirms initialization.
 
 ### AGENT PLANNER
 
-#### [ ] iris/src/agents/agent_planner/__init__.py
-- **Status:** PENDING
-- **Has Logging:** TBD
-- **Logging Statements:** TBD
-- **Security Assessment:** TBD
-- **Notes:** TBD
+#### [x] iris/src/agents/agent_planner/__init__.py
+- **Status:** COMPLETED
+- **Has Logging:** NO
+- **Logging Statements:** None found
+- **Security Assessment:** N/A - No logging statements present
+- **Notes:** Standard Python package initialization file with no logging.
 
-#### [ ] iris/src/agents/agent_planner/planner.py
-- **Status:** PENDING
-- **Has Logging:** TBD
-- **Logging Statements:** TBD
-- **Security Assessment:** TBD
-- **Notes:** TBD
+#### [x] iris/src/agents/agent_planner/planner.py
+- **Status:** COMPLETED
+- **Has Logging:** YES
+- **Logging Statements:** 
+  - Line 19: `import logging`
+  - Line 34: `logger = logging.getLogger(__name__)`
+  - Line 89: `logger.info(f"Creating database selection plan using model: {MODEL_NAME}")`
+  - Line 90: `logger.info(f"Is continuation: {is_continuation}")`
+  - Line 91: `logger.info("Initiating Planner API call for database selection")`
+  - Line 118: `logger.warning(f"Expected tool call but received content: {content_returned[:100]}...")`
+  - Line 151: `logger.info(f"Database selection plan created with {len(validated_databases)} databases: {validated_databases}")`
+  - Line 159: `logger.error(f"Error creating database selection plan: {str(e)}", exc_info=True)`
+- **Security Assessment:** SAFE - Logs status, plan creation, warnings, and errors; no sensitive data exposed
+- **Notes:** Provides visibility into planner operations for debugging query plan creation and error handling.
 
 #### [ ] iris/src/agents/agent_planner/planner_settings.py
 - **Status:** PENDING

@@ -11,10 +11,10 @@ This version implements advanced prompt engineering techniques:
 3. Inclusion of global context (Project, Database, Fiscal, Restrictions)
 """
 
-from ....global_prompts.project_statement import get_project_statement
-from ....global_prompts.database_statement import get_database_statement
-from ....global_prompts.fiscal_statement import get_fiscal_statement
-from ....global_prompts.restrictions_statement import get_restrictions_statement
+from ...global_prompts.project_statement import get_project_statement
+from ...global_prompts.database_statement import get_database_statement
+from ...global_prompts.fiscal_statement import get_fiscal_statement
+from ...global_prompts.restrictions_statement import get_restrictions_statement
 
 # Define the subagent role
 SUBAGENT_ROLE = "an expert research assistant specializing in analyzing external PwC accounting guidance documents"

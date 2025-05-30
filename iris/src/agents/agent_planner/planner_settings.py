@@ -27,7 +27,7 @@ from ...global_prompts.database_statement import (
     get_database_statement,
     get_available_databases,
 )
-from ....global_prompts.fiscal_statement import get_fiscal_statement
+from ...global_prompts.fiscal_statement import get_fiscal_statement
 from ...global_prompts.restrictions_statement import get_restrictions_statement
 
 # Get module logger (no configuration here - using centralized config)
