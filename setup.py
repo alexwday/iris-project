@@ -9,6 +9,7 @@ setup(
         "requests",
         "cryptography",
         "psycopg2-binary",
+        "pgvector",
         "jupyter",
         "python-dotenv",
         "fastapi>=0.104.1",
