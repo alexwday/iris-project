@@ -86,6 +86,53 @@ def test_chat_endpoint():
     
     print("-" * 50)
 
+def test_streaming_endpoint():
+    """Test the streaming chat endpoint"""
+    print("🌊 Testing Streaming Chat Endpoint...")
+    
+    # Sample conversation
+    test_conversation = {
+        "messages": [
+            {"role": "user", "content": "What are the latest tax regulations for Canadian corporations?"}
+        ],
+        "stream": True
+    }
+    
+    try:
+        print(f"Sending streaming request: {json.dumps(test_conversation, indent=2)}")
+        
+        start_time = time.time()
+        response = requests.post(
+            f"{API_BASE_URL}/chat",
+            json=test_conversation,
+            headers={"Content-Type": "application/json"},
+            stream=True,  # Important: enable streaming on client side
+            timeout=300
+        )
+        
+        print(f"Status Code: {response.status_code}")
+        
+        if response.status_code == 200:
+            print("✅ Streaming request successful!")
+            print("📡 Streaming response chunks:")
+            print("-" * 40)
+            
+            # Process streaming response
+            for chunk in response.iter_content(chunk_size=None, decode_unicode=True):
+                if chunk:
+                    print(chunk, end='', flush=True)
+            
+            end_time = time.time()
+            print(f"\n\n⏱️ Streaming completed in {(end_time - start_time):.2f} seconds")
+        else:
+            print("❌ Streaming request failed!")
+            print(f"Error: {response.text}")
+            
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Streaming request error: {e}")
+    
+    print("-" * 50)
+
 def test_with_conversation_history():
     """Test with multi-turn conversation"""
     print("🔄 Testing Multi-turn Conversation...")
@@ -136,7 +183,17 @@ def print_curl_examples():
     "stream": false
   }}'""")
     
-    print("\n3. Multi-turn Chat:")
+    print("\n3. Streaming Chat:")
+    print(f"""curl -X POST "{API_BASE_URL}/chat" \\
+  -H "Content-Type: application/json" \\
+  -d '{{
+    "messages": [
+      {{"role": "user", "content": "What are the latest tax regulations?"}}
+    ],
+    "stream": true
+  }}'""")
+    
+    print("\n4. Multi-turn Chat:")
     print(f"""curl -X POST "{API_BASE_URL}/chat" \\
   -H "Content-Type: application/json" \\
   -d '{{
@@ -144,7 +201,8 @@ def print_curl_examples():
       {{"role": "user", "content": "What is IFRS 16?"}},
       {{"role": "assistant", "content": "IFRS 16 deals with lease accounting..."}},
       {{"role": "user", "content": "How does it affect balance sheets?"}}
-    ]
+    ],
+    "stream": false
   }}'""")
     
     print("-" * 50)
@@ -207,6 +265,7 @@ def main():
     # Run tests
     test_health_endpoint()
     test_chat_endpoint()
+    test_streaming_endpoint()
     test_with_conversation_history()
     test_fastapi_client()
     print_curl_examples()
