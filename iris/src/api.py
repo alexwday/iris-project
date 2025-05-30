@@ -134,6 +134,8 @@ async def stream_chat_response(conversation: List[Dict[str, str]]):
                     break
                 # Yield chunk as-is to preserve original spacing and timing
                 yield chunk
+                # Give control back to event loop to ensure chunk is flushed
+                await asyncio.sleep(0)
             except queue.Empty:
                 # Check if there's an exception
                 if exception_container[0]:
