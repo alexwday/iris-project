@@ -22,7 +22,7 @@ import inspect
 import logging
 from typing import Any, Dict, Generator, List, Optional, TypeVar, Union, cast
 
-from ...chat_model.model_settings import ENVIRONMENT
+from ...initial_setup.env_config import config
 from ...global_prompts.database_statement import get_available_databases
 
 # Removed old token usage imports

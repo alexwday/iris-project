@@ -18,7 +18,7 @@ import logging
 import json
 from typing import Any, Dict, List, Optional, Union, Generator # Keep Generator
 
-from ...chat_model.model_settings import get_model_config
+from ...initial_setup.env_config import config
 
 from ...llm_connectors.rbc_openai import call_llm # Remove log_usage_statistics
 from .summarizer_settings import (
@@ -80,7 +80,7 @@ def generate_streaming_summary(
     if scope == "research":
         try:
             # Get model configuration dynamically
-            model_config = get_model_config(MODEL_CAPABILITY)
+            model_config = config.get_model_config(MODEL_CAPABILITY)
             model_name = model_config["name"]
             prompt_token_cost = model_config["prompt_token_cost"]
             completion_token_cost = model_config["completion_token_cost"]

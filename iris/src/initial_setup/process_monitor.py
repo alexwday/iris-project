@@ -24,6 +24,7 @@ from datetime import datetime, timezone
 import json
 import psycopg2 # Use project's standard DB connection method
 from psycopg2.extras import Json # For inserting JSONB
+from iris.src.initial_setup.env_config import config
 
 # Configure module logger
 logger = logging.getLogger(__name__)
@@ -306,7 +307,7 @@ class ProcessMonitor:
                 # Convert UUID to string for PostgreSQL compatibility
                 record = (
                     str(self.run_uuid),  # Convert UUID to string
-                    'iris', # model_name
+                    config.PROCESS_MONITOR_MODEL_NAME, # model_name from environment
                     stage.name,
                     stage.start_time, # Already timezone-aware UTC
                     stage.end_time,   # Already timezone-aware UTC

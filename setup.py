@@ -10,6 +10,10 @@ setup(
         "cryptography",
         "psycopg2-binary",
         "jupyter",
+        "python-dotenv",
+        "fastapi>=0.104.1",
+        "uvicorn[standard]>=0.24.0",
+        "pydantic>=2.5.0",
     ],
     extras_require={
         "dev": [

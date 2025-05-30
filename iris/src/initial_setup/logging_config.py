@@ -4,7 +4,8 @@ Centralized Logging Configuration Module
 
 This module provides a consistent logging configuration for all modules
 in the application, preventing duplicate log messages and ensuring uniform
-log formatting across the application.
+log formatting across the application. The logging level is configured
+via environment variables.
 
 Functions:
     configure_logging: Sets up the root logger with appropriate handlers
@@ -12,14 +13,15 @@ Functions:
 Dependencies:
     - logging
     - sys
+    - iris.src.initial_setup.env_config
 """
 
 import logging
 import sys
-import logging # Ensure logging is imported if not already assumed
+from iris.src.initial_setup.env_config import config
 
 
-def configure_logging(level=logging.DEBUG): # Changed default level to DEBUG
+def configure_logging(level=None):
     """
     Configure root logger with handlers for consistent logging across modules.
 
@@ -28,11 +30,14 @@ def configure_logging(level=logging.DEBUG): # Changed default level to DEBUG
     duplicate log messages.
 
     Args:
-        level (int): The logging level to set (default: logging.INFO)
+        level (int): The logging level to set. If None, uses environment config.
 
     Returns:
         logging.Logger: Configured root logger
     """
+    # Use environment config if level not provided
+    if level is None:
+        level = getattr(logging, config.LOG_LEVEL.upper(), logging.DEBUG)
     # Configure root logger
     root_logger = logging.getLogger()
 

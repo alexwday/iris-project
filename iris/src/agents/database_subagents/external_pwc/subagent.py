@@ -37,7 +37,7 @@ except ImportError:
 # Removed tiktoken import attempt
 
 
-from ....chat_model.model_settings import ENVIRONMENT, get_model_config
+from ....initial_setup.env_config import config
 from ....initial_setup.db_config import connect_to_db
 from ....llm_connectors.rbc_openai import call_llm
 from .content_synthesis_prompt import (
@@ -87,7 +87,7 @@ def _generate_query_embedding(
     logger.info(f"Generating embedding for query: '{query}'...")
     usage_details: LlmUsageDetails = None
     try:
-        model_config = get_model_config(EMBEDDING_MODEL_CAPABILITY)
+        model_config = config.get_model_config(EMBEDDING_MODEL_CAPABILITY)
         model_name = model_config["name"]
         prompt_cost = model_config["prompt_token_cost"]
         # Embeddings typically don't have completion cost, set to 0 or small value
@@ -249,7 +249,7 @@ Provide your response as a single JSON object mapping each ID to 1 (relevant) or
 
     relevance_map = {}
     try:
-        model_config = get_model_config(RELEVANCE_MODEL_CAPABILITY)
+        model_config = config.get_model_config(RELEVANCE_MODEL_CAPABILITY)
         call_params = {
             "oauth_token": token or "placeholder_token",
             "prompt_token_cost": model_config["prompt_token_cost"],
@@ -731,7 +731,7 @@ def _generate_response_from_chunks(
     }
 
     try:
-        model_config = get_model_config(RESPONSE_MODEL_CAPABILITY)
+        model_config = config.get_model_config(RESPONSE_MODEL_CAPABILITY)
         call_params = {
             "oauth_token": token or "placeholder_token",
             "prompt_token_cost": model_config["prompt_token_cost"],
@@ -858,7 +858,7 @@ def _query_database_logic(
 
     # --- Database Connection & Embedding ---
     try:
-        conn = connect_to_db(ENVIRONMENT)
+        conn = connect_to_db()
         if not conn:
             raise ConnectionError("Failed to connect to the database.")
         register_vector(conn)

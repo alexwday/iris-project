@@ -15,6 +15,10 @@ CREATE TABLE apg_catalog (
     document_description TEXT,                    -- Original AI-generated description of document usage/scope
     document_usage TEXT,                          -- New field for LLM selection/usage
     
+    -- EMBEDDING fields
+    document_usage_embedding vector(2000),        -- Vector embedding for document_usage
+    document_description_embedding vector(2000),  -- Vector embedding for document_description
+    
     -- REFRESH metadata fields
     date_created TIMESTAMP WITH TIME ZONE,        -- Original document creation date
     date_last_modified TIMESTAMP WITH TIME ZONE,  -- Date the document was last modified
@@ -40,7 +44,8 @@ CREATE TABLE apg_content (
     section_id INTEGER NOT NULL,                  -- Ordered sequence number within the document
     section_name VARCHAR(500),                    -- Title of the section/chapter
     section_summary TEXT,                         -- AI-generated summary of the section
-    section_content TEXT NOT NULL                 -- The actual content of the section
+    section_content TEXT NOT NULL,                -- The actual content of the section
+    page_number INTEGER                           -- Page number for content breakdown
 );
 
 -- 3. process_monitor_logs Table

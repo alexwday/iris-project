@@ -23,14 +23,14 @@ from typing import Any, Dict, Optional, Iterator
 
 from openai import OpenAI
 
-from ..chat_model.model_settings import (
-    BASE_URL,
-    IS_RBC_ENV,
-    MAX_RETRY_ATTEMPTS,
-    REQUEST_TIMEOUT,
-    RETRY_DELAY_SECONDS,
-    TOKEN_PREVIEW_LENGTH,
-)
+from ..initial_setup.env_config import config
+
+# Get settings from config
+BASE_URL = config.BASE_URL
+MAX_RETRY_ATTEMPTS = config.MAX_RETRY_ATTEMPTS
+REQUEST_TIMEOUT = config.REQUEST_TIMEOUT
+RETRY_DELAY_SECONDS = config.RETRY_DELAY_SECONDS
+TOKEN_PREVIEW_LENGTH = config.TOKEN_PREVIEW_LENGTH
 
 # Get module logger
 logger = logging.getLogger(__name__)
@@ -131,8 +131,7 @@ def call_llm(
         if len(oauth_token) > TOKEN_PREVIEW_LENGTH
         else oauth_token
     )
-    auth_type = "OAuth token" if IS_RBC_ENV else "API key"
-    logger.info(f"Using {auth_type}: {token_preview}")
+    logger.info(f"Using OAuth token: {token_preview}")
     logger.info(f"Using API base URL: {api_base_url}")
 
     # Set timeout if not provided
@@ -151,10 +150,9 @@ def call_llm(
     # Log key parameters
     model_name = params.get("model", "unknown") # Capture model name
     has_tools = "tools" in params
-    env_type = "RBC" if IS_RBC_ENV else "local"
     logger.info(
         f"Making {'streaming' if is_streaming else 'non-streaming'} call to model: {model_name}"
-        f"{' with tools' if has_tools else ''} in {env_type} environment"
+        f"{' with tools' if has_tools else ''} in RBC environment"
     )
 
     while attempts < MAX_RETRY_ATTEMPTS:

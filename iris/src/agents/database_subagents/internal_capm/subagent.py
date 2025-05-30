@@ -25,7 +25,7 @@ DatabaseResponse = Union[MetadataResponse, ResearchResponse]
 FileLink = Dict[str, str]  # Contains 'file_link' and 'document_name'
 SubagentResult = Tuple[DatabaseResponse, Optional[List[str]], Optional[List[FileLink]]]  # result + doc_ids + file_links
 
-from ....chat_model.model_settings import ENVIRONMENT, get_model_config
+from ....initial_setup.env_config import config
 from ....initial_setup.db_config import connect_to_db
 from ....llm_connectors.rbc_openai import call_llm
 from .catalog_selection_prompt import get_catalog_selection_prompt
@@ -126,8 +126,8 @@ def fetch_capm_catalog() -> List[Dict[str, Any]]:
     """
     Fetch the full internal CAPM catalog from the database.
     """
-    logger.info(f"Fetching full CAPM catalog (environment: {ENVIRONMENT})")
-    conn = connect_to_db(ENVIRONMENT)
+    logger.info(f"Fetching full CAPM catalog (environment: {config.ENVIRONMENT})")
+    conn = connect_to_db()
     catalog_records: List[Dict[str, Any]] = []
     if not conn:
         logger.error("Failed to connect to database for CAPM catalog")
@@ -171,7 +171,7 @@ def fetch_document_sections_and_summaries(doc_ids: List[str]) -> List[Dict[str, 
     if not doc_ids:
         logger.warning("No CAPM document IDs to fetch")
         return []
-    conn = connect_to_db(ENVIRONMENT)
+    conn = connect_to_db()
     result: List[Dict[str, Any]] = []
     if not conn:
         logger.error("Failed to connect to database for CAPM sections and summaries")
@@ -249,7 +249,7 @@ def fetch_section_content(
     if not section_id_selections:
         logger.warning("No CAPM section IDs provided to fetch content")
         return []
-    conn = connect_to_db(ENVIRONMENT)
+    conn = connect_to_db()
     result: List[Dict[str, Any]] = []
     if not conn:
         logger.error("Failed to connect to database for CAPM section content")
@@ -346,7 +346,7 @@ def get_completion(
     usage_details = None # Initialize
     response = None # Initialize
     try:
-        model_config = get_model_config(capability)
+        model_config = config.get_model_config(capability)
         model_name = model_config["name"]
         prompt_cost = model_config["prompt_token_cost"]
         completion_cost = model_config["completion_token_cost"]

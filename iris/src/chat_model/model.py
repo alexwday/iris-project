@@ -221,11 +221,14 @@ def _model_generator(
     from ..agents.agent_planner.planner import create_database_selection_plan
     from ..agents.agent_router.router import get_routing_decision
     from ..agents.agent_summarizer.summarizer import generate_streaming_summary
-    from ..conversation_setup.conversation import process_conversation
+    from ..initial_setup.conversation import process_conversation
     from ..initial_setup.logging_config import configure_logging
-    from ..initial_setup.oauth.oauth import setup_oauth
-    from ..initial_setup.ssl.ssl import setup_ssl
-    from .model_settings import SHOW_USAGE_SUMMARY
+    from ..initial_setup.oauth import setup_oauth
+    from ..initial_setup.ssl import setup_ssl
+    from ..initial_setup.env_config import config
+
+# Get settings from config
+SHOW_USAGE_SUMMARY = config.SHOW_USAGE_SUMMARY
     # Import DB connection utility (assuming it exists and named get_db_connection)
     from ..initial_setup.db_config import connect_to_db, ENVIRONMENT # Import necessary items
 
@@ -604,6 +607,91 @@ def model(
         error_msg = f"Error during synchronous model execution: {str(e)}"
         logger.error(error_msg, exc_info=True)
         yield f"**Error:** {error_msg}"
+
+
+# --- Async Wrapper for FastAPI ---
+async def process_request_async(
+    conversation: List[Dict[str, str]], 
+    stream: bool = False
+) -> Dict[str, Any]:
+    """
+    Async wrapper for FastAPI that processes a conversation request.
+    
+    Args:
+        conversation: List of message dictionaries with 'role' and 'content'
+        stream: Whether to enable streaming (not implemented in this wrapper)
+        
+    Returns:
+        Dictionary with response data including:
+        - response: The complete response text
+        - agent_used: Which agent handled the request
+        - processing_time_ms: Processing time in milliseconds
+        - token_usage: Token usage statistics
+        - run_uuid: Unique run identifier
+    """
+    import asyncio
+    import time
+    
+    logger = logging.getLogger(__name__)
+    logger.info(f"Processing async request with {len(conversation)} messages")
+    
+    start_time = time.time()
+    
+    def run_sync_model():
+        """Run the synchronous model in a thread"""
+        try:
+            # Convert conversation to expected format
+            conversation_dict = {"messages": conversation}
+            
+            # Collect all chunks from the generator
+            response_chunks = []
+            agent_used = None
+            run_uuid = None
+            token_usage = None
+            
+            # Run the existing synchronous model
+            for chunk in model(conversation_dict, debug_mode=True):
+                if isinstance(chunk, str):
+                    response_chunks.append(chunk)
+                elif isinstance(chunk, dict):
+                    # This might be debug info or final summary
+                    if "agent_used" in chunk:
+                        agent_used = chunk.get("agent_used")
+                    if "run_uuid" in chunk:
+                        run_uuid = chunk.get("run_uuid")
+                    if "token_usage" in chunk:
+                        token_usage = chunk.get("token_usage")
+            
+            # Join all response chunks
+            full_response = "".join(response_chunks)
+            
+            return {
+                "response": full_response,
+                "agent_used": agent_used,
+                "run_uuid": str(run_uuid) if run_uuid else None,
+                "token_usage": token_usage
+            }
+            
+        except Exception as e:
+            logger.error(f"Error in sync model execution: {str(e)}", exc_info=True)
+            return {
+                "response": f"Error processing request: {str(e)}",
+                "agent_used": None,
+                "run_uuid": None,
+                "token_usage": None
+            }
+    
+    # Run the synchronous code in a thread pool to avoid blocking
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(None, run_sync_model)
+    
+    # Add processing time
+    processing_time_ms = int((time.time() - start_time) * 1000)
+    result["processing_time_ms"] = processing_time_ms
+    
+    logger.info(f"Async request completed in {processing_time_ms}ms")
+    
+    return result
 
 
 # --- Helper Function (Remains Synchronous) ---

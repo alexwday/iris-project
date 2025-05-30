@@ -25,7 +25,7 @@ DatabaseResponse = Union[MetadataResponse, ResearchResponse]
 FileLink = Dict[str, str]  # Contains 'file_link' and 'document_name'
 SubagentResult = Tuple[DatabaseResponse, Optional[List[str]], Optional[List[FileLink]]]  # result + doc_ids + file_links
 
-from ....chat_model.model_settings import ENVIRONMENT, get_model_config
+from ....initial_setup.env_config import config
 from ....initial_setup.db_config import connect_to_db
 from ....llm_connectors.rbc_openai import call_llm
 from .catalog_selection_prompt import get_catalog_selection_prompt
@@ -76,8 +76,8 @@ def fetch_memos_catalog() -> List[Dict[str, Any]]:
     """
     Fetch the full internal Memos catalog from the database synchronously.
     """
-    logger.info(f"Fetching full Memos catalog (environment: {ENVIRONMENT})")
-    conn = connect_to_db(ENVIRONMENT)
+    logger.info(f"Fetching full Memos catalog (environment: {config.ENVIRONMENT})")
+    conn = connect_to_db()
     catalog_records: List[Dict[str, Any]] = []
     if not conn:
         logger.error("Failed to connect to database for Memos catalog")
@@ -120,7 +120,7 @@ def fetch_document_content(doc_ids: List[str]) -> List[Dict[str, Any]]:
     if not doc_ids:
         logger.warning("No Memos document IDs to fetch")
         return []
-    conn = connect_to_db(ENVIRONMENT)
+    conn = connect_to_db()
     result: List[Dict[str, Any]] = []
     if not conn:
         logger.error("Failed to connect to database for Memos content")
@@ -190,7 +190,7 @@ def get_completion(
     usage_details = None # Initialize
     response = None # Initialize
     try:
-        model_config = get_model_config(capability)
+        model_config = config.get_model_config(capability)
         model_name = model_config["name"]
         prompt_cost = model_config["prompt_token_cost"]
         completion_cost = model_config["completion_token_cost"]

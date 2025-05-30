@@ -17,7 +17,7 @@ Dependencies:
 import logging
 from typing import Generator, Dict, Any # Added Generator, Dict, Any
 
-from ...chat_model.model_settings import get_model_config
+from ...initial_setup.env_config import config
 from ...llm_connectors.rbc_openai import call_llm
 from .response_settings import MAX_TOKENS, MODEL_CAPABILITY, SYSTEM_PROMPT, TEMPERATURE
 
@@ -25,7 +25,7 @@ from .response_settings import MAX_TOKENS, MODEL_CAPABILITY, SYSTEM_PROMPT, TEMP
 logger = logging.getLogger(__name__)
 
 # Get model configuration based on capability
-model_config = get_model_config(MODEL_CAPABILITY)
+model_config = config.get_model_config(MODEL_CAPABILITY)
 MODEL_NAME = model_config["name"]
 PROMPT_TOKEN_COST = model_config["prompt_token_cost"]
 COMPLETION_TOKEN_COST = model_config["completion_token_cost"]
