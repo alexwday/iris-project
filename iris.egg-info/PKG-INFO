@@ -5,7 +5,12 @@ Requires-Dist: openai
 Requires-Dist: requests
 Requires-Dist: cryptography
 Requires-Dist: psycopg2-binary
+Requires-Dist: pgvector
 Requires-Dist: jupyter
+Requires-Dist: python-dotenv
+Requires-Dist: fastapi>=0.104.1
+Requires-Dist: uvicorn[standard]>=0.24.0
+Requires-Dist: pydantic>=2.5.0
 Provides-Extra: dev
 Requires-Dist: pytest; extra == "dev"
 Requires-Dist: pytest-cov; extra == "dev"

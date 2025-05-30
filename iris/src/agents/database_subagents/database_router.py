@@ -22,8 +22,8 @@ import inspect
 import logging
 from typing import Any, Dict, Generator, List, Optional, TypeVar, Union, cast
 
-from ...initial_setup.env_config import config
-from ...global_prompts.database_statement import get_available_databases
+from ....initial_setup.env_config import config
+from ....global_prompts.database_statement import get_available_databases
 
 # Removed old token usage imports
 # from ...llm_connectors.rbc_openai import get_token_usage, reset_token_usage
@@ -112,10 +112,8 @@ def route_query_sync(
         return error_response, None, None # Return tuple with None for file_links
 
     try:
-        module_path = f".{database}.subagent"
-        subagent_module = importlib.import_module(
-            module_path, package="iris.src.agents.database_subagents"
-        )
+        module_path = f"iris.src.agents.database_subagents.{database}.subagent"
+        subagent_module = importlib.import_module(module_path)
         logger.debug(f"Successfully imported module: {module_path}")
 
         if not hasattr(subagent_module, "query_database_sync"):

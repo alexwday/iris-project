@@ -6,9 +6,9 @@
 
 ## Progress Summary
 - **Total Files:** 89
-- **Completed:** 31
-- **Files with Logging:** 20
-- **Total Logging Statements:** 265
+- **Completed:** 53
+- **Files with Logging:** 31
+- **Total Logging Statements:** 641
 - **Security Issues:** 0
 
 ---
@@ -548,196 +548,561 @@
 - **Security Assessment:** SAFE - Logs status, plan creation, warnings, and errors; no sensitive data exposed
 - **Notes:** Provides visibility into planner operations for debugging query plan creation and error handling.
 
-#### [ ] iris/src/agents/agent_planner/planner_settings.py
-- **Status:** PENDING
-- **Has Logging:** TBD
-- **Logging Statements:** TBD
-- **Security Assessment:** TBD
-- **Notes:** TBD
+#### [x] iris/src/agents/agent_planner/planner_settings.py
+- **Status:** COMPLETED
+- **Has Logging:** YES
+- **Logging Statements:**
+  - Line 23: `import logging`
+  - Line 34: `logger = logging.getLogger(__name__)`
+  - Line 234: `logger.debug("Planner agent settings initialized")`
+- **Security Assessment:** SAFE - Only logs initialization of module settings; no sensitive data exposed
+- **Notes:** Provides a debug log confirming planner agent settings initialization
 
 ### AGENT ROUTER
 
-#### [ ] iris/src/agents/agent_router/__init__.py
-- **Status:** PENDING
-- **Has Logging:** TBD
-- **Logging Statements:** TBD
-- **Security Assessment:** TBD
-- **Notes:** TBD
+#### [x] iris/src/agents/agent_router/__init__.py
+- **Status:** COMPLETED
+- **Has Logging:** NO
+- **Logging Statements:** None found
+- **Security Assessment:** N/A - No logging statements present
+- **Notes:** Standard Python package initialization file with no logging.
 
-#### [ ] iris/src/agents/agent_router/router.py
-- **Status:** PENDING
-- **Has Logging:** TBD
-- **Logging Statements:** TBD
-- **Security Assessment:** TBD
-- **Notes:** TBD
+#### [x] iris/src/agents/agent_router/router.py
+- **Status:** COMPLETED
+- **Has Logging:** YES
+- **Logging Statements:**
+  - Line 18: `import logging`
+  - Line 33: `logger = logging.getLogger(__name__)`
+  - Line 77: `logger.info(f"Getting routing decision using model: {MODEL_NAME}")`
+  - Line 78: `logger.info("Initiating Router API call")`
+  - Line 106: `logger.warning(f"Expected tool call but received content: {content_returned[:100]}...")`
+  - Line 134: `logger.info(f"Routing decision: {function_name}")`
+  - Line 140: `logger.error(f"Error getting routing decision: {str(e)}", exc_info=True)`
+- **Security Assessment:** SAFE - Only logs routing decisions, info and error details; no sensitive data exposed
+- **Notes:** Provides operational visibility into routing logic, tool call initiation, and error handling.
 
-#### [ ] iris/src/agents/agent_router/router_settings.py
-- **Status:** PENDING
-- **Has Logging:** TBD
-- **Logging Statements:** TBD
-- **Security Assessment:** TBD
-- **Notes:** TBD
+#### [x] iris/src/agents/agent_router/router_settings.py
+- **Status:** COMPLETED
+- **Has Logging:** YES
+- **Logging Statements:**
+  - Line 22: `import logging`
+  - Line 30: `logger = logging.getLogger(__name__)`
+  - Line 328: `logger.debug("Router agent settings initialized")`
+- **Security Assessment:** SAFE - Only logs initialization of module settings; no sensitive data exposed
+- **Notes:** Provides debug log confirming router agent settings initialization
 
 ### AGENT SUMMARIZER
 
-#### [ ] iris/src/agents/agent_summarizer/__init__.py
-- **Status:** PENDING
-- **Has Logging:** TBD
-- **Logging Statements:** TBD
-- **Security Assessment:** TBD
-- **Notes:** TBD
+#### [x] iris/src/agents/agent_summarizer/__init__.py
+- **Status:** COMPLETED
+- **Has Logging:** NO
+- **Logging Statements:** None found
+- **Security Assessment:** N/A - No logging statements present
+- **Notes:** Standard Python package initialization file with no logging.
 
-#### [ ] iris/src/agents/agent_summarizer/summarizer.py
-- **Status:** PENDING
-- **Has Logging:** TBD
-- **Logging Statements:** TBD
-- **Security Assessment:** TBD
-- **Notes:** TBD
+#### [x] iris/src/agents/agent_summarizer/summarizer.py
+- **Status:** COMPLETED
+- **Has Logging:** YES
+- **Logging Statements:**
+  - Line 17: `import logging`
+  - Line 33: `logger = logging.getLogger(__name__)`
+  - Line 76: `logger.info(f"Generating final summary for scope: {scope}")`
+  - Line 88: `logger.error(f"Failed to get model configuration: {config_err}", exc_info=True)`
+  - Line 136: `logger.info(f"Generating streaming research summary using model: {model_name}")`
+  - Line 139: `logger.info(f"Summarizing detailed research from {len(aggregated_detailed_research)} databases.")`
+  - Line 142: `logger.info("Initiating Summarizer stream API call")`
+  - Line 167: `logger.info("Summary stream finished.")`
+  - Line 172: `logger.warning("Usage details not found in summary stream.")`
+  - Line 176: `logger.error(f"Error generating streaming research summary: {str(e)}", exc_info=True)`
+  - Line 186: `logger.warning("Summarizer called with 'metadata' scope, which is not actively handled here anymore.")`
+  - Line 194: `logger.error(error_msg)`
+- **Security Assessment:** SAFE - Only logs summary generation progress, info, warnings, and errors; no sensitive data exposed
+- **Notes:** Critical for tracking summary generation flow, progress metrics, and error handling in the summarizer agent.
 
-#### [ ] iris/src/agents/agent_summarizer/summarizer_settings.py
-- **Status:** PENDING
-- **Has Logging:** TBD
-- **Logging Statements:** TBD
-- **Security Assessment:** TBD
-- **Notes:** TBD
+#### [x] iris/src/agents/agent_summarizer/summarizer_settings.py
+- **Status:** COMPLETED
+- **Has Logging:** YES
+- **Logging Statements:**
+  - Line 22: `import logging`
+  - Line 33: `logger = logging.getLogger(__name__)`
+  - Line 341: `logger.debug("Summarizer agent settings initialized")`
+- **Security Assessment:** SAFE - Only logs module initialization of summarizer settings; no sensitive data exposed
+- **Notes:** Provides a debug log confirming summarizer agent settings initialization
 
 ### DATABASE SUBAGENTS
 
-#### [ ] iris/src/agents/database_subagents/__init__.py
-- **Status:** PENDING
-- **Has Logging:** TBD
-- **Logging Statements:** TBD
-- **Security Assessment:** TBD
-- **Notes:** TBD
+#### [x] iris/src/agents/database_subagents/__init__.py
+- **Status:** COMPLETED
+- **Has Logging:** NO
+- **Logging Statements:** None found
+- **Security Assessment:** N/A - No logging statements present
+- **Notes:** Standard Python package initialization file with no logging.
 
-#### [ ] iris/src/agents/database_subagents/database_router.py
-- **Status:** PENDING
-- **Has Logging:** TBD
-- **Logging Statements:** TBD
-- **Security Assessment:** TBD
-- **Notes:** TBD
+#### [x] iris/src/agents/database_subagents/database_router.py
+- **Status:** COMPLETED
+- **Has Logging:** YES
+- **Logging Statements:**
+  - Line 22: `import logging`
+  - Line 46: `logger = logging.getLogger(__name__)`
+  - Line 82: `logger.info(f"Routing query (sync) to database: {database} with scope: {scope}")`
+  - Line 85: `logger.debug(f"Using process monitor stage name: {stage_name}")`
+  - Line 94: `logger.error(error_msg)`
+  - Line 119: `logger.debug(f"Successfully imported module: {module_path}")`
+  - Line 123: `logger.error(error_msg)`
+  - Line 137: `logger.debug(f"Calling query_database_sync for {database}")`
+  - Line 183: `logger.error(error_msg, exc_info=True)`
+  - Line 207: `logger.error(error_msg, exc_info=True)`
+- **Security Assessment:** SAFE - Only logs routing operations, debug details, and errors; no sensitive data exposed
+- **Notes:** Centralizes database query routing with detailed logging for tracing and error diagnostics.
 
 ### EXTERNAL EY
 
-#### [ ] iris/src/agents/database_subagents/external_ey/__init__.py
-- **Status:** PENDING
-- **Has Logging:** TBD
-- **Logging Statements:** TBD
-- **Security Assessment:** TBD
-- **Notes:** TBD
+#### [x] iris/src/agents/database_subagents/external_ey/__init__.py
+- **Status:** COMPLETED
+- **Has Logging:** NO
+- **Logging Statements:** None found
+- **Security Assessment:** N/A - No logging statements present
+- **Notes:** Standard Python package initialization file with no logging.
 
-#### [ ] iris/src/agents/database_subagents/external_ey/content_synthesis_prompt.py
-- **Status:** PENDING
-- **Has Logging:** TBD
-- **Logging Statements:** TBD
-- **Security Assessment:** TBD
-- **Notes:** TBD
+#### [x] iris/src/agents/database_subagents/external_ey/content_synthesis_prompt.py
+- **Status:** COMPLETED
+- **Has Logging:** NO
+- **Logging Statements:** None found
+- **Security Assessment:** N/A - No logging statements present
+- **Notes:** Defines prompt templates for EY guidance synthesis; no logging used.
 
-#### [ ] iris/src/agents/database_subagents/external_ey/subagent.py
-- **Status:** PENDING
-- **Has Logging:** TBD
-- **Logging Statements:** TBD
-- **Security Assessment:** TBD
-- **Notes:** TBD
+#### [x] iris/src/agents/database_subagents/external_ey/subagent.py
+- **Status:** COMPLETED
+- **Has Logging:** YES
+- **Logging Statements:**
+  - Line 13: `import logging`
+  - Line 49: `logger = logging.getLogger(__name__)`
+  - Line 87: `logger.info(f"Generating embedding for query: '{query}'...")`
+  - Line 115: `logger.debug(f"Embedding Usage details: {usage_details}")`
+  - Line 119: `logger.debug("call_llm did not return usage_details")`
+  - Line 128: `logger.info("Embedding generated successfully.")`
+  - Line 131: `logger.error("No embedding data received from API.", extra={"api_response": response})`
+  - Line 139: `logger.error(f"Failed to generate embedding: {e}", exc_info=True)`
+  - Line 152: `logger.info(f"Performing Initial Vector Search (Retrieving Top {initial_k}){log_doc_filter}")`
+  - Line 178: `logger.info(f"Found {len(results_raw)} results via vector search.")`
+  - Line 189: `logger.error(f"Vector search failed: {e}", exc_info=True)`
+  - Line 200: `logger.info(f"Filtering {len(results)} results by summary relevance using {RELEVANCE_MODEL_CAPABILITY}")`
+  - Line 215: `logger.warning(f"Skipping result index {i} due to missing id or chapter_summary.")`
+  - Line 220: `logger.warning("No valid summaries found for relevance check.")`
+  - Line 265: `logger.info(f"Calling {RELEVANCE_MODEL_CAPABILITY} for summary relevance check...")`
+  - Line 276: `logger.debug(f"Relevance Check Usage details for {DATABASE_NAME}: {usage_details}")`
+  - Line 281: `logger.debug("call_llm did not return usage_details")`
+  - Line 300: `logger.info("Summary relevance check successful.")`
+  - Line 302: `logger.error(f"Failed to decode JSON response from relevance check: {e}. Response: {response_content}", exc_info=True)`
+  - Line 306: `logger.error(f"Invalid JSON structure from relevance check: {e}. Response: {response_content}")`
+  - Line 310: `logger.error("Invalid or empty response received from relevance check LLM.", extra={"api_response": response})`
+  - Line 316: `logger.error(f"Error during relevance check LLM call: {e}", exc_info=True)`
+  - Line 329: `logger.info(f"Filtering out chunk ID {chunk_id} (summary deemed irrelevant).")`
+  - Line 330: `logger.info(f"Finished summary filtering. Kept {len(filtered_results)} results, removed {removed_count}.")`
+  - Line 345: `logger.info(f"Reranking by Importance & Sorting (Factor: {importance_factor})")`
+  - Line 352: `logger.warning(f"Skipping unexpected item type in reranking: {type(item)}")`
+  - Line 366: `logger.warning(f"Could not calculate score for Chunk {item.get('id', 'N/A')} due to invalid numeric values. Setting new_score to 0. Error: {e}")`
+  - Line 399: `logger.info(f"Finished reranking and sorting {len(final_reranked_list)} items.")`
+  - Line 401: `logger.info("\n--- Importance Reranking Results ---\n" + tabulate(rerank_log_data, headers=headers_rerank, tablefmt="grid"))`
+  - Line 403: `logger.info("\n--- Importance Reranking Results ---")`
+  - Line 404: `logger.info(f"NewRank: {row[0]}, OrigRank: {row[1]}, ID: {row[2]}, OrigScore: {row[3]}, Importance: {row[4]}, NewScore: {row[5]}")`
+  - Line 416: `logger.info(f"Expanding sections by token count (Top {top_k_rank} < {top_k_tokens} tokens, Others < {general_tokens} tokens)")`
+  - Line 487: `logger.error(f"Failed to fetch/process expansion for section {section_key}: {e}", exc_info=True)`
+  - Line 496: `logger.info("\n--- Section Expansion Log ---\n" + tabulate(expansion_log_data, headers=headers_expansion, tablefmt="grid"))`
+  - Line 498: `logger.info("\n--- Section Expansion Log ---")`
+  - Line 501: `logger.info(f"Finished section expansion. Intermediate count: {len(processed_results)}. Added {len(added_chunk_ids)} new chunks.")`
+  - Line 537: `logger.info(f"Filling sequence gaps (Max Gap: {max_seq_gap} sequences)")`
+  - Line 570: `logger.info("Not enough items with sequence numbers to check for gaps.")`
+  - Line 611: `logger.error(f"Failed to fetch/process gap fill between seq {last_item_info['max_seq']} and {current_item_info['min_seq']}: {e}", exc_info=True)`
+  - Line 624: `logger.info("\n--- Sequence Gap Filling Log ---\n" + tabulate(gap_log_data, headers=headers_gaps, tablefmt="grid"))`
+  - Line 626: `logger.info("\n--- Sequence Gap Filling Log ---")`
+  - Line 629: `logger.info(f"Finished sequence gap filling. Result count: {len(final_processed_results)}. Added {len(added_chunk_ids)} new chunks.")`
+  - Line 635: `logger.info("Formatting Final Results as Cards for LLM")`
+  - Line 677: `logger.debug(f"Formatting Card {i+1}: Group of {len(item['chunks'])} chunks (Section: {record_for_metadata.get('section_hierarchy', 'N/A')})")`
+  - Line 686: `logger.warning(f"Skipping unexpected item type during formatting: {type(item)}")`
+  - Line 691: `logger.warning(f"Skipping Card {i+1} due to missing metadata or content.")`
+  - Line 717: `logger.info(f"Formatted {final_item_count} cards.")`
+  - Line 728: `logger.info(f"Generating Final Response from Processed Chunks using {RESPONSE_MODEL_CAPABILITY}")`
+  - Line 789: `logger.debug(f"Received tool arguments string: {arguments_str}")`
+  - Line 807: `logger.error(f"Missing required keys ('status_summary', 'detailed_research_report') in parsed tool arguments from LLM: {arguments}")`
+  - Line 810: `logger.error(f"Failed to parse tool arguments JSON: {json_err}. Arguments: {arguments_str}")`
+  - Line 813: `logger.error(f"Unexpected tool called: {tool_call.function.name}")`
+  - Line 828: `logger.warning(f"LLM returned content instead of tool call: {content[:200]}...")`
+  - Line 834: `logger.error("No tool call or content received from LLM for synthesis.")`
+  - Line 838: `logger.error(f"Exception during final response synthesis: {e}", exc_info=True)`
+  - Line 871: `logger.info("Database connection successful and pgvector registered.")`
+  - Line 958: `logger.info(f"Captured {len(initial_chunk_ids)} initial chunk IDs for research scope.")`
+  - Line 1099: `logger.info(f"Querying {DATABASE_NAME} database: '{query}' with scope: {scope}")`
+  - Line 1102: `logger.debug(f"Using process monitor stage name: {stage_name}")`
+  - Line 1127: `logger.error(f"Error adding LLM usage details to process monitor for stage {stage_name}: {monitor_err}", exc_info=True)`
+  - Line 1150: `logger.error(f"Error during external_ey query execution: {str(e)}", exc_info=True)`
+  - Line 1175: `logger.info(f"external_ey query completed in {duration:.2f} seconds.")`
+- **Security Assessment:** SAFE - Only logs embedding generation, search operations, filtering, reranking, expansion, and synthesis progress; no sensitive data exposed
+- **Notes:** Comprehensive internal monitoring of all steps in the EY subagent pipeline, invaluable for debugging search, processing, and synthesis without leaking sensitive information.
 
 ### EXTERNAL IASB
 
-#### [ ] iris/src/agents/database_subagents/external_iasb/__init__.py
-- **Status:** PENDING
-- **Has Logging:** TBD
-- **Logging Statements:** TBD
-- **Security Assessment:** TBD
-- **Notes:** TBD
+#### [x] iris/src/agents/database_subagents/external_iasb/__init__.py
+- **Status:** COMPLETED
+- **Has Logging:** NO
+- **Logging Statements:** None found
+- **Security Assessment:** N/A - No logging statements present
+- **Notes:** Standard Python package initialization file with no logging.
 
-#### [ ] iris/src/agents/database_subagents/external_iasb/content_synthesis_prompt.py
-- **Status:** PENDING
-- **Has Logging:** TBD
-- **Logging Statements:** TBD
-- **Security Assessment:** TBD
-- **Notes:** TBD
+#### [x] iris/src/agents/database_subagents/external_iasb/content_synthesis_prompt.py
+- **Status:** COMPLETED
+- **Has Logging:** NO
+- **Logging Statements:** None found
+- **Security Assessment:** N/A - No logging statements present
+- **Notes:** Provides prompt templates for IASB content synthesis; no logging used.
 
-#### [ ] iris/src/agents/database_subagents/external_iasb/subagent.py
-- **Status:** PENDING
-- **Has Logging:** TBD
-- **Logging Statements:** TBD
-- **Security Assessment:** TBD
-- **Notes:** TBD
+#### [x] iris/src/agents/database_subagents/external_iasb/subagent.py
+- **Status:** COMPLETED
+- **Has Logging:** YES
+- **Logging Statements:**
+  - Line 13: `import logging`
+  - Line 49: `logger = logging.getLogger(__name__)`
+  - Line 94: `logger.info(f"Generating embedding for query: '{query}'...")`
+  - Line 122: `logger.debug(f"Embedding Usage details: {usage_details}")`
+  - Line 126: `logger.debug("call_llm did not return usage_details")`
+  - Line 135: `logger.info("Embedding generated successfully.")`
+  - Line 138: `logger.error("No embedding data received from API.", extra={"api_response": response})`
+  - Line 145: `logger.error(f"Failed to generate embedding: {e}", exc_info=True)`
+  - Line 159: `logger.info(f"Performing Initial Vector Search (Retrieving Top {initial_k}){log_doc_filter}")`
+  - Line 185: `logger.info(f"Found {len(results_raw)} results via vector search.")`
+  - Line 195: `logger.error(f"Vector search failed: {e}", exc_info=True)`
+  - Line 207: `logger.info(f"Filtering {len(results)} results by summary relevance using {RELEVANCE_MODEL_CAPABILITY}")`
+  - Line 223: `logger.warning(f"Skipping result index {i} due to missing id or chapter_summary.")`
+  - Line 227: `logger.warning("No valid summaries found for relevance check.")`
+  - Line 272: `logger.info(f"Calling {RELEVANCE_MODEL_CAPABILITY} for summary relevance check...")`
+  - Line 281: `logger.debug(f"Relevance Check Usage details for {DATABASE_NAME}: {usage_details}")`
+  - Line 284: `logger.debug("call_llm did not return usage_details")`
+  - Line 303: `logger.info("Summary relevance check successful.")`
+  - Line 306: `logger.error(f"Failed to decode JSON response from relevance check: {e}. Response: {response_content}", exc_info=True)`
+  - Line 310: `logger.error(f"Invalid JSON structure from relevance check: {e}. Response: {response_content}")`
+  - Line 313: `logger.error("Invalid or empty response received from relevance check LLM.", extra={"api_response": response})`
+  - Line 319: `logger.error(f"Error during relevance check LLM call: {e}", exc_info=True)`
+  - Line 333: `logger.info(f"Filtering out chunk ID {chunk_id} (summary deemed irrelevant).")`
+  - Line 334: `logger.info(f"Finished summary filtering. Kept {len(filtered_results)} results, removed {removed_count}.")`
+  - Line 349: `logger.info(f"Reranking by Importance & Sorting (Factor: {importance_factor})")`
+  - Line 356: `logger.warning(f"Skipping unexpected item type in reranking: {type(item)}")`
+  - Line 369: `logger.warning(f"Could not calculate score for Chunk {item.get('id', 'N/A')} due to invalid numeric values. Setting new_score to 0. Error: {e}")`
+  - Line 403: `logger.info(f"Finished reranking and sorting {len(final_reranked_list)} items.")`
+  - Line 405: `logger.info("\n--- Importance Reranking Results ---\n" + tabulate(rerank_log_data, headers=headers_rerank, tablefmt="grid"))`
+  - Line 407: `logger.info("\n--- Importance Reranking Results ---")`
+  - Line 420: `logger.info(f"Expanding sections by token count (Top {top_k_rank} < {top_k_tokens} tokens, Others < {general_tokens} tokens)")`
+  - Line 490: `logger.error(f"Failed to fetch/process expansion for section {section_key}: {e}", exc_info=True)`
+  - Line 500: `logger.info("\n--- Section Expansion Log ---\n" + tabulate(expansion_log_data, headers=headers_expansion, tablefmt="grid"))`
+  - Line 502: `logger.info("\n--- Section Expansion Log ---")`
+  - Line 505: `logger.info(f"Finished section expansion. Intermediate count: {len(processed_results)}. Added {len(added_chunk_ids)} new chunks.")`
+  - Line 541: `logger.info(f"Filling sequence gaps (Max Gap: {max_seq_gap} sequences)")`
+  - Line 573: `logger.info("Not enough items with sequence numbers to check for gaps.")`
+  - Line 615: `logger.error(f"Failed to fetch/process gap fill between seq {last_item_info['max_seq']} and {current_item_info['min_seq']}: {e}", exc_info=True)`
+  - Line 628: `logger.info("\n--- Sequence Gap Filling Log ---\n" + tabulate(gap_log_data, headers=headers_gaps, tablefmt="grid"))`
+  - Line 630: `logger.info("\n--- Sequence Gap Filling Log ---")`
+  - Line 633: `logger.info(f"Finished sequence gap filling. Result count: {len(final_processed_results)}. Added {len(added_chunk_ids)} new chunks.")`
+  - Line 639: `logger.info("Formatting Final Results as Cards for LLM")`
+  - Line 681: `logger.debug(f"Formatting Card {i+1}: Group of {len(item['chunks'])} chunks (Section: {record_for_metadata.get('section_hierarchy', 'N/A')})")`
+  - Line 687: `logger.warning(f"Skipping unexpected item type during formatting: {type(item)}")`
+  - Line 693: `logger.warning(f"Skipping Card {i+1} due to missing metadata or content.")`
+  - Line 723: `logger.info(f"Formatted {final_item_count} cards.")`
+  - Line 734: `logger.info(f"Generating Final Response from Processed Chunks using {RESPONSE_MODEL_CAPABILITY}")`
+  - Line 792: `logger.debug(f"Received tool arguments string: {arguments_str}")`
+  - Line 810: `logger.error(f"Missing required keys ('status_summary', 'detailed_research_report') in parsed tool arguments from LLM: {arguments}")`
+  - Line 813: `logger.error(f"Failed to parse tool arguments JSON: {json_err}. Arguments: {arguments_str}")`
+  - Line 816: `logger.error(f"Unexpected tool called: {tool_call.function.name}")`
+  - Line 831: `logger.warning(f"LLM returned content instead of tool call: {content[:200]}...")`
+  - Line 837: `logger.error("No tool call or content received from LLM for synthesis.")`
+  - Line 841: `logger.error(f"Exception during final response synthesis: {e}", exc_info=True)`
+  - Line 961: `logger.info("Database connection successful and pgvector registered.")`
+  - Line 1056: `logger.info(f"Captured {len(ids_for_doc)} initial chunk IDs for doc {doc_id} (research scope).")`
+  - Line 1076: `logger.info(f"Collected {len(initial_chunk_ids)} total initial chunk IDs for research scope across all IASB sources.")`
+  - Line 1077: `logger.info(f"Collected {len(final_chunk_ids)} total final chunk IDs for research scope across all IASB sources.")`
+  - Line 1080: `logger.info(f"Formatting combined {len(all_processed_results)} processed items from all IASB sources.")`
+  - Line 1092: `logger.error(f"Invalid scope '{scope}' provided to {DATABASE_NAME} subagent.")`
+  - Line 1100: `logger.error(f"Database error during {DATABASE_NAME} query (Scope: {scope}): {db_err}", exc_info=True)`
+  - Line 1108: `logger.error(f"Connection error for {DATABASE_NAME} (Scope: {scope}): {conn_err}", exc_info=True)`
+  - Line 1115: `logger.error(f"Unexpected error querying {DATABASE_NAME} database (Scope: {scope}): {e}", exc_info=True)`
+  - Line 1131: `logger.error(f"Reached end of _query_database_logic unexpectedly for scope '{scope}' in {DATABASE_NAME}.")`
+  - Line 1159: `logger.info(f"Querying {DATABASE_NAME} database: '{query}' with scope: {scope}")`
+  - Line 1162: `logger.debug(f"Using process monitor stage name: {stage_name}")`
+  - Line 1207: `logger.error(f"Error during {DATABASE_NAME} query execution: {str(e)}", exc_info=True)`
+  - Line 1232: `logger.info(f"{DATABASE_NAME} query completed in {duration:.2f} seconds.")`
+- **Security Assessment:** SAFE - Only logs embedding generation, search operations, filtering, reranking, expansion, and synthesis progress; no sensitive data exposed
+- **Notes:** Comprehensive internal monitoring of all steps in the IASB subagent pipeline, invaluable for debugging search, processing, and synthesis without leaking sensitive information.
 
 ### EXTERNAL KPMG
 
-#### [ ] iris/src/agents/database_subagents/external_kpmg/__init__.py
-- **Status:** PENDING
-- **Has Logging:** TBD
-- **Logging Statements:** TBD
-- **Security Assessment:** TBD
-- **Notes:** TBD
+#### [x] iris/src/agents/database_subagents/external_kpmg/__init__.py
+- **Status:** COMPLETED
+- **Has Logging:** NO
+- **Logging Statements:** None found
+- **Security Assessment:** N/A - No logging statements present
+- **Notes:** Standard Python package initialization file with no logging.
 
-#### [ ] iris/src/agents/database_subagents/external_kpmg/content_synthesis_prompt.py
-- **Status:** PENDING
-- **Has Logging:** TBD
-- **Logging Statements:** TBD
-- **Security Assessment:** TBD
-- **Notes:** TBD
+#### [x] iris/src/agents/database_subagents/external_kpmg/content_synthesis_prompt.py
+- **Status:** COMPLETED
+- **Has Logging:** NO
+- **Logging Statements:** None found
+- **Security Assessment:** N/A - No logging statements present
+- **Notes:** Defines prompt templates for KPMG guidance synthesis; no logging used.
 
-#### [ ] iris/src/agents/database_subagents/external_kpmg/subagent.py
-- **Status:** PENDING
-- **Has Logging:** TBD
-- **Logging Statements:** TBD
-- **Security Assessment:** TBD
-- **Notes:** TBD
+#### [x] iris/src/agents/database_subagents/external_kpmg/subagent.py
+- **Status:** COMPLETED
+- **Has Logging:** YES
+- **Logging Statements:**
+  - Line 13: `import logging`
+  - Line 49: `logger = logging.getLogger(__name__)`
+  - Line 87: `logger.info(f"Generating embedding for query: '{query}'...")`
+  - Line 115: `logger.debug(f"Embedding Usage details: {usage_details}")`
+  - Line 119: `logger.debug("call_llm did not return usage_details")`
+  - Line 128: `logger.info("Embedding generated successfully.")`
+  - Line 131: `logger.error("No embedding data received from API.", extra={"api_response": response})`
+  - Line 139: `logger.error(f"Failed to generate embedding: {e}", exc_info=True)`
+  - Line 152: `logger.info(f"Performing Initial Vector Search (Retrieving Top {initial_k}){log_doc_filter}")`
+  - Line 178: `logger.info(f"Found {len(results_raw)} results via vector search.")`
+  - Line 189: `logger.error(f"Vector search failed: {e}", exc_info=True)`
+  - Line 200: `logger.info(f"Filtering {len(results)} results by summary relevance using {RELEVANCE_MODEL_CAPABILITY}")`
+  - Line 215: `logger.warning(f"Skipping result index {i} due to missing id or chapter_summary.")`
+  - Line 220: `logger.warning("No valid summaries found for relevance check.")`
+  - Line 265: `logger.info(f"Calling {RELEVANCE_MODEL_CAPABILITY} for summary relevance check...")`
+  - Line 276: `logger.debug(f"Relevance Check Usage details for {DATABASE_NAME}: {usage_details}")`
+  - Line 281: `logger.debug("call_llm did not return usage_details")`
+  - Line 300: `logger.info("Summary relevance check successful.")`
+  - Line 302: `logger.error(f"Failed to decode JSON response from relevance check: {e}. Response: {response_content}", exc_info=True)`
+  - Line 306: `logger.error(f"Invalid JSON structure from relevance check: {e}. Response: {response_content}")`
+  - Line 310: `logger.error("Invalid or empty response received from relevance check LLM.", extra={"api_response": response})`
+  - Line 316: `logger.error(f"Error during relevance check LLM call: {e}", exc_info=True)`
+  - Line 329: `logger.info(f"Filtering out chunk ID {chunk_id} (summary deemed irrelevant).")`
+  - Line 334: `logger.info(f"Finished summary filtering. Kept {len(filtered_results)} results, removed {removed_count}.")`
+  - Line 345: `logger.info(f"Reranking by Importance & Sorting (Factor: {importance_factor})")`
+  - Line 352: `logger.warning(f"Skipping unexpected item type in reranking: {type(item)}")`
+  - Line 366: `logger.warning(f"Could not calculate score for Chunk {item.get('id', 'N/A')} due to invalid numeric values. Setting new_score to 0. Error: {e}")`
+  - Line 399: `logger.info(f"Finished reranking and sorting {len(final_reranked_list)} items.")`
+  - Line 401: `logger.info("\n--- Importance Reranking Results ---\n" + tabulate(rerank_log_data, headers=headers_rerank, tablefmt="grid"))`
+  - Line 403: `logger.info("\n--- Importance Reranking Results ---")`
+  - Line 404: `logger.info(f"NewRank: {row[0]}, OrigRank: {row[1]}, ID: {row[2]}, OrigScore: {row[3]}, Importance: {row[4]}, NewScore: {row[5]}")`
+  - Line 419: `logger.info(f"Expanding sections by token count (Top {top_k_rank} < {top_k_tokens} tokens, Others < {general_tokens} tokens)")`
+  - Line 483: `logger.error(f"Failed to fetch/process expansion for section {section_key}: {e}", exc_info=True)`
+  - Line 492: `logger.info("\n--- Section Expansion Log ---\n" + tabulate(expansion_log_data, headers=headers_expansion, tablefmt="grid"))`
+  - Line 494: `logger.info("\n--- Section Expansion Log ---")`
+  - Line 498: `logger.info(f"Finished section expansion. Intermediate count: {len(processed_results)}. Added {len(added_chunk_ids)} new chunks.")`
+  - Line 534: `logger.info(f"Filling sequence gaps (Max Gap: {max_seq_gap} sequences)")`
+  - Line 567: `logger.info("Not enough items with sequence numbers to check for gaps.")`
+  - Line 608: `logger.error(f"Failed to fetch/process gap fill between seq {last_item_info['max_seq']} and {current_item_info['min_seq']}: {e}", exc_info=True)`
+  - Line 621: `logger.info("\n--- Sequence Gap Filling Log ---\n" + tabulate(gap_log_data, headers=headers_gaps, tablefmt="grid"))`
+  - Line 623: `logger.info("\n--- Sequence Gap Filling Log ---")`
+  - Line 627: `logger.info(f"Finished sequence gap filling. Result count: {len(final_results_with_gaps)}. Added {len(added_chunk_ids)} new chunks.")`
+  - Line 632: `logger.info("Formatting Final Results as Cards for LLM")`
+  - Line 674: `logger.debug(f"Formatting Card {i+1}: Group of {len(item['chunks'])} chunks (Section: {record_for_metadata.get('section_hierarchy', 'N/A')})")`
+  - Line 682: `logger.warning(f"Skipping unexpected item type during formatting: {type(item)}")`
+  - Line 687: `logger.warning(f"Skipping Card {i+1} due to missing metadata or content.")`
+  - Line 714: `logger.info(f"Formatted {final_item_count} cards.")`
+  - Line 725: `logger.info(f"Generating Final Response from Processed Chunks using {RESPONSE_MODEL_CAPABILITY}")`
+  - Line 783: `logger.debug(f"Received tool arguments string: {arguments_str}")`
+  - Line 801: `logger.error(f"Missing required keys ('status_summary', 'detailed_research_report') in parsed tool arguments from LLM: {arguments}")`
+  - Line 803: `logger.error(f"Failed to parse tool arguments JSON: {json_err}. Arguments: {arguments_str}")`
+  - Line 807: `logger.error(f"Unexpected tool called: {tool_call.function.name}")`
+  - Line 822: `logger.warning(f"LLM returned content instead of tool call: {content[:200]}...")`
+  - Line 828: `logger.error("No tool call or content received from LLM for synthesis.")`
+  - Line 832: `logger.error(f"Exception during final response synthesis: {e}", exc_info=True)`
+  - Line 865: `logger.info("Database connection successful and pgvector registered.")`
+  - Line 894: `logger.info(f"Captured {len(initial_chunk_ids)} initial chunk IDs for metadata scope.")`
+  - Line 1086: `logger.info(f"Querying {DATABASE_NAME} database: '{query}' with scope: {scope}")`
+  - Line 1089: `logger.debug(f"Using process monitor stage name: {stage_name}")`
+  - Line 1113: `logger.error(f"Error adding LLM usage details to process monitor for stage {stage_name}: {monitor_err}", exc_info=True)`
+  - Line 1134: `logger.error(f"Error during {DATABASE_NAME} query execution: {str(e)}", exc_info=True)`
+  - Line 1159: `logger.info(f"{DATABASE_NAME} query completed in {duration:.2f} seconds.")`
+- **Security Assessment:** SAFE - Only logs embedding generation, search operations, filtering, reranking, expansion, and synthesis progress; no sensitive data exposed
+- **Notes:** Comprehensive internal monitoring of all steps in the KPMG subagent pipeline, invaluable for debugging search, processing, and synthesis without leaking sensitive information.
 
 ### EXTERNAL PWC
 
-#### [ ] iris/src/agents/database_subagents/external_pwc/__init__.py
-- **Status:** PENDING
-- **Has Logging:** TBD
-- **Logging Statements:** TBD
-- **Security Assessment:** TBD
-- **Notes:** TBD
+#### [x] iris/src/agents/database_subagents/external_pwc/__init__.py
+- **Status:** COMPLETED
+- **Has Logging:** NO
+- **Logging Statements:** None found
+- **Security Assessment:** N/A - No logging statements present
+- **Notes:** Standard Python package initialization file with no logging.
 
-#### [ ] iris/src/agents/database_subagents/external_pwc/content_synthesis_prompt.py
-- **Status:** PENDING
-- **Has Logging:** TBD
-- **Logging Statements:** TBD
-- **Security Assessment:** TBD
-- **Notes:** TBD
+#### [x] iris/src/agents/database_subagents/external_pwc/content_synthesis_prompt.py
+- **Status:** COMPLETED
+- **Has Logging:** NO
+- **Logging Statements:** None found
+- **Security Assessment:** N/A - No logging statements present
+- **Notes:** Defines prompt templates for PwC guidance synthesis; no logging used.
 
-#### [ ] iris/src/agents/database_subagents/external_pwc/subagent.py
-- **Status:** PENDING
-- **Has Logging:** TBD
-- **Logging Statements:** TBD
-- **Security Assessment:** TBD
-- **Notes:** TBD
+#### [x] iris/src/agents/database_subagents/external_pwc/subagent.py
+- **Status:** COMPLETED
+- **Has Logging:** YES
+- **Logging Statements:** 
+  - Line 87: `logger.info(f"Generating embedding for query: '{query}'...")`
+  - Line 115: `logger.debug(f"Embedding Usage details: {usage_details}")`
+  - Line 119: `logger.debug("call_llm did not return usage_details")`
+  - Line 128: `logger.info("Embedding generated successfully.")`
+  - Line 131: `logger.error("No embedding data received from API.", extra={"api_response": response})`
+  - Line 152: `logger.info(f"Performing Initial Vector Search (Retrieving Top {initial_k}){log_doc_filter}")`
+  - Line 156: `logger.error("Cannot perform vector search without embedding.")`
+  - Line 178: `logger.info(f"Found {len(results_raw)} results via vector search.")`
+  - Line 189: `logger.error(f"Vector search failed: {e}", exc_info=True)`
+  - Line 200: `logger.info(f"Filtering {len(results)} results by summary relevance using {RELEVANCE_MODEL_CAPABILITY}")`
+  - Line 215: `logger.warning(f"Skipping result index {i} due to missing id or chapter_summary.")`
+  - Line 220: `logger.warning("No valid summaries found for relevance check.")`
+  - Line 265: `logger.info(f"Calling {RELEVANCE_MODEL_CAPABILITY} for summary relevance check...")`
+  - Line 274: `logger.debug(f"Relevance Check Usage details for {DATABASE_NAME}: {usage_details}")`
+  - Line 278: `logger.debug("call_llm did not return usage_details")`
+  - Line 296: `logger.info("Summary relevance check successful.")`
+  - Line 298: `logger.error(f"Failed to decode JSON response from relevance check: {e}. Response: {response_content}", exc_info=True)`
+  - Line 303: `logger.error(f"Invalid JSON structure from relevance check: {e}. Response: {response_content}")`
+  - Line 312: `logger.error(f"Error during relevance check LLM call: {e}", exc_info=True)`
+  - Line 326: `logger.info(f"Filtering out chunk ID {chunk_id} (summary deemed irrelevant).")`
+  - Line 327: `logger.info(f"Finished summary filtering. Kept {len(filtered_results)} results, removed {removed_count}.")`
+  - Line 329: `logger.warning("Skipping summary filtering due to errors in relevance check.")`
+  - Line 342: `logger.info(f"Reranking by Importance & Sorting (Factor: {importance_factor})")`
+  - Line 349: `logger.warning(f"Skipping unexpected item type in reranking: {type(item)}")`
+  - Line 362: `logger.warning(f"Could not calculate score for Chunk {item.get('id', 'N/A')} due to invalid numeric values. Setting new_score to 0. Error: {e}")`
+  - Line 396: `logger.info(f"Finished reranking and sorting {len(final_reranked_list)} items.")`
+  - Line 398: `logger.info("\n--- Importance Reranking Results ---\n" + tabulate(rerank_log_data, headers=headers_rerank, tablefmt="grid"))`
+  - Line 400: `logger.info("\n--- Importance Reranking Results ---")`
+  - Line 401: `for row in rerank_log_data: logger.info(f"NewRank: {row[0]}, OrigRank: {row[1]}, ID: {row[2]}, OrigScore: {row[3]}, Importance: {row[4]}, NewScore: {row[5]}")`
+  - Line 413: `logger.info(f"Expanding sections by token count (Top {top_k_rank} < {top_k_tokens} tokens, Others < {general_tokens} tokens)")`
+  - Line 483: `logger.error(f"Failed to fetch/process expansion for section {section_key}: {e}", exc_info=True)`
+  - Line 493: `logger.info("\n--- Section Expansion Log ---\n" + tabulate(expansion_log_data, headers=headers_expansion, tablefmt="grid"))`
+  - Line 495: `logger.info("\n--- Section Expansion Log ---")`
+  - Line 496: `for row in expansion_log_data: logger.info(f"ID: {row[0]}, Rank: {row[1]}, Tokens: {row[2]}, Threshold: {row[3]}, Action: {row[4]}, Added: {row[5]}")`
+  - Line 498: `logger.info(f"Finished section expansion. Intermediate count: {len(processed_results)}. Added {len(added_chunk_ids)} new chunks.")`
+  - Line 515: `logger.debug(f"Filtering out single chunk ID {chunk_id} (Rank: {item.get('rank', 'N/A')}) included in group.")`
+  - Line 520: `logger.warning(f"Unexpected item type during final expansion filtering: {type(item)}")`
+  - Line 523: `logger.info(f"Finished filtering expanded singles. Removed {skipped_singles}. Final count: {len(final_processed_results)}")`
+  - Line 534: `logger.info(f"Filling sequence gaps (Max Gap: {max_seq_gap} sequences)")`
+  - Line 566: `logger.info("Not enough items with sequence numbers to check for gaps.")`
+  - Line 608: `logger.error(f"Failed to fetch/process gap fill between seq {last_item_info['max_seq']} and {current_item_info['min_seq']}: {e}", exc_info=True)`
+  - Line 621: `logger.info("\n--- Sequence Gap Filling Log ---\n" + tabulate(gap_log_data, headers=headers_gaps, tablefmt="grid"))`
+  - Line 623: `logger.info("\n--- Sequence Gap Filling Log ---")`
+  - Line 624: `for row in gap_log_data: logger.info(f"Between: {row[0]}, And: {row[1]}, Seq Gap: {row[2]}, Action: {row[3]}, Added: {row[4]}")`
+  - Line 626: `logger.info(f"Finished sequence gap filling. Result count: {len(final_results_with_gaps)}. Added {len(added_chunk_ids)} new chunks.")`
+  - Line 632: `logger.info("Formatting Final Results as Cards for LLM")`
+  - Line 651: `logger.warning(f"Found {len(items_without_sequence)} items without sequence numbers, placing them at the end.")`
+  - Line 656: `logger.error(f"Error sorting results before formatting: {sort_err}. Proceeding with unsorted results.", exc_info=True)`
+  - Line 674: `logger.debug(f"Formatting Card {i+1}: Group of {len(item['chunks'])} chunks (Section: {record_for_metadata.get('section_hierarchy', 'N/A')})")`
+  - Line 681: `logger.debug(f"Formatting Card {i+1}: Single Chunk ID {record_for_metadata.get('id', 'N/A')}")`
+  - Line 683: `logger.warning(f"Skipping unexpected item type during formatting: {type(item)}")`
+  - Line 687: `logger.warning(f"Skipping Card {i+1} due to missing metadata or content.")`
+  - Line 714: `logger.info(f"Formatted {final_item_count} cards.")`
+  - Line 725: `logger.info(f"Generating Final Response from Processed Chunks using {RESPONSE_MODEL_CAPABILITY}")`
+  - Line 755: `logger.info(f"Calling {RESPONSE_MODEL_CAPABILITY} for final response synthesis...")`
+  - Line 764: `logger.debug(f"Synthesis Usage details: {usage_details}")`
+  - Line 768: `logger.debug("call_llm did not return usage_details")`
+  - Line 783: `logger.debug(f"Received tool arguments string: {arguments_str}")`
+  - Line 788: `logger.info(f"Successfully parsed synthesis tool call for {DATABASE_NAME}.")`
+  - Line 801: `logger.error(f"Missing required keys ('status_summary', 'detailed_research_report') in parsed tool arguments from LLM: {arguments}")`
+  - Line 804: `logger.error(f"Failed to parse tool arguments JSON: {json_err}. Arguments: {arguments_str}")`
+  - Line 807: `logger.error(f"Unexpected tool called: {tool_call.function.name}")`
+  - Line 822: `logger.warning(f"LLM returned content instead of tool call: {content[:200]}...")`
+  - Line 828: `logger.error("No tool call or content received from LLM for synthesis.")`
+  - Line 832: `logger.error(f"Exception during final response synthesis: {e}", exc_info=True)`
+  - Line 865: `logger.info("Database connection successful and pgvector registered.")`
+  - Line 884: `logger.info(f"Processing '{scope}' scope for {DATABASE_NAME}")`
+  - Line 891: `logger.info(f"No initial vector search results for metadata query in {DATABASE_NAME}.")`
+  - Line 905: `logger.warning(f"Skipping record due to missing fields: {record.get('id')}")`
+  - Line 928: `logger.info(f"Returning {len(metadata_response)} unique sections for metadata scope from {DATABASE_NAME}.")`
+  - Line 934: `logger.info(f"Processing '{scope}' scope for {DATABASE_NAME}")`
+  - Line 948: `logger.info(f"Captured {len(initial_chunk_ids)} initial chunk IDs for research scope.")`
+  - Line 1001: `logger.info(f"Collected {len(final_chunk_ids)} final chunk IDs for research scope.")`
+  - Line 1015: `logger.error(f"Invalid scope '{scope}' provided to {DATABASE_NAME} subagent.")`
+  - Line 1023: `logger.error(f"Database error during {DATABASE_NAME} query (Scope: {scope}): {db_err}", exc_info=True)`
+  - Line 1031: `logger.error(f"Connection error for {DATABASE_NAME} (Scope: {scope}): {conn_err}", exc_info=True)`
+  - Line 1038: `logger.error(f"Unexpected error querying {DATABASE_NAME} database (Scope: {scope}): {e}", exc_info=True)`
+  - Line 1050: `logger.info("Database connection closed.")`
+  - Line 1053: `logger.error(f"Reached end of _query_database_logic unexpectedly for scope '{scope}' in {DATABASE_NAME}.")`
+  - Line 1081: `logger.info(f"Querying {DATABASE_NAME} database: '{query}' with scope: {scope}")`
+  - Line 1084: `logger.debug(f"Using process monitor stage name: {stage_name}")`
+  - Line 1108: `logger.error(f"Error adding LLM usage details to process monitor for stage {stage_name}: {monitor_err}", exc_info=True)`
+  - Line 1129: `logger.error(f"Error during {DATABASE_NAME} query execution: {str(e)}", exc_info=True)`
+  - Line 1154: `logger.info(f"{DATABASE_NAME} query completed in {duration:.2f} seconds.")`
+- **Security Assessment:** SAFE - Logs operational pipeline steps, performance metrics, error conditions, and debugging data without exposing sensitive data or credentials.
+- **Notes:** Essential for tracing embedding generation, vector search, LLM filtering, reranking, section expansion, gap filling, formatting, and synthesis phases; invaluable for debugging subagent operations in PwC guidance processing.
 
 ### INTERNAL AIO
 
-#### [ ] iris/src/agents/database_subagents/internal_aio/__init__.py
-- **Status:** PENDING
-- **Has Logging:** TBD
-- **Logging Statements:** TBD
-- **Security Assessment:** TBD
-- **Notes:** TBD
+#### [x] iris/src/agents/database_subagents/internal_aio/__init__.py
+- **Status:** COMPLETED
+- **Has Logging:** NO
+- **Logging Statements:** None found
+- **Security Assessment:** N/A - No logging statements present
+- **Notes:** Standard Python package initialization file with no logging.
 
-#### [ ] iris/src/agents/database_subagents/internal_aio/catalog_selection_prompt.py
-- **Status:** PENDING
-- **Has Logging:** TBD
-- **Logging Statements:** TBD
-- **Security Assessment:** TBD
-- **Notes:** TBD
+#### [x] iris/src/agents/database_subagents/internal_aio/catalog_selection_prompt.py
+- **Status:** COMPLETED
+- **Has Logging:** NO
+- **Logging Statements:** None found
+- **Security Assessment:** N/A - No logging statements present
+- **Notes:** Provides prompt templates for AIO catalog selection; no logging used.
 
-#### [ ] iris/src/agents/database_subagents/internal_aio/content_synthesis_prompt.py
-- **Status:** PENDING
-- **Has Logging:** TBD
-- **Logging Statements:** TBD
-- **Security Assessment:** TBD
-- **Notes:** TBD
+#### [x] iris/src/agents/database_subagents/internal_aio/content_synthesis_prompt.py
+- **Status:** COMPLETED
+- **Has Logging:** NO
+- **Logging Statements:** None found
+- **Security Assessment:** N/A - No logging statements present
+- **Notes:** Defines prompt templates for AIO content synthesis; no logging used.
 
-#### [ ] iris/src/agents/database_subagents/internal_aio/subagent.py
-- **Status:** PENDING
-- **Has Logging:** TBD
-- **Logging Statements:** TBD
-- **Security Assessment:** TBD
-- **Notes:** TBD
+#### [x] iris/src/agents/database_subagents/internal_aio/subagent.py
+- **Status:** COMPLETED
+- **Has Logging:** YES
+- **Logging Statements:** 
+  - Line 79: `logger.info(f"Fetching full AIO catalog (environment: {config.ENVIRONMENT})")`
+  - Line 83: `logger.error("Failed to connect to database for AIO catalog")`
+  - Line 104: `logger.info(f"Retrieved {len(catalog_records)} AIO catalog entries from database")`
+  - Line 108: `logger.error(f"Error fetching AIO catalog from database: {str(e)}")`
+  - Line 119: `logger.info(f"Fetching AIO content for documents: {doc_ids}")`
+  - Line 121: `logger.warning("No AIO document IDs to fetch")`
+  - Line 126: `logger.error("Failed to connect to database for AIO content")`
+  - Line 143: `logger.info(f"Found {len(doc_names)} AIO documents for IDs: {doc_ids}")`
+  - Line 167: `logger.info(f"Retrieved AIO content for {len(result)} documents from database")`
+  - Line 169: `logger.error(f"Error fetching AIO document content from database: {str(e)}")`
+  - Line 198: `logger.error(f"Error: {llm_err}", exc_info=True)`
+  - Line 224: `logger.info("Forcing non-streaming mode for tool call.")`
+  - Line 236: `logger.debug(f"Usage details for {database_name}: {usage_details}")`
+  - Line 241: `logger.debug("call_llm did not return usage_details")`
+  - Line 244: `logger.error(f"call_llm failed: {llm_err}", exc_info=True)`
+  - Line 249: `logger.debug("Returning raw response object and usage details for tool call.")`
+  - Line 257: `logger.error("Invalid response structure received for tool call.")`
+  - Line 270: `logger.warning("LLM response message content was missing or None.")`
+  - Line 273: `logger.error("LLM response object or choices attribute missing/empty.")`
+  - Line 275: `logger.debug("Returning extracted content string and usage details for standard completion.")`
+  - Line 291: `logger.info("Selecting relevant AIO documents from catalog")`
+  - Line 298: `logger.info(f"Initiating AIO Document Selection API call (DB: {database_name})")`
+  - Line 312: `logger.debug(f"Document selection usage: {selection_usage}")`
+  - Line 320: `logger.error("get_completion failed during document selection: {selection_response_str}")`
+  - Line 331: `logger.info(f"LLM selected AIO document IDs: {selected_ids}")`
+  - Line 334: `logger.error("LLM response was valid JSON but not a list of strings: {selection_response_str}")`
+  - Line 339: `logger.error("Could not extract AIO document IDs from response using fallback regex: {valid_ids}")`
+  - Line 353: `logger.warning("LLM did not select any relevant documents from the catalog based on the query.")`
+  - Line 357: `logger.error(f"Error during LLM AIO document selection: {str(e)}")`
+  - Line 360: `logger.error(f"No documents provided for {database_name} synthesis.")`
+  - Line 400: `logger.info(f"Synthesizing response and status for {database_name} using tool call.")`
+  - Line 413: `logger.warning(f"No documents provided for {database_name} synthesis.")`
+  - Line 423: `logger.info(f"Initiating AIO Synthesis API call (DB: {database_name})")`
+  - Line 443: `logger.debug(f"Research synthesis usage: {synthesis_usage}")`
+  - Line 451: `logger.error("get_completion failed for {database_name} synthesis: {synthesis_response_str}")`
+  - Line 470: `logger.debug(f"Received tool arguments string: {arguments_str}")`
+  - Line 477: `logger.info(f"Successfully parsed synthesis tool call for {database_name}.")`
+  - Line 489: `logger.error(f"Missing required keys in parsed tool arguments for {database_name}: {arguments}")`
+  - Line 497: `logger.error(f"Failed to parse tool arguments JSON for {database_name}: {json_err}. Arguments: {arguments_str}")`
+  - Line 505: `logger.error(f"Unexpected tool called for {database_name}: {tool_call.function.name}")`
+  - Line 513: `logger.error("No tool call received from LLM for {database_name} synthesis, despite being requested.")`
+  - Line 526: `logger.warning(f"LLM returned content instead of tool call: {content[:200]}...")`
+  - Line 539: `logger.error("Error during synthesis tool call for {database_name}: {str(e)}")`
+  - Line 565: `logger.info(f"Querying Internal AIO database (sync): '{query}' with scope: {scope}")`
+  - Line 574: `logger.debug(f"Using process monitor stage name: {stage_name}")`
+  - Line 580: `logger.info(f"Retrieved {len(catalog)} total AIO catalog entries")`
+  - Line 597: `logger.info(f"LLM selected {len(selected_doc_ids)} relevant AIO document IDs: {selected_doc_ids}")`
+  - Line 622: `logger.info(f"Returning {len(selected_items)} selected AIO metadata items.")`
+  - Line 655: `logger.info(f"Retrieved content for {len(documents)} AIO documents for research.")`
+  - Line 676: `logger.error(f"Invalid scope provided to internal_aio subagent: {scope}")`
+  - Line 681: `logger.error(error_msg, exc_info=True)`
+- **Security Assessment:** SAFE - Logs catalog retrieval, content fetching, LLM calls, selections, and synthesis operations without exposing sensitive data or credentials.
+- **Notes:** Essential for tracing async AIO pipeline steps: catalog fetch, document selection, content retrieval, and research synthesis; invaluable for debugging internal AIO subagent operations.
 
 ### INTERNAL CAPM
 
