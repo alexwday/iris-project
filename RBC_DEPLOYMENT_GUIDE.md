@@ -6,16 +6,21 @@ This guide walks you through deploying the IRIS FastAPI application in your RBC 
 
 - Access to RBC development/production environment
 - Python 3.8+ installed
-- Git access to clone the repository
+- Git access to clone the repository (or project zip file)
 - Network access to required APIs and databases
-- SSL certificate file (`rbc-ca-bundle.cer`)
+- VS Code or text editor for configuration
+- SSL certificate file (`rbc-ca-bundle.cer`) - included in project files
 
 ## Step 1: Clone and Setup Repository
 
-### 1.1 Clone the Repository
+### 1.1 Get the Project Files
 ```bash
-# Clone your IRIS repository
+# Option A: Clone the repository
 git clone <your-repo-url> iris-project
+cd iris-project
+
+# Option B: If you received a zip file
+unzip iris-project.zip
 cd iris-project
 ```
 
@@ -47,8 +52,11 @@ pip list | grep uvicorn
 # Copy the example environment file
 cp .env.example .env
 
-# Edit the environment file with your RBC values
-nano .env  # or use your preferred editor
+# Edit the environment file with VS Code (recommended)
+code .env
+
+# Alternative: Use default Mac text editor
+# open -e .env
 ```
 
 ### 2.2 Configure Environment Variables
@@ -130,16 +138,17 @@ IRIS_SHOW_USAGE_SUMMARY=true
 IRIS_PROCESS_MONITOR_MODEL_NAME=iris
 ```
 
-### 2.3 Place SSL Certificate
+### 2.3 Verify SSL Certificate
 ```bash
-# Copy your RBC SSL certificate to the initial_setup directory
-cp /path/to/your/rbc-ca-bundle.cer iris/src/initial_setup/rbc-ca-bundle.cer
-
-# Verify the certificate is in the right place
+# Verify the SSL certificate is included in the project
 ls -la iris/src/initial_setup/rbc-ca-bundle.cer
+
+# The certificate should already be included in your project files
 ```
 
 ## Step 3: Validate Configuration
+
+**Important**: These tests must be run in order as OAuth requires SSL to be set up first.
 
 ### 3.1 Test Configuration Loading
 ```bash
@@ -173,23 +182,83 @@ else:
 ```bash
 python3 -c "
 from iris.src.initial_setup.ssl import setup_ssl
+import os
 try:
     cert_path = setup_ssl()
     print(f'✅ SSL setup successful: {cert_path}')
+    print(f'SSL_CERT_FILE environment variable: {os.environ.get(\"SSL_CERT_FILE\", \"Not set\")}')
+    print(f'REQUESTS_CA_BUNDLE environment variable: {os.environ.get(\"REQUESTS_CA_BUNDLE\", \"Not set\")}')
 except Exception as e:
     print(f'❌ SSL setup failed: {e}')
 "
 ```
 
-### 3.4 Test OAuth
+### 3.4 Test OAuth (with SSL)
 ```bash
 python3 -c "
+from iris.src.initial_setup.ssl import setup_ssl
 from iris.src.initial_setup.oauth import setup_oauth
 try:
+    # Setup SSL first (required for OAuth)
+    ssl_path = setup_ssl()
+    print(f'✅ SSL setup successful: {ssl_path}')
+    
+    # Now test OAuth
     token = setup_oauth()
     print(f'✅ OAuth successful (token length: {len(token)})')
 except Exception as e:
-    print(f'❌ OAuth failed: {e}')
+    print(f'❌ OAuth test failed: {e}')
+    print('Note: OAuth requires SSL certificate and valid RBC credentials')
+"
+```
+
+### 3.5 Comprehensive Integration Test
+```bash
+# Test all components together in the correct order
+python3 -c "
+from iris.src.initial_setup.env_config import config
+from iris.src.initial_setup.ssl import setup_ssl
+from iris.src.initial_setup.oauth import setup_oauth
+from iris.src.initial_setup.db_config import connect_to_db
+
+print('=== IRIS Configuration Test ===')
+print(f'Environment: {config.ENVIRONMENT}')
+print()
+
+try:
+    # Step 1: Validate configuration
+    print('1. Testing configuration...')
+    if config.validate():
+        print('✅ Configuration is valid')
+    else:
+        print('❌ Configuration validation failed')
+        exit(1)
+    
+    # Step 2: Setup SSL
+    print('\\n2. Setting up SSL...')
+    ssl_path = setup_ssl()
+    print(f'✅ SSL configured: {ssl_path}')
+    
+    # Step 3: Test OAuth
+    print('\\n3. Testing OAuth...')
+    token = setup_oauth()
+    print(f'✅ OAuth successful (token length: {len(token)})')
+    
+    # Step 4: Test database
+    print('\\n4. Testing database connection...')
+    conn = connect_to_db()
+    if conn:
+        print('✅ Database connection successful')
+        conn.close()
+    else:
+        print('❌ Database connection failed')
+        
+    print('\\n=== All tests passed! IRIS is ready to deploy. ===')
+    
+except Exception as e:
+    print(f'\\n❌ Test failed: {e}')
+    print('\\nPlease check your .env file and ensure all RBC values are correct.')
+    exit(1)
 "
 ```
 
