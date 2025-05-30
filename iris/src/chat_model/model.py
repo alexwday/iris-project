@@ -186,7 +186,7 @@ def _model_generator(
     """
     Core synchronous generator handling the agent workflow.
     """
-    from ..initial_setup.process_monitor import enable_monitoring, get_process_monitor
+    from ..initial_setup.process_monitor_setup import enable_monitoring, get_process_monitor
     
     # Add more logging around the process monitoring setup
     logger = logging.getLogger(__name__)
