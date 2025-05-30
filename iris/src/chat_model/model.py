@@ -649,7 +649,7 @@ async def process_request_async(
             token_usage = None
             
             # Run the existing synchronous model
-            for chunk in model(conversation_dict, debug_mode=True):
+            for chunk in model(conversation_dict, debug_mode=False):
                 if isinstance(chunk, str):
                     response_chunks.append(chunk)
                 elif isinstance(chunk, dict):
