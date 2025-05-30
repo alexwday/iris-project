@@ -266,7 +266,7 @@ else:
 ### 3.3 Test SSL Setup
 ```bash
 python3 -c "
-from iris.src.initial_setup.ssl import setup_ssl
+from iris.src.initial_setup.ssl_setup import setup_ssl
 import os
 try:
     cert_path = setup_ssl()
@@ -281,8 +281,8 @@ except Exception as e:
 ### 3.4 Test OAuth (with SSL)
 ```bash
 python3 -c "
-from iris.src.initial_setup.ssl import setup_ssl
-from iris.src.initial_setup.oauth import setup_oauth
+from iris.src.initial_setup.ssl_setup import setup_ssl
+from iris.src.initial_setup.oauth_setup import setup_oauth
 try:
     # Setup SSL first (required for OAuth)
     ssl_path = setup_ssl()
@@ -302,8 +302,8 @@ except Exception as e:
 # Test all components together in the correct order
 python3 -c "
 from iris.src.initial_setup.env_config import config
-from iris.src.initial_setup.ssl import setup_ssl
-from iris.src.initial_setup.oauth import setup_oauth
+from iris.src.initial_setup.ssl_setup import setup_ssl
+from iris.src.initial_setup.oauth_setup import setup_oauth
 from iris.src.initial_setup.db_config import connect_to_db
 
 print('=== IRIS Configuration Test ===')
