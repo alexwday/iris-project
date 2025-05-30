@@ -18,7 +18,7 @@ import time
 from typing import Dict, Any
 
 # API base URL (adjust for your environment)
-API_BASE_URL = "http://localhost:8001"
+API_BASE_URL = "http://localhost:8000"
 
 def test_health_endpoint():
     """Test the health check endpoint"""
