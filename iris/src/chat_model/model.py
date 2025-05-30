@@ -226,7 +226,7 @@ def _model_generator(
     from ..initial_setup.oauth import setup_oauth
     from ..initial_setup.ssl import setup_ssl
     from ..initial_setup.env_config import config
-    from ..initial_setup.db_config import connect_to_db, ENVIRONMENT
+    from ..initial_setup.db_config import connect_to_db
 
     # Get settings from config
     SHOW_USAGE_SUMMARY = config.SHOW_USAGE_SUMMARY
@@ -523,9 +523,9 @@ def _model_generator(
                 logger.info(f"Attempting to log process monitor data to database for run {process_monitor.run_uuid}")
                 logger.info(f"Total stages to log: {len(process_monitor.stages)}")
                 # Show ENVIRONMENT value
-                logger.info(f"Using environment: {ENVIRONMENT}")
+                logger.info(f"Using environment: {config.ENVIRONMENT}")
                 
-                db_conn = connect_to_db(ENVIRONMENT)
+                db_conn = connect_to_db()
                 if db_conn:
                     logger.info("Database connection established")
                     # Check if table exists
@@ -546,7 +546,7 @@ def _model_generator(
                         db_conn.commit() # Commit transaction
                     logger.info("Process monitor data logged to database.")
                 else:
-                    logger.error(f"Failed to get database connection for logging process monitor data. Environment: {ENVIRONMENT}")
+                    logger.error(f"Failed to get database connection for logging process monitor data. Environment: {config.ENVIRONMENT}")
             except Exception as log_exc:
                 logger.error(f"Failed to log process monitor data to database: {log_exc}", exc_info=True)
                 # Rollback if connection object available
