@@ -349,14 +349,41 @@ except Exception as e:
 
 ## Step 4: Start the API Server
 
+### 4.0 Check and Clear Port 8000
+Before starting the server, ensure port 8000 is available:
+
+```bash
+# Check what's using port 8000
+lsof -i :8000
+
+# If something is using port 8000, you'll see output like:
+# COMMAND   PID USER   FD   TYPE  DEVICE SIZE/OFF NODE NAME
+# python3  1234 user    4u  IPv4  123456      0t0  TCP *:8000 (LISTEN)
+
+# To kill the process using port 8000:
+# Option 1: Kill by PID (replace 1234 with actual PID from lsof output)
+kill -9 1234
+
+# Option 2: Kill all processes on port 8000
+lsof -ti :8000 | xargs kill -9
+
+# On Windows, use:
+# Check port usage
+netstat -ano | findstr :8000
+# Kill process (replace PID with number from last column)
+taskkill /PID <PID> /F
+```
+
 ### 4.1 Development Mode (with auto-reload)
 ```bash
 # Start the development server
 uvicorn iris.src.api:app --host 0.0.0.0 --port 8000 --reload
 
 # The API will be available at:
-# http://localhost:8000
-# API docs at: http://localhost:8000/docs
+# Main API: http://localhost:8000
+# Swagger UI (Interactive API docs): http://localhost:8000/docs
+# ReDoc (Alternative API docs): http://localhost:8000/redoc
+# Health Check: http://localhost:8000/health
 ```
 
 ### 4.2 Production Mode
@@ -454,11 +481,41 @@ Response: {
 #### cURL Examples
 The test script also provides ready-to-use cURL commands for manual testing.
 
-### 5.4 Launch Chat Interface
+### 5.4 Verify Server and Documentation Access
 
-Once API tests pass, launch the web chat interface:
+Before launching the chat interface, verify the server is fully operational:
 
 ```bash
+# 1. Check server is running
+curl http://localhost:8000/health
+
+# 2. Open API documentation in browser
+# Swagger UI (Interactive documentation)
+open http://localhost:8000/docs
+# Or: xdg-open http://localhost:8000/docs  # Linux
+# Or: start http://localhost:8000/docs      # Windows
+
+# 3. Alternative documentation (ReDoc)
+open http://localhost:8000/redoc
+```
+
+**Important URLs when server is running:**
+- **API Base**: `http://localhost:8000`
+- **Health Check**: `http://localhost:8000/health`
+- **Swagger UI**: `http://localhost:8000/docs` (Interactive API testing)
+- **ReDoc**: `http://localhost:8000/redoc` (Clean API documentation)
+- **Chat Endpoint**: `http://localhost:8000/chat` (POST requests only)
+
+### 5.5 Launch Chat Interface
+
+Once API tests pass and server is verified, launch the web chat interface:
+
+**IMPORTANT**: The server must be running on port 8000 before opening the chat interface.
+
+```bash
+# Ensure you're in the project directory
+cd /path/to/iris-project
+
 # Open the chat interface in your browser
 open chat_interface.html
 # Or on Linux: xdg-open chat_interface.html
@@ -479,10 +536,38 @@ The chat interface connects to `http://localhost:8000` by default.
 To change the API URL, edit `chat_interface.html`:
 
 ```javascript
-this.apiUrl = 'http://your-api-server:8000';
+// Find this line near the top of the script section
+this.apiUrl = 'http://localhost:8000';
+
+// Change to your server address if different
+// Examples:
+// this.apiUrl = 'http://192.168.1.100:8000';  // Local network
+// this.apiUrl = 'https://api.yourcompany.com'; // Production server
 ```
 
-### 5.5 Complete Testing Workflow
+#### Troubleshooting Connection Issues
+
+If the chat interface shows "Disconnected" or won't send messages:
+
+1. **Verify server is running**:
+   ```bash
+   curl http://localhost:8000/health
+   # Should return: {"status":"healthy","environment":"rbc","version":"1.0.0"}
+   ```
+
+2. **Check browser console** (F12 → Console tab):
+   - Look for CORS errors or connection refused messages
+   - If you see CORS errors, the FastAPI server includes CORS middleware by default
+
+3. **Ensure same protocol**:
+   - If API uses HTTPS, chat interface URL must also use HTTPS
+   - If API uses HTTP, chat interface URL must use HTTP
+
+4. **Check firewall**:
+   - Ensure port 8000 is not blocked by firewall
+   - On corporate networks, you may need to request port access
+
+### 5.6 Complete Testing Workflow
 
 Follow this sequence to verify everything works:
 
@@ -511,24 +596,61 @@ print('\nSystem check complete.')
 
 This will run through the complete agent pipeline and display the streaming response in the terminal.
 
-## Step 7: Launch Web Interface
+## Step 7: Production Deployment Summary
 
-### Start the Server (if not already running)
+### Server Management Commands
+
+**Start the server** (choose one):
 ```bash
+# Option 1: Direct uvicorn (recommended for testing)
+uvicorn iris.src.api:app --host 0.0.0.0 --port 8000
+
+# Option 2: Using the convenience script
 python start_server.py
+
+# Option 3: Production with multiple workers
+uvicorn iris.src.api:app --host 0.0.0.0 --port 8000 --workers 4
 ```
 
-The web interface will be available at `http://localhost:8000`
+**Stop the server**:
+```bash
+# Find the process
+lsof -i :8000
 
-### Test the Interface
-1. Open your browser and navigate to `http://localhost:8000`
-2. Test the system with various queries to ensure proper functionality
-3. Verify that streaming responses work correctly in the web interface
+# Kill it (replace PID with actual process ID)
+kill -9 <PID>
+```
 
-### Access API Documentation
-Open your browser to:
-- **Swagger UI**: `http://localhost:8000/docs`
-- **ReDoc**: `http://localhost:8000/redoc`
+### Quick Access URLs
+
+Once the server is running, access these endpoints:
+
+| Service | URL | Description |
+|---------|-----|-------------|
+| Chat Interface | `file:///path/to/iris-project/chat_interface.html` | Open the HTML file directly |
+| API Health | `http://localhost:8000/health` | Check if API is running |
+| Swagger UI | `http://localhost:8000/docs` | Interactive API documentation |
+| ReDoc | `http://localhost:8000/redoc` | Alternative API docs |
+| API Root | `http://localhost:8000/` | Base API endpoint |
+
+### Verification Checklist
+
+✅ **Server Running**: `curl http://localhost:8000/health` returns healthy status  
+✅ **API Docs**: Can access `http://localhost:8000/docs` in browser  
+✅ **Chat Interface**: Opens and shows "Connected" status  
+✅ **Test Query**: Can send a message and receive streaming response  
+✅ **Database**: Queries return results (check logs for database connections)  
+
+### Common Issues and Solutions
+
+| Issue | Solution |
+|-------|----------|
+| Port 8000 already in use | `lsof -ti :8000 \| xargs kill -9` |
+| Chat shows "Disconnected" | Ensure server is running on port 8000 |
+| CORS errors in browser | Server includes CORS middleware; check URL matches |
+| SSL certificate errors | Verify cert file exists: `ls iris/src/initial_setup/rbc-ca-bundle.cer` |
+| OAuth failures | Check `.env` has valid RBC credentials |
+| Database connection fails | Verify `.env` database settings and network access |
 
 ---
 
