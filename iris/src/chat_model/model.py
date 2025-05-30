@@ -226,12 +226,11 @@ def _model_generator(
     from ..initial_setup.oauth import setup_oauth
     from ..initial_setup.ssl import setup_ssl
     from ..initial_setup.env_config import config
+    from ..initial_setup.db_config import connect_to_db, ENVIRONMENT
 
-# Get settings from config
-SHOW_USAGE_SUMMARY = config.SHOW_USAGE_SUMMARY
-    # Import DB connection utility (assuming it exists and named get_db_connection)
-    from ..initial_setup.db_config import connect_to_db, ENVIRONMENT # Import necessary items
-
+    # Get settings from config
+    SHOW_USAGE_SUMMARY = config.SHOW_USAGE_SUMMARY
+    
     logger = configure_logging()
     db_conn = None
     db_cursor = None
