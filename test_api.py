@@ -117,10 +117,11 @@ def test_streaming_endpoint():
             print("📡 Streaming response chunks:")
             print("-" * 40)
             
-            # Process streaming response
-            for chunk in response.iter_content(chunk_size=None, decode_unicode=True):
+            # Process streaming response with better chunk handling
+            for chunk in response.iter_content(chunk_size=1, decode_unicode=True):
                 if chunk:
                     print(chunk, end='', flush=True)
+                    time.sleep(0.01)  # Small delay to see streaming effect
             
             end_time = time.time()
             print(f"\n\n⏱️ Streaming completed in {(end_time - start_time):.2f} seconds")
