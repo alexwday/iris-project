@@ -62,10 +62,6 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     response: str = Field(..., description="IRIS response")
-    agent_used: Optional[str] = Field(None, description="Which agent handled the request")
-    processing_time_ms: int = Field(..., description="Processing time in milliseconds")
-    token_usage: Optional[Dict[str, Any]] = Field(None, description="Token usage statistics")
-    run_uuid: Optional[str] = Field(None, description="Unique run identifier for tracking")
 
 class HealthResponse(BaseModel):
     status: str
@@ -108,11 +104,7 @@ async def chat_endpoint(request: ChatRequest):
         logger.info("Chat request processed successfully")
         
         return ChatResponse(
-            response=result.get("response", ""),
-            agent_used=result.get("agent_used"),
-            processing_time_ms=result.get("processing_time_ms", 0),
-            token_usage=result.get("token_usage"),
-            run_uuid=result.get("run_uuid")
+            response=result.get("response", "")
         )
         
     except Exception as e:
