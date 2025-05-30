@@ -132,26 +132,8 @@ async def stream_chat_response(conversation: List[Dict[str, str]]):
                 chunk = chunk_queue.get(timeout=0.1)
                 if chunk is None:  # Sentinel value
                     break
-                # Split large chunks into smaller pieces for better streaming
-                if len(chunk) > 50:  # If chunk is large, split it
-                    words = chunk.split(' ')
-                    current_piece = ""
-                    for word in words:
-                        if len(current_piece + word + " ") > 50:
-                            if current_piece:
-                                yield current_piece + " "
-                                await asyncio.sleep(0.05)  # Small delay for streaming effect
-                                current_piece = word
-                            else:
-                                yield word + " "
-                                await asyncio.sleep(0.05)
-                        else:
-                            current_piece += word + " "
-                    if current_piece:
-                        yield current_piece
-                else:
-                    yield chunk
-                    await asyncio.sleep(0.02)  # Small delay for streaming effect
+                # Yield chunk as-is to preserve original spacing and timing
+                yield chunk
             except queue.Empty:
                 # Check if there's an exception
                 if exception_container[0]:
