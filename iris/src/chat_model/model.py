@@ -101,7 +101,7 @@ def _execute_query_worker(
     result = None
     task_exception = None
 
-    from ..initial_setup.process_monitor import get_process_monitor
+    from ..initial_setup.process_monitor_setup import get_process_monitor
     process_monitor = get_process_monitor()
     query_stage_name = f"db_query_{db_name}_{query_index}"
 
@@ -221,10 +221,10 @@ def _model_generator(
     from ..agents.agent_planner.planner import create_database_selection_plan
     from ..agents.agent_router.router import get_routing_decision
     from ..agents.agent_summarizer.summarizer import generate_streaming_summary
-    from ..initial_setup.conversation import process_conversation
+    from ..initial_setup.conversation_setup import process_conversation
     from ..initial_setup.logging_config import configure_logging
-    from ..initial_setup.oauth import setup_oauth
-    from ..initial_setup.ssl import setup_ssl
+    from ..initial_setup.oauth_setup import setup_oauth
+    from ..initial_setup.ssl_setup import setup_ssl
     from ..initial_setup.env_config import config
     from ..initial_setup.db_config import connect_to_db
 

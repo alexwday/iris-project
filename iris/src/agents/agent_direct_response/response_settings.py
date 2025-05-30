@@ -22,7 +22,7 @@ import logging
 
 from ...global_prompts.project_statement import get_project_statement
 from ...global_prompts.database_statement import get_database_statement
-from ...global_prompts.fiscal_calendar import get_fiscal_statement
+from ....global_prompts.fiscal_statement import get_fiscal_statement
 from ...global_prompts.restrictions_statement import get_restrictions_statement
 
 # Get module logger (no configuration here - using centralized config)
