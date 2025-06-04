@@ -522,11 +522,22 @@ def _model_generator(
                                         # Get all content pieces for this page and clean them
                                         content_pieces = []
                                         for content in page_content_map[page_num]:
-                                            # Truncate individual pieces and clean problematic characters
-                                            if len(content) > 150:
-                                                content = content[:150] + "..."
-                                            # Remove quotes and clean up but keep other punctuation
-                                            content_clean = content.replace('"', '').replace('\n', ' ').replace('\r', ' ')
+                                            # Clean markdown formatting characters that could break display
+                                            content_clean = (content
+                                                .replace('"', "'")      # Replace quotes to avoid JavaScript issues
+                                                .replace('`', "'")      # Remove backticks (code blocks)
+                                                .replace('|', ' ')      # Remove pipes (tables)
+                                                .replace('*', ' ')      # Remove asterisks (bold/italic)
+                                                .replace('#', ' ')      # Remove hashes (headers)
+                                                .replace('[', '(')      # Replace brackets
+                                                .replace(']', ')')
+                                                .replace('\n', ' ')     # Replace newlines with spaces
+                                                .replace('\r', ' ')     # Replace carriage returns
+                                                .replace('  ', ' ')     # Collapse multiple spaces
+                                                .strip()
+                                            )
+                                            
+                                            # No character limit - include full content for highlighting
                                             content_pieces.append(f'"{content_clean}"')
                                         
                                         # Join content pieces with commas and wrap in brackets
