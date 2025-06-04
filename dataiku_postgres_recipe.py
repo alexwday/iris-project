@@ -15,16 +15,31 @@ DB_NAME = "maven-finance"
 DB_USER = "your-db-user"
 DB_PASSWORD = "your-db-password"
 
+# SSL Options - Try different configurations if certificate access is denied
+# Option 1: Disable SSL (not recommended for production)
+# sslmode = "disable"
+
+# Option 2: Use SSL without certificate validation
+# sslmode = "require"
+
+# Option 3: Use SSL with full verification (requires certificate file access)
+# sslmode = "verify-full"
+# sslcert = "/path/to/client-cert.pem"
+# sslkey = "/path/to/client-key.pem"
+# sslrootcert = "/path/to/ca-cert.pem"
+
 print(f"Connecting to PostgreSQL: host={DB_HOST}, port={DB_PORT}, dbname={DB_NAME}, user={DB_USER}")
 
 try:
-    # Create connection
+    # Create connection with SSL disabled
+    # WARNING: This is not secure for production use
     conn = psycopg2.connect(
         host=DB_HOST,
         port=DB_PORT,
         dbname=DB_NAME,
         user=DB_USER,
-        password=DB_PASSWORD
+        password=DB_PASSWORD,
+        sslmode='disable'  # Disable SSL to avoid certificate permission issues
     )
     
     print("Database connection successful")
