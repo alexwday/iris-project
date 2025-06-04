@@ -94,8 +94,15 @@ def format_documents_for_llm(documents: List[Dict[str, Any]]) -> str:
                 section_summary = section.get("section_summary", f"Page {page_num}, Section {section_id}")
                 
                 # Format each section with CLEAR metadata for LLM reference
+                logger.info(f"PAR DEBUG: Formatting section - Page {page_num}, Section {section_id}, Name: '{section_name}'")
                 formatted_docs += f"### [PAGE: {page_num}, SECTION: {section_id}] {section_name}\n"
                 formatted_docs += f"**Section Summary:** {section_summary}\n\n"
+                # Add explicit instruction about section naming for citations
+                if section_name and not section_name.startswith("Section "):
+                    formatted_docs += f"**CITATION NOTE: When referencing this content, use the section name '{section_name}' rather than just the section number.**\n\n"
+                    logger.info(f"PAR DEBUG: Added citation note for descriptive section name: '{section_name}'")
+                else:
+                    logger.info(f"PAR DEBUG: Generic section name detected: '{section_name}' - LLM should extract from content")
                 formatted_docs += f"{section_content}\n\n"
             
             formatted_docs += "---\n\n"
@@ -413,7 +420,7 @@ SYNTHESIS_TOOL_SCHEMA = {
                 },
                 "detailed_research": {
                     "type": "string",
-                    "description": "Detailed, structured markdown report synthesizing information from documents. Include citations on separate lines after each paragraph using: ***Source: Document Name, Page X, Section Name*** in bold italic format. Use the actual section name from the document content rather than just the section ID number when available.",
+                    "description": "Detailed, structured markdown report synthesizing information from documents. Include citations on separate lines after each paragraph using: ***Source: Document Name, Page X, Section Name*** in bold italic format. CRITICAL: Extract actual section names/titles from within the document content (look for headers, bold titles, topic names) rather than using generic 'Section X' labels.",
                 },
                 "page_numbers": {
                     "type": "array",
@@ -530,6 +537,19 @@ def synthesize_response_and_status(
                         research = arguments.get("detailed_research", default_research)
                         page_numbers = arguments.get("page_numbers", [])
                         section_ids_by_page = arguments.get("section_ids_by_page", {})
+                        
+                        # Debug the generated research to check for section names in citations
+                        logger.info(f"PAR DEBUG: Generated detailed_research length: {len(research)} characters")
+                        if "***Source:" in research:
+                            citation_count = research.count("***Source:")
+                            logger.info(f"PAR DEBUG: Found {citation_count} citations in detailed_research")
+                            # Log first few citations for debugging
+                            import re
+                            citations = re.findall(r'\*\*\*Source:.*?\*\*\*', research)
+                            for i, citation in enumerate(citations[:3]):  # Show first 3 citations
+                                logger.info(f"PAR DEBUG: Citation {i+1}: {citation}")
+                        else:
+                            logger.warning("PAR DEBUG: No citations found in detailed_research - this may be the issue!")
                         
                         if not isinstance(status, str):
                             status = default_error_status

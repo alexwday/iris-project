@@ -26,7 +26,11 @@ Your objective is to:
 1. Determine the relevance of the provided document content to the user query.
 2. Generate a concise status flag summarizing the findings' relevance.
 3. Synthesize a detailed, structured research report in Markdown format using ONLY information from the provided documents.
-4. Include accurate citations on separate lines after each paragraph or key point using the format: ***Source: Document Name, Page X, Section Name*** in bold italic. PRIORITIZE using the actual section name from the content (e.g., "Introduction", "Methodology", "Key Requirements") rather than just the section ID number. Only use the section ID number if no descriptive section name is available.
+4. Include accurate citations on separate lines after each paragraph or key point using the format: ***Source: Document Name, Page X, Section Name*** in bold italic. 
+   - **CRITICAL:** Look for actual section titles/headers in the document content (e.g., "Introduction", "Methodology", "Key Requirements", "Background", "Analysis") 
+   - If the section header shows "Section X" but the content contains a descriptive title or heading, use that descriptive title
+   - Extract section names from markdown headers (##, ###), bold text at the start of sections, or any clear section titles within the content
+   - Only use the generic "Section X" format as a last resort when no descriptive name can be found in the content
 5. Ensure the report is optimized for consumption by another AI agent (the Summarizer).
 6. Adhere strictly to all compliance restrictions.
 """
@@ -111,6 +115,9 @@ def get_content_synthesis_prompt(user_query: str, formatted_documents: str) -> s
         "   **Strict Adherence to Data Sourcing:** Remember to strictly follow the `<CRITICAL_DATA_SOURCING>` rules defined in the global `<RESTRICTIONS_AND_GUIDELINES>`. Your report MUST be derived *exclusively* from the text within the `<DOCUMENT_SECTIONS>`. Do NOT introduce any facts, concepts, standard names/numbers, definitions, interpretations, or any external knowledge not explicitly present *within* the provided sections.",
         "3. **Generate Detailed Research Report:** Synthesize a comprehensive internal report using *only* information from the provided document sections.",
         "   * Structure the report clearly using Markdown (e.g., `## Key Findings`, `## Detailed Analysis`, `## Supporting Details`, `## Conflicts/Gaps`).",
+        "   * **Extract Section Names:** For each section you reference, look within the section content for descriptive titles, headers, or topic names. Use these descriptive names in your citations instead of generic section numbers.",
+        "     - Example: If you see '### [PAGE: 15, SECTION: 3] Section 3' but the content starts with '## Background and Methodology', use 'Background and Methodology' in your citation",
+        "     - Example: If content has headers like '**Risk Assessment Procedures**' or '## Key Compliance Requirements', use those exact titles",
         '   * **CRITICAL PAGE/SECTION TRACKING: Each section in the document content is marked with [PAGE: X, SECTION: Y] headers. You MUST track which specific page numbers and section IDs you reference in your research. For every piece of information you use, note the PAGE and SECTION numbers from the headers. Then provide this tracking data in your tool call: `page_numbers` should list all unique page numbers you referenced, and `section_ids_by_page` should map each page number to the list of section IDs you used from that page. For example, if you reference [PAGE: 15, SECTION: 3] and [PAGE: 15, SECTION: 5], your tool call should include `page_numbers: [15]` and `section_ids_by_page: {"15": [3, 5]}`.**',
         "   * **CRITICAL STANDARD FILTERING:** Focus your synthesis *only* on information relevant to the accounting standard specified or implied in the <USER_QUERY> (Defaulting to IFRS if none is specified). Actively filter out and ignore information related to other standards (e.g., US GAAP) unless that standard was explicitly requested in the query.**",
         "   * **CRITICAL TYPE FILTERING:** Similarly, if the <USER_QUERY> specifies a particular accounting type (e.g., 'financial assets', 'liabilities'), focus your synthesis *only* on information directly relevant to that type. Actively filter out and ignore information related to other types unless the query explicitly asks for comparison or broader context.**",
