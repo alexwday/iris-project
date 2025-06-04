@@ -59,7 +59,7 @@ def format_documents_for_llm(documents: List[Dict[str, Any]]) -> str:
     """
     Format retrieved documents into a string that is optimized for LLM analysis.
     Now reconstructs documents from page/section records in correct order and formats 
-    for clear section separation with page/section references.
+    for clear section separation with page/section references that the LLM can cite.
     """
     formatted_docs = ""
     for doc in documents:
@@ -90,10 +90,12 @@ def format_documents_for_llm(documents: List[Dict[str, Any]]) -> str:
             for section in page_sections_list:
                 section_id = section.get("section_id", 0)
                 section_content = section.get("section_content", "No content available")
+                section_name = section.get("section_name", f"Section {section_id}")
                 section_summary = section.get("section_summary", f"Page {page_num}, Section {section_id}")
                 
-                # Format each section clearly with identifiable headers
-                formatted_docs += f"### {section_summary}\n\n"
+                # Format each section with CLEAR metadata for LLM reference
+                formatted_docs += f"### [PAGE: {page_num}, SECTION: {section_id}] {section_name}\n"
+                formatted_docs += f"**Section Summary:** {section_summary}\n\n"
                 formatted_docs += f"{section_content}\n\n"
             
             formatted_docs += "---\n\n"
@@ -747,10 +749,16 @@ def query_database_sync(
             section_content_map = {}
             logger.info(f"PAR DEBUG: Retrieved {len(documents)} documents from database")
             for doc in documents:
+                logger.info(f"PAR DEBUG: Document keys: {list(doc.keys())}")
                 page_sections = doc.get("page_sections", [])
-                logger.info(f"PAR DEBUG: Document '{doc.get('document_name', 'Unknown')}' has {len(page_sections)} page_sections")
+                sections = doc.get("sections", [])  # Check old format too
+                logger.info(f"PAR DEBUG: Document '{doc.get('document_name', 'Unknown')}' has {len(page_sections)} page_sections and {len(sections)} old sections")
                 if page_sections:
                     logger.info(f"PAR DEBUG: First page_section sample: {page_sections[0]}")
+                elif sections:
+                    logger.info(f"PAR DEBUG: First old section sample: {sections[0]}")
+                else:
+                    logger.info(f"PAR DEBUG: Document has no sections at all!")
                 for section in page_sections:
                     page_num = section.get("page_number")
                     section_id = section.get("section_id")
