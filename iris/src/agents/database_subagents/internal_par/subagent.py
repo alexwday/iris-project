@@ -727,6 +727,10 @@ def query_database_sync(
             page_numbers = research_result.get("page_numbers", [])
             section_ids_by_page_str = research_result.get("section_ids_by_page", {})
             
+            logger.info(f"DEBUG: Raw research_result keys: {list(research_result.keys())}")
+            logger.info(f"DEBUG: Raw page_numbers from tool: {page_numbers}")
+            logger.info(f"DEBUG: Raw section_ids_by_page from tool: {section_ids_by_page_str}")
+            
             # Convert string keys to integers for page_section_refs
             page_section_refs = {}
             for page_str, section_list in section_ids_by_page_str.items():
@@ -741,8 +745,12 @@ def query_database_sync(
             
             # Build section content map for referenced sections
             section_content_map = {}
+            logger.info(f"DEBUG: Retrieved {len(documents)} documents from database")
             for doc in documents:
                 page_sections = doc.get("page_sections", [])
+                logger.info(f"DEBUG: Document '{doc.get('document_name', 'Unknown')}' has {len(page_sections)} page_sections")
+                if page_sections:
+                    logger.info(f"DEBUG: First page_section sample: {page_sections[0]}")
                 for section in page_sections:
                     page_num = section.get("page_number")
                     section_id = section.get("section_id")
@@ -754,6 +762,7 @@ def query_database_sync(
                         section_content_map[key] = section_content
                         
             logger.info(f"Built section content map for {len(section_content_map)} referenced sections")
+            logger.info(f"DEBUG: Final section_content_map keys: {list(section_content_map.keys())}")
             
             # Add details to process monitor before returning
             if process_monitor:
