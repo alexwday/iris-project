@@ -473,7 +473,7 @@ def _model_generator(
                             yield "\n\n## 📎 Referenced Documents\n\n"
                             seen_links = set()  # Avoid duplicates
                             
-                            # Group file links by document to create enhanced links with page/section data
+                            # Create one link per document with aggregated page/section data
                             for link_info in all_file_links:
                                 file_link = link_info.get("file_link")
                                 document_name = link_info.get("document_name", "Unknown Document")
@@ -485,42 +485,70 @@ def _model_generator(
                                     continue
                                 seen_links.add(link_key)
                                 
-                                # Find page/section data for this document across all databases
-                                enhanced_links = []
+                                # Aggregate all page/section data for this document across all databases
+                                page_content_map = {}  # Maps page_num -> combined content for that page
+                                
                                 for db_name, page_refs in all_page_section_refs.items():
                                     section_content = all_section_content_maps.get(db_name, {})
                                     
                                     if page_refs and section_content:
-                                        # Create page-specific links with highlight text
+                                        # Collect content for each page
                                         for page_num, section_ids in page_refs.items():
+                                            if page_num not in page_content_map:
+                                                page_content_map[page_num] = []
+                                            
                                             for section_id in section_ids:
                                                 content_key = f"{page_num}:{section_id}"
                                                 highlight_text = section_content.get(content_key, "")
-                                                
                                                 if highlight_text:
-                                                    # Truncate highlight text to manageable length for URL
-                                                    highlight_text_short = highlight_text[:200] + "..." if len(highlight_text) > 200 else highlight_text
-                                                    # Escape quotes for JavaScript
-                                                    highlight_text_escaped = highlight_text_short.replace('"', '\\"').replace("'", "\\'")
-                                                    
-                                                    if file_link:
-                                                        enhanced_link = f'<a class="chatbot-link" href=\'javascript:window.maven.openPdf("{file_link}", {page_num}, "{highlight_text_escaped}")\'>📄 {document_name} (Page {page_num}, Section {section_id})</a>'
-                                                    else:
-                                                        enhanced_link = f'<a class="chatbot-link" href=\'javascript:window.maven.openPdf("", {page_num}, "{highlight_text_escaped}")\'>📄 {document_name} (Page {page_num}, Section {section_id})</a>'
-                                                    enhanced_links.append(enhanced_link)
+                                                    page_content_map[page_num].append(highlight_text)
                                 
-                                # If no enhanced links were created, fall back to basic link
-                                if not enhanced_links:
+                                # Create enhanced link with page-specific content mapping
+                                if page_content_map:
+                                    # Sort pages for consistent display
+                                    sorted_pages = sorted(page_content_map.keys())
+                                    
+                                    # Create meaningful page list description
+                                    if len(sorted_pages) == 1:
+                                        page_description = f"Page {sorted_pages[0]}"
+                                    elif len(sorted_pages) <= 3:
+                                        page_description = f"Pages {', '.join(map(str, sorted_pages))}"
+                                    else:
+                                        page_description = f"Pages {sorted_pages[0]}-{sorted_pages[-1]} ({len(sorted_pages)} pages)"
+                                    
+                                    # Create clean bracket format: '[page1:"text1","text2"][page2:"text3","text4"]'
+                                    page_brackets = []
+                                    for page_num in sorted_pages:
+                                        # Get all content pieces for this page and clean them
+                                        content_pieces = []
+                                        for content in page_content_map[page_num]:
+                                            # Truncate individual pieces and clean problematic characters
+                                            if len(content) > 150:
+                                                content = content[:150] + "..."
+                                            # Remove quotes and clean up but keep other punctuation
+                                            content_clean = content.replace('"', '').replace('\n', ' ').replace('\r', ' ')
+                                            content_pieces.append(f'"{content_clean}"')
+                                        
+                                        # Join content pieces with commas and wrap in brackets
+                                        page_content = ",".join(content_pieces)
+                                        page_brackets.append(f"[{page_num}:{page_content}]")
+                                    
+                                    # Join all page brackets
+                                    page_data_string = "".join(page_brackets)
+                                    
+                                    if file_link:
+                                        html_link = f'<a class="chatbot-link" href=\'javascript:window.maven.openPdf("{file_link}", "{page_data_string}")\'>📄 {document_name} ({page_description})</a>'
+                                    else:
+                                        html_link = f'<a class="chatbot-link" href=\'javascript:window.maven.openPdf("", "{page_data_string}")\'>📄 {document_name} ({page_description})</a>'
+                                else:
+                                    # Fall back to basic link if no page/section data
                                     if not file_link:
                                         html_link = f'<a class="chatbot-link" href=\'javascript:window.maven.openPdf("")\'>📄 {document_name}</a>'
                                     else:
                                         html_link = f'<a class="chatbot-link" href=\'javascript:window.maven.openPdf("{file_link}")\'>📄 {document_name}</a>'
-                                    enhanced_links.append(html_link)
                                 
-                                # Yield all links for this document
-                                for link in enhanced_links:
-                                    logger.info(f"Yielding enhanced HTML link: {link}")
-                                    yield f"{link}\n"
+                                logger.info(f"Yielding enhanced HTML link: {html_link}")
+                                yield f"{html_link}\n"
                             yield "\n"
                         else:
                             logger.warning("No file links collected from any database")
