@@ -49,7 +49,9 @@ The internal Summarizer Agent, which will use your report to construct the final
 SUBAGENT_RESPONSE_FORMAT = """
 A mandatory tool call to `synthesize_research_findings` containing:
 1. `status_summary`: A single-line status flag (e.g., ✅, ℹ️, 📄, ⚠️, ❓).
-2. `detailed_research_report`: A comprehensive Markdown string containing the synthesized findings with citations.
+2. `detailed_research`: A comprehensive Markdown string containing the synthesized findings with citations.
+3. `page_numbers`: Array of page numbers referenced in the research.
+4. `section_ids_by_page`: Object mapping page numbers to arrays of section IDs used from that page.
 """
 
 
@@ -109,7 +111,7 @@ def get_content_synthesis_prompt(user_query: str, formatted_documents: str) -> s
         "   **Strict Adherence to Data Sourcing:** Remember to strictly follow the `<CRITICAL_DATA_SOURCING>` rules defined in the global `<RESTRICTIONS_AND_GUIDELINES>`. Your report MUST be derived *exclusively* from the text within the `<DOCUMENT_SECTIONS>`. Do NOT introduce any facts, concepts, standard names/numbers, definitions, interpretations, or any external knowledge not explicitly present *within* the provided sections.",
         "3. **Generate Detailed Research Report:** Synthesize a comprehensive internal report using *only* information from the provided document sections.",
         "   * Structure the report clearly using Markdown (e.g., `## Key Findings`, `## Detailed Analysis`, `## Supporting Details`, `## Conflicts/Gaps`).",
-        '   * **CRITICAL CITATION: Cite sources accurately *inline* within the report body, immediately following the information they support. Use the most specific document identifier available (e.g., Document Name, Filename if provided in context) and the full hierarchical path (e.g., Chapter > Section > Subsection Title/Hierarchy). Include Standard and Standard Codes if relevant and available in the context card. Format citations clearly like: `(Source: [Document Identifier], Path: [Full Hierarchy Path], Standard: [Standard], Code: [Standard Code])`. If a specific field (like Hierarchy, Standard, or Code) is not available for a source, omit that field from the citation for that source.**',
+        '   * **CRITICAL CITATION AND REFERENCE TRACKING: Cite sources accurately *inline* within the report body using document and section names. Additionally, you MUST track all page numbers and section IDs that you reference in your research and provide them in the tool call parameters. Extract page numbers and section IDs from the section headers in the document content (e.g., "Page 15, Section 3") and include them in the `page_numbers` array and `section_ids_by_page` object in your tool response.**',
         "   * **CRITICAL STANDARD FILTERING:** Focus your synthesis *only* on information relevant to the accounting standard specified or implied in the <USER_QUERY> (Defaulting to IFRS if none is specified). Actively filter out and ignore information related to other standards (e.g., US GAAP) unless that standard was explicitly requested in the query.**",
         "   * **CRITICAL TYPE FILTERING:** Similarly, if the <USER_QUERY> specifies a particular accounting type (e.g., 'financial assets', 'liabilities'), focus your synthesis *only* on information directly relevant to that type. Actively filter out and ignore information related to other types unless the query explicitly asks for comparison or broader context.**",
         "   * If information is conflicting, present all sides clearly.",
@@ -117,11 +119,11 @@ def get_content_synthesis_prompt(user_query: str, formatted_documents: str) -> s
         "   * Optimize this report for the Summarizer Agent (another AI) to read and understand easily.",
         "   * Furthermore, pay special attention to any logical tests or criteria described in the content (e.g., conditions connected by 'and'/'or', multi-part tests, 'if...then' statements). Reproduce the full structure and wording of these tests accurately in your report, using formatting like bullet points or nested lists if needed for clarity.",
         "   * Adhere strictly to the <RESTRICTIONS_AND_GUIDELINES> provided in the <CONTEXT>.",
-        "4. **Format Output:** Prepare the Status Summary Flag and the Detailed Research Report for the tool call.",
+        "4. **Format Output:** Prepare the Status Summary Flag, Detailed Research Report, Page Numbers array, and Section IDs by Page object for the tool call.",
         "</INSTRUCTIONS>",
         "<OUTPUT_SPECIFICATION>",
         "You MUST call the `synthesize_research_findings` tool.",
-        "Provide the generated status summary flag (as a single string) and the full detailed research report (as a markdown string) as arguments.",
+        "Provide the generated status summary flag, detailed research report, page numbers array, and section IDs by page object as arguments.",
         "Do not include any other text, preamble, or explanation in your response outside the tool call.",
         "If no relevant document sections were provided or found, the status summary flag should reflect that (`📄`), and the detailed research report argument should state that no analysis is possible based on the provided sections.",
         SUBAGENT_RESPONSE_FORMAT,  # Reinforce the expected output format

@@ -34,9 +34,11 @@ from typing import Any, Dict, Generator, List, Optional, TypeVar, Union, cast, T
 MetadataResponse = List[Dict[str, Any]]
 ResearchResponse = Dict[str, str]
 DatabaseResponse = Union[MetadataResponse, ResearchResponse]
-# Define the type returned by subagents (result + optional doc IDs + optional file links)
+# Define the type returned by subagents (result + optional doc IDs + optional file links + optional page/section refs + optional section content)
 FileLink = Dict[str, str]  # Contains 'file_link' and 'document_name'
-SubagentResult = Tuple[DatabaseResponse, Optional[List[str]], Optional[List[FileLink]]]
+PageSectionRefs = Dict[int, List[int]]  # Maps page numbers to lists of section IDs
+SectionContentMap = Dict[str, str]  # Maps "page_num:section_id" to section content
+SubagentResult = Tuple[DatabaseResponse, Optional[List[str]], Optional[List[FileLink]], Optional[PageSectionRefs], Optional[SectionContentMap]]
 T = TypeVar("T")
 
 # Get available databases from the central configuration
@@ -109,7 +111,7 @@ def route_query_sync(
             # REMOVED: Stage end (even for errors) is now handled by the caller (_execute_query_worker)
             # process_monitor.end_stage(stage_name, status="error")
             
-        return error_response, None, None # Return tuple with None for file_links
+        return error_response, None, None, None, None # Return tuple with None for file_links, page_refs, section_content
 
     try:
         module_path = f"iris.src.agents.database_subagents.{database}.subagent"
@@ -145,12 +147,18 @@ def route_query_sync(
         # Pass the process monitor and stage name if the function supports them
         result_tuple = query_func(**call_args)
         
-        # Handle both 2-element and 3-element tuples for backward compatibility
+        # Handle different tuple lengths for backward compatibility
         if len(result_tuple) == 2:
             # Old format: (result, doc_ids)
-            result_tuple = (result_tuple[0], result_tuple[1], None)
+            result_tuple = (result_tuple[0], result_tuple[1], None, None, None)
+        elif len(result_tuple) == 3:
+            # Format with file_links: (result, doc_ids, file_links)
+            result_tuple = (result_tuple[0], result_tuple[1], result_tuple[2], None, None)
+        elif len(result_tuple) == 4:
+            # Format with page_refs: (result, doc_ids, file_links, page_refs)
+            result_tuple = (result_tuple[0], result_tuple[1], result_tuple[2], result_tuple[3], None)
         
-        # Now result_tuple is guaranteed to have 3 elements
+        # Now result_tuple is guaranteed to have 5 elements
         # The following line was incorrectly indented after removing the else block
         # result_tuple: SubagentResult = query_func(query, scope, token) # REMOVED - Handled by **call_args
 
@@ -162,6 +170,12 @@ def route_query_sync(
             # Add file links if available
             if len(result_tuple) > 2 and result_tuple[2]:  # If file_links is not None
                 process_monitor.add_stage_details(stage_name, file_links=result_tuple[2])
+            # Add page/section refs if available
+            if len(result_tuple) > 3 and result_tuple[3]:  # If page_section_refs is not None
+                process_monitor.add_stage_details(stage_name, page_section_refs=result_tuple[3])
+            # Add section content if available
+            if len(result_tuple) > 4 and result_tuple[4]:  # If section_content_map is not None
+                process_monitor.add_stage_details(stage_name, section_content_map=result_tuple[4])
             
             # Add status summary if available in research results
             if scope == "research" and isinstance(result_tuple[0], dict):
@@ -172,7 +186,7 @@ def route_query_sync(
             # REMOVED: Stage end is now handled by the caller (_execute_query_worker)
             # process_monitor.end_stage(stage_name, status="completed")
 
-        # Return the complete tuple (result, doc_ids, file_links)
+        # Return the complete tuple (result, doc_ids, file_links, page_section_refs, section_content_map)
         return result_tuple
 
     except (ImportError, AttributeError) as e:
@@ -195,7 +209,7 @@ def route_query_sync(
             # REMOVED: Stage end (even for errors) is now handled by the caller (_execute_query_worker)
             # process_monitor.end_stage(stage_name, status="error")
             
-        return error_response, None, None # Return tuple with None for file_links
+        return error_response, None, None, None, None # Return tuple with None for file_links, page_refs, section_content
 
     except Exception as e:
         # Catch other potential exceptions during subagent execution
@@ -219,4 +233,4 @@ def route_query_sync(
             # REMOVED: Stage end (even for errors) is now handled by the caller (_execute_query_worker)
             # process_monitor.end_stage(stage_name, status="error")
             
-        return error_response, None, None # Return tuple with None for file_links
+        return error_response, None, None, None, None # Return tuple with None for file_links, page_refs, section_content

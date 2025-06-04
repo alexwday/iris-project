@@ -21,9 +21,11 @@ MetadataResponse = List[Dict[str, Any]]
 # ResearchResponse is now a dictionary containing detailed research and status
 ResearchResponse = Dict[str, str]
 DatabaseResponse = Union[MetadataResponse, ResearchResponse]
-# Updated to include file links
+# Updated to include file links, page/section references, and section content
 FileLink = Dict[str, str]  # Contains 'file_link' and 'document_name'
-SubagentResult = Tuple[DatabaseResponse, Optional[List[str]], Optional[List[FileLink]]]  # result + doc_ids + file_links
+PageSectionRefs = Dict[int, List[int]]  # Maps page numbers to lists of section IDs
+SectionContentMap = Dict[str, str]  # Maps "page_num:section_id" to section content
+SubagentResult = Tuple[DatabaseResponse, Optional[List[str]], Optional[List[FileLink]], Optional[PageSectionRefs], Optional[SectionContentMap]]  # result + doc_ids + file_links + page_sections + section_content
 
 from ....initial_setup.env_config import config
 from ....initial_setup.db_config import connect_to_db
@@ -56,19 +58,48 @@ def format_catalog_for_llm(catalog_records: List[Dict[str, Any]]) -> str:
 def format_documents_for_llm(documents: List[Dict[str, Any]]) -> str:
     """
     Format retrieved documents into a string that is optimized for LLM analysis.
+    Now reconstructs documents from page/section records in correct order and formats 
+    for clear section separation with page/section references.
     """
     formatted_docs = ""
     for doc in documents:
         doc_name = doc.get("document_name", "Untitled")
         formatted_docs += f"# {doc_name}\n\n"
-        sections = doc.get("sections", [])
-        for section in sections:
-            section_name = section.get("section_name", "Untitled Section")
-            section_content = section.get("section_content", "No content available")
-            formatted_docs += f"## {section_name}\n\n"
-            formatted_docs += f"{section_content}\n\n"
-        formatted_docs += "---\n\n"
+        
+        # Get page_sections and reconstruct document in proper order
+        page_sections = doc.get("page_sections", [])
+        if not page_sections:
+            formatted_docs += "No content available.\n\n"
+            continue
+            
+        # Group sections by page number for clear organization
+        pages_dict = {}
+        for section in page_sections:
+            page_num = section.get("page_number", 0)
+            if page_num not in pages_dict:
+                pages_dict[page_num] = []
+            pages_dict[page_num].append(section)
+        
+        # Process pages in order
+        for page_num in sorted(pages_dict.keys()):
+            formatted_docs += f"## Page {page_num}\n\n"
+            
+            # Process sections within the page in order
+            page_sections_list = sorted(pages_dict[page_num], key=lambda x: x.get("section_id", 0))
+            
+            for section in page_sections_list:
+                section_id = section.get("section_id", 0)
+                section_content = section.get("section_content", "No content available")
+                section_summary = section.get("section_summary", f"Page {page_num}, Section {section_id}")
+                
+                # Format each section clearly with identifiable headers
+                formatted_docs += f"### {section_summary}\n\n"
+                formatted_docs += f"{section_content}\n\n"
+            
+            formatted_docs += "---\n\n"
+        
     return formatted_docs.strip()
+
 
 
 # Database interaction functions (now synchronous)
@@ -115,6 +146,7 @@ def fetch_par_catalog() -> List[Dict[str, Any]]:
 def fetch_document_content(doc_ids: List[str]) -> List[Dict[str, Any]]:
     """
     Fetch the content of specified PAR documents from the database synchronously.
+    Now retrieves all page/section records with page_number, section_id, section_summary fields.
     """
     logger.info(f"Fetching PAR content for documents: {doc_ids}")
     if not doc_ids:
@@ -146,24 +178,27 @@ def fetch_document_content(doc_ids: List[str]) -> List[Dict[str, Any]]:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    SELECT section_id, section_name, section_content
+                    SELECT section_id, section_name, section_content, page_number, section_summary
                     FROM apg_content
                     WHERE document_source = 'internal_par'
                     AND document_name = %s
-                    ORDER BY section_id
+                    ORDER BY page_number, section_id
                 """,
                     (doc_name,),
                 )
-                sections = []
+                page_sections = []
                 for row in cur.fetchall():
-                    sections.append(
+                    page_sections.append(
                         {
+                            "section_id": row[0],
                             "section_name": (row[1] if row[1] else f"Section {row[0]}"),
                             "section_content": row[2],
+                            "page_number": row[3],
+                            "section_summary": row[4] if row[4] else f"Page {row[3]}, Section {row[0]} of {doc_name}",
                         }
                     )
-                if sections:
-                    result.append({"document_name": doc_name, "sections": sections})
+                if page_sections:
+                    result.append({"document_name": doc_name, "page_sections": page_sections})
         logger.info(f"Retrieved PAR content for {len(result)} documents from database")
     except Exception as e:
         logger.error(f"Error fetching PAR document content from database: {str(e)}")
@@ -366,7 +401,7 @@ SYNTHESIS_TOOL_SCHEMA = {
     "type": "function",
     "function": {
         "name": "synthesize_research_findings",
-        "description": "Synthesizes research findings from provided documents and generates a status summary.",
+        "description": "Synthesizes research findings from provided documents and generates a status summary with page/section references.",
         "parameters": {
             "type": "object",
             "properties": {
@@ -378,8 +413,21 @@ SYNTHESIS_TOOL_SCHEMA = {
                     "type": "string",
                     "description": "Detailed, structured markdown report synthesizing information from documents, including citations (document and section names).",
                 },
+                "page_numbers": {
+                    "type": "array",
+                    "items": {"type": "integer"},
+                    "description": "List of page numbers referenced in the research findings (extracted from the document sections used).",
+                },
+                "section_ids_by_page": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "array",
+                        "items": {"type": "integer"}
+                    },
+                    "description": "Object mapping page numbers (as string keys) to arrays of section IDs referenced on that page.",
+                },
             },
-            "required": ["status_summary", "detailed_research"],
+            "required": ["status_summary", "detailed_research", "page_numbers", "section_ids_by_page"],
         },
     },
 }
@@ -470,21 +518,32 @@ def synthesize_response_and_status(
                 logger.debug(f"Received tool arguments string: {arguments_str}")
                 try:
                     arguments = json.loads(arguments_str)
-                    if (
-                        "status_summary" in arguments
-                        and "detailed_research" in arguments
-                    ):
+                    required_keys = ["status_summary", "detailed_research", "page_numbers", "section_ids_by_page"]
+                    if all(key in arguments for key in required_keys):
                         logger.info(
                             f"Successfully parsed synthesis tool call for {database_name}."
                         )
-                        # Ensure values are strings, default if not (though schema should enforce)
+                        # Ensure values have correct types, default if not
                         status = arguments.get("status_summary", default_error_status)
                         research = arguments.get("detailed_research", default_research)
+                        page_numbers = arguments.get("page_numbers", [])
+                        section_ids_by_page = arguments.get("section_ids_by_page", {})
+                        
                         if not isinstance(status, str):
                             status = default_error_status
                         if not isinstance(research, str):
                             research = default_research
-                        return {"status_summary": status, "detailed_research": research} # Return result dict
+                        if not isinstance(page_numbers, list):
+                            page_numbers = []
+                        if not isinstance(section_ids_by_page, dict):
+                            section_ids_by_page = {}
+                            
+                        return {
+                            "status_summary": status, 
+                            "detailed_research": research,
+                            "page_numbers": page_numbers,
+                            "section_ids_by_page": section_ids_by_page
+                        } # Return result dict
                     else:
                         logger.error(
                             f"Missing required keys in parsed tool arguments for {database_name}: {arguments}"
@@ -560,7 +619,7 @@ def query_database_sync(
         
     Returns:
         Tuple containing the main database response, a list of selected document IDs (or None),
-        and a list of file links (or None).
+        a list of file links (or None), page/section references (or None), and section content map (or None).
     """
     logger.info(
         f"Querying Internal PAR database (sync): '{query}' with scope: {scope}"
@@ -569,6 +628,8 @@ def query_database_sync(
     default_error_status = "❌ Error during query processing."
     selected_doc_ids: Optional[List[str]] = None  # Initialize
     file_links: Optional[List[FileLink]] = None  # Initialize file links
+    page_section_refs: Optional[PageSectionRefs] = None  # Initialize page/section references
+    section_content_map: Optional[SectionContentMap] = None  # Initialize section content map
     # Use the passed-in stage name if available, otherwise default
     stage_name = query_stage_name or f"db_query_{database_name}_unknown"
     logger.debug(f"Using process monitor stage name: {stage_name}")
@@ -587,7 +648,7 @@ def query_database_sync(
                     "detailed_research": "No documents found in the Internal PAR database catalog.",
                     "status_summary": "📄 No documents found in catalog.",
                 }
-            return response, selected_doc_ids, file_links  # Return empty response and None IDs/links
+            return response, selected_doc_ids, file_links, page_section_refs, section_content_map  # Return empty response and None IDs/links/page_sections/content
 
         # Select documents using the updated helper function
         selected_doc_ids = select_relevant_documents(
@@ -614,7 +675,7 @@ def query_database_sync(
                     document_ids=selected_doc_ids
                 )
                 
-            return response, selected_doc_ids, file_links  # Return empty response and empty IDs list/links
+            return response, selected_doc_ids, file_links, page_section_refs, section_content_map  # Return empty response and empty IDs list/links/page_sections/content
 
         # Process based on scope
         if scope == "metadata":
@@ -638,7 +699,7 @@ def query_database_sync(
                     document_ids=selected_doc_ids
                 )
                 
-            return selected_items, selected_doc_ids, file_links  # Return metadata, IDs, and file links
+            return selected_items, selected_doc_ids, file_links, page_section_refs, section_content_map  # Return metadata, IDs, file links, and None page_sections/content (metadata scope doesn't need them)
             
         elif scope == "research":
             # Collect file links from catalog before fetching content (including blank ones)
@@ -662,6 +723,38 @@ def query_database_sync(
                 query, documents, token, database_name, process_monitor, stage_name
             )
             
+            # Extract page/section references from the tool response
+            page_numbers = research_result.get("page_numbers", [])
+            section_ids_by_page_str = research_result.get("section_ids_by_page", {})
+            
+            # Convert string keys to integers for page_section_refs
+            page_section_refs = {}
+            for page_str, section_list in section_ids_by_page_str.items():
+                try:
+                    page_num = int(page_str)
+                    page_section_refs[page_num] = section_list if isinstance(section_list, list) else []
+                except (ValueError, TypeError):
+                    logger.warning(f"Could not convert page key to integer: {page_str}")
+                    continue
+                    
+            logger.info(f"Extracted page/section references from tool response: {page_section_refs}")
+            
+            # Build section content map for referenced sections
+            section_content_map = {}
+            for doc in documents:
+                page_sections = doc.get("page_sections", [])
+                for section in page_sections:
+                    page_num = section.get("page_number")
+                    section_id = section.get("section_id")
+                    section_content = section.get("section_content", "")
+                    
+                    # Check if this section was referenced in the research
+                    if page_num in page_section_refs and section_id in page_section_refs[page_num]:
+                        key = f"{page_num}:{section_id}"
+                        section_content_map[key] = section_content
+                        
+            logger.info(f"Built section content map for {len(section_content_map)} referenced sections")
+            
             # Add details to process monitor before returning
             if process_monitor:
                 process_monitor.add_stage_details(stage_name, 
@@ -670,7 +763,7 @@ def query_database_sync(
                     status_summary=research_result.get("status_summary", "")
                 )
             
-            return research_result, selected_doc_ids, file_links  # Return research result, IDs, and file links
+            return research_result, selected_doc_ids, file_links, page_section_refs, section_content_map  # Return research result, IDs, file links, page/section refs, and section content
             
         else:
             logger.error(f"Invalid scope provided to internal_par subagent: {scope}")
@@ -695,5 +788,5 @@ def query_database_sync(
                 document_ids=selected_doc_ids # Keep doc IDs if available
             )
             
-        # Return error response and potentially selected IDs/links if selection succeeded before error
-        return response, selected_doc_ids, file_links
+        # Return error response and potentially selected IDs/links/page_sections/content if selection succeeded before error
+        return response, selected_doc_ids, file_links, page_section_refs, section_content_map

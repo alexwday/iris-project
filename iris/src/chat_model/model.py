@@ -125,13 +125,22 @@ def _execute_query_worker(
         # Pass the process_monitor instance and the specific stage name to the router
         result_tuple = route_query_sync(db_name, query_text, scope, token, process_monitor=process_monitor, query_stage_name=query_stage_name) # ADDED query_stage_name
         
-        # Handle both 2-element and 3-element tuples for backward compatibility
-        if len(result_tuple) == 3:
+        # Handle different tuple lengths for backward compatibility
+        if len(result_tuple) == 5:
+            result, doc_ids, file_links, page_section_refs, section_content_map = result_tuple
+        elif len(result_tuple) == 4:
+            result, doc_ids, file_links, page_section_refs = result_tuple
+            section_content_map = None
+        elif len(result_tuple) == 3:
             result, doc_ids, file_links = result_tuple
+            page_section_refs = None
+            section_content_map = None
         else:
             # Old format: (result, doc_ids)
             result, doc_ids = result_tuple
             file_links = None
+            page_section_refs = None
+            section_content_map = None
         logger.info(f"Thread completed query for database: {db_name}")
         # End the stage for this specific query worker instance successfully
         process_monitor.end_stage(query_stage_name) # RESTORED end_stage call here
@@ -174,6 +183,8 @@ def _execute_query_worker(
         "result": result,
         "exception": task_exception,
         "file_links": file_links if 'file_links' in locals() else None,
+        "page_section_refs": page_section_refs if 'page_section_refs' in locals() else None,
+        "section_content_map": section_content_map if 'section_content_map' in locals() else None,
     }
 
 
@@ -365,6 +376,8 @@ def _model_generator(
                     metadata_results_by_db: Dict[str, List[Dict[str, Any]]] = {}
                     total_metadata_items = 0
                     all_file_links = []  # Collect all file links from all databases
+                    all_page_section_refs = {}  # Collect all page/section refs by database
+                    all_section_content_maps = {}  # Collect all section content maps by database
                     futures = []
 
                     with concurrent.futures.ThreadPoolExecutor() as executor:
@@ -385,6 +398,8 @@ def _model_generator(
                             result = result_data["result"]
                             scope = result_data["scope"]
                             file_links = result_data.get("file_links", None)
+                            page_section_refs = result_data.get("page_section_refs", None)
+                            section_content_map = result_data.get("section_content_map", None)
 
                             # --- Legacy Debug Block Removed ---
 
@@ -410,6 +425,14 @@ def _model_generator(
                                 all_file_links.extend(file_links)
                             else:
                                 logger.debug(f"No file links returned from {db_name}")
+                                
+                            # Collect page/section data if available
+                            if page_section_refs:
+                                logger.info(f"Collected page/section refs from {db_name}: {page_section_refs}")
+                                all_page_section_refs[db_name] = page_section_refs
+                            if section_content_map:
+                                logger.info(f"Collected section content map from {db_name} with {len(section_content_map)} sections")
+                                all_section_content_maps[db_name] = section_content_map
                                 
                             status_block = f"**Database:** {db_display_name}\n**Status:** {status_summary}\n---\n"
                             yield status_block
@@ -444,27 +467,60 @@ def _model_generator(
                         # --- Legacy Debug Block Removed ---
                         yield "\n\n---"
                         
-                        # Stream file links if available
+                        # Stream file links if available with enhanced page/section navigation
                         logger.info(f"Checking file links: all_file_links has {len(all_file_links)} items")
                         if all_file_links:
                             yield "\n\n## 📎 Referenced Documents\n\n"
                             seen_links = set()  # Avoid duplicates
+                            
+                            # Group file links by document to create enhanced links with page/section data
                             for link_info in all_file_links:
                                 file_link = link_info.get("file_link")
                                 document_name = link_info.get("document_name", "Unknown Document")
                                 logger.debug(f"Processing link: {file_link} for document: {document_name}")
-                                # Include all documents, even with blank file links
-                                link_key = f"{file_link}|{document_name}"  # Unique key for link+doc combo
-                                if link_key not in seen_links:
-                                    seen_links.add(link_key)
-                                    # Generate the HTML link in the specified format
+                                
+                                # Create base link key for deduplication
+                                link_key = f"{file_link}|{document_name}"
+                                if link_key in seen_links:
+                                    continue
+                                seen_links.add(link_key)
+                                
+                                # Find page/section data for this document across all databases
+                                enhanced_links = []
+                                for db_name, page_refs in all_page_section_refs.items():
+                                    section_content = all_section_content_maps.get(db_name, {})
+                                    
+                                    if page_refs and section_content:
+                                        # Create page-specific links with highlight text
+                                        for page_num, section_ids in page_refs.items():
+                                            for section_id in section_ids:
+                                                content_key = f"{page_num}:{section_id}"
+                                                highlight_text = section_content.get(content_key, "")
+                                                
+                                                if highlight_text:
+                                                    # Truncate highlight text to manageable length for URL
+                                                    highlight_text_short = highlight_text[:200] + "..." if len(highlight_text) > 200 else highlight_text
+                                                    # Escape quotes for JavaScript
+                                                    highlight_text_escaped = highlight_text_short.replace('"', '\\"').replace("'", "\\'")
+                                                    
+                                                    if file_link:
+                                                        enhanced_link = f'<a class="chatbot-link" href=\'javascript:window.maven.openPdf("{file_link}", {page_num}, "{highlight_text_escaped}")\'>📄 {document_name} (Page {page_num}, Section {section_id})</a>'
+                                                    else:
+                                                        enhanced_link = f'<a class="chatbot-link" href=\'javascript:window.maven.openPdf("", {page_num}, "{highlight_text_escaped}")\'>📄 {document_name} (Page {page_num}, Section {section_id})</a>'
+                                                    enhanced_links.append(enhanced_link)
+                                
+                                # If no enhanced links were created, fall back to basic link
+                                if not enhanced_links:
                                     if not file_link:
-                                        # For blank links, use empty string or placeholder
-                                        html_link = f'<a class="chatbot-link" href=\'javascript:window.maven.openPdf("")\'>📄 {document_name}</a>\n'
+                                        html_link = f'<a class="chatbot-link" href=\'javascript:window.maven.openPdf("")\'>📄 {document_name}</a>'
                                     else:
-                                        html_link = f'<a class="chatbot-link" href=\'javascript:window.maven.openPdf("{file_link}")\'>📄 {document_name}</a>\n'
-                                    logger.info(f"Yielding HTML link: {html_link.strip()}")
-                                    yield html_link
+                                        html_link = f'<a class="chatbot-link" href=\'javascript:window.maven.openPdf("{file_link}")\'>📄 {document_name}</a>'
+                                    enhanced_links.append(html_link)
+                                
+                                # Yield all links for this document
+                                for link in enhanced_links:
+                                    logger.info(f"Yielding enhanced HTML link: {link}")
+                                    yield f"{link}\n"
                             yield "\n"
                         else:
                             logger.warning("No file links collected from any database")
