@@ -522,20 +522,13 @@ def _model_generator(
                                         # Get all content pieces for this page and clean them
                                         content_pieces = []
                                         for content in page_content_map[page_num]:
-                                            # Clean markdown formatting characters that could break display
-                                            content_clean = (content
-                                                .replace('"', "'")      # Replace quotes to avoid JavaScript issues
-                                                .replace('`', "'")      # Remove backticks (code blocks)
-                                                .replace('|', ' ')      # Remove pipes (tables)
-                                                .replace('*', ' ')      # Remove asterisks (bold/italic)
-                                                .replace('#', ' ')      # Remove hashes (headers)
-                                                .replace('[', '(')      # Replace brackets
-                                                .replace(']', ')')
-                                                .replace('\n', ' ')     # Replace newlines with spaces
-                                                .replace('\r', ' ')     # Replace carriage returns
-                                                .replace('  ', ' ')     # Collapse multiple spaces
-                                                .strip()
-                                            )
+                                            # Strip ALL formatting - keep only words for highlighting
+                                            import re
+                                            # Remove all markdown/special characters and keep only words and basic punctuation
+                                            content_clean = re.sub(r'[|*#`_~\[\]{}\\<>@$%^&+=]', ' ', content)  # Remove special chars
+                                            content_clean = re.sub(r'["\']', '', content_clean)                    # Remove quotes
+                                            content_clean = re.sub(r'\s+', ' ', content_clean)                     # Collapse whitespace
+                                            content_clean = content_clean.strip()                                  # Trim edges
                                             
                                             # No character limit - include full content for highlighting
                                             content_pieces.append(f'"{content_clean}"')
