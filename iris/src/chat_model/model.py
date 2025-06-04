@@ -514,7 +514,7 @@ def _model_generator(
                                     elif len(sorted_pages) <= 3:
                                         page_description = f"Pages {', '.join(map(str, sorted_pages))}"
                                     else:
-                                        page_description = f"Pages {sorted_pages[0]}-{sorted_pages[-1]} ({len(sorted_pages)} pages)"
+                                        page_description = f"Pages {sorted_pages[0]}-{sorted_pages[-1]}"
                                     
                                     # Create clean bracket format: '[page1:"text1","text2"][page2:"text3","text4"]'
                                     page_brackets = []
@@ -539,17 +539,23 @@ def _model_generator(
                                     
                                     # Join all page brackets
                                     page_data_string = "".join(page_brackets)
+                                    logger.info(f"DEBUG: Page brackets: {page_brackets}")
+                                    logger.info(f"DEBUG: Final page_data_string: {page_data_string}")
                                     
                                     if file_link:
                                         html_link = f'<a class="chatbot-link" href=\'javascript:window.maven.openPdf("{file_link}", "{page_data_string}")\'>📄 {document_name} ({page_description})</a>'
+                                        logger.info(f"DEBUG: Full href link with page data: javascript:window.maven.openPdf(\"{file_link}\", \"{page_data_string}\")")
                                     else:
                                         html_link = f'<a class="chatbot-link" href=\'javascript:window.maven.openPdf("", "{page_data_string}")\'>📄 {document_name} ({page_description})</a>'
+                                        logger.info(f"DEBUG: Full href link with page data (no file): javascript:window.maven.openPdf(\"\", \"{page_data_string}\")")
                                 else:
                                     # Fall back to basic link if no page/section data
                                     if not file_link:
                                         html_link = f'<a class="chatbot-link" href=\'javascript:window.maven.openPdf("")\'>📄 {document_name}</a>'
+                                        logger.info(f"DEBUG: Basic href link (no file): javascript:window.maven.openPdf(\"\")")
                                     else:
                                         html_link = f'<a class="chatbot-link" href=\'javascript:window.maven.openPdf("{file_link}")\'>📄 {document_name}</a>'
+                                        logger.info(f"DEBUG: Basic href link: javascript:window.maven.openPdf(\"{file_link}\")")
                                 
                                 logger.info(f"Yielding enhanced HTML link: {html_link}")
                                 yield f"{html_link}\n"

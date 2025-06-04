@@ -26,7 +26,7 @@ Your objective is to:
 1. Determine the relevance of the provided document content to the user query.
 2. Generate a concise status flag summarizing the findings' relevance.
 3. Synthesize a detailed, structured research report in Markdown format using ONLY information from the provided documents.
-4. Include accurate citations on separate lines after each paragraph or key point using the format: ***Source: Document Name, Page X, Section Name*** in bold italic. Use the most specific section identifier available (name or number).
+4. Include accurate citations on separate lines after each paragraph or key point using the format: ***Source: Document Name, Page X, Section Name*** in bold italic. PRIORITIZE using the actual section name from the content (e.g., "Introduction", "Methodology", "Key Requirements") rather than just the section ID number. Only use the section ID number if no descriptive section name is available.
 5. Ensure the report is optimized for consumption by another AI agent (the Summarizer).
 6. Adhere strictly to all compliance restrictions.
 """

@@ -116,7 +116,7 @@ SUMMARIZER_SPECIFIC_GUARDRAILS = """
 4. Maintain neutrality when presenting conflicting information found in the internal reports.
 5. For 'metadata' scope: Never modify or interpret the raw results.
 6. For 'research' scope: Focus on synthesizing the provided internal reports into a user-facing answer.
-7. **Integrate Citations:** Accurately incorporate citations from the internal research reports into the final response. Use the format: Content paragraph followed by a new line with ***Source: Document Name, Page X, Section Name*** in bold italic.
+7. **Integrate Citations:** Accurately incorporate citations from the internal research reports into the final response. Use the format: Content paragraph followed by a new line with ***Source: Document Name, Page X, Section Name*** in bold italic. Use the actual section name (e.g., "Introduction", "Key Requirements") rather than just section numbers when available.
 8. Highlight limitations in the research when they exist based on the internal reports.
 9. **Strict Adherence to Data Sourcing:** Remember to strictly follow the `<CRITICAL_DATA_SOURCING>` rules defined in the global `<RESTRICTIONS_AND_GUIDELINES>`. Your response MUST be derived *exclusively* from the text provided in the `aggregated_results`. Do NOT introduce any facts, concepts, standard names/numbers, definitions, or interpretations not explicitly present *within* the input reports.
 </SUMMARIZER_GUARDRAILS>
@@ -280,15 +280,15 @@ The policy emphasizes the importance of contemporaneous documentation to support
 
 The primary internal policy outlines the general hedge accounting criteria under IFRS 9, including the need for formal designation and documentation at inception and ongoing effectiveness testing.
 
-***Source: CAPM Policy HedgeAcct IFRS9, Page 15, Section 2.1***
+***Source: CAPM Policy HedgeAcct IFRS9, Page 15, Designation and Documentation Requirements***
 
-***Source: CAPM Policy HedgeAcct IFRS9, Page 22, Section 4.3***
+***Source: CAPM Policy HedgeAcct IFRS9, Page 22, Effectiveness Testing Procedures***
 
 For the specific case of using cross-currency swaps to hedge forecasted foreign currency debt issuance, an APG Wiki entry concludes that the critical terms match method is typically suitable when key parameters align, and provides a specific documentation checklist for this transaction type.
 
-***Source: Wiki Entry CrossCurrencySwap Hedge 2022-11, Page 3, Conclusion Para 3***
+***Source: Wiki Entry CrossCurrencySwap Hedge 2022-11, Page 3, Analysis and Conclusions***
 
-***Source: Wiki Entry CrossCurrencySwap Hedge 2022-11, Page 5, Documentation Checklist***
+***Source: Wiki Entry CrossCurrencySwap Hedge 2022-11, Page 5, Required Documentation Checklist***
 
 
 **Example 2: Applying IFRS 15 to a New Service Offering**
