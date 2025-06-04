@@ -413,7 +413,7 @@ SYNTHESIS_TOOL_SCHEMA = {
                 },
                 "detailed_research": {
                     "type": "string",
-                    "description": "Detailed, structured markdown report synthesizing information from documents, including citations (document and section names).",
+                    "description": "Detailed, structured markdown report synthesizing information from documents. Include citations on separate lines after each paragraph using: ***Source: Document Name, Page X, Section Name*** in bold italic format.",
                 },
                 "page_numbers": {
                     "type": "array",

@@ -116,7 +116,7 @@ SUMMARIZER_SPECIFIC_GUARDRAILS = """
 4. Maintain neutrality when presenting conflicting information found in the internal reports.
 5. For 'metadata' scope: Never modify or interpret the raw results.
 6. For 'research' scope: Focus on synthesizing the provided internal reports into a user-facing answer.
-7. **Integrate Citations:** Accurately incorporate citations (e.g., "Source: [Document Name], Section: [Section Name]") provided in the internal research reports into the final response.
+7. **Integrate Citations:** Accurately incorporate citations from the internal research reports into the final response. Use the format: Content paragraph followed by a new line with ***Source: Document Name, Page X, Section Name*** in bold italic.
 8. Highlight limitations in the research when they exist based on the internal reports.
 9. **Strict Adherence to Data Sourcing:** Remember to strictly follow the `<CRITICAL_DATA_SOURCING>` rules defined in the global `<RESTRICTIONS_AND_GUIDELINES>`. Your response MUST be derived *exclusively* from the text provided in the `aggregated_results`. Do NOT introduce any facts, concepts, standard names/numbers, definitions, or interpretations not explicitly present *within* the input reports.
 </SUMMARIZER_GUARDRAILS>
@@ -159,12 +159,12 @@ You will receive:
     1. **Provide a Concise Answer:** Focus on directly answering the specific question using only the most relevant information extracted from the internal reports.
     2. **Minimize Detail:** Avoid extensive background, comparison of multiple sources, detailed procedural steps, or discussion of conflicts/gaps unless *essential* to directly answer the simple question.
     3. **Prioritize Clarity and Brevity:** The goal is a short, accurate, and easy-to-understand response.
-    4. **Integrate Essential Citations:** Include citations only for the specific facts presented in the concise answer, using the full format provided in the internal reports.
+    4. **Integrate Essential Citations:** Include citations only for the specific facts presented in the concise answer. Use the format: Content followed by a new line with ***Source: Document Name, Page X, Section Name*** in bold italic.
 
   **B. If Original Query was Complex/Research-Oriented:**
     1. **Perform Comprehensive Synthesis:** Synthesize the key findings, analyses, definitions, examples, procedures, etc., relevant to the user's original query by reading and interpreting the provided internal research reports from `aggregated_results`.
     2. **Present Detailed Answer:** Present the answer directly to the user in a clear, coherent, and well-structured manner, potentially including background, different perspectives, and procedural details found in the reports.
-    3. **Integrate Full Citations:** Incorporate the detailed citations provided within the internal reports (e.g., `(Source: [Document Identifier], Path: [Full Hierarchy Path], Standard: [Standard], Code: [Standard Code])`) directly into your synthesized response where appropriate to attribute information. Ensure the full path and relevant details are included as provided in the internal report's citation.
+    3. **Integrate Full Citations:** Incorporate citations from the internal reports by adding a new line after each paragraph or key point with ***Source: Document Name, Page X, Section Name*** in bold italic format. Extract the document name, page number, and section details from the internal report citations.
     4. **Highlight Conflicts/Gaps:** Use the subagents' status flags and report content to identify and clearly explain any significant differences, inconsistencies, or gaps across the sources. Apply `PATTERN_RECOGNITION_INSTRUCTIONS`.
     5. **Signal Confidence:** Use the subagents' status flags and the quality/consistency of information found in the reports to apply `CONFIDENCE_SIGNALING` appropriately throughout your response.
     6. **Provide Context:** Briefly explain the scope of the research undertaken (which databases were consulted) and provide an overall assessment of the findings based on the status flags (e.g., "Research across CAPM and ICFR found direct answers, while Memos provided related context...").
@@ -216,7 +216,7 @@ For 'research' scope:
 - A comprehensive yet concise synthesized answer based on internal research reports.
 - Clear introduction, body paragraphs, and conclusion.
 - Markdown headings and bullet points for readability.
-- Integrated citations from internal reports (e.g., "(Source: [Document Identifier], Path: [Full Hierarchy Path], Standard: [Standard], Code: [Standard Code])").
+- Integrated citations from internal reports using the format: ***Source: Document Name, Page X, Section Name*** on separate lines after relevant content.
 - Highlighted conflicts or knowledge gaps based on internal reports.
 - No preamble text (e.g., "Here is the summary:").
 """
@@ -278,7 +278,17 @@ The policy emphasizes the importance of contemporaneous documentation to support
 
 *Desired Synthesized Output:*
 
-The primary internal policy outlines the general hedge accounting criteria under IFRS 9, including the need for formal designation and documentation at inception (Source: CAPM Policy HedgeAcct IFRS9, Path: Section 2.1) and ongoing effectiveness testing (Source: CAPM Policy HedgeAcct IFRS9, Path: Section 4.3). For the specific case of using cross-currency swaps to hedge forecasted foreign currency debt issuance, an APG Wiki entry concludes that the critical terms match method is typically suitable when key parameters align (Source: Wiki Entry CrossCurrencySwap Hedge 2022-11, Path: Conclusion Para 3), and provides a specific documentation checklist for this transaction type (Source: Wiki Entry CrossCurrencySwap Hedge 2022-11, Path: Documentation Checklist).
+The primary internal policy outlines the general hedge accounting criteria under IFRS 9, including the need for formal designation and documentation at inception and ongoing effectiveness testing.
+
+***Source: CAPM Policy HedgeAcct IFRS9, Page 15, Section 2.1***
+
+***Source: CAPM Policy HedgeAcct IFRS9, Page 22, Section 4.3***
+
+For the specific case of using cross-currency swaps to hedge forecasted foreign currency debt issuance, an APG Wiki entry concludes that the critical terms match method is typically suitable when key parameters align, and provides a specific documentation checklist for this transaction type.
+
+***Source: Wiki Entry CrossCurrencySwap Hedge 2022-11, Page 3, Conclusion Para 3***
+
+***Source: Wiki Entry CrossCurrencySwap Hedge 2022-11, Page 5, Documentation Checklist***
 
 
 **Example 2: Applying IFRS 15 to a New Service Offering**
@@ -300,7 +310,21 @@ The primary internal policy outlines the general hedge accounting criteria under
 
 *Desired Synthesized Output:*
 
-Based on the official standard, IFRS 15 mandates the identification of distinct performance obligations in contracts (Source: IASB Official Text, Path: IFRS 15 > Paragraph 27, Standard: IFRS 15, Code: Para 27) and revenue recognition upon their satisfaction (Source: IASB Official Text, Path: IFRS 15 > Paragraph 31, Standard: IFRS 15, Code: Para 31). Estimation of variable consideration is required, but inclusion in the transaction price is limited to amounts where a significant reversal is highly improbable (Source: IASB Official Text, Path: IFRS 15 > Paragraph 56, Standard: IFRS 15, Code: Para 56). An internal accounting memo applied this standard to the new 'Cloud Analytics Platform' offering (Source: Memo CloudAnalytics RevRec 2024-Q1, Path: Scope), concluding that the setup fee and monthly access represent distinct performance obligations (Source: Memo CloudAnalytics RevRec 2024-Q1, Path: Analysis POs). The memo also provides specific guidance on estimating variable consideration from usage tiers for this service (Source: Memo CloudAnalytics RevRec 2024-Q1, Path: Variable Consideration Estimate).
+Based on the official standard, IFRS 15 mandates the identification of distinct performance obligations in contracts and revenue recognition upon their satisfaction. Estimation of variable consideration is required, but inclusion in the transaction price is limited to amounts where a significant reversal is highly improbable.
+
+***Source: IASB Official Text IFRS 15, Page 12, Paragraph 27***
+
+***Source: IASB Official Text IFRS 15, Page 14, Paragraph 31***
+
+***Source: IASB Official Text IFRS 15, Page 23, Paragraph 56***
+
+An internal accounting memo applied this standard to the new Cloud Analytics Platform offering, concluding that the setup fee and monthly access represent distinct performance obligations. The memo also provides specific guidance on estimating variable consideration from usage tiers for this service.
+
+***Source: Memo CloudAnalytics RevRec 2024-Q1, Page 2, Scope Section***
+
+***Source: Memo CloudAnalytics RevRec 2024-Q1, Page 5, Analysis POs Section***
+
+***Source: Memo CloudAnalytics RevRec 2024-Q1, Page 7, Variable Consideration Estimate Section***
 
 
 **Example 3: Handling Conflicting Guidance on Software Capitalization**
@@ -322,7 +346,19 @@ Based on the official standard, IFRS 15 mandates the identification of distinct 
 
 *Desired Synthesized Output:*
 
-Regarding the capitalization of internally developed software costs, the internal policy mandates expensing costs from the preliminary project stage (Source: CAPM Policy SoftwareDev IAS38, Path: Section 5.2.1) and explicitly prohibits capitalizing training costs (Source: CAPM Policy SoftwareDev IAS38, Path: Section 5.4.b). Costs from the application development stage are capitalizable only if specific criteria are met (Source: CAPM Policy SoftwareDev IAS38, Path: Section 5.3). However, there appears to be differing external guidance regarding cloud computing arrangements (SaaS); EY's guidance suggests certain configuration costs might be capitalizable if they meet the definition of an intangible asset (Source: EY Global IFRS Update - SaaS Costs, Path: Issue 12 > Page 5), which potentially conflicts with interpretations expensing most such costs. Further analysis may be needed to reconcile the internal policy with this external perspective for SaaS arrangements.
+Regarding the capitalization of internally developed software costs, the internal policy mandates expensing costs from the preliminary project stage and explicitly prohibits capitalizing training costs. Costs from the application development stage are capitalizable only if specific criteria are met.
+
+***Source: CAPM Policy SoftwareDev IAS38, Page 8, Section 5.2.1***
+
+***Source: CAPM Policy SoftwareDev IAS38, Page 12, Section 5.4.b***
+
+***Source: CAPM Policy SoftwareDev IAS38, Page 10, Section 5.3***
+
+However, there appears to be differing external guidance regarding cloud computing arrangements (SaaS). EY's guidance suggests certain configuration costs might be capitalizable if they meet the definition of an intangible asset, which potentially conflicts with interpretations expensing most such costs.
+
+***Source: EY Global IFRS Update - SaaS Costs, Page 5, Issue 12***
+
+Further analysis may be needed to reconcile the internal policy with this external perspective for SaaS arrangements.
 </CITATION_INTEGRATION_EXAMPLES>
 """,
         # --- END EXAMPLES ---
