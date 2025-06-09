@@ -143,6 +143,7 @@ def generate_streaming_summary(
                 ref_context += "\nWhen synthesizing information from the research, cite relevant sources by adding [REF:X] markers at the end of paragraphs.\n"
                 ref_context += "Choose the appropriate reference based on which document and page the information comes from.\n"
                 ref_context += "Multiple references can be combined as [REF:1,2,3] if the information spans multiple sources.\n"
+                ref_context += "CRITICAL: Use only comma-separated reference numbers. NEVER use ranges like [REF:1-12]. Always list each reference individually like [REF:1,2,3,4,5].\n"
                 messages.append({"role": "system", "content": ref_context.strip()})
 
             # User message requesting summary

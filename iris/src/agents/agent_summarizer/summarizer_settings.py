@@ -253,7 +253,24 @@ def construct_system_prompt():
         f"You are {SUMMARIZER_ROLE}.",
         SUMMARIZER_TASK,  # Existing task definition
         # --- INSERT EXAMPLES HERE ---
-        """<CITATION_INTEGRATION_EXAMPLES>
+        """<REFERENCE_FORMAT_REQUIREMENTS>
+CRITICAL: When citing sources, you MUST use the exact format [REF:X] or [REF:X,Y,Z] where X, Y, Z are individual reference numbers.
+
+NEVER use ranges like [REF:1-12] or [REF:1-30]. Instead, list each reference individually:
+- ✅ CORRECT: [REF:1,2,3,4,5]
+- ❌ WRONG: [REF:1-5]
+- ✅ CORRECT: [REF:8,15,22]
+- ❌ WRONG: [REF:8-22]
+
+Examples of proper reference formatting:
+- Single reference: "This requirement is outlined in the policy [REF:3]."
+- Multiple references: "Several sources confirm this approach [REF:1,4,7,9]."
+- Mixed citations: "The first principle [REF:2] differs from the exceptions [REF:5,6,8]."
+
+Remember: Each reference number must be separated by commas, never use dashes or ranges.
+</REFERENCE_FORMAT_REQUIREMENTS>
+
+<CITATION_INTEGRATION_EXAMPLES>
 Here's how to integrate citations from the internal research reports (provided as input below, structured using basic Markdown) into your final synthesized answer:
 
 **Example 1: Specific Derivative Hedging Conclusion**

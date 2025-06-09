@@ -105,7 +105,24 @@ def _process_final_references(buffer: str, reference_index: Dict[str, Dict[str, 
     # Find all [REF:X] or [REF:X,Y,Z] patterns
     def replace_refs(match):
         ref_text = match.group(1)
-        ref_ids = [id.strip() for id in ref_text.split(",")]
+        
+        # Parse both comma-separated and range formats
+        ref_ids = []
+        for part in ref_text.split(","):
+            part = part.strip()
+            if "-" in part:
+                # Handle ranges like "1-12"
+                try:
+                    start, end = part.split("-", 1)
+                    start_num = int(start.strip())
+                    end_num = int(end.strip())
+                    ref_ids.extend(str(i) for i in range(start_num, end_num + 1))
+                except ValueError:
+                    # If parsing fails, treat as regular ID
+                    ref_ids.append(part)
+            else:
+                ref_ids.append(part)
+        
         logger.error(f"DEBUG FINAL REPLACE: Found reference {match.group(0)} with IDs: {ref_ids}")
 
         # Generate href links - group by page to avoid duplicates
@@ -139,7 +156,7 @@ def _process_final_references(buffer: str, reference_index: Dict[str, Dict[str, 
             logger.error(f"DEBUG FINAL REPLACE: No links found, keeping original: {match.group(0)}")
             return match.group(0)  # Keep original if no match
 
-    processed = re.sub(r"\[REF:([\d,\s]+)\]", replace_refs, buffer)
+    processed = re.sub(r"\[REF:([\d,\s\-]+)\]", replace_refs, buffer)
     logger.error(f"DEBUG FINAL: Final processed content: {repr(processed)}")
     yield processed
 
@@ -157,7 +174,7 @@ def _process_reference_buffer(buffer: str, reference_index: Dict[str, Dict[str, 
     logger.error(f"DEBUG STREAM: Complete reference_index: {reference_index}")
     
     # If buffer is shorter than buffer_size and doesn't contain complete references, keep buffering
-    ref_pattern = r"\[REF:([\d,\s]+)\]"
+    ref_pattern = r"\[REF:([\d,\s\-]+)\]"
     
     # Check if we have complete reference patterns
     refs_in_buffer = list(re.finditer(ref_pattern, buffer))
@@ -177,7 +194,23 @@ def _process_reference_buffer(buffer: str, reference_index: Dict[str, Dict[str, 
         # Process references from end to start to maintain string positions
         for match in reversed(refs_in_buffer):
             ref_text = match.group(1)
-            ref_ids = [id.strip() for id in ref_text.split(",")]
+            
+            # Parse both comma-separated and range formats
+            ref_ids = []
+            for part in ref_text.split(","):
+                part = part.strip()
+                if "-" in part:
+                    # Handle ranges like "1-12"
+                    try:
+                        start, end = part.split("-", 1)
+                        start_num = int(start.strip())
+                        end_num = int(end.strip())
+                        ref_ids.extend(str(i) for i in range(start_num, end_num + 1))
+                    except ValueError:
+                        # If parsing fails, treat as regular ID
+                        ref_ids.append(part)
+                else:
+                    ref_ids.append(part)
             
             # Generate href links - group by page to avoid duplicates
             page_links = {}  # Map (doc_name, page) -> href
