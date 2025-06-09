@@ -83,16 +83,22 @@ def extract_citations_and_build_references(
 
     # Build a mapping of document names to their file links
     doc_to_file = {}
+    logger.error(f"DEBUG EXTRACT_CITATIONS: file_links input: {file_links}")
     for link_info in file_links:
         doc_name = link_info.get("document_name", "")
         file_link = link_info.get("file_link", "")
+        logger.error(f"DEBUG EXTRACT_CITATIONS: Processing doc '{doc_name}' with file_link '{file_link}'")
         if doc_name:
             doc_to_file[doc_name] = file_link
+    logger.error(f"DEBUG EXTRACT_CITATIONS: Built doc_to_file mapping: {doc_to_file}")
 
     # Find all citations in the format: ***Source: Document Name, Page X, Section Name***
     citation_pattern = r"\*\*\*Source:\s*([^,]+),\s*Page\s*(\d+),\s*([^\*]+)\*\*\*"
     citations = list(re.finditer(citation_pattern, research_text))
 
+    logger.error(f"DEBUG EXTRACT_CITATIONS: Found {len(citations)} citations in research text")
+    logger.error(f"DEBUG EXTRACT_CITATIONS: Research text sample: {research_text[:500]}...")
+    
     if not citations:
         logger.warning("No citations found in research text")
         return research_text, {}
@@ -134,9 +140,11 @@ def extract_citations_and_build_references(
 
         # Create reference entry
         ref_id = str(ref_counter)
+        file_link_for_doc = doc_to_file.get(doc_name, "")
+        logger.error(f"DEBUG EXTRACT_CITATIONS: Creating ref {ref_id} for doc '{doc_name}', file_link='{file_link_for_doc}', page={page_num}, highlight='{highlight_text[:50]}...'")
         reference_index[ref_id] = {
             "doc_name": doc_name,
-            "file_link": doc_to_file.get(doc_name, ""),
+            "file_link": file_link_for_doc,
             "page": page_num,
             "section_name": section_name,
             "highlight_text": highlight_text,
@@ -939,16 +947,19 @@ def query_database_sync(
         elif scope == "research":
             # Collect file links from catalog before fetching content (including blank ones)
             file_links = []
+            logger.error(f"DEBUG PAR: Building file_links from catalog with {len(catalog)} items")
             for item in catalog:
                 if item.get("id") in selected_doc_ids:
+                    file_link_value = item.get("file_link", "")
+                    doc_name_value = item.get("document_name", "Unknown")
+                    logger.error(f"DEBUG PAR: Adding file_link for doc '{doc_name_value}': '{file_link_value}'")
                     file_links.append(
                         {
-                            "file_link": item.get(
-                                "file_link", ""
-                            ),  # Use empty string if None
-                            "document_name": item.get("document_name", "Unknown"),
+                            "file_link": file_link_value,  # Use empty string if None
+                            "document_name": doc_name_value,
                         }
                     )
+            logger.error(f"DEBUG PAR: Final file_links list: {file_links}")
 
             # Fetch content and synthesize
             documents = fetch_document_content(selected_doc_ids)  # Use par function
@@ -1048,6 +1059,7 @@ def query_database_sync(
                 logger.info(
                     f"Modified research with {len(reference_index)} reference markers"
                 )
+                logger.error(f"DEBUG PAR: Final reference_index: {reference_index}")
             else:
                 reference_index = {}
 
