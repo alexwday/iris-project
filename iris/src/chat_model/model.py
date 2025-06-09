@@ -617,10 +617,10 @@ def _model_generator(
                 # Display plan...
                 available_databases = get_available_databases()
                 if scope == "metadata":
-                    yield "---\n# 🔍 File Search Plan\n\n"
+                    yield "# 🔍 File Search Plan\n\n"
                     yield f"## Search Criteria\n{research_statement}\n\n"
                 else:
-                    yield "---\n# 📋 Research Plan\n\n"
+                    yield "# 📋 Research Plan\n\n"
                     yield f"## Research Statement\n{research_statement}\n\n"
                 selected_db_display_names = [
                     available_databases.get(db_name, {}).get("name", db_name)
@@ -636,7 +636,7 @@ def _model_generator(
                             ", ".join(selected_db_display_names[:-1])
                             + f", and {selected_db_display_names[-1]}"
                         )
-                    yield f"Searching the following databases using the full research statement: {names_str}.\n\n---\n"
+                    yield f"Searching the following databases: {names_str}.\n\n---\n"
                 else:
                     yield "No databases selected for search.\n\n---\n"
                 logger.info("Displayed database selection plan.")
@@ -785,7 +785,7 @@ def _model_generator(
                                 )
                                 all_reference_indices[db_name] = reference_index
 
-                            status_block = f"**Database:** {db_display_name}\n**Status:** {status_summary}\n---\n"
+                            status_block = f"**Database:** {db_display_name}\n{status_summary}\n---\n"
                             yield status_block
 
                     logger.info("All concurrent database queries completed processing.")
@@ -885,118 +885,7 @@ def _model_generator(
                         # --- Legacy Debug Block Removed ---
                         yield "\n\n---"
 
-                        # Stream file links if available with enhanced page/section navigation
-                        logger.info(
-                            f"Checking file links: all_file_links has {len(all_file_links)} items"
-                        )
-                        if all_file_links:
-                            yield "\n\n## 📎 Referenced Documents\n\n"
-                            seen_links = set()  # Avoid duplicates
-
-                            # Create one link per document with aggregated page/section data
-                            for link_info in all_file_links:
-                                file_link = link_info.get("file_link")
-                                document_name = link_info.get(
-                                    "document_name", "Unknown Document"
-                                )
-                                logger.debug(
-                                    f"Processing link: {file_link} for document: {document_name}"
-                                )
-
-                                # Create base link key for deduplication
-                                link_key = f"{file_link}|{document_name}"
-                                if link_key in seen_links:
-                                    continue
-                                seen_links.add(link_key)
-
-                                # Aggregate all page/section data for this document across all databases
-                                page_content_map = (
-                                    {}
-                                )  # Maps page_num -> combined content for that page
-
-                                for db_name, page_refs in all_page_section_refs.items():
-                                    section_content = all_section_content_maps.get(
-                                        db_name, {}
-                                    )
-
-                                    if page_refs and section_content:
-                                        # Collect content for each page
-                                        for page_num, section_ids in page_refs.items():
-                                            if page_num not in page_content_map:
-                                                page_content_map[page_num] = []
-
-                                            for section_id in section_ids:
-                                                content_key = f"{page_num}:{section_id}"
-                                                highlight_text = section_content.get(
-                                                    content_key, ""
-                                                )
-                                                if highlight_text:
-                                                    page_content_map[page_num].append(
-                                                        highlight_text
-                                                    )
-
-                                # Create enhanced links with page-specific content mapping
-                                if page_content_map:
-                                    # Sort pages for consistent display
-                                    sorted_pages = sorted(page_content_map.keys())
-
-                                    # Create separate links for each page since maven.openPdf expects 3 discrete parameters
-                                    page_links_html = []
-                                    for page_num in sorted_pages:
-                                        # Get all content pieces for this page and clean them
-                                        content_pieces = []
-                                        for content in page_content_map[page_num]:
-                                            # Strip ALL formatting - keep only words for highlighting
-                                            import re
-
-                                            # Remove all markdown/special characters and keep only words and basic punctuation
-                                            content_clean = re.sub(
-                                                r"[|*#`_~\[\]{}\\<>@$%^&+=]",
-                                                " ",
-                                                content,
-                                            )  # Remove special chars
-                                            content_clean = re.sub(
-                                                r'["\']', "", content_clean
-                                            )  # Remove quotes
-                                            content_clean = re.sub(
-                                                r"\s+", " ", content_clean
-                                            )  # Collapse whitespace
-                                            content_clean = (
-                                                content_clean.strip()
-                                            )  # Trim edges
-
-                                            if content_clean:  # Only add non-empty content
-                                                content_pieces.append(content_clean)
-
-                                        # Use first content piece for highlighting, or empty string if none
-                                        highlight_text = content_pieces[0] if content_pieces else ""
-                                        
-                                        # Create individual page link with 3-parameter format
-                                        if file_link:
-                                            page_link = f'<a class="chatbot-link" href=\'javascript:window.maven.openPdf("{file_link}", {page_num}, "{highlight_text}")\'> 📄 {document_name} Page {page_num}</a>'
-                                        else:
-                                            page_link = f'<a class="chatbot-link" href=\'javascript:window.maven.openPdf("", {page_num}, "{highlight_text}")\'> 📄 {document_name} Page {page_num}</a>'
-                                        
-                                        page_links_html.append(page_link)
-
-                                    # Combine all page links
-                                    html_link = " ".join(page_links_html)
-                                else:
-                                    # Fall back to basic link if no page/section data
-                                    if not file_link:
-                                        html_link = f'<a class="chatbot-link" href=\'javascript:window.maven.openPdf("", 1, "")\'>📄 {document_name}</a>'
-                                    else:
-                                        html_link = f'<a class="chatbot-link" href=\'javascript:window.maven.openPdf("{file_link}", 1, "")\'>📄 {document_name}</a>'
-
-                                logger.info(f"Yielding enhanced HTML link: {html_link}")
-                                yield f"{html_link}\n"
-                            yield "\n"
-                        else:
-                            logger.warning("No file links collected from any database")
-
-                    completion_message = f"\nCompleted processing {len(selected_databases)} database queries for scope '{scope}'.\n"
-                    yield completion_message
-                    logger.info(f"Completed process for scope '{scope}'")
+                        logger.info(f"Completed process for scope '{scope}'")
                 elif scope == "metadata":
                     # Metadata display logic...
                     seen_documents = {}
