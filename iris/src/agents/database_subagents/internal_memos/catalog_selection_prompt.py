@@ -1,25 +1,25 @@
 # internal_memos/catalog_selection_prompt.py
 """
-Prompt templates for selecting relevant Internal Memos documents from the catalog.
+Prompt templates for selecting relevant Memos documents from the catalog.
 
 This module contains prompts used to guide the LLM in selecting
-the most relevant documents from the Internal Memos catalog based on the user query.
+the most relevant documents from the Memos catalog based on the user query.
 """
 
 
 def get_catalog_selection_prompt(user_query: str, formatted_catalog: str) -> str:
     """
-    Generate a prompt for selecting relevant documents from the Internal Memos catalog.
+    Generate a prompt for selecting relevant documents from the Memos catalog.
 
     Args:
         user_query (str): The original user query
-        formatted_catalog (str): The formatted catalog of Internal Memos documents
+        formatted_catalog (str): The formatted catalog of Memos documents
 
     Returns:
         str: The formatted prompt for the LLM
     """
     prompt = f"""# TASK
-You are helping to search through a catalog of internal Memos documents to find
+You are helping to search through a catalog of internal PAR (Project Approval Request Guidance) documents to find
 the most relevant ones for answering a user query.
 
 ## User Query
@@ -41,7 +41,7 @@ Each catalog entry contains:
 4. Consider a breadth of documents if the query spans multiple topics
 
 # OUTPUT
-You must respond with ONLY the IDs of the most relevant documents.
+You must respond with ONLY the IDs of the most relevant documents. 
 Return a maximum of 5 document IDs.
 Your response must be formatted as a JSON array of document IDs as strings, for example:
 ["1", "2", "3"]

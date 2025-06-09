@@ -19,8 +19,8 @@ def get_catalog_selection_prompt(user_query: str, formatted_catalog: str) -> str
         str: The formatted prompt for the LLM
     """
     prompt = f"""# TASK
-You are helping to search through a catalog of internal External Reporting and Disclosure policy documents to find
-the most relevant ones for answering a user query. These documents cover topics like material information disclosure (LAW-8), subsidiary reporting (FIN-ACC-217), trading revenue reporting, and engagement/relationships with public accounting firms (FIN-ACC-212, FIN-ACC-213).
+You are helping to search through a catalog of internal PAR (Project Approval Request Guidance) documents to find
+the most relevant ones for answering a user query.
 
 ## User Query
 {user_query}

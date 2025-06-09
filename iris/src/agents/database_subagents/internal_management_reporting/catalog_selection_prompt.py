@@ -19,8 +19,8 @@ def get_catalog_selection_prompt(user_query: str, formatted_catalog: str) -> str
         str: The formatted prompt for the LLM
     """
     prompt = f"""# TASK
-You are helping to search through a catalog of internal Management Reporting policy and guidance documents to find
-the most relevant ones for answering a user query. These documents cover topics like general management reporting policies, performance metrics, intra-group transactions, and average balance reporting.
+You are helping to search through a catalog of internal PAR (Project Approval Request Guidance) documents to find
+the most relevant ones for answering a user query.
 
 ## User Query
 {user_query}

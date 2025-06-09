@@ -19,8 +19,8 @@ def get_catalog_selection_prompt(user_query: str, formatted_catalog: str) -> str
         str: The formatted prompt for the LLM
     """
     prompt = f"""# TASK
-You are helping to search through a catalog of internal Process and Controls policy documents to find
-the most relevant ones for answering a user query. These documents cover topics like Standard GL Naming Convention (FIN-ACC-22), Intra-group Accounts procedures (FIN-ACC-201), Internal Control over Financial Reporting (ICFR), and the Enterprise Internal Control Management Policy (ICMP).
+You are helping to search through a catalog of internal PAR (Project Approval Request Guidance) documents to find
+the most relevant ones for answering a user query.
 
 ## User Query
 {user_query}

@@ -21,9 +21,20 @@ MetadataResponse = List[Dict[str, Any]]
 # ResearchResponse is now a dictionary containing detailed research and status
 ResearchResponse = Dict[str, str]
 DatabaseResponse = Union[MetadataResponse, ResearchResponse]
-# Updated to include file links
+# Updated to include file links, page/section references, and section content
 FileLink = Dict[str, str]  # Contains 'file_link' and 'document_name'
-SubagentResult = Tuple[DatabaseResponse, Optional[List[str]], Optional[List[FileLink]]]  # result + doc_ids + file_links
+PageSectionRefs = Dict[int, List[int]]  # Maps page numbers to lists of section IDs
+SectionContentMap = Dict[str, str]  # Maps "page_num:section_id" to section content
+# Reference index for inline citations
+ReferenceIndex = Dict[str, Dict[str, Any]]  # Maps reference ID to reference details
+SubagentResult = Tuple[
+    DatabaseResponse,
+    Optional[List[str]],
+    Optional[List[FileLink]],
+    Optional[PageSectionRefs],
+    Optional[SectionContentMap],
+    Optional[ReferenceIndex],
+]  # result + doc_ids + file_links + page_sections + section_content + reference_index
 
 from ....initial_setup.env_config import config
 from ....initial_setup.db_config import connect_to_db
@@ -53,21 +64,145 @@ def format_catalog_for_llm(catalog_records: List[Dict[str, Any]]) -> str:
     return formatted_catalog.strip()
 
 
+def build_structured_reference_index(
+    page_numbers: List[int], 
+    file_links: List[FileLink], 
+    section_content_map: Dict[str, str]
+) -> ReferenceIndex:
+    """
+    Build reference index from structured data instead of parsing citations.
+    Creates simple page-based references with combined section text for highlighting.
+
+    Args:
+        page_numbers: List of page numbers referenced in the research
+        file_links: File links for the documents
+        section_content_map: Maps "page_num:section_id" to section content
+
+    Returns:
+        Reference index mapping ref_id to {file_link, page, doc_name, highlight_text}
+    """
+    import re
+
+    logger.error(f"DEBUG STRUCTURED_REF: Building reference index from {len(page_numbers)} pages")
+    logger.error(f"DEBUG STRUCTURED_REF: file_links: {file_links}")
+    logger.error(f"DEBUG STRUCTURED_REF: section_content_map keys: {list(section_content_map.keys())}")
+
+    # Build document name to file link mapping
+    doc_to_file = {}
+    for link_info in file_links:
+        doc_name = link_info.get("document_name", "")
+        file_link = link_info.get("file_link", "")
+        if doc_name and file_link:
+            doc_to_file[doc_name] = file_link
+
+    logger.error(f"DEBUG STRUCTURED_REF: doc_to_file mapping: {doc_to_file}")
+
+    reference_index = {}
+    ref_counter = 1
+
+    # Create one reference per page
+    for page_num in sorted(set(page_numbers)):  # Remove duplicates and sort
+        # Find all sections for this page in section_content_map
+        page_sections = []
+        for key, content in section_content_map.items():
+            if key.startswith(f"{page_num}:"):
+                page_sections.append(content)
+
+        # Combine all section content for this page
+        combined_content = " ".join(page_sections)
+        
+        # Clean the content for highlighting
+        content_clean = re.sub(r"[|*#`_~\[\]{}\\<>@$%^&+=]", " ", combined_content)
+        content_clean = re.sub(r'["\']', "", content_clean)
+        content_clean = re.sub(r"\s+", " ", content_clean).strip()
+        
+        # Use first file_link available (assuming single document for now)
+        file_link = ""
+        doc_name = "Unknown Document"
+        if file_links:
+            file_link = file_links[0].get("file_link", "")
+            doc_name = file_links[0].get("document_name", "Unknown Document")
+
+        ref_id = str(ref_counter)
+        reference_index[ref_id] = {
+            "doc_name": doc_name,
+            "file_link": file_link,
+            "page": page_num,
+            "section_name": f"Page {page_num}",
+            "highlight_text": content_clean,
+        }
+
+        logger.error(f"DEBUG STRUCTURED_REF: Created ref {ref_id} for page {page_num}, file_link='{file_link}', highlight_length={len(content_clean)}")
+        ref_counter += 1
+
+    logger.error(f"DEBUG STRUCTURED_REF: Final reference_index: {reference_index}")
+    return reference_index
+
+
 def format_documents_for_llm(documents: List[Dict[str, Any]]) -> str:
     """
     Format retrieved documents into a string that is optimized for LLM analysis.
+    Now reconstructs documents from page/section records in correct order and formats
+    for clear section separation with page/section references that the LLM can cite.
     """
     formatted_docs = ""
     for doc in documents:
         doc_name = doc.get("document_name", "Untitled")
         formatted_docs += f"# {doc_name}\n\n"
-        sections = doc.get("sections", [])
-        for section in sections:
-            section_name = section.get("section_name", "Untitled Section")
-            section_content = section.get("section_content", "No content available")
-            formatted_docs += f"## {section_name}\n\n"
-            formatted_docs += f"{section_content}\n\n"
-        formatted_docs += "---\n\n"
+
+        # Get page_sections and reconstruct document in proper order
+        page_sections = doc.get("page_sections", [])
+        if not page_sections:
+            formatted_docs += "No content available.\n\n"
+            continue
+
+        # Group sections by page number for clear organization
+        pages_dict: Dict[int, List[Dict[str, Any]]] = {}
+        for section in page_sections:
+            page_num = section.get("page_number", 0)
+            if page_num not in pages_dict:
+                pages_dict[page_num] = []
+            pages_dict[page_num].append(section)
+
+        # Process pages in order
+        for page_num in sorted(pages_dict.keys()):
+            formatted_docs += f"## Page {page_num}\n\n"
+
+            # Process sections within the page in order
+            page_sections_list = sorted(
+                pages_dict[page_num], key=lambda x: x.get("section_id", 0)
+            )
+
+            for section in page_sections_list:
+                section_id = section.get("section_id", 0)
+                section_content = section.get("section_content", "No content available")
+                section_name = section.get("section_name", f"Section {section_id}")
+                section_summary = section.get(
+                    "section_summary", f"Page {page_num}, Section {section_id}"
+                )
+
+                # Format each section with CLEAR metadata for LLM reference
+                logger.info(
+                    f"Memos DEBUG: Formatting section - Page {page_num}, Section {section_id}, Name: '{section_name}'"
+                )
+                formatted_docs += (
+                    f"### [PAGE: {page_num}, SECTION: {section_id}] {section_name}\n"
+                )
+                formatted_docs += f"**Section Summary:** {section_summary}\n\n"
+                # Add explicit instruction about section naming for citations
+                if section_name and not section_name.startswith("Section "):
+                    formatted_docs += f"**CITATION NOTE: When referencing this content, use the section name '{section_name}' rather than just the section number.**\n\n"
+                    logger.info(
+                        f"Memos DEBUG: Added citation note for descriptive section name: '{section_name}'"
+                    )
+                else:
+                    logger.info(
+                        f"Memos DEBUG: Generic section name detected: '{section_name}' - LLM should extract from content"
+                    )
+                formatted_docs += f"{section_content}\n\n"
+
+            formatted_docs += "---\n\n"
+
     return formatted_docs.strip()
 
 
@@ -88,7 +223,7 @@ def fetch_memos_catalog() -> List[Dict[str, Any]]:
                 """
                 SELECT id, document_name, document_description
                 FROM apg_catalog
-                WHERE document_source = 'internal_memo'
+                WHERE document_source = 'internal_memos'
                 ORDER BY document_name
             """
             )
@@ -98,7 +233,7 @@ def fetch_memos_catalog() -> List[Dict[str, Any]]:
                         "id": str(row[0]),
                         "document_name": row[1],
                         "document_description": row[2],
-                        "file_link": row[3] if row[3] else None,
+                        
                     }
                 )
         logger.info(
@@ -112,9 +247,10 @@ def fetch_memos_catalog() -> List[Dict[str, Any]]:
     return catalog_records
 
 
-def fetch_document_content(doc_ids: List[str]) -> List[Dict[str, Any]]:
+def fetch_memos_content(doc_ids: List[str]) -> List[Dict[str, Any]]:
     """
     Fetch the content of specified Memos documents from the database synchronously.
+    Now retrieves all page/section records with page_number, section_id, section_summary fields.
     """
     logger.info(f"Fetching Memos content for documents: {doc_ids}")
     if not doc_ids:
@@ -134,7 +270,7 @@ def fetch_document_content(doc_ids: List[str]) -> List[Dict[str, Any]]:
                 SELECT id, document_name
                 FROM apg_catalog
                 WHERE id::text IN ({placeholders})
-                AND document_source = 'internal_memo'
+                AND document_source = 'internal_memos'
             """,
                 doc_ids,
             )
@@ -146,24 +282,33 @@ def fetch_document_content(doc_ids: List[str]) -> List[Dict[str, Any]]:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    SELECT section_id, section_name, section_content
+                    SELECT section_id, section_name, section_content, page_number, section_summary
                     FROM apg_content
-                    WHERE document_source = 'internal_memo'
+                    WHERE document_source = 'internal_memos'
                     AND document_name = %s
-                    ORDER BY section_id
+                    ORDER BY page_number, section_id
                 """,
                     (doc_name,),
                 )
-                sections = []
+                page_sections = []
                 for row in cur.fetchall():
-                    sections.append(
+                    page_sections.append(
                         {
+                            "section_id": row[0],
                             "section_name": (row[1] if row[1] else f"Section {row[0]}"),
                             "section_content": row[2],
+                            "page_number": row[3],
+                            "section_summary": (
+                                row[4]
+                                if row[4]
+                                else f"Page {row[3]}, Section {row[0]} of {doc_name}"
+                            ),
                         }
                     )
-                if sections:
-                    result.append({"document_name": doc_name, "sections": sections})
+                if page_sections:
+                    result.append(
+                        {"document_name": doc_name, "page_sections": page_sections}
+                    )
         logger.info(f"Retrieved Memos content for {len(result)} documents from database")
     except Exception as e:
         logger.error(f"Error fetching Memos document content from database: {str(e)}")
@@ -182,13 +327,15 @@ def get_completion(
     token: Optional[str] = None,
     database_name: Optional[str] = None,
     **kwargs: Any,  # Accept additional kwargs for tools, tool_choice etc.
-) -> Tuple[Any, Optional[Dict[str, Any]]]:  # Returns (response_content, usage_details) tuple
+) -> Tuple[
+    Any, Optional[Dict[str, Any]]
+]:  # Returns (response_content, usage_details) tuple
     """
     Helper function to get a completion from the LLM synchronously.
     Handles standard completions and tool calls. Returns content and usage details.
     """
-    usage_details = None # Initialize
-    response = None # Initialize
+    usage_details = None  # Initialize
+    response = None  # Initialize
     try:
         model_config = config.get_model_config(capability)
         model_name = model_config["name"]
@@ -214,7 +361,7 @@ def get_completion(
         "messages": messages,
         "max_tokens": max_tokens,
         "temperature": temperature,
-        "database_name": database_name, # Pass database_name from caller
+        "database_name": database_name,  # Pass database_name from caller
         **kwargs,
     }
 
@@ -228,7 +375,7 @@ def get_completion(
     try:
         # Direct synchronous call - now returns a tuple (response, usage_details)
         result = call_llm(**call_params)
-        
+
         # Handle the new tuple format: (api_response, usage_details)
         if isinstance(result, tuple) and len(result) == 2:
             response, usage_details = result
@@ -237,9 +384,9 @@ def get_completion(
         else:
             # For backward compatibility in case it doesn't return a tuple
             response = result
-            usage_details = None # Ensure usage_details is None if not returned
+            usage_details = None  # Ensure usage_details is None if not returned
             logger.debug("call_llm did not return usage_details")
-            
+
     except Exception as llm_err:
         logger.error(f"call_llm failed: {llm_err}", exc_info=True)
         # Return error string and None for usage details
@@ -272,7 +419,9 @@ def get_completion(
         else:
             logger.error("LLM response object or choices attribute missing/empty.")
             response_value = "Error: Could not retrieve response content."
-        logger.debug("Returning extracted content string and usage details for standard completion.")
+        logger.debug(
+            "Returning extracted content string and usage details for standard completion."
+        )
         # Return the content string and usage details
         return response_value, usage_details
 
@@ -281,9 +430,9 @@ def select_relevant_documents(
     query: str,
     catalog: List[Dict[str, Any]],
     token: Optional[str] = None,
-    database_name: str = "internal_memos", # Default to memos
-    process_monitor=None, # Added process_monitor
-    stage_name: Optional[str] = None # Added stage_name
+    database_name: str = "internal_memos",  # Default to par
+    process_monitor=None,  # Added process_monitor
+    stage_name: Optional[str] = None,  # Added stage_name
 ) -> List[str]:
     """
     Use an LLM to select the most relevant Memos documents from the catalog based on the query (synchronous).
@@ -304,19 +453,25 @@ def select_relevant_documents(
             prompt=selection_prompt,
             max_tokens=200,
             token=token,
-            database_name=database_name # Pass the specific database name
+            database_name=database_name,  # Pass the specific database name
         )
 
         # Track token usage from LLM calls
         if selection_usage:
             logger.debug(f"Document selection usage: {selection_usage}")
             # Update process monitor if available
-            if process_monitor and stage_name: # Check if monitor and stage_name exist
-                process_monitor.add_llm_call_details_to_stage(stage_name, selection_usage)
-                process_monitor.add_stage_details(stage_name, task="document_selection") # Add task detail
+            if process_monitor and stage_name:  # Check if monitor and stage_name exist
+                process_monitor.add_llm_call_details_to_stage(
+                    stage_name, selection_usage
+                )
+                process_monitor.add_stage_details(
+                    stage_name, task="document_selection"
+                )  # Add task detail
 
         # Check if get_completion returned an error string
-        if isinstance(selection_response_str, str) and selection_response_str.startswith("Error:"):
+        if isinstance(
+            selection_response_str, str
+        ) and selection_response_str.startswith("Error:"):
             logger.error(
                 f"get_completion failed during document selection: {selection_response_str}"
             )
@@ -354,7 +509,9 @@ def select_relevant_documents(
                     f"Extracted Memos document IDs using fallback regex: {valid_ids}"
                 )
                 return valid_ids
-            logger.error("Could not extract Memos document IDs from response using fallback.")
+            logger.error(
+                "Could not extract Memos document IDs from response using fallback."
+            )
             return []
     except Exception as e:
         logger.error(f"Error during LLM Memos document selection: {str(e)}")
@@ -366,7 +523,7 @@ SYNTHESIS_TOOL_SCHEMA = {
     "type": "function",
     "function": {
         "name": "synthesize_research_findings",
-        "description": "Synthesizes research findings from provided documents and generates a status summary.",
+        "description": "Synthesizes research findings from provided documents and generates a status summary with page/section references.",
         "parameters": {
             "type": "object",
             "properties": {
@@ -376,10 +533,28 @@ SYNTHESIS_TOOL_SCHEMA = {
                 },
                 "detailed_research": {
                     "type": "string",
-                    "description": "Detailed, structured markdown report synthesizing information from documents, including citations (document and section names).",
+                    "description": "Detailed, structured markdown report synthesizing information from documents. Include citations on separate lines after each paragraph using: ***Source: Document Name, Page X, Section Name*** in bold italic format. CRITICAL: Extract actual section names/titles from within the document content (look for headers, bold titles, topic names) rather than using generic 'Section X' labels.",
+                },
+                "page_numbers": {
+                    "type": "array",
+                    "items": {"type": "integer"},
+                    "description": "List of page numbers referenced in the research findings (extracted from the document sections used).",
+                },
+                "section_ids_by_page": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                    },
+                    "description": "Object mapping page numbers (as string keys) to arrays of section IDs referenced on that page.",
                 },
             },
-            "required": ["status_summary", "detailed_research"],
+            "required": [
+                "status_summary",
+                "detailed_research",
+                "page_numbers",
+                "section_ids_by_page",
+            ],
         },
     },
 }
@@ -390,12 +565,12 @@ def synthesize_response_and_status(
     query: str,
     documents: List[Dict[str, Any]],
     token: Optional[str] = None,
-    database_name: str = "internal_memos", # Default to memos
-    process_monitor=None, # Added process_monitor
-    stage_name: Optional[str] = None # Added stage_name
-) -> ResearchResponse: # Return only ResearchResponse
+    database_name: str = "internal_memos",  # Default to par
+    process_monitor=None,  # Added process_monitor
+    stage_name: Optional[str] = None,  # Added stage_name
+) -> ResearchResponse:  # Return only ResearchResponse
     """
-    Use an LLM tool call to synthesize a detailed research response AND status summary for Memos (synchronous).
+    Use an LLM tool call to synthesize a detailed research response AND status summary for PAR (synchronous).
     """
     logger.info(
         f"Synthesizing response and status for {database_name} using tool call."
@@ -414,7 +589,7 @@ def synthesize_response_and_status(
         return {
             "detailed_research": default_research,
             "status_summary": default_no_info_status,
-        } # Removed None return
+        }  # Removed None return
 
     formatted_documents = format_documents_for_llm(documents)
     synthesis_prompt = get_content_synthesis_prompt(query, formatted_documents)
@@ -430,7 +605,7 @@ def synthesize_response_and_status(
             max_tokens=2500,
             temperature=0.2,
             token=token,
-            database_name=database_name, # Pass the specific database name
+            database_name=database_name,  # Pass the specific database name
             tools=[SYNTHESIS_TOOL_SCHEMA],
             tool_choice={
                 "type": "function",
@@ -442,17 +617,23 @@ def synthesize_response_and_status(
         if synthesis_usage:
             logger.debug(f"Research synthesis usage: {synthesis_usage}")
             # Update process monitor if available
-            if process_monitor and stage_name: # Check if monitor and stage_name exist
-                process_monitor.add_llm_call_details_to_stage(stage_name, synthesis_usage)
-                process_monitor.add_stage_details(stage_name, task="research_synthesis") # Add task detail
+            if process_monitor and stage_name:  # Check if monitor and stage_name exist
+                process_monitor.add_llm_call_details_to_stage(
+                    stage_name, synthesis_usage
+                )
+                process_monitor.add_stage_details(
+                    stage_name, task="research_synthesis"
+                )  # Add task detail
 
         # Check if get_completion returned an error string in the response part
-        if isinstance(synthesis_response_obj, str) and synthesis_response_obj.startswith("Error:"):
+        if isinstance(
+            synthesis_response_obj, str
+        ) and synthesis_response_obj.startswith("Error:"):
             logger.error(
                 f"get_completion failed for {database_name} synthesis: {synthesis_response_obj}"
             )
             error_result["detailed_research"] = synthesis_response_obj
-            return error_result # Return error dict
+            return error_result  # Return error dict
 
         # Process Tool Call Response
         if (
@@ -470,21 +651,59 @@ def synthesize_response_and_status(
                 logger.debug(f"Received tool arguments string: {arguments_str}")
                 try:
                     arguments = json.loads(arguments_str)
-                    if (
-                        "status_summary" in arguments
-                        and "detailed_research" in arguments
-                    ):
+                    required_keys = [
+                        "status_summary",
+                        "detailed_research",
+                        "page_numbers",
+                        "section_ids_by_page",
+                    ]
+                    if all(key in arguments for key in required_keys):
                         logger.info(
                             f"Successfully parsed synthesis tool call for {database_name}."
                         )
-                        # Ensure values are strings, default if not (though schema should enforce)
+                        # Ensure values have correct types, default if not
                         status = arguments.get("status_summary", default_error_status)
                         research = arguments.get("detailed_research", default_research)
+                        page_numbers = arguments.get("page_numbers", [])
+                        section_ids_by_page = arguments.get("section_ids_by_page", {})
+
+                        # Debug the generated research to check for section names in citations
+                        logger.info(
+                            f"Memos DEBUG: Generated detailed_research length: {len(research)} characters"
+                        )
+                        if "***Source:" in research:
+                            citation_count = research.count("***Source:")
+                            logger.info(
+                                f"Memos DEBUG: Found {citation_count} citations in detailed_research"
+                            )
+                            # Log first few citations for debugging
+                            import re
+
+                            citations = re.findall(r"\*\*\*Source:.*?\*\*\*", research)
+                            for i, citation in enumerate(
+                                citations[:3]
+                            ):  # Show first 3 citations
+                                logger.info(f"Memos DEBUG: Citation {i+1}: {citation}")
+                        else:
+                            logger.warning(
+                                "Memos DEBUG: No citations found in detailed_research - this may be the issue!"
+                            )
+
                         if not isinstance(status, str):
                             status = default_error_status
                         if not isinstance(research, str):
                             research = default_research
-                        return {"status_summary": status, "detailed_research": research} # Return result dict
+                        if not isinstance(page_numbers, list):
+                            page_numbers = []
+                        if not isinstance(section_ids_by_page, dict):
+                            section_ids_by_page = {}
+
+                        return {
+                            "status_summary": status,
+                            "detailed_research": research,
+                            "page_numbers": page_numbers,
+                            "section_ids_by_page": section_ids_by_page,
+                        }  # Return result dict
                     else:
                         logger.error(
                             f"Missing required keys in parsed tool arguments for {database_name}: {arguments}"
@@ -545,11 +764,15 @@ def synthesize_response_and_status(
 
 
 def query_database_sync(
-    query: str, scope: str, token: Optional[str] = None, process_monitor=None, query_stage_name: Optional[str] = None
-) -> SubagentResult: # Added query_stage_name
+    query: str,
+    scope: str,
+    token: Optional[str] = None,
+    process_monitor=None,
+    query_stage_name: Optional[str] = None,
+) -> SubagentResult:  # Added query_stage_name
     """
     Synchronously query the Internal Memos database based on the specified scope.
-    
+
     Args:
         query: The user's query to process
         scope: The type of data to return ("metadata" or "research")
@@ -557,18 +780,25 @@ def query_database_sync(
         process_monitor: Optional process monitor to track token usage
         query_stage_name (str, optional): The specific stage name for this query instance
                                           provided by the caller (e.g., worker).
-        
+
     Returns:
         Tuple containing the main database response, a list of selected document IDs (or None),
-        and a list of file links (or None).
+        a list of file links (or None), page/section references (or None), section content map (or None),
+        and reference index (or None).
     """
-    logger.info(
-        f"Querying Internal Memos database (sync): '{query}' with scope: {scope}"
-    )
-    database_name = "internal_memos" # Set database name
+    logger.error(f"DEBUG PAR START: Function called with query='{query}', scope='{scope}', token={'[SET]' if token else '[NONE]'}")
+    logger.info(f"Querying Internal Memos database (sync): '{query}' with scope: {scope}")
+    database_name = "internal_memos"  # Set database name
     default_error_status = "❌ Error during query processing."
     selected_doc_ids: Optional[List[str]] = None  # Initialize
     file_links: Optional[List[FileLink]] = None  # Initialize file links
+    page_section_refs: Optional[PageSectionRefs] = (
+        None  # Initialize page/section references
+    )
+    section_content_map: Optional[SectionContentMap] = (
+        None  # Initialize section content map
+    )
+    reference_index: Optional[ReferenceIndex] = None  # Initialize reference index
     # Use the passed-in stage name if available, otherwise default
     stage_name = query_stage_name or f"db_query_{database_name}_unknown"
     logger.debug(f"Using process monitor stage name: {stage_name}")
@@ -576,7 +806,7 @@ def query_database_sync(
 
     try:
         # Direct synchronous calls
-        catalog = fetch_memos_catalog() # Use memos function
+        catalog = fetch_memos_catalog()  # Use par function
         logger.info(f"Retrieved {len(catalog)} total Memos catalog entries")
         if not catalog:
             response: DatabaseResponse
@@ -587,18 +817,24 @@ def query_database_sync(
                     "detailed_research": "No documents found in the Internal Memos database catalog.",
                     "status_summary": "📄 No documents found in catalog.",
                 }
-            return response, selected_doc_ids, file_links  # Return empty response and None IDs/links
+            return (
+                response,
+                selected_doc_ids,
+                file_links,
+                page_section_refs,
+                section_content_map,
+                reference_index,
+            )  # Return empty response and None IDs/links/page_sections/content/refs
 
         # Select documents using the updated helper function
         selected_doc_ids = select_relevant_documents(
             query, catalog, token, database_name, process_monitor, stage_name
         )
-        
+
         logger.info(
             f"LLM selected {len(selected_doc_ids)} relevant Memos document IDs: {selected_doc_ids}"
         )
         if not selected_doc_ids:
-            response: DatabaseResponse
             if scope == "metadata":
                 response = []
             else:
@@ -606,72 +842,201 @@ def query_database_sync(
                     "detailed_research": "LLM did not select any relevant documents from the catalog based on the query.",
                     "status_summary": "📄 No relevant documents selected by LLM.",
                 }
-            
+
             # Add details to process monitor before returning
             if process_monitor:
-                process_monitor.add_stage_details(stage_name, 
-                    result_count=0, 
-                    document_ids=selected_doc_ids
+                process_monitor.add_stage_details(
+                    stage_name, result_count=0, document_ids=selected_doc_ids
                 )
-                
-            return response, selected_doc_ids, file_links  # Return empty response and empty IDs list/links
+
+            return (
+                response,
+                selected_doc_ids,
+                file_links,
+                page_section_refs,
+                section_content_map,
+                reference_index,
+            )  # Return empty response and empty IDs list/links/page_sections/content/refs
 
         # Process based on scope
         if scope == "metadata":
-            selected_items = [item for item in catalog if item.get("id") in selected_doc_ids]
-            logger.info(
-                f"Returning {len(selected_items)} selected Memos metadata items."
-            )
-            
+            selected_items = [
+                item for item in catalog if item.get("id") in selected_doc_ids
+            ]
+            logger.info(f"Returning {len(selected_items)} selected PAR metadata items.")
+
             # Collect file links from selected items (including blank ones)
             file_links = []
             for item in selected_items:
-                file_links.append({
-                    "file_link": item.get("file_link", ""),  # Use empty string if None
-                    "document_name": item.get("document_name", "Unknown")
-                })
-            
+                file_links.append(
+                    {
+                        "file_link": item.get(
+                            "file_link", ""
+                        ),  # Use empty string if None
+                        "document_name": item.get("document_name", "Unknown"),
+                    }
+                )
+
             # Add details to process monitor before returning
             if process_monitor:
-                process_monitor.add_stage_details(stage_name, 
-                    result_count=len(selected_items), 
-                    document_ids=selected_doc_ids
+                process_monitor.add_stage_details(
+                    stage_name,
+                    result_count=len(selected_items),
+                    document_ids=selected_doc_ids,
                 )
-                
-            return selected_items, selected_doc_ids, file_links  # Return metadata, IDs, and file links
-            
+
+            return (
+                selected_items,
+                selected_doc_ids,
+                file_links,
+                page_section_refs,
+                section_content_map,
+                reference_index,
+            )  # Return metadata, IDs, file links, and None page_sections/content/refs (metadata scope doesn't need them)
+
         elif scope == "research":
             # Collect file links from catalog before fetching content (including blank ones)
             file_links = []
+            logger.error(f"DEBUG PAR: Building file_links from catalog with {len(catalog)} items")
             for item in catalog:
                 if item.get("id") in selected_doc_ids:
-                    file_links.append({
-                        "file_link": item.get("file_link", ""),  # Use empty string if None
-                        "document_name": item.get("document_name", "Unknown")
-                    })
-            
+                    file_link_value = item.get("file_link", "")
+                    doc_name_value = item.get("document_name", "Unknown")
+                    logger.error(f"DEBUG PAR: Adding file_link for doc '{doc_name_value}': '{file_link_value}'")
+                    file_links.append(
+                        {
+                            "file_link": file_link_value,  # Use empty string if None
+                            "document_name": doc_name_value,
+                        }
+                    )
+            logger.error(f"DEBUG PAR: Final file_links list: {file_links}")
+
             # Fetch content and synthesize
-            documents = fetch_document_content(selected_doc_ids) # Use memos function
+            documents = fetch_memos_content(selected_doc_ids)  # Use par function
             logger.info(
                 f"Retrieved content for {len(documents)} Memos documents for research."
             )
-            
+
             # Get research synthesis using the updated helper function
             # synthesize_response_and_status now returns only the ResearchResponse dict
             research_result = synthesize_response_and_status(
                 query, documents, token, database_name, process_monitor, stage_name
             )
-            
+
+            # Extract page/section references from the tool response
+            page_numbers: List[int] = research_result.get("page_numbers", [])
+            section_ids_by_page_str: Dict[str, Any] = research_result.get(
+                "section_ids_by_page", {}
+            )
+
+            logger.info(
+                f"Memos DEBUG: Raw research_result keys: {list(research_result.keys())}"
+            )
+            logger.info(f"Memos DEBUG: Raw page_numbers from tool: {page_numbers}")
+            logger.info(
+                f"Memos DEBUG: Raw section_ids_by_page from tool: {section_ids_by_page_str}"
+            )
+
+            # Convert string keys to integers for page_section_refs
+            page_section_refs = {}
+            if isinstance(section_ids_by_page_str, dict):
+                for page_str, section_list in section_ids_by_page_str.items():
+                    try:
+                        page_num = int(page_str)
+                        page_section_refs[page_num] = (
+                            section_list if isinstance(section_list, list) else []
+                        )
+                    except (ValueError, TypeError):
+                        logger.warning(
+                            f"Could not convert page key to integer: {page_str}"
+                        )
+                        continue
+
+            logger.info(
+                f"Extracted page/section references from tool response: {page_section_refs}"
+            )
+
+            # Build section content map for referenced sections
+            section_content_map = {}
+            logger.info(
+                f"Memos DEBUG: Retrieved {len(documents)} documents from database"
+            )
+            for doc in documents:
+                logger.info(f"Memos DEBUG: Document keys: {list(doc.keys())}")
+                page_sections = doc.get("page_sections", [])
+                sections = doc.get("sections", [])  # Check old format too
+                logger.info(
+                    f"Memos DEBUG: Document '{doc.get('document_name', 'Unknown')}' has {len(page_sections)} page_sections and {len(sections)} old sections"
+                )
+                if page_sections:
+                    logger.info(
+                        f"Memos DEBUG: First page_section sample: {page_sections[0]}"
+                    )
+                elif sections:
+                    logger.info(f"Memos DEBUG: First old section sample: {sections[0]}")
+                else:
+                    logger.info(f"Memos DEBUG: Document has no sections at all!")
+                for section in page_sections:
+                    page_num = section.get("page_number")
+                    section_id = section.get("section_id")
+                    section_content = section.get("section_content", "")
+
+                    # Check if this section was referenced in the research
+                    if (
+                        page_num in page_section_refs
+                        and section_id in page_section_refs[page_num]
+                    ):
+                        key = f"{page_num}:{section_id}"
+                        section_content_map[key] = section_content
+
+            logger.info(
+                f"Built section content map for {len(section_content_map)} referenced sections"
+            )
+            logger.info(
+                f"Memos DEBUG: Final section_content_map keys: {list(section_content_map.keys())}"
+            )
+
+            # Build reference index from structured data
+            page_numbers = research_result.get("page_numbers", [])
+            if page_numbers and section_content_map:
+                reference_index = build_structured_reference_index(
+                    page_numbers, file_links, section_content_map
+                )
+                logger.info(
+                    f"Built structured reference index with {len(reference_index)} page references"
+                )
+                logger.error(f"DEBUG PAR: Final reference_index: {reference_index}")
+            else:
+                reference_index = {}
+                logger.warning("No page numbers or section content available for reference index")
+
             # Add details to process monitor before returning
             if process_monitor:
-                process_monitor.add_stage_details(stage_name, 
-                    result_count=len(documents), 
+                process_monitor.add_stage_details(
+                    stage_name,
+                    result_count=len(documents),
                     document_ids=selected_doc_ids,
-                    status_summary=research_result.get("status_summary", "")
+                    status_summary=research_result.get("status_summary", ""),
                 )
-            
-            return research_result, selected_doc_ids, file_links  # Return research result, IDs, and file links
-            
+
+            # DEBUG: Log what we're about to return
+            logger.error(f"DEBUG PAR: About to return 6-element tuple")
+            logger.error(f"DEBUG PAR: research_result type: {type(research_result)}")
+            logger.error(f"DEBUG PAR: selected_doc_ids: {selected_doc_ids}")
+            logger.error(f"DEBUG PAR: file_links count: {len(file_links) if file_links else 0}")
+            logger.error(f"DEBUG PAR: page_section_refs: {page_section_refs}")
+            logger.error(f"DEBUG PAR: section_content_map count: {len(section_content_map) if section_content_map else 0}")
+            logger.error(f"DEBUG PAR: reference_index count: {len(reference_index) if reference_index else 0}")
+
+            return (
+                research_result,
+                selected_doc_ids,
+                file_links,
+                page_section_refs,
+                section_content_map,
+                reference_index,
+            )  # Return research result, IDs, file links, page/section refs, section content, and reference index
+
         else:
             logger.error(f"Invalid scope provided to internal_memos subagent: {scope}")
             raise ValueError(f"Invalid scope: {scope}")  # Let the error propagate
@@ -679,7 +1044,6 @@ def query_database_sync(
     except Exception as e:
         error_msg = f"Error querying Internal Memos database (scope: {scope}): {str(e)}"
         logger.error(error_msg, exc_info=True)
-        response: DatabaseResponse
         if scope == "metadata":
             response = []
         else:
@@ -687,13 +1051,21 @@ def query_database_sync(
                 "detailed_research": f"**Error processing request for Internal Memos:** {str(e)}",
                 "status_summary": default_error_status,
             }
-            
+
             # Add details to process monitor before returning
-        if process_monitor: # Check if monitor exists before adding error details
-            process_monitor.add_stage_details(stage_name, 
+        if process_monitor:  # Check if monitor exists before adding error details
+            process_monitor.add_stage_details(
+                stage_name,
                 error=str(e),
-                document_ids=selected_doc_ids # Keep doc IDs if available
+                document_ids=selected_doc_ids,  # Keep doc IDs if available
             )
-            
-        # Return error response and potentially selected IDs/links if selection succeeded before error
-        return response, selected_doc_ids, file_links
+
+        # Return error response and potentially selected IDs/links/page_sections/content/refs if selection succeeded before error
+        return (
+            response,
+            selected_doc_ids,
+            file_links,
+            page_section_refs,
+            section_content_map,
+            reference_index,
+        )

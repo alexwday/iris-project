@@ -13,13 +13,13 @@ def get_catalog_selection_prompt(user_query: str, formatted_catalog: str) -> str
 
     Args:
         user_query (str): The original user query
-        formatted_catalog (str): The formatted catalog of PAR documents
+        formatted_catalog (str): The formatted catalog of AIO documents
 
     Returns:
         str: The formatted prompt for the LLM
     """
     prompt = f"""# TASK
-You are helping to search through a catalog of internal AIO (Auditor Independence Office) policy documents, procedures, and FAQs to find
+You are helping to search through a catalog of internal PAR (Project Approval Request Guidance) documents to find
 the most relevant ones for answering a user query.
 
 ## User Query

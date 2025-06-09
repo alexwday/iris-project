@@ -1,26 +1,26 @@
 # internal_esg/catalog_selection_prompt.py
 """
-Prompt templates for selecting relevant Internal ESG documents from the catalog.
+Prompt templates for selecting relevant ESG documents from the catalog.
 
 This module contains prompts used to guide the LLM in selecting
-the most relevant documents from the Internal ESG catalog based on the user query.
+the most relevant documents from the ESG catalog based on the user query.
 """
 
 
 def get_catalog_selection_prompt(user_query: str, formatted_catalog: str) -> str:
     """
-    Generate a prompt for selecting relevant documents from the Internal ESG catalog.
+    Generate a prompt for selecting relevant documents from the ESG catalog.
 
     Args:
         user_query (str): The original user query
-        formatted_catalog (str): The formatted catalog of Internal ESG documents
+        formatted_catalog (str): The formatted catalog of ESG documents
 
     Returns:
         str: The formatted prompt for the LLM
     """
     prompt = f"""# TASK
-You are helping to search through a catalog of internal ESG (Environmental, Social, Governance) guidance documents to find
-the most relevant ones for answering a user query. These documents cover topics like evaluating prior period ESG changes and the ESG Materiality Framework.
+You are helping to search through a catalog of internal PAR (Project Approval Request Guidance) documents to find
+the most relevant ones for answering a user query.
 
 ## User Query
 {user_query}
