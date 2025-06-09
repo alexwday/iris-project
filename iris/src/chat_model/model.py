@@ -107,8 +107,8 @@ def _process_final_references(buffer: str, reference_index: Dict[str, Dict[str, 
         ref_ids = [id.strip() for id in ref_text.split(",")]
         logger.error(f"DEBUG FINAL REPLACE: Found reference {match.group(0)} with IDs: {ref_ids}")
 
-        # Generate href links for each reference
-        links = []
+        # Generate href links - group by page to avoid duplicates
+        page_links = {}  # Map (doc_name, page) -> href
         for ref_id in ref_ids:
             if ref_id in reference_index:
                 ref_data = reference_index[ref_id]
@@ -116,18 +116,19 @@ def _process_final_references(buffer: str, reference_index: Dict[str, Dict[str, 
                 page = ref_data.get("page", 1)
                 highlight_text = ref_data.get("highlight_text", "")
                 doc_name = ref_data.get("doc_name", "Unknown Document")
-                section_name = ref_data.get("section_name", "")
 
-                # Create href link with page data format and descriptive text
-                page_data = f"[{page}:\"{highlight_text}\"]" if highlight_text else str(page)
-                link_text = f"📄 {doc_name} (Page {page})"
-                if section_name:
-                    link_text += f" - {section_name}"
-                href = f'<a href=\'javascript:window.maven.openPdf("{file_link}", "{page_data}")\'>{link_text}</a>'
-                links.append(href)
-                logger.error(f"DEBUG FINAL REPLACE: Created href for ref {ref_id}: {href}")
+                # Create href link with simple filename + page format
+                page_key = (doc_name, page)
+                if page_key not in page_links:
+                    page_data = f"[{page}:\"{highlight_text}\"]" if highlight_text else str(page)
+                    link_text = f"📄 {doc_name} Page {page}"
+                    href = f'<a href=\'javascript:window.maven.openPdf("{file_link}", "{page_data}")\'>{link_text}</a>'
+                    page_links[page_key] = href
+                    logger.error(f"DEBUG FINAL REPLACE: Created href for ref {ref_id}: {href}")
             else:
                 logger.error(f"DEBUG FINAL REPLACE: Reference {ref_id} not found in index")
+
+        links = list(page_links.values())
 
         # Return the reference line with links
         if links:
@@ -176,8 +177,8 @@ def _process_reference_buffer(buffer: str, reference_index: Dict[str, Dict[str, 
             ref_text = match.group(1)
             ref_ids = [id.strip() for id in ref_text.split(",")]
             
-            # Generate href links
-            links = []
+            # Generate href links - group by page to avoid duplicates
+            page_links = {}  # Map (doc_name, page) -> href
             for ref_id in ref_ids:
                 if ref_id in reference_index:
                     ref_data = reference_index[ref_id]
@@ -185,19 +186,20 @@ def _process_reference_buffer(buffer: str, reference_index: Dict[str, Dict[str, 
                     page = ref_data.get("page", 1)
                     highlight_text = ref_data.get("highlight_text", "")
                     doc_name = ref_data.get("doc_name", "Unknown Document")
-                    section_name = ref_data.get("section_name", "")
                     
                     # DEBUG: Log what we're putting in the href
                     logger.error(f"DEBUG STREAM: Ref {ref_id} data: file='{file_link}', page={page}, highlight='{highlight_text[:50]}...'")
                     
-                    # Create href link with page data format and descriptive text
-                    page_data = f"[{page}:\"{highlight_text}\"]" if highlight_text else str(page)
-                    link_text = f"📄 {doc_name} (Page {page})"
-                    if section_name:
-                        link_text += f" - {section_name}"
-                    href = f'<a href=\'javascript:window.maven.openPdf("{file_link}", "{page_data}")\'>{link_text}</a>'
-                    links.append(href)
-                    logger.error(f"DEBUG STREAM: Created href: {href[:100]}...")
+                    # Create href link with simple filename + page format
+                    page_key = (doc_name, page)
+                    if page_key not in page_links:
+                        page_data = f"[{page}:\"{highlight_text}\"]" if highlight_text else str(page)
+                        link_text = f"📄 {doc_name} Page {page}"
+                        href = f'<a href=\'javascript:window.maven.openPdf("{file_link}", "{page_data}")\'>{link_text}</a>'
+                        page_links[page_key] = href
+                        logger.error(f"DEBUG STREAM: Created href: {href[:100]}...")
+            
+            links = list(page_links.values())
             
             # Replace the reference with links
             if links:
