@@ -35,14 +35,14 @@ Each catalog entry contains:
 {formatted_catalog}
 
 ## Selection Criteria
-1. **Evaluate the Document Description** for each document. Select documents whose descriptions suggest they are likely relevant to the user query. The next step will refine the selection based on section summaries, so you can be slightly more inclusive here if a document seems potentially relevant.
-2. Prioritize documents with descriptions that promise specific, detailed information pertinent to the query over those with generic descriptions.
-3. Consider documents that might provide useful context if their descriptions indicate relevance to the query's topic.
-4. Aim for a balance between relevance and potential usefulness for the subsequent section review step.
+1. Select documents that directly address aspects of the user query
+2. Consider documents that provide background information or context relevant to the query
+3. Prioritize documents that appear most specific to the user's question
+4. Consider a breadth of documents if the query spans multiple topics
 
 # OUTPUT
-You must respond with ONLY the IDs of the potentially relevant documents based on their descriptions.
-Return a maximum of **5** document IDs.
+You must respond with ONLY the IDs of the most relevant documents. 
+Return a maximum of 5 document IDs.
 Your response must be formatted as a JSON array of document IDs as strings, for example:
 ["1", "2", "5"]
 

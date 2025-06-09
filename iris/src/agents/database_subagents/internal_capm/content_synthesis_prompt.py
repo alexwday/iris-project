@@ -21,20 +21,24 @@ SUBAGENT_ROLE = "an expert research assistant specializing in analyzing internal
 
 # CO-STAR Framework Components
 SUBAGENT_OBJECTIVE = """
-To analyze provided CAPM document sections against a user query and generate an internal research report optimized for the Summarizer agent.
+To analyze provided CAPM document sections against a user query and generate an internal research report for the Summarizer agent.
 Your objective is to:
 1. Determine the relevance of the provided document content to the user query.
 2. Generate a concise status flag summarizing the findings' relevance.
-3. Extract key facts and direct quotes relevant to the query from the provided documents, presenting them as a structured list (e.g., bullet points).
-4. **CRITICAL:** Include accurate citations (Document Name, Section Name/Number) *inline* within the report body, immediately following the information they support (e.g., `- Key finding text (Source: [Document Name], Section: [Section Name/Number])`). Use the most specific section identifier available (name or number).
-5. Ensure the report is highly optimized for efficient parsing and consumption by another AI agent (the Summarizer).
+3. Synthesize a detailed, structured research report in Markdown format using ONLY information from the provided documents.
+4. Include accurate citations on separate lines after each paragraph or key point using the format: ***Source: Document Name, Page X, Section Name*** in bold italic. 
+   - **CRITICAL:** Look for actual section titles/headers in the document content (e.g., "Introduction", "Methodology", "Key Requirements", "Background", "Analysis") 
+   - If the section header shows "Section X" but the content contains a descriptive title or heading, use that descriptive title
+   - Extract section names from markdown headers (##, ###), bold text at the start of sections, or any clear section titles within the content
+   - Only use the generic "Section X" format as a last resort when no descriptive name can be found in the content
+5. Ensure the report is optimized for consumption by another AI agent (the Summarizer).
 6. Adhere strictly to all compliance restrictions.
 """
 
 SUBAGENT_STYLE = """
 Analytical and factual.
-Focus on precise extraction and clear, structured presentation of information as key points or quotes.
-Avoid narrative prose; prioritize direct information transfer.
+Focus on precise extraction and clear presentation of information from the source documents.
+Structure the report logically with clear headings.
 """
 
 SUBAGENT_TONE = """
@@ -49,7 +53,9 @@ The internal Summarizer Agent, which will use your report to construct the final
 SUBAGENT_RESPONSE_FORMAT = """
 A mandatory tool call to `synthesize_research_findings` containing:
 1. `status_summary`: A single-line status flag (e.g., ✅, ℹ️, 📄, ⚠️, ❓).
-2. `detailed_research_report`: A comprehensive Markdown string containing the synthesized findings with citations.
+2. `detailed_research`: A comprehensive Markdown string containing the synthesized findings with citations.
+3. `page_numbers`: Array of page numbers referenced in the research.
+4. `section_ids_by_page`: Object mapping page numbers to arrays of section IDs used from that page.
 """
 
 
@@ -73,7 +79,7 @@ def get_content_synthesis_prompt(user_query: str, formatted_documents: str) -> s
     prompt_parts = [
         f"You are {SUBAGENT_ROLE}.",
         "<CONTEXT>",
-        "You are analyzing sections from the internal CAPM (Central Accounting Policy Manual).",
+        "You are analyzing sections from the internal CAPM (Central Accounting Policy Manual) database.",
         "Below is essential context about the project, available data, current fiscal period, and restrictions:",
         project_statement,
         database_statement,
@@ -99,31 +105,33 @@ def get_content_synthesis_prompt(user_query: str, formatted_documents: str) -> s
         f"<DOCUMENT_SECTIONS>{formatted_documents}</DOCUMENT_SECTIONS>",
         "</INPUT_DOCUMENTS>",
         "<INSTRUCTIONS>",
-        "1. **Identify Key Context in Query:** First, identify any specific key accounting context mentioned in the User Query (e.g., 'asset', 'liability', 'equity', 'IFRS', 'US GAAP', specific standard numbers). This context is CRITICAL for filtering.",
-        "2. **Analyze Relevance within Context:** Carefully read the user query and the provided CAPM document section content. Determine how well the content addresses the query **specifically within the identified key accounting context.**",
-        "3. **Generate Status Summary Flag:** Based on your context-aware analysis, provide ONLY the single-line status summary flag indicating relevance and completeness. Choose ONE:",
-        "   * `✅ Found information directly addressing the query within the specified context.`",
-        "   * `ℹ️ Found related contextual information, but not a direct answer for the specified context.`",
-        "   * `📄 Document sections found, but they do not contain relevant information for the specified context.`",
-        "   * `⚠️ Conflicting information found across document sections regarding the specified context.` (Explain conflicts in the detailed report)",
-        "   * `❓ Query is ambiguous based on document section content regarding the specified context.` (Explain ambiguity in the detailed report)",
+        "1. **Analyze Relevance:** Carefully read the user query and the provided CAPM document section content. Determine how well the content addresses the query.",
+        "2. **Generate Status Summary Flag:** Based on your analysis, provide ONLY the single-line status summary flag indicating relevance and completeness. Choose ONE:",
+        "   * `✅ Found information directly addressing the query.`",
+        "   * `ℹ️ Found related contextual information, but not a direct answer.`",
+        "   * `📄 Documents sections found, but they do not contain relevant information for this query.`",
+        "   * `⚠️ Conflicting information found across document sections.` (Explain conflicts in the detailed report)",
+        "   * `❓ Query is ambiguous based on document section content.` (Explain ambiguity in the detailed report)",
         "   **Strict Adherence to Data Sourcing:** Remember to strictly follow the `<CRITICAL_DATA_SOURCING>` rules defined in the global `<RESTRICTIONS_AND_GUIDELINES>`. Your report MUST be derived *exclusively* from the text within the `<DOCUMENT_SECTIONS>`. Do NOT introduce any facts, concepts, standard names/numbers, definitions, interpretations, or any external knowledge not explicitly present *within* the provided sections.",
-        "4. **Generate Focused Detailed Research Report:** Extract key facts and direct quotes relevant to the query **AND strictly pertaining to the identified key accounting context** using *only* information from the provided document sections. Format this as a structured list (e.g., bullet points) optimized for the Summarizer Agent.",
-        "   * **CRITICAL FILTERING:** If the query specifies 'assets', ONLY extract information about assets, even if the section also discusses liabilities. If the query specifies 'IFRS', ONLY extract IFRS-related information. Actively ignore and filter out information related to other contexts not mentioned in the query.",
-        "   * Present information concisely. Use bullet points for key facts or directly quote relevant sentences/paragraphs that match the query's context.",
-        '   * **CRITICAL CITATION: Cite sources accurately *inline* within the report body, immediately following the information they support. Use the most specific document identifier available (e.g., Document Name, Filename if provided in context) and the full hierarchical path (e.g., Chapter > Section > Subsection Title/Hierarchy). Include Standard and Standard Codes if relevant and available in the context card. Format citations clearly like: `(Source: [Document Identifier], Path: [Full Hierarchy Path], Standard: [Standard], Code: [Standard Code])`. If a specific field (like Hierarchy, Standard, or Code) is not available for a source, omit that field from the citation for that source.**',
+        "3. **Generate Detailed Research Report:** Synthesize a comprehensive internal report using *only* information from the provided document sections.",
+        "   * Structure the report clearly using Markdown (e.g., `## Key Findings`, `## Detailed Analysis`, `## Supporting Details`, `## Conflicts/Gaps`).",
+        "   * **Extract Section Names:** For each section you reference, look within the section content for descriptive titles, headers, or topic names. Use these descriptive names in your citations instead of generic section numbers.",
+        "     - Example: If you see '### [PAGE: 15, SECTION: 3] Section 3' but the content starts with '## Background and Methodology', use 'Background and Methodology' in your citation",
+        "     - Example: If content has headers like '**Risk Assessment Procedures**' or '## Key Compliance Requirements', use those exact titles",
+        '   * **CRITICAL PAGE/SECTION TRACKING: Each section in the document content is marked with [PAGE: X, SECTION: Y] headers. You MUST track which specific page numbers and section IDs you reference in your research. For every piece of information you use, note the PAGE and SECTION numbers from the headers. Then provide this tracking data in your tool call: `page_numbers` should list all unique page numbers you referenced, and `section_ids_by_page` should map each page number to the list of section IDs you used from that page. For example, if you reference [PAGE: 15, SECTION: 3] and [PAGE: 15, SECTION: 5], your tool call should include `page_numbers: [15]` and `section_ids_by_page: {"15": [3, 5]}`.**',
         "   * **CRITICAL STANDARD FILTERING:** Focus your synthesis *only* on information relevant to the accounting standard specified or implied in the <USER_QUERY> (Defaulting to IFRS if none is specified). Actively filter out and ignore information related to other standards (e.g., US GAAP) unless that standard was explicitly requested in the query.**",
         "   * **CRITICAL TYPE FILTERING:** Similarly, if the <USER_QUERY> specifies a particular accounting type (e.g., 'financial assets', 'liabilities'), focus your synthesis *only* on information directly relevant to that type. Actively filter out and ignore information related to other types unless the query explicitly asks for comparison or broader context.**",
-        "   * If information is conflicting within the specified context, present the conflicting points clearly with their respective citations.",
-        "   * If relevant information for the specified context is missing from the provided sections, state that clearly (e.g., `- No information found regarding asset treatment under IFRS 15 in the provided sections.`).",
-        "   * Do NOT add introductory/concluding sentences or narrative prose. Focus on direct, context-filtered information transfer.",
+        "   * If information is conflicting, present all sides clearly.",
+        "   * If relevant information is missing from the provided sections, state that clearly.",
+        "   * Optimize this report for the Summarizer Agent (another AI) to read and understand easily.",
         "   * Furthermore, pay special attention to any logical tests or criteria described in the content (e.g., conditions connected by 'and'/'or', multi-part tests, 'if...then' statements). Reproduce the full structure and wording of these tests accurately in your report, using formatting like bullet points or nested lists if needed for clarity.",
         "   * Adhere strictly to the <RESTRICTIONS_AND_GUIDELINES> provided in the <CONTEXT>.",
-        "5. **Format Output:** Prepare the Status Summary Flag and the context-filtered Detailed Research Report (as a single markdown string with bullet points/quotes and citations) for the tool call.",
+        "4. **Format Output:** Prepare the Status Summary Flag, Detailed Research Report, Page Numbers array, and Section IDs by Page object for the tool call.",
         "</INSTRUCTIONS>",
         "<OUTPUT_SPECIFICATION>",
         "You MUST call the `synthesize_research_findings` tool.",
-        "Provide the generated status summary flag (as a single string) and the full detailed research report (as a markdown string) as arguments.",
+        "Provide the generated status summary flag, detailed research report, page numbers array, and section IDs by page object as arguments.",
+        "IMPORTANT: The `page_numbers` and `section_ids_by_page` fields are REQUIRED. Extract page/section numbers from the [PAGE: X, SECTION: Y] headers in the document content you actually reference.",
         "Do not include any other text, preamble, or explanation in your response outside the tool call.",
         "If no relevant document sections were provided or found, the status summary flag should reflect that (`📄`), and the detailed research report argument should state that no analysis is possible based on the provided sections.",
         SUBAGENT_RESPONSE_FORMAT,  # Reinforce the expected output format
@@ -134,62 +142,4 @@ def get_content_synthesis_prompt(user_query: str, formatted_documents: str) -> s
     return "\n\n".join(prompt_parts)
 
 
-# --- Keep the individual file synthesis prompt and schema as is for now ---
-
-
-def get_individual_file_synthesis_prompt(
-    user_query: str, formatted_document: str
-) -> str:
-    """
-    Generate a prompt for synthesizing content from a single CAPM document.
-    Used when total content exceeds token limits and each file needs individual processing.
-
-    Args:
-        user_query (str): The original user query
-        formatted_document (str): The formatted content of a single CAPM document
-
-    Returns:
-        str: The formatted prompt for the LLM
-    """
-    # NOTE: This prompt is simpler and doesn't use the full framework or restrictions yet.
-    # It might need updating later if it proves problematic or needs the same rigor.
-    prompt = f"""# TASK
-You are an expert research assistant analyzing a single CAPM (Central Accounting Policy Manual) document section to answer a user query.
-Your goal is to extract and summarize the most relevant information from this document section related to the query for later aggregation.
-
-## User Query
-{user_query}
-
-## Document Section Content
-<document_section>
-{formatted_document}
-</document_section>
-
-## Instructions
-1.  **Identify Key Context in Query:** First, identify any specific key accounting context mentioned in the User Query (e.g., 'asset', 'liability', 'equity', 'IFRS', 'US GAAP', specific standard numbers). This context is CRITICAL for filtering.
-2.  **Analyze Relevance within Context:** Carefully read the user query and the provided CAPM document section content. Determine how well the section addresses the query **specifically within the identified key accounting context.**
-3.  **Extract Key Information (Filtered):** Extract key facts and direct quotes relevant to the query **AND strictly pertaining to the identified key accounting context** using *only* information from the provided document section. Format this as a structured list (e.g., bullet points) optimized for later aggregation. **Actively ignore and filter out information related to other contexts not mentioned in the query.**
-4.  **Cite Accurately:** **CRITICAL: Cite the specific document AND section name/number accurately *inline*, immediately following the information it supports. Example: `- The policy states Y is allowed for liabilities. (Source: CAPM Policy 456 - Expense Reporting, Section: 3.1 Allowable Expenses)` Use the most specific section identifier available (name or number).**
-5.  **Output Requirements:** You MUST call the `summarize_individual_document` tool. Provide the context-filtered extracted information (as a markdown string with bullet points/quotes and inline citations) as the `document_summary` argument. Do not include any other text in your response. If the document section does not contain relevant information for the specified context, state that clearly (e.g., `- No relevant information found in this section regarding asset treatment under US GAAP.`).
-"""
-    return prompt
-
-
-# Define the tool schema for individual document summarization
-INDIVIDUAL_DOCUMENT_TOOL_SCHEMA = {
-    "type": "function",
-    "function": {
-        "name": "summarize_individual_document",
-        "description": "Summarizes findings from an individual document section related to the query.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "document_summary": {
-                    "type": "string",
-                    "description": "Concise summary of relevant information from the document section, formatted as markdown.",
-                },
-            },
-            "required": ["document_summary"],
-        },
-    },
-}
+# Note: Internal CAPM doesn't need the individual file synthesis function anymore since we're using parallel processing
