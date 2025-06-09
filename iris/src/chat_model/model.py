@@ -103,6 +103,10 @@ def _process_reference_buffer(
         If final: generator yielding processed chunks
     """
     import re
+    
+    # DEBUG: Log function entry
+    logger = logging.getLogger(__name__)
+    logger.error(f"DEBUG REFBUF: Called with final={final}, buffer_len={len(buffer)}, ref_index_len={len(reference_index)}")
 
     if final:
         # Process all remaining content
@@ -132,7 +136,7 @@ def _process_reference_buffer(
 
         processed = re.sub(r"\[REF:([\d,\s]+)\]", replace_refs, buffer)
         yield processed
-        return
+        # Don't return None - the generator should just end after yielding
 
     # For streaming, we need to be careful not to split references
     # Look for complete paragraphs (ending with \n\n or a [REF:X] pattern)
@@ -190,6 +194,8 @@ def _process_reference_buffer(
             # Update buffer to remaining content
             buffer = buffer[match.end() :]
 
+    # DEBUG: Log what we're returning
+    logger.error(f"DEBUG REFBUF: Returning tuple with processed_len={len(processed_content)}, remaining_buffer_len={len(buffer)}")
     return processed_content, buffer
 
 
