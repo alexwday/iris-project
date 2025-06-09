@@ -115,9 +115,15 @@ def _process_final_references(buffer: str, reference_index: Dict[str, Dict[str, 
                 file_link = ref_data.get("file_link", "")
                 page = ref_data.get("page", 1)
                 highlight_text = ref_data.get("highlight_text", "")
+                doc_name = ref_data.get("doc_name", "Unknown Document")
+                section_name = ref_data.get("section_name", "")
 
-                # Create href link
-                href = f'<a href=\'javascript:window.maven.openPdf("{file_link}", {page}, "{highlight_text}")\'>📄</a>'
+                # Create href link with page data format and descriptive text
+                page_data = f"[{page}:\"{highlight_text}\"]" if highlight_text else str(page)
+                link_text = f"📄 {doc_name} (Page {page})"
+                if section_name:
+                    link_text += f" - {section_name}"
+                href = f'<a href=\'javascript:window.maven.openPdf("{file_link}", "{page_data}")\'>{link_text}</a>'
                 links.append(href)
                 logger.error(f"DEBUG FINAL REPLACE: Created href for ref {ref_id}: {href}")
             else:
@@ -178,11 +184,20 @@ def _process_reference_buffer(buffer: str, reference_index: Dict[str, Dict[str, 
                     file_link = ref_data.get("file_link", "")
                     page = ref_data.get("page", 1)
                     highlight_text = ref_data.get("highlight_text", "")
+                    doc_name = ref_data.get("doc_name", "Unknown Document")
+                    section_name = ref_data.get("section_name", "")
                     
-                    # Create href link
-                    href = f'<a href=\'javascript:window.maven.openPdf("{file_link}", {page}, "{highlight_text}")\'>📄</a>'
+                    # DEBUG: Log what we're putting in the href
+                    logger.error(f"DEBUG STREAM: Ref {ref_id} data: file='{file_link}', page={page}, highlight='{highlight_text[:50]}...'")
+                    
+                    # Create href link with page data format and descriptive text
+                    page_data = f"[{page}:\"{highlight_text}\"]" if highlight_text else str(page)
+                    link_text = f"📄 {doc_name} (Page {page})"
+                    if section_name:
+                        link_text += f" - {section_name}"
+                    href = f'<a href=\'javascript:window.maven.openPdf("{file_link}", "{page_data}")\'>{link_text}</a>'
                     links.append(href)
-                    logger.error(f"DEBUG STREAM: Created href for ref {ref_id}")
+                    logger.error(f"DEBUG STREAM: Created href: {href[:100]}...")
             
             # Replace the reference with links
             if links:
