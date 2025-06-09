@@ -117,12 +117,11 @@ def _process_final_references(buffer: str, reference_index: Dict[str, Dict[str, 
                 highlight_text = ref_data.get("highlight_text", "")
                 doc_name = ref_data.get("doc_name", "Unknown Document")
 
-                # Create href link with simple filename + page format
+                # Create href link with 3-parameter format: filename, page, highlight_text
                 page_key = (doc_name, page)
                 if page_key not in page_links:
-                    page_data = f"[{page}:\"{highlight_text}\"]" if highlight_text else str(page)
                     link_text = f"📄 {doc_name} Page {page}"
-                    href = f'<a href=\'javascript:window.maven.openPdf("{file_link}", "{page_data}")\'>{link_text}</a>'
+                    href = f'<a href=\'javascript:window.maven.openPdf("{file_link}", {page}, "{highlight_text}")\'>{link_text}</a>'
                     page_links[page_key] = href
                     logger.error(f"DEBUG FINAL REPLACE: Created href for ref {ref_id}: {href}")
             else:
@@ -190,12 +189,11 @@ def _process_reference_buffer(buffer: str, reference_index: Dict[str, Dict[str, 
                     # DEBUG: Log what we're putting in the href
                     logger.error(f"DEBUG STREAM: Ref {ref_id} data: file='{file_link}', page={page}, highlight='{highlight_text[:50]}...'")
                     
-                    # Create href link with simple filename + page format
+                    # Create href link with 3-parameter format: filename, page, highlight_text
                     page_key = (doc_name, page)
                     if page_key not in page_links:
-                        page_data = f"[{page}:\"{highlight_text}\"]" if highlight_text else str(page)
                         link_text = f"📄 {doc_name} Page {page}"
-                        href = f'<a href=\'javascript:window.maven.openPdf("{file_link}", "{page_data}")\'>{link_text}</a>'
+                        href = f'<a href=\'javascript:window.maven.openPdf("{file_link}", {page}, "{highlight_text}")\'>{link_text}</a>'
                         page_links[page_key] = href
                         logger.error(f"DEBUG STREAM: Created href: {href[:100]}...")
             
@@ -934,23 +932,13 @@ def _model_generator(
                                                         highlight_text
                                                     )
 
-                                # Create enhanced link with page-specific content mapping
+                                # Create enhanced links with page-specific content mapping
                                 if page_content_map:
                                     # Sort pages for consistent display
                                     sorted_pages = sorted(page_content_map.keys())
 
-                                    # Create meaningful page list description
-                                    if len(sorted_pages) == 1:
-                                        page_description = f"Page {sorted_pages[0]}"
-                                    elif len(sorted_pages) <= 3:
-                                        page_description = (
-                                            f"Pages {', '.join(map(str, sorted_pages))}"
-                                        )
-                                    else:
-                                        page_description = f"Pages {sorted_pages[0]}-{sorted_pages[-1]}"
-
-                                    # Create clean bracket format: '[page1:"text1","text2"][page2:"text3","text4"]'
-                                    page_brackets = []
+                                    # Create separate links for each page since maven.openPdf expects 3 discrete parameters
+                                    page_links_html = []
                                     for page_num in sorted_pages:
                                         # Get all content pieces for this page and clean them
                                         content_pieces = []
@@ -974,28 +962,28 @@ def _model_generator(
                                                 content_clean.strip()
                                             )  # Trim edges
 
-                                            # No character limit - include full content for highlighting
-                                            content_pieces.append(f'"{content_clean}"')
+                                            if content_clean:  # Only add non-empty content
+                                                content_pieces.append(content_clean)
 
-                                        # Join content pieces with commas and wrap in brackets
-                                        page_content = ",".join(content_pieces)
-                                        page_brackets.append(
-                                            f"[{page_num}:{page_content}]"
-                                        )
+                                        # Use first content piece for highlighting, or empty string if none
+                                        highlight_text = content_pieces[0] if content_pieces else ""
+                                        
+                                        # Create individual page link with 3-parameter format
+                                        if file_link:
+                                            page_link = f'<a class="chatbot-link" href=\'javascript:window.maven.openPdf("{file_link}", {page_num}, "{highlight_text}")\'> 📄 {document_name} Page {page_num}</a>'
+                                        else:
+                                            page_link = f'<a class="chatbot-link" href=\'javascript:window.maven.openPdf("", {page_num}, "{highlight_text}")\'> 📄 {document_name} Page {page_num}</a>'
+                                        
+                                        page_links_html.append(page_link)
 
-                                    # Join all page brackets
-                                    page_data_string = "".join(page_brackets)
-
-                                    if file_link:
-                                        html_link = f'<a class="chatbot-link" href=\'javascript:window.maven.openPdf("{file_link}", "{page_data_string}")\'>📄 {document_name} ({page_description})</a>'
-                                    else:
-                                        html_link = f'<a class="chatbot-link" href=\'javascript:window.maven.openPdf("", "{page_data_string}")\'>📄 {document_name} ({page_description})</a>'
+                                    # Combine all page links
+                                    html_link = " ".join(page_links_html)
                                 else:
                                     # Fall back to basic link if no page/section data
                                     if not file_link:
-                                        html_link = f'<a class="chatbot-link" href=\'javascript:window.maven.openPdf("")\'>📄 {document_name}</a>'
+                                        html_link = f'<a class="chatbot-link" href=\'javascript:window.maven.openPdf("", 1, "")\'>📄 {document_name}</a>'
                                     else:
-                                        html_link = f'<a class="chatbot-link" href=\'javascript:window.maven.openPdf("{file_link}")\'>📄 {document_name}</a>'
+                                        html_link = f'<a class="chatbot-link" href=\'javascript:window.maven.openPdf("{file_link}", 1, "")\'>📄 {document_name}</a>'
 
                                 logger.info(f"Yielding enhanced HTML link: {html_link}")
                                 yield f"{html_link}\n"
