@@ -137,15 +137,79 @@ def _process_final_references(buffer: str, reference_index: Dict[str, Dict[str, 
     yield processed
 
 
-def _process_reference_buffer(buffer: str, reference_index: Dict[str, Dict[str, Any]]) -> tuple[str, str]:
+def _process_reference_buffer(buffer: str, reference_index: Dict[str, Dict[str, Any]], buffer_size: int = 25) -> tuple[str, str]:
     """
-    For streaming: just accumulate chunks without processing references.
-    All reference processing happens at the end in _process_final_references.
-    Returns tuple of (processed_content, remaining_buffer) for streaming.
+    Smart buffering: accumulate chunks and process complete reference patterns immediately.
+    This ensures href links are sent in the stream before the UI displays [REF:X] tags.
+    Returns tuple of (processed_content_to_output, remaining_buffer).
     """
-    # During streaming, just pass through content without processing references
-    # References will be processed at the end when we have the complete text
-    return buffer, ""
+    import re
+    
+    logger = logging.getLogger(__name__)
+    
+    # If buffer is shorter than buffer_size and doesn't contain complete references, keep buffering
+    ref_pattern = r"\[REF:([\d,\s]+)\]"
+    
+    # Check if we have complete reference patterns
+    refs_in_buffer = list(re.finditer(ref_pattern, buffer))
+    
+    if not refs_in_buffer and len(buffer) < buffer_size:
+        # No complete references and buffer not full yet - keep buffering
+        return "", buffer
+    
+    # We have either complete references or a full buffer - process what we can
+    processed_content = ""
+    remaining_buffer = buffer
+    
+    if refs_in_buffer:
+        # Process each reference pattern found
+        logger.error(f"DEBUG STREAM: Found {len(refs_in_buffer)} references in buffer: {buffer}")
+        
+        # Process references from end to start to maintain string positions
+        for match in reversed(refs_in_buffer):
+            ref_text = match.group(1)
+            ref_ids = [id.strip() for id in ref_text.split(",")]
+            
+            # Generate href links
+            links = []
+            for ref_id in ref_ids:
+                if ref_id in reference_index:
+                    ref_data = reference_index[ref_id]
+                    file_link = ref_data.get("file_link", "")
+                    page = ref_data.get("page", 1)
+                    highlight_text = ref_data.get("highlight_text", "")
+                    
+                    # Create href link
+                    href = f'<a href=\'javascript:window.maven.openPdf("{file_link}", {page}, "{highlight_text}")\'>📄</a>'
+                    links.append(href)
+                    logger.error(f"DEBUG STREAM: Created href for ref {ref_id}")
+            
+            # Replace the reference with links
+            if links:
+                replacement = f" {' '.join(links)} "
+                remaining_buffer = remaining_buffer[:match.start()] + replacement + remaining_buffer[match.end():]
+                logger.error(f"DEBUG STREAM: Replaced {match.group(0)} with {replacement}")
+        
+        # Output everything up to and including the processed references
+        processed_content = remaining_buffer
+        remaining_buffer = ""
+        
+    else:
+        # No references but buffer is full - output some content but keep potential partial refs
+        # Look for potential start of reference pattern at the end
+        potential_ref_start = buffer.rfind("[")
+        if potential_ref_start != -1 and potential_ref_start > len(buffer) - 10:
+            # Keep potential reference start in buffer
+            processed_content = buffer[:potential_ref_start]
+            remaining_buffer = buffer[potential_ref_start:]
+        else:
+            # No potential reference at end - output most of buffer but keep a small amount
+            keep_chars = min(5, len(buffer) // 2)
+            processed_content = buffer[:-keep_chars] if keep_chars > 0 else buffer
+            remaining_buffer = buffer[-keep_chars:] if keep_chars > 0 else ""
+    
+    logger.error(f"DEBUG STREAM: Outputting {len(processed_content)} chars, keeping {len(remaining_buffer)} chars")
+    return processed_content, remaining_buffer
 
 
 # --- Worker Function for Threaded Query Execution ---
