@@ -25,7 +25,16 @@ DatabaseResponse = Union[MetadataResponse, ResearchResponse]
 FileLink = Dict[str, str]  # Contains 'file_link' and 'document_name'
 PageSectionRefs = Dict[int, List[int]]  # Maps page numbers to lists of section IDs
 SectionContentMap = Dict[str, str]  # Maps "page_num:section_id" to section content
-SubagentResult = Tuple[DatabaseResponse, Optional[List[str]], Optional[List[FileLink]], Optional[PageSectionRefs], Optional[SectionContentMap]]  # result + doc_ids + file_links + page_sections + section_content
+# Reference index for inline citations
+ReferenceIndex = Dict[str, Dict[str, Any]]  # Maps reference ID to reference details
+SubagentResult = Tuple[
+    DatabaseResponse,
+    Optional[List[str]],
+    Optional[List[FileLink]],
+    Optional[PageSectionRefs],
+    Optional[SectionContentMap],
+    Optional[ReferenceIndex],
+]  # result + doc_ids + file_links + page_sections + section_content + reference_index
 
 from ....initial_setup.env_config import config
 from ....initial_setup.db_config import connect_to_db
@@ -55,60 +64,188 @@ def format_catalog_for_llm(catalog_records: List[Dict[str, Any]]) -> str:
     return formatted_catalog.strip()
 
 
+def extract_citations_and_build_references(
+    research_text: str, documents: List[Dict[str, Any]], file_links: List[FileLink]
+) -> Tuple[str, ReferenceIndex]:
+    """
+    Extract citations from research text and build reference index.
+    Replace citations with [REF:X] markers.
+
+    Args:
+        research_text: The detailed research text with citations
+        documents: The source documents used for research
+        file_links: File links for the documents
+
+    Returns:
+        Tuple of (modified_text, reference_index)
+    """
+    import re
+
+    # Build a mapping of document names to their file links
+    doc_to_file = {}
+    for link_info in file_links:
+        doc_name = link_info.get("document_name", "")
+        file_link = link_info.get("file_link", "")
+        if doc_name:
+            doc_to_file[doc_name] = file_link
+
+    # Find all citations in the format: ***Source: Document Name, Page X, Section Name***
+    citation_pattern = r"\*\*\*Source:\s*([^,]+),\s*Page\s*(\d+),\s*([^\*]+)\*\*\*"
+    citations = list(re.finditer(citation_pattern, research_text))
+
+    if not citations:
+        logger.warning("No citations found in research text")
+        return research_text, {}
+
+    # Build reference index
+    reference_index = {}
+    ref_counter = 1
+    modified_text = research_text
+
+    # Process citations in reverse order to maintain string positions
+    for match in reversed(citations):
+        doc_name = match.group(1).strip()
+        page_num = int(match.group(2))
+        section_name = match.group(3).strip()
+
+        # Find the actual section content from documents
+        highlight_text = ""
+        for doc in documents:
+            if doc.get("document_name") == doc_name:
+                for section in doc.get("page_sections", []):
+                    if (
+                        section.get("page_number") == page_num
+                        and section.get("section_name", "").strip() == section_name
+                    ):
+                        # Extract first 100 chars of content for highlighting
+                        content = section.get("section_content", "")
+                        # Clean the content for highlighting
+                        content_clean = re.sub(
+                            r"[|*#`_~\[\]{}\\<>@$%^&+=]", " ", content
+                        )
+                        content_clean = re.sub(r'["\']', "", content_clean)
+                        content_clean = re.sub(r"\s+", " ", content_clean).strip()
+                        highlight_text = (
+                            content_clean[:100]
+                            if len(content_clean) > 100
+                            else content_clean
+                        )
+                        break
+
+        # Create reference entry
+        ref_id = str(ref_counter)
+        reference_index[ref_id] = {
+            "doc_name": doc_name,
+            "file_link": doc_to_file.get(doc_name, ""),
+            "page": page_num,
+            "section_name": section_name,
+            "highlight_text": highlight_text,
+        }
+
+        # Check if this citation is at the end of a paragraph
+        citation_end = match.end()
+        remaining_text = modified_text[citation_end:].lstrip()
+
+        # If next characters are newlines or end of text, place [REF:X] there
+        if not remaining_text or remaining_text.startswith("\n"):
+            # Replace citation with reference marker
+            modified_text = (
+                modified_text[: match.start()]
+                + f" [REF:{ref_id}]"
+                + modified_text[match.end() :]
+            )
+        else:
+            # Citation is inline, remove it and add reference at end of paragraph
+            # Find the next paragraph break
+            next_break = modified_text.find("\n\n", citation_end)
+            if next_break == -1:
+                next_break = len(modified_text)
+
+            # Remove the citation
+            modified_text = (
+                modified_text[: match.start()] + modified_text[match.end() :]
+            )
+
+            # Add reference at paragraph end
+            # Adjust next_break position due to removed text
+            next_break -= match.end() - match.start()
+            modified_text = (
+                modified_text[:next_break]
+                + f" [REF:{ref_id}]"
+                + modified_text[next_break:]
+            )
+
+        ref_counter += 1
+
+    logger.info(f"Extracted {len(reference_index)} citations and built reference index")
+    return modified_text, reference_index
+
+
 def format_documents_for_llm(documents: List[Dict[str, Any]]) -> str:
     """
     Format retrieved documents into a string that is optimized for LLM analysis.
-    Now reconstructs documents from page/section records in correct order and formats 
+    Now reconstructs documents from page/section records in correct order and formats
     for clear section separation with page/section references that the LLM can cite.
     """
     formatted_docs = ""
     for doc in documents:
         doc_name = doc.get("document_name", "Untitled")
         formatted_docs += f"# {doc_name}\n\n"
-        
+
         # Get page_sections and reconstruct document in proper order
         page_sections = doc.get("page_sections", [])
         if not page_sections:
             formatted_docs += "No content available.\n\n"
             continue
-            
+
         # Group sections by page number for clear organization
-        pages_dict = {}
+        pages_dict: Dict[int, List[Dict[str, Any]]] = {}
         for section in page_sections:
             page_num = section.get("page_number", 0)
             if page_num not in pages_dict:
                 pages_dict[page_num] = []
             pages_dict[page_num].append(section)
-        
+
         # Process pages in order
         for page_num in sorted(pages_dict.keys()):
             formatted_docs += f"## Page {page_num}\n\n"
-            
+
             # Process sections within the page in order
-            page_sections_list = sorted(pages_dict[page_num], key=lambda x: x.get("section_id", 0))
-            
+            page_sections_list = sorted(
+                pages_dict[page_num], key=lambda x: x.get("section_id", 0)
+            )
+
             for section in page_sections_list:
                 section_id = section.get("section_id", 0)
                 section_content = section.get("section_content", "No content available")
                 section_name = section.get("section_name", f"Section {section_id}")
-                section_summary = section.get("section_summary", f"Page {page_num}, Section {section_id}")
-                
+                section_summary = section.get(
+                    "section_summary", f"Page {page_num}, Section {section_id}"
+                )
+
                 # Format each section with CLEAR metadata for LLM reference
-                logger.info(f"PAR DEBUG: Formatting section - Page {page_num}, Section {section_id}, Name: '{section_name}'")
-                formatted_docs += f"### [PAGE: {page_num}, SECTION: {section_id}] {section_name}\n"
+                logger.info(
+                    f"PAR DEBUG: Formatting section - Page {page_num}, Section {section_id}, Name: '{section_name}'"
+                )
+                formatted_docs += (
+                    f"### [PAGE: {page_num}, SECTION: {section_id}] {section_name}\n"
+                )
                 formatted_docs += f"**Section Summary:** {section_summary}\n\n"
                 # Add explicit instruction about section naming for citations
                 if section_name and not section_name.startswith("Section "):
                     formatted_docs += f"**CITATION NOTE: When referencing this content, use the section name '{section_name}' rather than just the section number.**\n\n"
-                    logger.info(f"PAR DEBUG: Added citation note for descriptive section name: '{section_name}'")
+                    logger.info(
+                        f"PAR DEBUG: Added citation note for descriptive section name: '{section_name}'"
+                    )
                 else:
-                    logger.info(f"PAR DEBUG: Generic section name detected: '{section_name}' - LLM should extract from content")
+                    logger.info(
+                        f"PAR DEBUG: Generic section name detected: '{section_name}' - LLM should extract from content"
+                    )
                 formatted_docs += f"{section_content}\n\n"
-            
-            formatted_docs += "---\n\n"
-        
-    return formatted_docs.strip()
 
+            formatted_docs += "---\n\n"
+
+    return formatted_docs.strip()
 
 
 # Database interaction functions (now synchronous)
@@ -203,11 +340,17 @@ def fetch_document_content(doc_ids: List[str]) -> List[Dict[str, Any]]:
                             "section_name": (row[1] if row[1] else f"Section {row[0]}"),
                             "section_content": row[2],
                             "page_number": row[3],
-                            "section_summary": row[4] if row[4] else f"Page {row[3]}, Section {row[0]} of {doc_name}",
+                            "section_summary": (
+                                row[4]
+                                if row[4]
+                                else f"Page {row[3]}, Section {row[0]} of {doc_name}"
+                            ),
                         }
                     )
                 if page_sections:
-                    result.append({"document_name": doc_name, "page_sections": page_sections})
+                    result.append(
+                        {"document_name": doc_name, "page_sections": page_sections}
+                    )
         logger.info(f"Retrieved PAR content for {len(result)} documents from database")
     except Exception as e:
         logger.error(f"Error fetching PAR document content from database: {str(e)}")
@@ -226,13 +369,15 @@ def get_completion(
     token: Optional[str] = None,
     database_name: Optional[str] = None,
     **kwargs: Any,  # Accept additional kwargs for tools, tool_choice etc.
-) -> Tuple[Any, Optional[Dict[str, Any]]]:  # Returns (response_content, usage_details) tuple
+) -> Tuple[
+    Any, Optional[Dict[str, Any]]
+]:  # Returns (response_content, usage_details) tuple
     """
     Helper function to get a completion from the LLM synchronously.
     Handles standard completions and tool calls. Returns content and usage details.
     """
-    usage_details = None # Initialize
-    response = None # Initialize
+    usage_details = None  # Initialize
+    response = None  # Initialize
     try:
         model_config = config.get_model_config(capability)
         model_name = model_config["name"]
@@ -258,7 +403,7 @@ def get_completion(
         "messages": messages,
         "max_tokens": max_tokens,
         "temperature": temperature,
-        "database_name": database_name, # Pass database_name from caller
+        "database_name": database_name,  # Pass database_name from caller
         **kwargs,
     }
 
@@ -272,7 +417,7 @@ def get_completion(
     try:
         # Direct synchronous call - now returns a tuple (response, usage_details)
         result = call_llm(**call_params)
-        
+
         # Handle the new tuple format: (api_response, usage_details)
         if isinstance(result, tuple) and len(result) == 2:
             response, usage_details = result
@@ -281,9 +426,9 @@ def get_completion(
         else:
             # For backward compatibility in case it doesn't return a tuple
             response = result
-            usage_details = None # Ensure usage_details is None if not returned
+            usage_details = None  # Ensure usage_details is None if not returned
             logger.debug("call_llm did not return usage_details")
-            
+
     except Exception as llm_err:
         logger.error(f"call_llm failed: {llm_err}", exc_info=True)
         # Return error string and None for usage details
@@ -316,7 +461,9 @@ def get_completion(
         else:
             logger.error("LLM response object or choices attribute missing/empty.")
             response_value = "Error: Could not retrieve response content."
-        logger.debug("Returning extracted content string and usage details for standard completion.")
+        logger.debug(
+            "Returning extracted content string and usage details for standard completion."
+        )
         # Return the content string and usage details
         return response_value, usage_details
 
@@ -325,9 +472,9 @@ def select_relevant_documents(
     query: str,
     catalog: List[Dict[str, Any]],
     token: Optional[str] = None,
-    database_name: str = "internal_par", # Default to par
-    process_monitor=None, # Added process_monitor
-    stage_name: Optional[str] = None # Added stage_name
+    database_name: str = "internal_par",  # Default to par
+    process_monitor=None,  # Added process_monitor
+    stage_name: Optional[str] = None,  # Added stage_name
 ) -> List[str]:
     """
     Use an LLM to select the most relevant PAR documents from the catalog based on the query (synchronous).
@@ -348,19 +495,25 @@ def select_relevant_documents(
             prompt=selection_prompt,
             max_tokens=200,
             token=token,
-            database_name=database_name # Pass the specific database name
+            database_name=database_name,  # Pass the specific database name
         )
 
         # Track token usage from LLM calls
         if selection_usage:
             logger.debug(f"Document selection usage: {selection_usage}")
             # Update process monitor if available
-            if process_monitor and stage_name: # Check if monitor and stage_name exist
-                process_monitor.add_llm_call_details_to_stage(stage_name, selection_usage)
-                process_monitor.add_stage_details(stage_name, task="document_selection") # Add task detail
+            if process_monitor and stage_name:  # Check if monitor and stage_name exist
+                process_monitor.add_llm_call_details_to_stage(
+                    stage_name, selection_usage
+                )
+                process_monitor.add_stage_details(
+                    stage_name, task="document_selection"
+                )  # Add task detail
 
         # Check if get_completion returned an error string
-        if isinstance(selection_response_str, str) and selection_response_str.startswith("Error:"):
+        if isinstance(
+            selection_response_str, str
+        ) and selection_response_str.startswith("Error:"):
             logger.error(
                 f"get_completion failed during document selection: {selection_response_str}"
             )
@@ -398,7 +551,9 @@ def select_relevant_documents(
                     f"Extracted PAR document IDs using fallback regex: {valid_ids}"
                 )
                 return valid_ids
-            logger.error("Could not extract PAR document IDs from response using fallback.")
+            logger.error(
+                "Could not extract PAR document IDs from response using fallback."
+            )
             return []
     except Exception as e:
         logger.error(f"Error during LLM PAR document selection: {str(e)}")
@@ -431,12 +586,17 @@ SYNTHESIS_TOOL_SCHEMA = {
                     "type": "object",
                     "additionalProperties": {
                         "type": "array",
-                        "items": {"type": "integer"}
+                        "items": {"type": "integer"},
                     },
                     "description": "Object mapping page numbers (as string keys) to arrays of section IDs referenced on that page.",
                 },
             },
-            "required": ["status_summary", "detailed_research", "page_numbers", "section_ids_by_page"],
+            "required": [
+                "status_summary",
+                "detailed_research",
+                "page_numbers",
+                "section_ids_by_page",
+            ],
         },
     },
 }
@@ -447,10 +607,10 @@ def synthesize_response_and_status(
     query: str,
     documents: List[Dict[str, Any]],
     token: Optional[str] = None,
-    database_name: str = "internal_par", # Default to par
-    process_monitor=None, # Added process_monitor
-    stage_name: Optional[str] = None # Added stage_name
-) -> ResearchResponse: # Return only ResearchResponse
+    database_name: str = "internal_par",  # Default to par
+    process_monitor=None,  # Added process_monitor
+    stage_name: Optional[str] = None,  # Added stage_name
+) -> ResearchResponse:  # Return only ResearchResponse
     """
     Use an LLM tool call to synthesize a detailed research response AND status summary for PAR (synchronous).
     """
@@ -471,7 +631,7 @@ def synthesize_response_and_status(
         return {
             "detailed_research": default_research,
             "status_summary": default_no_info_status,
-        } # Removed None return
+        }  # Removed None return
 
     formatted_documents = format_documents_for_llm(documents)
     synthesis_prompt = get_content_synthesis_prompt(query, formatted_documents)
@@ -487,7 +647,7 @@ def synthesize_response_and_status(
             max_tokens=2500,
             temperature=0.2,
             token=token,
-            database_name=database_name, # Pass the specific database name
+            database_name=database_name,  # Pass the specific database name
             tools=[SYNTHESIS_TOOL_SCHEMA],
             tool_choice={
                 "type": "function",
@@ -499,17 +659,23 @@ def synthesize_response_and_status(
         if synthesis_usage:
             logger.debug(f"Research synthesis usage: {synthesis_usage}")
             # Update process monitor if available
-            if process_monitor and stage_name: # Check if monitor and stage_name exist
-                process_monitor.add_llm_call_details_to_stage(stage_name, synthesis_usage)
-                process_monitor.add_stage_details(stage_name, task="research_synthesis") # Add task detail
+            if process_monitor and stage_name:  # Check if monitor and stage_name exist
+                process_monitor.add_llm_call_details_to_stage(
+                    stage_name, synthesis_usage
+                )
+                process_monitor.add_stage_details(
+                    stage_name, task="research_synthesis"
+                )  # Add task detail
 
         # Check if get_completion returned an error string in the response part
-        if isinstance(synthesis_response_obj, str) and synthesis_response_obj.startswith("Error:"):
+        if isinstance(
+            synthesis_response_obj, str
+        ) and synthesis_response_obj.startswith("Error:"):
             logger.error(
                 f"get_completion failed for {database_name} synthesis: {synthesis_response_obj}"
             )
             error_result["detailed_research"] = synthesis_response_obj
-            return error_result # Return error dict
+            return error_result  # Return error dict
 
         # Process Tool Call Response
         if (
@@ -527,7 +693,12 @@ def synthesize_response_and_status(
                 logger.debug(f"Received tool arguments string: {arguments_str}")
                 try:
                     arguments = json.loads(arguments_str)
-                    required_keys = ["status_summary", "detailed_research", "page_numbers", "section_ids_by_page"]
+                    required_keys = [
+                        "status_summary",
+                        "detailed_research",
+                        "page_numbers",
+                        "section_ids_by_page",
+                    ]
                     if all(key in arguments for key in required_keys):
                         logger.info(
                             f"Successfully parsed synthesis tool call for {database_name}."
@@ -537,20 +708,29 @@ def synthesize_response_and_status(
                         research = arguments.get("detailed_research", default_research)
                         page_numbers = arguments.get("page_numbers", [])
                         section_ids_by_page = arguments.get("section_ids_by_page", {})
-                        
+
                         # Debug the generated research to check for section names in citations
-                        logger.info(f"PAR DEBUG: Generated detailed_research length: {len(research)} characters")
+                        logger.info(
+                            f"PAR DEBUG: Generated detailed_research length: {len(research)} characters"
+                        )
                         if "***Source:" in research:
                             citation_count = research.count("***Source:")
-                            logger.info(f"PAR DEBUG: Found {citation_count} citations in detailed_research")
+                            logger.info(
+                                f"PAR DEBUG: Found {citation_count} citations in detailed_research"
+                            )
                             # Log first few citations for debugging
                             import re
-                            citations = re.findall(r'\*\*\*Source:.*?\*\*\*', research)
-                            for i, citation in enumerate(citations[:3]):  # Show first 3 citations
+
+                            citations = re.findall(r"\*\*\*Source:.*?\*\*\*", research)
+                            for i, citation in enumerate(
+                                citations[:3]
+                            ):  # Show first 3 citations
                                 logger.info(f"PAR DEBUG: Citation {i+1}: {citation}")
                         else:
-                            logger.warning("PAR DEBUG: No citations found in detailed_research - this may be the issue!")
-                        
+                            logger.warning(
+                                "PAR DEBUG: No citations found in detailed_research - this may be the issue!"
+                            )
+
                         if not isinstance(status, str):
                             status = default_error_status
                         if not isinstance(research, str):
@@ -559,13 +739,13 @@ def synthesize_response_and_status(
                             page_numbers = []
                         if not isinstance(section_ids_by_page, dict):
                             section_ids_by_page = {}
-                            
+
                         return {
-                            "status_summary": status, 
+                            "status_summary": status,
                             "detailed_research": research,
                             "page_numbers": page_numbers,
-                            "section_ids_by_page": section_ids_by_page
-                        } # Return result dict
+                            "section_ids_by_page": section_ids_by_page,
+                        }  # Return result dict
                     else:
                         logger.error(
                             f"Missing required keys in parsed tool arguments for {database_name}: {arguments}"
@@ -626,11 +806,15 @@ def synthesize_response_and_status(
 
 
 def query_database_sync(
-    query: str, scope: str, token: Optional[str] = None, process_monitor=None, query_stage_name: Optional[str] = None
-) -> SubagentResult: # Added query_stage_name
+    query: str,
+    scope: str,
+    token: Optional[str] = None,
+    process_monitor=None,
+    query_stage_name: Optional[str] = None,
+) -> SubagentResult:  # Added query_stage_name
     """
     Synchronously query the Internal PAR database based on the specified scope.
-    
+
     Args:
         query: The user's query to process
         scope: The type of data to return ("metadata" or "research")
@@ -638,20 +822,24 @@ def query_database_sync(
         process_monitor: Optional process monitor to track token usage
         query_stage_name (str, optional): The specific stage name for this query instance
                                           provided by the caller (e.g., worker).
-        
+
     Returns:
         Tuple containing the main database response, a list of selected document IDs (or None),
-        a list of file links (or None), page/section references (or None), and section content map (or None).
+        a list of file links (or None), page/section references (or None), section content map (or None),
+        and reference index (or None).
     """
-    logger.info(
-        f"Querying Internal PAR database (sync): '{query}' with scope: {scope}"
-    )
-    database_name = "internal_par" # Set database name
+    logger.info(f"Querying Internal PAR database (sync): '{query}' with scope: {scope}")
+    database_name = "internal_par"  # Set database name
     default_error_status = "❌ Error during query processing."
     selected_doc_ids: Optional[List[str]] = None  # Initialize
     file_links: Optional[List[FileLink]] = None  # Initialize file links
-    page_section_refs: Optional[PageSectionRefs] = None  # Initialize page/section references
-    section_content_map: Optional[SectionContentMap] = None  # Initialize section content map
+    page_section_refs: Optional[PageSectionRefs] = (
+        None  # Initialize page/section references
+    )
+    section_content_map: Optional[SectionContentMap] = (
+        None  # Initialize section content map
+    )
+    reference_index: Optional[ReferenceIndex] = None  # Initialize reference index
     # Use the passed-in stage name if available, otherwise default
     stage_name = query_stage_name or f"db_query_{database_name}_unknown"
     logger.debug(f"Using process monitor stage name: {stage_name}")
@@ -659,7 +847,7 @@ def query_database_sync(
 
     try:
         # Direct synchronous calls
-        catalog = fetch_par_catalog() # Use par function
+        catalog = fetch_par_catalog()  # Use par function
         logger.info(f"Retrieved {len(catalog)} total PAR catalog entries")
         if not catalog:
             response: DatabaseResponse
@@ -670,18 +858,24 @@ def query_database_sync(
                     "detailed_research": "No documents found in the Internal PAR database catalog.",
                     "status_summary": "📄 No documents found in catalog.",
                 }
-            return response, selected_doc_ids, file_links, page_section_refs, section_content_map  # Return empty response and None IDs/links/page_sections/content
+            return (
+                response,
+                selected_doc_ids,
+                file_links,
+                page_section_refs,
+                section_content_map,
+                reference_index,
+            )  # Return empty response and None IDs/links/page_sections/content/refs
 
         # Select documents using the updated helper function
         selected_doc_ids = select_relevant_documents(
             query, catalog, token, database_name, process_monitor, stage_name
         )
-        
+
         logger.info(
             f"LLM selected {len(selected_doc_ids)} relevant PAR document IDs: {selected_doc_ids}"
         )
         if not selected_doc_ids:
-            response: DatabaseResponse
             if scope == "metadata":
                 response = []
             else:
@@ -689,92 +883,133 @@ def query_database_sync(
                     "detailed_research": "LLM did not select any relevant documents from the catalog based on the query.",
                     "status_summary": "📄 No relevant documents selected by LLM.",
                 }
-            
+
             # Add details to process monitor before returning
             if process_monitor:
-                process_monitor.add_stage_details(stage_name, 
-                    result_count=0, 
-                    document_ids=selected_doc_ids
+                process_monitor.add_stage_details(
+                    stage_name, result_count=0, document_ids=selected_doc_ids
                 )
-                
-            return response, selected_doc_ids, file_links, page_section_refs, section_content_map  # Return empty response and empty IDs list/links/page_sections/content
+
+            return (
+                response,
+                selected_doc_ids,
+                file_links,
+                page_section_refs,
+                section_content_map,
+                reference_index,
+            )  # Return empty response and empty IDs list/links/page_sections/content/refs
 
         # Process based on scope
         if scope == "metadata":
-            selected_items = [item for item in catalog if item.get("id") in selected_doc_ids]
-            logger.info(
-                f"Returning {len(selected_items)} selected PAR metadata items."
-            )
-            
+            selected_items = [
+                item for item in catalog if item.get("id") in selected_doc_ids
+            ]
+            logger.info(f"Returning {len(selected_items)} selected PAR metadata items.")
+
             # Collect file links from selected items (including blank ones)
             file_links = []
             for item in selected_items:
-                file_links.append({
-                    "file_link": item.get("file_link", ""),  # Use empty string if None
-                    "document_name": item.get("document_name", "Unknown")
-                })
-            
+                file_links.append(
+                    {
+                        "file_link": item.get(
+                            "file_link", ""
+                        ),  # Use empty string if None
+                        "document_name": item.get("document_name", "Unknown"),
+                    }
+                )
+
             # Add details to process monitor before returning
             if process_monitor:
-                process_monitor.add_stage_details(stage_name, 
-                    result_count=len(selected_items), 
-                    document_ids=selected_doc_ids
+                process_monitor.add_stage_details(
+                    stage_name,
+                    result_count=len(selected_items),
+                    document_ids=selected_doc_ids,
                 )
-                
-            return selected_items, selected_doc_ids, file_links, page_section_refs, section_content_map  # Return metadata, IDs, file links, and None page_sections/content (metadata scope doesn't need them)
-            
+
+            return (
+                selected_items,
+                selected_doc_ids,
+                file_links,
+                page_section_refs,
+                section_content_map,
+                reference_index,
+            )  # Return metadata, IDs, file links, and None page_sections/content/refs (metadata scope doesn't need them)
+
         elif scope == "research":
             # Collect file links from catalog before fetching content (including blank ones)
             file_links = []
             for item in catalog:
                 if item.get("id") in selected_doc_ids:
-                    file_links.append({
-                        "file_link": item.get("file_link", ""),  # Use empty string if None
-                        "document_name": item.get("document_name", "Unknown")
-                    })
-            
+                    file_links.append(
+                        {
+                            "file_link": item.get(
+                                "file_link", ""
+                            ),  # Use empty string if None
+                            "document_name": item.get("document_name", "Unknown"),
+                        }
+                    )
+
             # Fetch content and synthesize
-            documents = fetch_document_content(selected_doc_ids) # Use par function
+            documents = fetch_document_content(selected_doc_ids)  # Use par function
             logger.info(
                 f"Retrieved content for {len(documents)} PAR documents for research."
             )
-            
+
             # Get research synthesis using the updated helper function
             # synthesize_response_and_status now returns only the ResearchResponse dict
             research_result = synthesize_response_and_status(
                 query, documents, token, database_name, process_monitor, stage_name
             )
-            
+
             # Extract page/section references from the tool response
-            page_numbers = research_result.get("page_numbers", [])
-            section_ids_by_page_str = research_result.get("section_ids_by_page", {})
-            
-            logger.info(f"PAR DEBUG: Raw research_result keys: {list(research_result.keys())}")
+            page_numbers: List[int] = research_result.get("page_numbers", [])
+            section_ids_by_page_str: Dict[str, Any] = research_result.get(
+                "section_ids_by_page", {}
+            )
+
+            logger.info(
+                f"PAR DEBUG: Raw research_result keys: {list(research_result.keys())}"
+            )
             logger.info(f"PAR DEBUG: Raw page_numbers from tool: {page_numbers}")
-            logger.info(f"PAR DEBUG: Raw section_ids_by_page from tool: {section_ids_by_page_str}")
-            
+            logger.info(
+                f"PAR DEBUG: Raw section_ids_by_page from tool: {section_ids_by_page_str}"
+            )
+
             # Convert string keys to integers for page_section_refs
             page_section_refs = {}
-            for page_str, section_list in section_ids_by_page_str.items():
-                try:
-                    page_num = int(page_str)
-                    page_section_refs[page_num] = section_list if isinstance(section_list, list) else []
-                except (ValueError, TypeError):
-                    logger.warning(f"Could not convert page key to integer: {page_str}")
-                    continue
-                    
-            logger.info(f"Extracted page/section references from tool response: {page_section_refs}")
-            
+            if isinstance(section_ids_by_page_str, dict):
+                for page_str, section_list in section_ids_by_page_str.items():
+                    try:
+                        page_num = int(page_str)
+                        page_section_refs[page_num] = (
+                            section_list if isinstance(section_list, list) else []
+                        )
+                    except (ValueError, TypeError):
+                        logger.warning(
+                            f"Could not convert page key to integer: {page_str}"
+                        )
+                        continue
+
+            logger.info(
+                f"Extracted page/section references from tool response: {page_section_refs}"
+            )
+
             # Build section content map for referenced sections
             section_content_map = {}
-            logger.info(f"PAR DEBUG: Retrieved {len(documents)} documents from database")
+            logger.info(
+                f"PAR DEBUG: Retrieved {len(documents)} documents from database"
+            )
             for doc in documents:
                 logger.info(f"PAR DEBUG: Document keys: {list(doc.keys())}")
                 page_sections = doc.get("page_sections", [])
                 sections = doc.get("sections", [])  # Check old format too
-                logger.info(f"PAR DEBUG: Document '{doc.get('document_name', 'Unknown')}' has {len(page_sections)} page_sections and {len(sections)} old sections")
+                logger.info(
+                    f"PAR DEBUG: Document '{doc.get('document_name', 'Unknown')}' has {len(page_sections)} page_sections and {len(sections)} old sections"
+                )
                 if page_sections:
-                    logger.info(f"PAR DEBUG: First page_section sample: {page_sections[0]}")
+                    logger.info(
+                        f"PAR DEBUG: First page_section sample: {page_sections[0]}"
+                    )
                 elif sections:
                     logger.info(f"PAR DEBUG: First old section sample: {sections[0]}")
                 else:
@@ -783,25 +1018,56 @@ def query_database_sync(
                     page_num = section.get("page_number")
                     section_id = section.get("section_id")
                     section_content = section.get("section_content", "")
-                    
+
                     # Check if this section was referenced in the research
-                    if page_num in page_section_refs and section_id in page_section_refs[page_num]:
+                    if (
+                        page_num in page_section_refs
+                        and section_id in page_section_refs[page_num]
+                    ):
                         key = f"{page_num}:{section_id}"
                         section_content_map[key] = section_content
-                        
-            logger.info(f"Built section content map for {len(section_content_map)} referenced sections")
-            logger.info(f"PAR DEBUG: Final section_content_map keys: {list(section_content_map.keys())}")
-            
+
+            logger.info(
+                f"Built section content map for {len(section_content_map)} referenced sections"
+            )
+            logger.info(
+                f"PAR DEBUG: Final section_content_map keys: {list(section_content_map.keys())}"
+            )
+
+            # Extract citations and build reference index
+            detailed_research = research_result.get("detailed_research", "")
+            if detailed_research:
+                modified_research, reference_index = (
+                    extract_citations_and_build_references(
+                        detailed_research, documents, file_links
+                    )
+                )
+                # Update the research result with modified text
+                research_result["detailed_research"] = modified_research
+                logger.info(
+                    f"Modified research with {len(reference_index)} reference markers"
+                )
+            else:
+                reference_index = {}
+
             # Add details to process monitor before returning
             if process_monitor:
-                process_monitor.add_stage_details(stage_name, 
-                    result_count=len(documents), 
+                process_monitor.add_stage_details(
+                    stage_name,
+                    result_count=len(documents),
                     document_ids=selected_doc_ids,
-                    status_summary=research_result.get("status_summary", "")
+                    status_summary=research_result.get("status_summary", ""),
                 )
-            
-            return research_result, selected_doc_ids, file_links, page_section_refs, section_content_map  # Return research result, IDs, file links, page/section refs, and section content
-            
+
+            return (
+                research_result,
+                selected_doc_ids,
+                file_links,
+                page_section_refs,
+                section_content_map,
+                reference_index,
+            )  # Return research result, IDs, file links, page/section refs, section content, and reference index
+
         else:
             logger.error(f"Invalid scope provided to internal_par subagent: {scope}")
             raise ValueError(f"Invalid scope: {scope}")  # Let the error propagate
@@ -809,7 +1075,6 @@ def query_database_sync(
     except Exception as e:
         error_msg = f"Error querying Internal PAR database (scope: {scope}): {str(e)}"
         logger.error(error_msg, exc_info=True)
-        response: DatabaseResponse
         if scope == "metadata":
             response = []
         else:
@@ -817,13 +1082,21 @@ def query_database_sync(
                 "detailed_research": f"**Error processing request for Internal PAR:** {str(e)}",
                 "status_summary": default_error_status,
             }
-            
+
             # Add details to process monitor before returning
-        if process_monitor: # Check if monitor exists before adding error details
-            process_monitor.add_stage_details(stage_name, 
+        if process_monitor:  # Check if monitor exists before adding error details
+            process_monitor.add_stage_details(
+                stage_name,
                 error=str(e),
-                document_ids=selected_doc_ids # Keep doc IDs if available
+                document_ids=selected_doc_ids,  # Keep doc IDs if available
             )
-            
-        # Return error response and potentially selected IDs/links/page_sections/content if selection succeeded before error
-        return response, selected_doc_ids, file_links, page_section_refs, section_content_map
+
+        # Return error response and potentially selected IDs/links/page_sections/content/refs if selection succeeded before error
+        return (
+            response,
+            selected_doc_ids,
+            file_links,
+            page_section_refs,
+            section_content_map,
+            reference_index,
+        )

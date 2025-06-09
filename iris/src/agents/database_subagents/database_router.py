@@ -28,17 +28,35 @@ from ...global_prompts.database_statement import get_available_databases
 # Removed old token usage imports
 # from ...llm_connectors.rbc_openai import get_token_usage, reset_token_usage
 
-from typing import Any, Dict, Generator, List, Optional, TypeVar, Union, cast, Tuple # Added Tuple
+from typing import (
+    Any,
+    Dict,
+    Generator,
+    List,
+    Optional,
+    TypeVar,
+    Union,
+    cast,
+    Tuple,
+)  # Added Tuple
 
 # Define response types for database queries
 MetadataResponse = List[Dict[str, Any]]
 ResearchResponse = Dict[str, str]
 DatabaseResponse = Union[MetadataResponse, ResearchResponse]
-# Define the type returned by subagents (result + optional doc IDs + optional file links + optional page/section refs + optional section content)
+# Define the type returned by subagents (result + optional doc IDs + optional file links + optional page/section refs + optional section content + optional reference index)
 FileLink = Dict[str, str]  # Contains 'file_link' and 'document_name'
 PageSectionRefs = Dict[int, List[int]]  # Maps page numbers to lists of section IDs
 SectionContentMap = Dict[str, str]  # Maps "page_num:section_id" to section content
-SubagentResult = Tuple[DatabaseResponse, Optional[List[str]], Optional[List[FileLink]], Optional[PageSectionRefs], Optional[SectionContentMap]]
+ReferenceIndex = Dict[str, Dict[str, Any]]  # Maps reference ID to reference details
+SubagentResult = Tuple[
+    DatabaseResponse,
+    Optional[List[str]],
+    Optional[List[FileLink]],
+    Optional[PageSectionRefs],
+    Optional[SectionContentMap],
+    Optional[ReferenceIndex],
+]
 T = TypeVar("T")
 
 # Get available databases from the central configuration
@@ -57,8 +75,13 @@ logger = logging.getLogger(__name__)
 
 
 def route_query_sync(
-    database: str, query: str, scope: str, token: Optional[str] = None, process_monitor=None, query_stage_name: Optional[str] = None
-) -> SubagentResult: # Updated return type hint, added query_stage_name
+    database: str,
+    query: str,
+    scope: str,
+    token: Optional[str] = None,
+    process_monitor=None,
+    query_stage_name: Optional[str] = None,
+) -> SubagentResult:  # Updated return type hint, added query_stage_name
     """
     Synchronously routes a database query to the appropriate subagent module.
 
@@ -103,15 +126,22 @@ def route_query_sync(
                 "detailed_research": f"Error: {error_msg}",
                 "status_summary": f"❌ Error: Unknown database '{database}'.",
             }
-        
+
         # End the stage with error status if process monitor is provided
         # Use the specific stage_name passed from the worker
         if process_monitor:
             process_monitor.add_stage_details(stage_name, error=error_msg)
             # REMOVED: Stage end (even for errors) is now handled by the caller (_execute_query_worker)
             # process_monitor.end_stage(stage_name, status="error")
-            
-        return error_response, None, None, None, None # Return tuple with None for file_links, page_refs, section_content
+
+        return (
+            error_response,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )  # Return tuple with None for file_links, page_refs, section_content, reference_index
 
     try:
         module_path = f"iris.src.agents.database_subagents.{database}.subagent"
@@ -121,44 +151,68 @@ def route_query_sync(
         if not hasattr(subagent_module, "query_database_sync"):
             error_msg = f"Subagent module for '{database}' missing 'query_database_sync' function."
             logger.error(error_msg)  # Log the error
-            
+
             # End stage with error if process monitor is provided
             # Use the specific stage_name passed from the worker
             if process_monitor:
                 process_monitor.add_stage_details(stage_name, error=error_msg)
                 # REMOVED: Stage end (even for errors) is now handled by the caller (_execute_query_worker)
                 # process_monitor.end_stage(stage_name, status="error")
-                
+
             # Raise attribute error as it's a code structure issue and sync is expected
             raise AttributeError(error_msg)
 
         # Use the synchronous version directly - it now returns a tuple
         query_func = subagent_module.query_database_sync
         logger.debug(f"Calling query_database_sync for {database}")
-        
+
         # Check if the function can accept process_monitor and query_stage_name parameters
         sig = inspect.signature(query_func)
-        call_args = {'query': query, 'scope': scope, 'token': token}
-        if 'process_monitor' in sig.parameters:
-            call_args['process_monitor'] = process_monitor
-        if 'query_stage_name' in sig.parameters:
-            call_args['query_stage_name'] = stage_name # Pass the specific stage name
+        call_args = {"query": query, "scope": scope, "token": token}
+        if "process_monitor" in sig.parameters:
+            call_args["process_monitor"] = process_monitor
+        if "query_stage_name" in sig.parameters:
+            call_args["query_stage_name"] = stage_name  # Pass the specific stage name
 
         # Pass the process monitor and stage name if the function supports them
         result_tuple = query_func(**call_args)
-        
+
         # Handle different tuple lengths for backward compatibility
         if len(result_tuple) == 2:
             # Old format: (result, doc_ids)
-            result_tuple = (result_tuple[0], result_tuple[1], None, None, None)
+            result_tuple = (result_tuple[0], result_tuple[1], None, None, None, None)
         elif len(result_tuple) == 3:
             # Format with file_links: (result, doc_ids, file_links)
-            result_tuple = (result_tuple[0], result_tuple[1], result_tuple[2], None, None)
+            result_tuple = (
+                result_tuple[0],
+                result_tuple[1],
+                result_tuple[2],
+                None,
+                None,
+                None,
+            )
         elif len(result_tuple) == 4:
             # Format with page_refs: (result, doc_ids, file_links, page_refs)
-            result_tuple = (result_tuple[0], result_tuple[1], result_tuple[2], result_tuple[3], None)
-        
-        # Now result_tuple is guaranteed to have 5 elements
+            result_tuple = (
+                result_tuple[0],
+                result_tuple[1],
+                result_tuple[2],
+                result_tuple[3],
+                None,
+                None,
+            )
+        elif len(result_tuple) == 5:
+            # Format with section_content: (result, doc_ids, file_links, page_refs, section_content)
+            result_tuple = (
+                result_tuple[0],
+                result_tuple[1],
+                result_tuple[2],
+                result_tuple[3],
+                result_tuple[4],
+                None,
+            )
+
+        # Now result_tuple is guaranteed to have 6 elements
         # The following line was incorrectly indented after removing the else block
         # result_tuple: SubagentResult = query_func(query, scope, token) # REMOVED - Handled by **call_args
 
@@ -166,27 +220,48 @@ def route_query_sync(
         if process_monitor:
             # If the subagent didn't add document IDs to the stage details, add them now
             if len(result_tuple) > 1 and result_tuple[1]:  # If doc_ids is not None
-                process_monitor.add_stage_details(stage_name, document_ids=result_tuple[1])
+                process_monitor.add_stage_details(
+                    stage_name, document_ids=result_tuple[1]
+                )
             # Add file links if available
             if len(result_tuple) > 2 and result_tuple[2]:  # If file_links is not None
-                process_monitor.add_stage_details(stage_name, file_links=result_tuple[2])
+                process_monitor.add_stage_details(
+                    stage_name, file_links=result_tuple[2]
+                )
             # Add page/section refs if available
-            if len(result_tuple) > 3 and result_tuple[3]:  # If page_section_refs is not None
-                process_monitor.add_stage_details(stage_name, page_section_refs=result_tuple[3])
+            if (
+                len(result_tuple) > 3 and result_tuple[3]
+            ):  # If page_section_refs is not None
+                process_monitor.add_stage_details(
+                    stage_name, page_section_refs=result_tuple[3]
+                )
             # Add section content if available
-            if len(result_tuple) > 4 and result_tuple[4]:  # If section_content_map is not None
-                process_monitor.add_stage_details(stage_name, section_content_map=result_tuple[4])
-            
+            if (
+                len(result_tuple) > 4 and result_tuple[4]
+            ):  # If section_content_map is not None
+                process_monitor.add_stage_details(
+                    stage_name, section_content_map=result_tuple[4]
+                )
+            # Add reference index if available
+            if (
+                len(result_tuple) > 5 and result_tuple[5]
+            ):  # If reference_index is not None
+                process_monitor.add_stage_details(
+                    stage_name, reference_index=result_tuple[5]
+                )
+
             # Add status summary if available in research results
             if scope == "research" and isinstance(result_tuple[0], dict):
                 status_summary = result_tuple[0].get("status_summary", "")
                 if status_summary:
-                    process_monitor.add_stage_details(stage_name, status_summary=status_summary)
-            
+                    process_monitor.add_stage_details(
+                        stage_name, status_summary=status_summary
+                    )
+
             # REMOVED: Stage end is now handled by the caller (_execute_query_worker)
             # process_monitor.end_stage(stage_name, status="completed")
 
-        # Return the complete tuple (result, doc_ids, file_links, page_section_refs, section_content_map)
+        # Return the complete tuple (result, doc_ids, file_links, page_section_refs, section_content_map, reference_index)
         return result_tuple
 
     except (ImportError, AttributeError) as e:
@@ -201,15 +276,22 @@ def route_query_sync(
                 "detailed_research": f"Error: {error_msg}",
                 "status_summary": f"❌ Error: Could not execute query for '{database}' due to internal configuration.",
             }
-            
+
         # End the stage with error status if process monitor is provided
         # Use the specific stage_name passed from the worker
         if process_monitor:
             process_monitor.add_stage_details(stage_name, error=error_msg)
             # REMOVED: Stage end (even for errors) is now handled by the caller (_execute_query_worker)
             # process_monitor.end_stage(stage_name, status="error")
-            
-        return error_response, None, None, None, None # Return tuple with None for file_links, page_refs, section_content
+
+        return (
+            error_response,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )  # Return tuple with None for file_links, page_refs, section_content, reference_index
 
     except Exception as e:
         # Catch other potential exceptions during subagent execution
@@ -225,12 +307,19 @@ def route_query_sync(
                 "detailed_research": f"Error: {error_msg}",
                 "status_summary": f"❌ Error: Failed during query execution for '{database}'.",
             }
-            
+
         # End the stage with error status if process monitor is provided
         # Use the specific stage_name passed from the worker
         if process_monitor:
             process_monitor.add_stage_details(stage_name, error=error_msg)
             # REMOVED: Stage end (even for errors) is now handled by the caller (_execute_query_worker)
             # process_monitor.end_stage(stage_name, status="error")
-            
-        return error_response, None, None, None, None # Return tuple with None for file_links, page_refs, section_content
+
+        return (
+            error_response,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )  # Return tuple with None for file_links, page_refs, section_content, reference_index
