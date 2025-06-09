@@ -7,10 +7,29 @@
 
 ## Quick Start
 
+### Automated Setup (Recommended for fresh clones)
+
+```bash
+# One-command setup for fresh clones
+./setup_fresh_clone.sh
+
+# Edit environment variables (required)
+nano .env
+
+# Start the server
+python start_server.py
+```
+
+### Manual Setup
+
 ```bash
 # Install dependencies
 pip install -e .
 pip install -e ".[dev]"
+
+# Copy environment template
+cp .env.example .env
+# Edit .env with your configuration
 
 # Start the API server
 python start_server.py
