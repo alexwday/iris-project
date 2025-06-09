@@ -94,11 +94,18 @@ def _process_final_references(buffer: str, reference_index: Dict[str, Dict[str, 
     """
     import re
     
+    # DEBUG: Log final processing
+    logger = logging.getLogger(__name__)
+    logger.error(f"DEBUG FINAL: Processing final buffer with length {len(buffer)}")
+    logger.error(f"DEBUG FINAL: Buffer content: {repr(buffer)}")
+    logger.error(f"DEBUG FINAL: Reference index keys: {list(reference_index.keys())}")
+    
     # Process all remaining content
     # Find all [REF:X] or [REF:X,Y,Z] patterns
     def replace_refs(match):
         ref_text = match.group(1)
         ref_ids = [id.strip() for id in ref_text.split(",")]
+        logger.error(f"DEBUG FINAL REPLACE: Found reference {match.group(0)} with IDs: {ref_ids}")
 
         # Generate href links for each reference
         links = []
@@ -112,14 +119,21 @@ def _process_final_references(buffer: str, reference_index: Dict[str, Dict[str, 
                 # Create href link
                 href = f'<a href=\'javascript:window.maven.openPdf("{file_link}", {page}, "{highlight_text}")\'>📄</a>'
                 links.append(href)
+                logger.error(f"DEBUG FINAL REPLACE: Created href for ref {ref_id}: {href}")
+            else:
+                logger.error(f"DEBUG FINAL REPLACE: Reference {ref_id} not found in index")
 
         # Return the reference line with links
         if links:
-            return f"\n\n{' '.join(links)}\n\n"
+            result = f"\n\n{' '.join(links)}\n\n"
+            logger.error(f"DEBUG FINAL REPLACE: Returning links: {result}")
+            return result
         else:
+            logger.error(f"DEBUG FINAL REPLACE: No links found, keeping original: {match.group(0)}")
             return match.group(0)  # Keep original if no match
 
     processed = re.sub(r"\[REF:([\d,\s]+)\]", replace_refs, buffer)
+    logger.error(f"DEBUG FINAL: Final processed content: {repr(processed)}")
     yield processed
 
 
@@ -133,6 +147,8 @@ def _process_reference_buffer(buffer: str, reference_index: Dict[str, Dict[str, 
     # DEBUG: Log function entry
     logger = logging.getLogger(__name__)
     logger.error(f"DEBUG REFBUF: Called with buffer_len={len(buffer)}, ref_index_len={len(reference_index)}")
+    logger.error(f"DEBUG REFBUF: Buffer content: {repr(buffer)}")
+    logger.error(f"DEBUG REFBUF: Reference index keys: {list(reference_index.keys())}")
 
     # For streaming, we need to be careful not to split references
     # Look for complete paragraphs (ending with \n\n or a [REF:X] pattern)
@@ -145,6 +161,7 @@ def _process_reference_buffer(buffer: str, reference_index: Dict[str, Dict[str, 
         match = re.search(ref_pattern, buffer, re.DOTALL)
         if not match:
             # No complete reference found
+            logger.error(f"DEBUG REFBUF: No reference pattern match found")
             # Check if we have complete paragraphs without references
             double_newline = buffer.find("\n\n")
             if double_newline != -1:
@@ -152,10 +169,13 @@ def _process_reference_buffer(buffer: str, reference_index: Dict[str, Dict[str, 
                 para_content = buffer[: double_newline + 2]
                 processed_content += para_content
                 buffer = buffer[double_newline + 2 :]
+                logger.error(f"DEBUG REFBUF: Processed paragraph, remaining buffer: {repr(buffer)}")
             else:
                 # No complete paragraph, wait for more content
+                logger.error(f"DEBUG REFBUF: No complete paragraph, breaking")
                 break
         else:
+            logger.error(f"DEBUG REFBUF: Found reference match: {match.group(0)}")
             # Found a complete reference
             pre_text = match.group(1)
             ref_marker = match.group(2)
