@@ -211,6 +211,25 @@ def route_query_sync(
                 result_tuple[4],
                 None,
             )
+        elif len(result_tuple) == 6:
+            # Current format: (result, doc_ids, file_links, page_refs, section_content, reference_index)
+            # No modification needed - already 6 elements
+            pass
+        else:
+            # Unexpected tuple length - log error and create safe 6-element tuple
+            error_msg = f"Unexpected tuple length {len(result_tuple)} from subagent {database}"
+            logger.error(error_msg)
+            if process_monitor:
+                process_monitor.add_stage_details(stage_name, error=error_msg)
+            # Create error response tuple
+            if scope == "metadata":
+                error_response = []
+            else:
+                error_response = {
+                    "detailed_research": f"Error: Unexpected response format from {database}",
+                    "status_summary": f"❌ Error: Invalid response format from '{database}'.",
+                }
+            result_tuple = (error_response, None, None, None, None, None)
 
         # Now result_tuple is guaranteed to have 6 elements
         # The following line was incorrectly indented after removing the else block

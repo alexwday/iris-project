@@ -267,9 +267,28 @@ def _execute_query_worker(
             page_section_refs = None
             section_content_map = None
             reference_index = None
-        else:
+        elif len(result_tuple) == 2:
             # Old format: (result, doc_ids)
             result, doc_ids = result_tuple
+            file_links = None
+            page_section_refs = None
+            section_content_map = None
+            reference_index = None
+        else:
+            # Unexpected tuple length - handle gracefully
+            logger.error(f"Unexpected tuple length {len(result_tuple)} from route_query_sync for {db_name}")
+            if len(result_tuple) > 0:
+                result = result_tuple[0]
+            else:
+                # Empty tuple case
+                if scope == "metadata":
+                    result = []
+                else:
+                    result = {
+                        "detailed_research": f"Error: Invalid response format from {db_name}",
+                        "status_summary": f"❌ Error: Query failed for '{db_name}'.",
+                    }
+            doc_ids = None
             file_links = None
             page_section_refs = None
             section_content_map = None
