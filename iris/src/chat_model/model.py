@@ -86,57 +86,53 @@ def format_usage_summary(
     return usage_summary
 
 
-# --- Helper function for reference processing ---
-def _process_reference_buffer(
-    buffer: str, reference_index: Dict[str, Dict[str, Any]], final: bool = False
-) -> Union[tuple[str, str], Generator[str, None, None]]:
+# --- Helper functions for reference processing ---
+def _process_final_references(buffer: str, reference_index: Dict[str, Dict[str, Any]]) -> Generator[str, None, None]:
+    """
+    Process all remaining buffer content and replace [REF:X] markers with href links.
+    This is a generator function for final processing.
+    """
+    import re
+    
+    # Process all remaining content
+    # Find all [REF:X] or [REF:X,Y,Z] patterns
+    def replace_refs(match):
+        ref_text = match.group(1)
+        ref_ids = [id.strip() for id in ref_text.split(",")]
+
+        # Generate href links for each reference
+        links = []
+        for ref_id in ref_ids:
+            if ref_id in reference_index:
+                ref_data = reference_index[ref_id]
+                file_link = ref_data.get("file_link", "")
+                page = ref_data.get("page", 1)
+                highlight_text = ref_data.get("highlight_text", "")
+
+                # Create href link
+                href = f'<a href=\'javascript:window.maven.openPdf("{file_link}", {page}, "{highlight_text}")\'>📄</a>'
+                links.append(href)
+
+        # Return the reference line with links
+        if links:
+            return f"\n\n{' '.join(links)}\n\n"
+        else:
+            return match.group(0)  # Keep original if no match
+
+    processed = re.sub(r"\[REF:([\d,\s]+)\]", replace_refs, buffer)
+    yield processed
+
+
+def _process_reference_buffer(buffer: str, reference_index: Dict[str, Dict[str, Any]]) -> tuple[str, str]:
     """
     Process buffer content to replace [REF:X] markers with href links.
-
-    Args:
-        buffer: The current buffer content
-        reference_index: Master reference index mapping ref IDs to details
-        final: If True, process all remaining content
-
-    Returns:
-        If not final: tuple of (processed_content, remaining_buffer)
-        If final: generator yielding processed chunks
+    Returns tuple of (processed_content, remaining_buffer) for streaming.
     """
     import re
     
     # DEBUG: Log function entry
     logger = logging.getLogger(__name__)
-    logger.error(f"DEBUG REFBUF: Called with final={final}, buffer_len={len(buffer)}, ref_index_len={len(reference_index)}")
-
-    if final:
-        # Process all remaining content
-        # Find all [REF:X] or [REF:X,Y,Z] patterns
-        def replace_refs(match):
-            ref_text = match.group(1)
-            ref_ids = [id.strip() for id in ref_text.split(",")]
-
-            # Generate href links for each reference
-            links = []
-            for ref_id in ref_ids:
-                if ref_id in reference_index:
-                    ref_data = reference_index[ref_id]
-                    file_link = ref_data.get("file_link", "")
-                    page = ref_data.get("page", 1)
-                    highlight_text = ref_data.get("highlight_text", "")
-
-                    # Create href link
-                    href = f'<a href=\'javascript:window.maven.openPdf("{file_link}", {page}, "{highlight_text}")\'>📄</a>'
-                    links.append(href)
-
-            # Return the reference line with links
-            if links:
-                return f"\n\n{' '.join(links)}\n\n"
-            else:
-                return match.group(0)  # Keep original if no match
-
-        processed = re.sub(r"\[REF:([\d,\s]+)\]", replace_refs, buffer)
-        yield processed
-        # Don't return None - the generator should just end after yielding
+    logger.error(f"DEBUG REFBUF: Called with buffer_len={len(buffer)}, ref_index_len={len(reference_index)}")
 
     # For streaming, we need to be careful not to split references
     # Look for complete paragraphs (ending with \n\n or a [REF:X] pattern)
@@ -820,8 +816,8 @@ def _model_generator(
                                     summary_usage_details = chunk["usage_details"]
                                     # Process any remaining buffer content
                                     if buffer:
-                                        yield from _process_reference_buffer(
-                                            buffer, master_reference_index, final=True
+                                        yield from _process_final_references(
+                                            buffer, master_reference_index
                                         )
                                 else:
                                     # Add chunk to buffer
