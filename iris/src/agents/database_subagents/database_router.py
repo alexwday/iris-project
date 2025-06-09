@@ -177,6 +177,11 @@ def route_query_sync(
         # Pass the process monitor and stage name if the function supports them
         result_tuple = query_func(**call_args)
 
+        # DEBUG: Log what we got back from the subagent
+        logger.error(f"DEBUG ROUTER: {database} subagent returned type: {type(result_tuple)}")
+        logger.error(f"DEBUG ROUTER: {database} subagent returned length: {len(result_tuple) if hasattr(result_tuple, '__len__') else 'No length'}")
+        logger.error(f"DEBUG ROUTER: {database} subagent returned content: {result_tuple}")
+
         # Handle different tuple lengths for backward compatibility
         if len(result_tuple) == 2:
             # Old format: (result, doc_ids)

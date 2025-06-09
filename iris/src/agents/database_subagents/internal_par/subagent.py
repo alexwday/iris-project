@@ -828,6 +828,7 @@ def query_database_sync(
         a list of file links (or None), page/section references (or None), section content map (or None),
         and reference index (or None).
     """
+    logger.error(f"DEBUG PAR START: Function called with query='{query}', scope='{scope}', token={'[SET]' if token else '[NONE]'}")
     logger.info(f"Querying Internal PAR database (sync): '{query}' with scope: {scope}")
     database_name = "internal_par"  # Set database name
     default_error_status = "❌ Error during query processing."
@@ -1058,6 +1059,15 @@ def query_database_sync(
                     document_ids=selected_doc_ids,
                     status_summary=research_result.get("status_summary", ""),
                 )
+
+            # DEBUG: Log what we're about to return
+            logger.error(f"DEBUG PAR: About to return 6-element tuple")
+            logger.error(f"DEBUG PAR: research_result type: {type(research_result)}")
+            logger.error(f"DEBUG PAR: selected_doc_ids: {selected_doc_ids}")
+            logger.error(f"DEBUG PAR: file_links count: {len(file_links) if file_links else 0}")
+            logger.error(f"DEBUG PAR: page_section_refs: {page_section_refs}")
+            logger.error(f"DEBUG PAR: section_content_map count: {len(section_content_map) if section_content_map else 0}")
+            logger.error(f"DEBUG PAR: reference_index count: {len(reference_index) if reference_index else 0}")
 
             return (
                 research_result,

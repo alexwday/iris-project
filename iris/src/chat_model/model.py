@@ -243,6 +243,11 @@ def _execute_query_worker(
             query_stage_name=query_stage_name,
         )  # ADDED query_stage_name
 
+        # DEBUG: Log what we got back from route_query_sync
+        logger.error(f"DEBUG TUPLE: {db_name} returned tuple type: {type(result_tuple)}")
+        logger.error(f"DEBUG TUPLE: {db_name} returned tuple length: {len(result_tuple) if hasattr(result_tuple, '__len__') else 'No length'}")
+        logger.error(f"DEBUG TUPLE: {db_name} returned tuple content: {result_tuple}")
+
         # Handle different tuple lengths for backward compatibility
         if len(result_tuple) == 6:
             (
@@ -944,59 +949,17 @@ def _model_generator(
 
                                     # Join all page brackets
                                     page_data_string = "".join(page_brackets)
-                                    logger.info(
-                                        f"🔗 HREF DEBUG: Page brackets: {page_brackets}"
-                                    )
-                                    logger.info(
-                                        f"🔗 HREF DEBUG: Final page_data_string: {page_data_string}"
-                                    )
 
                                     if file_link:
                                         html_link = f'<a class="chatbot-link" href=\'javascript:window.maven.openPdf("{file_link}", "{page_data_string}")\'>📄 {document_name} ({page_description})</a>'
-                                        logger.info(
-                                            f"🔗 HREF DEBUG: Document: '{document_name}' | Pages: '{page_description}' | File: '{file_link}'"
-                                        )
-                                        logger.info(
-                                            f'🔗 HREF DEBUG: JavaScript call: javascript:window.maven.openPdf("{file_link}", "{page_data_string}")'
-                                        )
-                                        logger.info(
-                                            f"🔗 HREF DEBUG: Complete HTML: {html_link}"
-                                        )
                                     else:
                                         html_link = f'<a class="chatbot-link" href=\'javascript:window.maven.openPdf("", "{page_data_string}")\'>📄 {document_name} ({page_description})</a>'
-                                        logger.info(
-                                            f"🔗 HREF DEBUG: Document: '{document_name}' | Pages: '{page_description}' | File: [EMPTY]"
-                                        )
-                                        logger.info(
-                                            f'🔗 HREF DEBUG: JavaScript call: javascript:window.maven.openPdf("", "{page_data_string}")'
-                                        )
-                                        logger.info(
-                                            f"🔗 HREF DEBUG: Complete HTML: {html_link}"
-                                        )
                                 else:
                                     # Fall back to basic link if no page/section data
                                     if not file_link:
                                         html_link = f'<a class="chatbot-link" href=\'javascript:window.maven.openPdf("")\'>📄 {document_name}</a>'
-                                        logger.info(
-                                            f"🔗 HREF DEBUG: BASIC LINK - Document: '{document_name}' | File: [EMPTY]"
-                                        )
-                                        logger.info(
-                                            f'🔗 HREF DEBUG: JavaScript call: javascript:window.maven.openPdf("")'
-                                        )
-                                        logger.info(
-                                            f"🔗 HREF DEBUG: Complete HTML: {html_link}"
-                                        )
                                     else:
                                         html_link = f'<a class="chatbot-link" href=\'javascript:window.maven.openPdf("{file_link}")\'>📄 {document_name}</a>'
-                                        logger.info(
-                                            f"🔗 HREF DEBUG: BASIC LINK - Document: '{document_name}' | File: '{file_link}'"
-                                        )
-                                        logger.info(
-                                            f'🔗 HREF DEBUG: JavaScript call: javascript:window.maven.openPdf("{file_link}")'
-                                        )
-                                        logger.info(
-                                            f"🔗 HREF DEBUG: Complete HTML: {html_link}"
-                                        )
 
                                 logger.info(f"Yielding enhanced HTML link: {html_link}")
                                 yield f"{html_link}\n"
