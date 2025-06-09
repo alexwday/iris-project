@@ -132,17 +132,23 @@ def generate_streaming_summary(
 
             # Add reference index information if available
             if reference_index:
-                ref_context = "Reference Information:\n"
-                ref_context += f"The research contains {len(reference_index)} references marked as [REF:X].\n"
-                ref_context += "When citing information from the research, use these existing reference markers.\n"
-                ref_context += "Place reference markers at the end of relevant paragraphs, not inline.\n"
-                ref_context += "Multiple references can be combined as [REF:1,2,3].\n"
+                ref_context = "Available References:\n"
+                ref_context += "You can cite the following sources using [REF:X] markers:\n\n"
+                
+                for ref_id, ref_data in reference_index.items():
+                    doc_name = ref_data.get("doc_name", "Unknown")
+                    page = ref_data.get("page", 1)
+                    ref_context += f"[REF:{ref_id}] = {doc_name} - Page {page}\n"
+                
+                ref_context += "\nWhen synthesizing information from the research, cite relevant sources by adding [REF:X] markers at the end of paragraphs.\n"
+                ref_context += "Choose the appropriate reference based on which document and page the information comes from.\n"
+                ref_context += "Multiple references can be combined as [REF:1,2,3] if the information spans multiple sources.\n"
                 messages.append({"role": "system", "content": ref_context.strip()})
 
             # User message requesting summary
             user_message = {
                 "role": "user",
-                "content": "Please generate the comprehensive research summary based on the provided context and requirements. Synthesize the findings from all sources into a single, coherent response. When citing information, use the [REF:X] markers already present in the research text, placing them at the end of paragraphs.",
+                "content": "Please generate the comprehensive research summary based on the provided context and requirements. Synthesize the findings from all sources into a single, coherent response. When citing information, add appropriate [REF:X] markers from the available references list at the end of relevant paragraphs based on which document and page the information comes from.",
             }
             messages.append(user_message)
 

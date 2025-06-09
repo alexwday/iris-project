@@ -99,6 +99,7 @@ def _process_final_references(buffer: str, reference_index: Dict[str, Dict[str, 
     logger.error(f"DEBUG FINAL: Processing final buffer with length {len(buffer)}")
     logger.error(f"DEBUG FINAL: Buffer content: {repr(buffer)}")
     logger.error(f"DEBUG FINAL: Reference index keys: {list(reference_index.keys())}")
+    logger.error(f"DEBUG FINAL: Complete reference_index: {reference_index}")
     
     # Process all remaining content
     # Find all [REF:X] or [REF:X,Y,Z] patterns
@@ -152,6 +153,8 @@ def _process_reference_buffer(buffer: str, reference_index: Dict[str, Dict[str, 
     import re
     
     logger = logging.getLogger(__name__)
+    logger.error(f"DEBUG STREAM: _process_reference_buffer called with reference_index keys: {list(reference_index.keys())}")
+    logger.error(f"DEBUG STREAM: Complete reference_index: {reference_index}")
     
     # If buffer is shorter than buffer_size and doesn't contain complete references, keep buffering
     ref_pattern = r"\[REF:([\d,\s]+)\]"

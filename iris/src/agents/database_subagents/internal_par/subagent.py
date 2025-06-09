@@ -64,129 +64,79 @@ def format_catalog_for_llm(catalog_records: List[Dict[str, Any]]) -> str:
     return formatted_catalog.strip()
 
 
-def extract_citations_and_build_references(
-    research_text: str, documents: List[Dict[str, Any]], file_links: List[FileLink]
-) -> Tuple[str, ReferenceIndex]:
+def build_structured_reference_index(
+    page_numbers: List[int], 
+    file_links: List[FileLink], 
+    section_content_map: Dict[str, str]
+) -> ReferenceIndex:
     """
-    Extract citations from research text and build reference index.
-    Replace citations with [REF:X] markers.
+    Build reference index from structured data instead of parsing citations.
+    Creates simple page-based references with combined section text for highlighting.
 
     Args:
-        research_text: The detailed research text with citations
-        documents: The source documents used for research
+        page_numbers: List of page numbers referenced in the research
         file_links: File links for the documents
+        section_content_map: Maps "page_num:section_id" to section content
 
     Returns:
-        Tuple of (modified_text, reference_index)
+        Reference index mapping ref_id to {file_link, page, doc_name, highlight_text}
     """
     import re
 
-    # Build a mapping of document names to their file links
+    logger.error(f"DEBUG STRUCTURED_REF: Building reference index from {len(page_numbers)} pages")
+    logger.error(f"DEBUG STRUCTURED_REF: file_links: {file_links}")
+    logger.error(f"DEBUG STRUCTURED_REF: section_content_map keys: {list(section_content_map.keys())}")
+
+    # Build document name to file link mapping
     doc_to_file = {}
-    logger.error(f"DEBUG EXTRACT_CITATIONS: file_links input: {file_links}")
     for link_info in file_links:
         doc_name = link_info.get("document_name", "")
         file_link = link_info.get("file_link", "")
-        logger.error(f"DEBUG EXTRACT_CITATIONS: Processing doc '{doc_name}' with file_link '{file_link}'")
-        if doc_name:
+        if doc_name and file_link:
             doc_to_file[doc_name] = file_link
-    logger.error(f"DEBUG EXTRACT_CITATIONS: Built doc_to_file mapping: {doc_to_file}")
 
-    # Find all citations in the format: ***Source: Document Name, Page X, Section Name***
-    citation_pattern = r"\*\*\*Source:\s*([^,]+),\s*Page\s*(\d+),\s*([^\*]+)\*\*\*"
-    citations = list(re.finditer(citation_pattern, research_text))
+    logger.error(f"DEBUG STRUCTURED_REF: doc_to_file mapping: {doc_to_file}")
 
-    logger.error(f"DEBUG EXTRACT_CITATIONS: Found {len(citations)} citations in research text")
-    logger.error(f"DEBUG EXTRACT_CITATIONS: Research text sample: {research_text[:500]}...")
-    
-    if not citations:
-        logger.warning("No citations found in research text")
-        return research_text, {}
-
-    # Build reference index
     reference_index = {}
     ref_counter = 1
-    modified_text = research_text
 
-    # Process citations in reverse order to maintain string positions
-    for match in reversed(citations):
-        doc_name = match.group(1).strip()
-        page_num = int(match.group(2))
-        section_name = match.group(3).strip()
+    # Create one reference per page
+    for page_num in sorted(set(page_numbers)):  # Remove duplicates and sort
+        # Find all sections for this page in section_content_map
+        page_sections = []
+        for key, content in section_content_map.items():
+            if key.startswith(f"{page_num}:"):
+                page_sections.append(content)
 
-        # Find the actual section content from documents
-        highlight_text = ""
-        for doc in documents:
-            if doc.get("document_name") == doc_name:
-                for section in doc.get("page_sections", []):
-                    if (
-                        section.get("page_number") == page_num
-                        and section.get("section_name", "").strip() == section_name
-                    ):
-                        # Extract first 100 chars of content for highlighting
-                        content = section.get("section_content", "")
-                        # Clean the content for highlighting
-                        content_clean = re.sub(
-                            r"[|*#`_~\[\]{}\\<>@$%^&+=]", " ", content
-                        )
-                        content_clean = re.sub(r'["\']', "", content_clean)
-                        content_clean = re.sub(r"\s+", " ", content_clean).strip()
-                        highlight_text = (
-                            content_clean[:100]
-                            if len(content_clean) > 100
-                            else content_clean
-                        )
-                        break
+        # Combine all section content for this page
+        combined_content = " ".join(page_sections)
+        
+        # Clean the content for highlighting
+        content_clean = re.sub(r"[|*#`_~\[\]{}\\<>@$%^&+=]", " ", combined_content)
+        content_clean = re.sub(r'["\']', "", content_clean)
+        content_clean = re.sub(r"\s+", " ", content_clean).strip()
+        
+        # Use first file_link available (assuming single document for now)
+        file_link = ""
+        doc_name = "Unknown Document"
+        if file_links:
+            file_link = file_links[0].get("file_link", "")
+            doc_name = file_links[0].get("document_name", "Unknown Document")
 
-        # Create reference entry
         ref_id = str(ref_counter)
-        file_link_for_doc = doc_to_file.get(doc_name, "")
-        logger.error(f"DEBUG EXTRACT_CITATIONS: Creating ref {ref_id} for doc '{doc_name}', file_link='{file_link_for_doc}', page={page_num}, highlight='{highlight_text[:50]}...'")
         reference_index[ref_id] = {
             "doc_name": doc_name,
-            "file_link": file_link_for_doc,
+            "file_link": file_link,
             "page": page_num,
-            "section_name": section_name,
-            "highlight_text": highlight_text,
+            "section_name": f"Page {page_num}",
+            "highlight_text": content_clean,
         }
 
-        # Check if this citation is at the end of a paragraph
-        citation_end = match.end()
-        remaining_text = modified_text[citation_end:].lstrip()
-
-        # If next characters are newlines or end of text, place [REF:X] there
-        if not remaining_text or remaining_text.startswith("\n"):
-            # Replace citation with reference marker
-            modified_text = (
-                modified_text[: match.start()]
-                + f" [REF:{ref_id}]"
-                + modified_text[match.end() :]
-            )
-        else:
-            # Citation is inline, remove it and add reference at end of paragraph
-            # Find the next paragraph break
-            next_break = modified_text.find("\n\n", citation_end)
-            if next_break == -1:
-                next_break = len(modified_text)
-
-            # Remove the citation
-            modified_text = (
-                modified_text[: match.start()] + modified_text[match.end() :]
-            )
-
-            # Add reference at paragraph end
-            # Adjust next_break position due to removed text
-            next_break -= match.end() - match.start()
-            modified_text = (
-                modified_text[:next_break]
-                + f" [REF:{ref_id}]"
-                + modified_text[next_break:]
-            )
-
+        logger.error(f"DEBUG STRUCTURED_REF: Created ref {ref_id} for page {page_num}, file_link='{file_link}', highlight_length={len(content_clean)}")
         ref_counter += 1
 
-    logger.info(f"Extracted {len(reference_index)} citations and built reference index")
-    return modified_text, reference_index
+    logger.error(f"DEBUG STRUCTURED_REF: Final reference_index: {reference_index}")
+    return reference_index
 
 
 def format_documents_for_llm(documents: List[Dict[str, Any]]) -> str:
@@ -1046,22 +996,19 @@ def query_database_sync(
                 f"PAR DEBUG: Final section_content_map keys: {list(section_content_map.keys())}"
             )
 
-            # Extract citations and build reference index
-            detailed_research = research_result.get("detailed_research", "")
-            if detailed_research:
-                modified_research, reference_index = (
-                    extract_citations_and_build_references(
-                        detailed_research, documents, file_links
-                    )
+            # Build reference index from structured data
+            page_numbers = research_result.get("page_numbers", [])
+            if page_numbers and section_content_map:
+                reference_index = build_structured_reference_index(
+                    page_numbers, file_links, section_content_map
                 )
-                # Update the research result with modified text
-                research_result["detailed_research"] = modified_research
                 logger.info(
-                    f"Modified research with {len(reference_index)} reference markers"
+                    f"Built structured reference index with {len(reference_index)} page references"
                 )
                 logger.error(f"DEBUG PAR: Final reference_index: {reference_index}")
             else:
                 reference_index = {}
+                logger.warning("No page numbers or section content available for reference index")
 
             # Add details to process monitor before returning
             if process_monitor:
