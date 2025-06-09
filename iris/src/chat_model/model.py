@@ -139,80 +139,13 @@ def _process_final_references(buffer: str, reference_index: Dict[str, Dict[str, 
 
 def _process_reference_buffer(buffer: str, reference_index: Dict[str, Dict[str, Any]]) -> tuple[str, str]:
     """
-    Process buffer content to replace [REF:X] markers with href links.
+    For streaming: just accumulate chunks without processing references.
+    All reference processing happens at the end in _process_final_references.
     Returns tuple of (processed_content, remaining_buffer) for streaming.
     """
-    import re
-    
-    # DEBUG: Log function entry
-    logger = logging.getLogger(__name__)
-    logger.error(f"DEBUG REFBUF: Called with buffer_len={len(buffer)}, ref_index_len={len(reference_index)}")
-    logger.error(f"DEBUG REFBUF: Buffer content: {repr(buffer)}")
-    logger.error(f"DEBUG REFBUF: Reference index keys: {list(reference_index.keys())}")
-
-    # For streaming, we need to be careful not to split references
-    # Look for complete paragraphs (ending with \n\n or a [REF:X] pattern)
-    processed_content = ""
-
-    # Check if buffer contains a complete reference pattern followed by paragraph break
-    ref_pattern = r"(.*?)(\[REF:[\d,\s]+\])(\s*\n\n|\s*$)"
-
-    while True:
-        match = re.search(ref_pattern, buffer, re.DOTALL)
-        if not match:
-            # No complete reference found
-            logger.error(f"DEBUG REFBUF: No reference pattern match found")
-            # Check if we have complete paragraphs without references
-            double_newline = buffer.find("\n\n")
-            if double_newline != -1:
-                # Process content up to paragraph break
-                para_content = buffer[: double_newline + 2]
-                processed_content += para_content
-                buffer = buffer[double_newline + 2 :]
-                logger.error(f"DEBUG REFBUF: Processed paragraph, remaining buffer: {repr(buffer)}")
-            else:
-                # No complete paragraph, wait for more content
-                logger.error(f"DEBUG REFBUF: No complete paragraph, breaking")
-                break
-        else:
-            logger.error(f"DEBUG REFBUF: Found reference match: {match.group(0)}")
-            # Found a complete reference
-            pre_text = match.group(1)
-            ref_marker = match.group(2)
-            post_text = match.group(3)
-
-            # Extract reference IDs
-            ref_match = re.match(r"\[REF:([\d,\s]+)\]", ref_marker)
-            if ref_match:
-                ref_ids = [id.strip() for id in ref_match.group(1).split(",")]
-
-                # Generate href links
-                links = []
-                for ref_id in ref_ids:
-                    if ref_id in reference_index:
-                        ref_data = reference_index[ref_id]
-                        file_link = ref_data.get("file_link", "")
-                        page = ref_data.get("page", 1)
-                        highlight_text = ref_data.get("highlight_text", "")
-
-                        # Create href link
-                        href = f'<a href=\'javascript:window.maven.openPdf("{file_link}", {page}, "{highlight_text}")\'>📄</a>'
-                        links.append(href)
-
-                # Construct processed text with reference links on new line
-                if links:
-                    processed_content += pre_text + "\n\n" + " ".join(links) + post_text
-                else:
-                    processed_content += pre_text + ref_marker + post_text
-            else:
-                processed_content += pre_text + ref_marker + post_text
-
-            # Update buffer to remaining content
-            buffer = buffer[match.end() :]
-
-    # DEBUG: Log what we're returning
-    logger.error(f"DEBUG REFBUF: Returning tuple with processed_len={len(processed_content)}, remaining_buffer_len={len(buffer)}")
-    return processed_content, buffer
+    # During streaming, just pass through content without processing references
+    # References will be processed at the end when we have the complete text
+    return buffer, ""
 
 
 # --- Worker Function for Threaded Query Execution ---
