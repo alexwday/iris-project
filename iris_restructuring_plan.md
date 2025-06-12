@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-This document outlines the proposed restructuring of the IRIS (Intelligent Retrieval & Interaction System) project to align with IT's requested three-folder architecture: **classes**, **assets**, and **services**.
+This document outlines the proposed restructuring of the IRIS (Intelligent Retrieval & Interaction System) project to align with IT's requested three-folder architecture: **classes**, **routers**, and **services**.
 
 ---
 
@@ -31,128 +31,127 @@ iris/src/
 ### Proposed Structure (Three-Folder Architecture)
 ```
 iris/
-├── classes/                  # 🧠 Business Logic & Core Functionality
-├── assets/                   # 📄 Static Resources & Configuration
-└── services/                 # 🔌 External Integrations & APIs
+├── classes/                  # 📊 Data Models & Domain Entities
+├── routers/                  # 🌐 API Endpoints & Request Handling
+└── services/                 # 🧠 Business Logic & Integrations
 ```
 
 ---
 
 ## 📁 Detailed Folder Structure
 
-### 🧠 **CLASSES** - Business Logic & Domain Models
+### 📊 **CLASSES** - Data Models & Domain Entities
 
-Contains all core business logic, agent implementations, and data models.
+Contains all data structures, domain models, and entity definitions used throughout the application.
 
 ```
 classes/
-├── agents/
-│   ├── core/                     # Main pipeline agents
-│   │   ├── router.py            # Determines query routing
-│   │   ├── clarifier.py         # Refines research goals
-│   │   ├── planner.py           # Selects databases
-│   │   ├── summarizer.py        # Synthesizes responses
-│   │   └── direct_response.py   # Handles conversational queries
-│   │
-│   └── database/                # Specialized database agents
-│       ├── internal/            # 13 internal data sources
-│       │   ├── capm.py         # Corporate Accounting Policies
-│       │   ├── wiki.py         # APG Wiki entries
-│       │   ├── cheatsheets.py  # Quick reference guides
-│       │   ├── memos.py        # Internal accounting memos
-│       │   ├── par.py          # Project approval requests
-│       │   ├── aio.py          # Auditor independence
-│       │   ├── icfr.py         # Internal controls
-│       │   ├── esg.py          # ESG guidance
-│       │   ├── compliance.py   # Compliance policies
-│       │   ├── reporting.py    # External reporting
-│       │   ├── standards.py    # Global finance standards
-│       │   ├── management.py   # Management reporting
-│       │   └── controls.py     # Process and controls
-│       │
-│       └── external/            # 4 external data sources
-│           ├── ey.py           # EY IFRS guidance
-│           ├── iasb.py         # IASB standards
-│           ├── kpmg.py         # KPMG IFRS guidance
-│           └── pwc.py          # PwC IFRS guidance
+├── models/                      # Pydantic models & schemas
+│   ├── conversation.py         # Conversation request/response models
+│   ├── agent_models.py         # Agent-specific data models
+│   ├── database_query.py       # Database query/result models
+│   └── research_models.py      # Research planning & results
 │
-├── models/                      # Data structures
-│   ├── conversation.py         # Conversation models
-│   ├── agent_response.py       # Response structures
-│   └── database_query.py       # Query/result models
+├── entities/                    # Domain entities
+│   ├── user.py                # User entity
+│   ├── session.py             # Session management
+│   └── usage_metrics.py       # Token usage tracking
 │
-└── orchestration/              # Pipeline coordination
-    └── chat_model.py          # Main orchestration logic
+├── schemas/                    # Database schemas
+│   ├── database_catalog.py    # Database metadata definitions
+│   └── document_schema.py     # Document structure schemas
+│
+└── constants/                  # Application constants
+    ├── agent_types.py         # Agent type enumerations
+    ├── database_names.py      # Database identifiers
+    └── prompt_templates.py    # Template string constants
 ```
 
-### 📄 **ASSETS** - Static Resources & Configuration
+### 🌐 **ROUTERS** - API Endpoints & Request Handling
 
-Contains all non-code resources: prompts, configurations, and schemas.
+Contains all API route definitions, request handlers, and HTTP-specific logic.
 
 ```
-assets/
-├── prompts/
-│   ├── global/                  # System-wide prompts
-│   │   ├── database_statement.py    # Database descriptions
-│   │   ├── fiscal_statement.py      # Fiscal calendar info
-│   │   ├── project_statement.py     # Project context
-│   │   └── restrictions_statement.py # Compliance rules
-│   │
-│   ├── agent_prompts/           # Agent-specific prompts
-│   │   ├── router_settings.py       # Router configuration
-│   │   ├── clarifier_settings.py    # Clarifier templates
-│   │   ├── planner_settings.py      # Planner instructions
-│   │   ├── summarizer_settings.py   # Summary templates
-│   │   └── direct_response_settings.py
-│   │
-│   └── database_prompts/        # Database agent prompts
-│       ├── catalog_selection/   # Document selection prompts
-│       │   ├── internal_capm_catalog.py
-│       │   ├── internal_wiki_catalog.py
-│       │   └── ... (one per subagent)
-│       │
-│       └── content_synthesis/   # Content synthesis prompts
-│           ├── internal_capm_synthesis.py
-│           ├── internal_wiki_synthesis.py
-│           └── ... (one per subagent)
+routers/
+├── main.py                     # FastAPI app initialization
+├── chat.py                     # Main chat endpoints
+│   ├── POST /chat             # Process chat request
+│   ├── POST /chat/stream      # Streaming chat response
+│   └── GET /chat/history      # Retrieve chat history
 │
-├── configs/                     # Configuration files
-│   ├── environment.py          # Environment detection
-│   ├── database.py             # Database connections
-│   ├── logging.py              # Logging configuration
-│   ├── oauth.py                # OAuth settings
-│   └── ssl.py                  # SSL certificates
+├── research.py                 # Research-specific endpoints
+│   ├── POST /research/query   # Direct research query
+│   ├── GET /research/status   # Check research status
+│   └── GET /research/sources  # List available sources
 │
-└── schemas/                    # Data definitions
-    └── database_catalog.py     # Database metadata
+├── admin.py                    # Administrative endpoints
+│   ├── GET /admin/metrics     # Usage metrics
+│   ├── GET /admin/logs        # System logs
+│   └── POST /admin/refresh    # Refresh configurations
+│
+├── health.py                   # Health & monitoring
+│   ├── GET /health            # Basic health check
+│   ├── GET /health/detailed   # Detailed system status
+│   └── GET /health/database   # Database connectivity
+│
+└── middleware/                 # HTTP middleware
+    ├── authentication.py      # OAuth/API key validation
+    ├── error_handler.py       # Global error handling
+    ├── logging.py             # Request/response logging
+    └── rate_limiting.py       # Rate limit enforcement
 ```
 
-### 🔌 **SERVICES** - External Integrations & APIs
+### 🧠 **SERVICES** - Business Logic & Integrations
 
-Contains all external-facing code and service integrations.
+Contains all business logic, agent implementations, external integrations, and service layers.
 
 ```
 services/
-├── api/
-│   ├── main.py                 # FastAPI application
-│   └── endpoints/              # API endpoints
-│       ├── chat.py            # Chat endpoints
-│       ├── health.py          # Health checks
-│       └── metrics.py         # Usage metrics
+├── agents/                     # Agent implementations
+│   ├── core/                  # Main pipeline agents
+│   │   ├── router_agent.py    # Query routing logic
+│   │   ├── clarifier_agent.py # Research clarification
+│   │   ├── planner_agent.py   # Database selection
+│   │   ├── summarizer_agent.py # Response synthesis
+│   │   └── direct_response_agent.py # Conversational responses
+│   │
+│   └── database/              # Database subagents
+│       ├── internal/          # Internal source agents
+│       │   ├── capm_agent.py  # CAPM queries
+│       │   ├── wiki_agent.py  # Wiki queries
+│       │   └── ... (other internal agents)
+│       │
+│       └── external/          # External source agents
+│           ├── ey_agent.py    # EY guidance
+│           ├── iasb_agent.py  # IASB standards
+│           └── ... (other external agents)
 │
-├── connectors/
-│   ├── openai_connector.py    # OpenAI API wrapper
-│   └── database/              # Database connections
-│       └── postgres.py        # PostgreSQL adapter
+├── orchestration/             # Workflow orchestration
+│   ├── chat_orchestrator.py   # Main chat workflow
+│   ├── research_pipeline.py   # Research coordination
+│   └── agent_coordinator.py   # Agent pipeline management
 │
-├── monitoring/
-│   └── process_monitor.py     # Performance tracking
+├── integrations/              # External service connectors
+│   ├── openai_service.py      # OpenAI API integration
+│   ├── database_service.py    # PostgreSQL operations
+│   └── oauth_service.py       # OAuth authentication
+│
+├── config/                    # Configuration services
+│   ├── environment_config.py  # Environment settings
+│   ├── database_config.py     # Database connections
+│   ├── logging_config.py      # Logging setup
+│   └── ssl_config.py          # SSL certificates
+│
+├── prompts/                   # Prompt management
+│   ├── global_prompts.py      # System-wide prompts
+│   ├── agent_prompts.py       # Agent-specific prompts
+│   └── database_prompts.py    # Database query prompts
 │
 └── utilities/                 # Shared utilities
-    ├── streaming.py          # Response streaming
-    ├── error_handling.py     # Error management
-    ├── token_counter.py      # Usage tracking
-    └── auth_utils.py         # Authentication helpers
+    ├── streaming.py           # Response streaming
+    ├── error_handling.py      # Error management
+    ├── token_counter.py       # Usage tracking
+    └── process_monitor.py     # Performance monitoring
 ```
 
 ---
@@ -160,22 +159,22 @@ services/
 ## 🔄 Migration Benefits
 
 ### For Development Team
-- ✅ **Preserved Architecture**: Agent pipeline remains intact
-- ✅ **Clear Organization**: Related files grouped logically
-- ✅ **Easier Testing**: Business logic separated from infrastructure
-- ✅ **Better Modularity**: Clear boundaries between components
+- ✅ **Standard Architecture**: Follows common FastAPI/microservice patterns
+- ✅ **Clear Separation**: Models, routes, and business logic clearly divided
+- ✅ **Testability**: Each layer can be tested independently
+- ✅ **Type Safety**: Models in one place for consistent typing
 
 ### For IT Operations
-- ✅ **Deployment Flexibility**: Can deploy/scale folders independently
-- ✅ **Security Isolation**: Business logic separate from external services
-- ✅ **Resource Management**: Static assets can be cached/CDN-hosted
-- ✅ **Service Monitoring**: All integrations in one place
+- ✅ **API-First Design**: All endpoints clearly defined in routers
+- ✅ **Service Isolation**: Business logic separate from HTTP layer
+- ✅ **Scalability**: Services can be deployed as microservices
+- ✅ **Monitoring**: Clear entry points for request tracking
 
 ### For Maintenance
-- ✅ **Simplified Updates**: Update prompts without touching code
-- ✅ **Configuration Management**: All configs in one location
-- ✅ **Dependency Tracking**: Clear separation of concerns
-- ✅ **Version Control**: Easier to track changes by type
+- ✅ **Industry Standard**: New developers will recognize the pattern
+- ✅ **Clear Dependencies**: Routers → Services → Classes
+- ✅ **Easy Updates**: Can modify API without touching business logic
+- ✅ **Swagger/OpenAPI**: Auto-documentation from router definitions
 
 ---
 
@@ -204,9 +203,33 @@ services/
 
 ---
 
-## 📞 Questions?
+## 📞 Key Architecture Notes
 
-This restructuring maintains IRIS's intelligent agent architecture while providing IT with the organized structure they need for deployment and management.
+### Classes/Routers/Services Pattern
+This is a standard **3-Layer Architecture** commonly used in modern API development:
+
+1. **Classes Layer** (Data/Domain)
+   - Pure data structures with no business logic
+   - Reusable across different services
+   - Framework-agnostic models
+
+2. **Routers Layer** (Presentation/API)
+   - HTTP-specific logic only
+   - Request validation and response formatting
+   - Authentication and authorization
+   - No business logic - just orchestration
+
+3. **Services Layer** (Business/Application)
+   - All business logic and rules
+   - Agent implementations
+   - External integrations
+   - Database operations
+
+This pattern ensures:
+- **Separation of Concerns**: Each layer has a specific responsibility
+- **Testability**: Mock any layer for testing
+- **Flexibility**: Change API without touching business logic
+- **Scalability**: Services can become microservices
 
 **Key Contact**: [Your Name]  
 **Review Date**: [Date]  
