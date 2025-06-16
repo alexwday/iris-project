@@ -26,7 +26,7 @@ from ...initial_setup.env_config import config
 from ...global_prompts.database_statement import get_available_databases
 
 # Removed old token usage imports
-# from ...llm_connectors.rbc_openai import get_token_usage, reset_token_usage
+# from ....llm_connectors.rbc_openai import get_token_usage, reset_token_usage
 
 from typing import (
     Any,
@@ -144,7 +144,7 @@ def route_query_sync(
         )  # Return tuple with None for file_links, page_refs, section_content, reference_index
 
     try:
-        module_path = f"iris.src.agents.database_subagents.{database}.subagent"
+        module_path = f"services.src.agents.database_subagents.{database}.subagent"
         subagent_module = importlib.import_module(module_path)
         logger.debug(f"Successfully imported module: {module_path}")
 

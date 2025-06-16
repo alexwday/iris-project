@@ -18,7 +18,7 @@ Dependencies:
 
 import logging
 import sys
-from iris.src.initial_setup.env_config import config
+from ..initial_setup.env_config import config
 
 
 def configure_logging(level=None):

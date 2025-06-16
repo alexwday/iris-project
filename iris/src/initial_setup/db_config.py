@@ -7,8 +7,7 @@ from typing import Any, Dict, Optional
 import logging
 import psycopg2
 import psycopg2.extras
-import uuid
-from iris.src.initial_setup.env_config import config
+from ..initial_setup.env_config import config
 
 # Register UUID adapter
 psycopg2.extras.register_uuid()
@@ -28,18 +27,25 @@ def get_db_params() -> Dict[str, Any]:
     return config.get_db_params()
 
 
-def connect_to_db() -> Optional[psycopg2.extensions.connection]:
+def build_postgres_uri(app_config):
     """
-    Connect to the PostgreSQL database.
+    Build a PostgreSQL connection URI from config properties (no port/dbname).
+    """
+    user = app_config.get('user')
+    password = app_config.get('password')
+    host = app_config.get('host')
+    return f"postgresql://{user}:{password}@{host}"
 
-    Returns:
-        Database connection object or None if connection fails
+
+def connect_to_db(env: str = "rbc") -> Optional[psycopg2.extensions.connection]:
     """
-    db_params = get_db_params()
+    Connect to the PostgreSQL database using a URI without port/dbname.
+    """
+    params = get_db_params()
+    uri = build_postgres_uri(params)
     try:
-        logger.info(f"Connecting to database with parameters: host={db_params['host']}, " +
-                   f"port={db_params['port']}, dbname={db_params['dbname']}, user={db_params['user']}")
-        conn = psycopg2.connect(**db_params)
+        logger.info(f"Connecting to database with URI:")
+        conn = psycopg2.connect(dsn=uri)
         conn.autocommit = False
         logger.info("Database connection successful")
         return conn

@@ -429,6 +429,7 @@ def _model_generator(
     conversation: Optional[Dict[str, Any]] = None,
     html_callback: Optional[callable] = None,
     debug_mode: bool = False,  # Keep debug_mode for legacy debug dict
+    db_names: Optional[List[str]] = None,  # List of database names to query
 ) -> Generator[str, None, None]:
     """
     Core synchronous generator handling the agent workflow.
@@ -649,6 +650,16 @@ def _model_generator(
 
                 # Display plan...
                 available_databases = get_available_databases()
+                logger.info(f"Initial available databases: {list(get_available_databases().keys())}")
+                if db_names is not None:
+                    logger.info(f"db_names filter provided: {db_names}")
+                    available_databases = {k: v for k, v in available_databases.items() if k in db_names}
+                    logger.info(f"Filtered available_databases: {list(available_databases.keys())}")
+                    selected_databases = [db for db in selected_databases if db in db_names]
+                    logger.info(f"Filtered selected_databases: {selected_databases}")
+                else:
+                    logger.info("No db_names filter provided; using all available databases.")
+                logger.info(f"Final selected_databases to be queried: {selected_databases}")
                 if scope == "metadata":
                     yield "# 🔍 File Search Plan\n\n"
                     yield f"## Search Criteria\n{research_statement}\n\n"
@@ -1095,6 +1106,7 @@ def model(
     conversation: Optional[Dict[str, Any]] = None,
     html_callback: Optional[callable] = None,
     debug_mode: bool = False,  # Keep debug_mode for legacy dict
+    db_names: Optional[List[str]] = None,
 ) -> Generator[str, None, None]:
     """
     Synchronous wrapper for the model generator.
@@ -1102,7 +1114,7 @@ def model(
     logger = logging.getLogger(__name__)
     logger.debug("Entering synchronous model wrapper.")
     try:
-        sync_gen = _model_generator(conversation, html_callback, debug_mode)
+        sync_gen = _model_generator(conversation, html_callback, debug_mode, db_names)
         for chunk in sync_gen:
             yield chunk
         logger.debug("Synchronous generator completed.")
@@ -1114,7 +1126,7 @@ def model(
 
 # --- Async Wrapper for FastAPI ---
 async def process_request_async(
-    conversation: List[Dict[str, str]], stream: bool = False
+    conversation: List[Dict[str, str]], stream: bool = False, db_names: Optional[List[str]] = None
 ) -> Dict[str, Any]:
     """
     Async wrapper for FastAPI that processes a conversation request.
@@ -1152,7 +1164,7 @@ async def process_request_async(
             token_usage = None
 
             # Run the existing synchronous model
-            for chunk in model(conversation_dict, debug_mode=False):
+            for chunk in model(conversation_dict, debug_mode=False, db_names=db_names):
                 if isinstance(chunk, str):
                     response_chunks.append(chunk)
                 elif isinstance(chunk, dict):
