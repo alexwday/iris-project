@@ -171,6 +171,48 @@
             border-top: 1px solid #e5e5e5;
         }
         
+        .database-selector {
+            margin-bottom: 16px;
+            padding: 16px;
+            background: #f8f9fa;
+            border: 1px solid #e5e5e5;
+            border-radius: 8px;
+            max-width: 1200px;
+            margin: 0 auto 16px auto;
+        }
+        
+        .database-selector label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #374151;
+        }
+        
+        .database-selector select {
+            width: 100%;
+            min-height: 80px;
+            padding: 8px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+        
+        .database-selector button {
+            background: #6366f1;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            margin-right: 8px;
+        }
+        
+        .database-selector button:hover {
+            background: #5856eb;
+        }
+        
         .input-wrapper {
             position: relative;
             max-width: 1200px;
@@ -352,6 +394,24 @@
         </div>
         
         <div class="input-container">
+            <div class="database-selector">
+                <label for="databaseSelect">Databases to search:</label>
+                <select id="databaseSelect" multiple>
+                    <option value="internal_aio">AIO</option>
+                    <option value="internal_capm">CAPM</option>
+                    <option value="internal_cheatsheets">Cheatsheets</option>
+                    <option value="internal_esg">ESG</option>
+                    <option value="internal_ext_reporting_and_disclosure">External Reporting</option>
+                    <option value="internal_global_finance_standards">Global Finance Standards</option>
+                    <option value="internal_management_reporting">Management Reporting</option>
+                    <option value="internal_memos">Memos</option>
+                    <option value="internal_par">PAR</option>
+                    <option value="internal_process_and_controls">Process & Controls</option>
+                    <option value="internal_wiki">Wiki</option>
+                </select>
+                <button id="selectAllBtn">Select All</button>
+                <button id="clearAllBtn">Clear All</button>
+            </div>
             <div class="input-wrapper">
                 <textarea 
                     class="input-box" 

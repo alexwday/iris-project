@@ -34,6 +34,14 @@ def build_postgres_uri(app_config):
     user = app_config.get('user')
     password = app_config.get('password')
     host = app_config.get('host')
+    
+    # TEMPORARY LOCAL DEV FIX - DELETE BEFORE SHARING WITH IT
+    port = app_config.get('port')
+    dbname = app_config.get('dbname')
+    if port and port != '5432':  # Only add port if it's non-standard
+        return f"postgresql://{user}:{password}@{host}:{port}/{dbname}"
+    # END TEMPORARY FIX
+    
     return f"postgresql://{user}:{password}@{host}"
 
 
