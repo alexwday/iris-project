@@ -181,24 +181,98 @@
             margin: 0 auto 16px auto;
         }
         
-        .database-selector label {
-            display: block;
-            margin-bottom: 8px;
+        .database-selector-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+        
+        .database-selector-header h3 {
+            margin: 0;
+            font-size: 14px;
             font-weight: 600;
             color: #374151;
         }
         
-        .database-selector select {
-            width: 100%;
-            min-height: 80px;
-            padding: 8px;
-            border: 1px solid #d1d5db;
-            border-radius: 6px;
-            font-size: 14px;
-            margin-bottom: 8px;
+        .filter-toggle {
+            background: #6366f1;
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
         }
         
-        .database-selector button {
+        .filter-toggle:hover {
+            background: #5856eb;
+        }
+        
+        .database-groups {
+            display: none;
+        }
+        
+        .database-groups.show {
+            display: block;
+        }
+        
+        .database-group {
+            margin-bottom: 16px;
+        }
+        
+        .database-group h4 {
+            margin: 0 0 8px 0;
+            font-size: 13px;
+            font-weight: 600;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .checkbox-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 8px;
+        }
+        
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            padding: 6px 8px;
+            background: white;
+            border: 1px solid #e5e5e5;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .checkbox-item:hover {
+            background: #f1f5f9;
+            border-color: #6366f1;
+        }
+        
+        .checkbox-item input[type="checkbox"] {
+            margin-right: 8px;
+            cursor: pointer;
+        }
+        
+        .checkbox-item label {
+            margin: 0;
+            font-size: 12px;
+            font-weight: 500;
+            color: #374151;
+            cursor: pointer;
+            flex: 1;
+        }
+        
+        .control-buttons {
+            margin-top: 12px;
+            display: flex;
+            gap: 8px;
+        }
+        
+        .control-buttons button {
             background: #6366f1;
             color: white;
             border: none;
@@ -206,11 +280,24 @@
             border-radius: 4px;
             font-size: 12px;
             cursor: pointer;
-            margin-right: 8px;
         }
         
-        .database-selector button:hover {
+        .control-buttons button:hover {
             background: #5856eb;
+        }
+        
+        .control-buttons button.secondary {
+            background: #9ca3af;
+        }
+        
+        .control-buttons button.secondary:hover {
+            background: #6b7280;
+        }
+        
+        .selected-count {
+            font-size: 11px;
+            color: #6b7280;
+            margin-left: auto;
         }
         
         .input-wrapper {
@@ -395,22 +482,69 @@
         
         <div class="input-container">
             <div class="database-selector">
-                <label for="databaseSelect">Databases to search:</label>
-                <select id="databaseSelect" multiple>
-                    <option value="internal_aio">AIO</option>
-                    <option value="internal_capm">CAPM</option>
-                    <option value="internal_cheatsheets">Cheatsheets</option>
-                    <option value="internal_esg">ESG</option>
-                    <option value="internal_ext_reporting_and_disclosure">External Reporting</option>
-                    <option value="internal_global_finance_standards">Global Finance Standards</option>
-                    <option value="internal_management_reporting">Management Reporting</option>
-                    <option value="internal_memos">Memos</option>
-                    <option value="internal_par">PAR</option>
-                    <option value="internal_process_and_controls">Process & Controls</option>
-                    <option value="internal_wiki">Wiki</option>
-                </select>
-                <button id="selectAllBtn">Select All</button>
-                <button id="clearAllBtn">Clear All</button>
+                <div class="database-selector-header">
+                    <h3>Database Filters</h3>
+                    <div class="selected-count" id="selectedCount">All databases (11)</div>
+                    <button class="filter-toggle" id="filterToggle">Show Filters</button>
+                </div>
+                
+                <div class="database-groups" id="databaseGroups">
+                    <div class="database-group">
+                        <h4>Internal Knowledge Bases</h4>
+                        <div class="checkbox-grid">
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="internal_aio" value="internal_aio" checked>
+                                <label for="internal_aio">AIO</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="internal_capm" value="internal_capm" checked>
+                                <label for="internal_capm">CAPM</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="internal_cheatsheets" value="internal_cheatsheets" checked>
+                                <label for="internal_cheatsheets">Cheatsheets</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="internal_esg" value="internal_esg" checked>
+                                <label for="internal_esg">ESG</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="internal_ext_reporting_and_disclosure" value="internal_ext_reporting_and_disclosure" checked>
+                                <label for="internal_ext_reporting_and_disclosure">External Reporting</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="internal_global_finance_standards" value="internal_global_finance_standards" checked>
+                                <label for="internal_global_finance_standards">Global Finance Standards</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="internal_management_reporting" value="internal_management_reporting" checked>
+                                <label for="internal_management_reporting">Management Reporting</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="internal_memos" value="internal_memos" checked>
+                                <label for="internal_memos">Memos</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="internal_par" value="internal_par" checked>
+                                <label for="internal_par">PAR</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="internal_process_and_controls" value="internal_process_and_controls" checked>
+                                <label for="internal_process_and_controls">Process & Controls</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="internal_wiki" value="internal_wiki" checked>
+                                <label for="internal_wiki">Wiki</label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="control-buttons">
+                        <button id="selectAllBtn">Select All</button>
+                        <button id="clearAllBtn" class="secondary">Clear All</button>
+                        <button id="selectInternalBtn">Internal Only</button>
+                    </div>
+                </div>
             </div>
             <div class="input-wrapper">
                 <textarea 
@@ -447,6 +581,7 @@
                 this.setupEventListeners();
                 this.checkAPIConnection();
                 this.autoResizeTextarea();
+                this.updateSelectedCount();
             }
             
             setupEventListeners() {
@@ -460,6 +595,45 @@
                 
                 this.messageInput.addEventListener('input', () => {
                     this.autoResizeTextarea();
+                });
+                
+                // Database selector event listeners
+                document.getElementById('filterToggle').addEventListener('click', () => {
+                    const groups = document.getElementById('databaseGroups');
+                    const toggle = document.getElementById('filterToggle');
+                    
+                    if (groups.classList.contains('show')) {
+                        groups.classList.remove('show');
+                        toggle.textContent = 'Show Filters';
+                    } else {
+                        groups.classList.add('show');
+                        toggle.textContent = 'Hide Filters';
+                    }
+                });
+                
+                document.getElementById('selectAllBtn').addEventListener('click', () => {
+                    const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+                    checkboxes.forEach(cb => cb.checked = true);
+                    this.updateSelectedCount();
+                });
+                
+                document.getElementById('clearAllBtn').addEventListener('click', () => {
+                    const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+                    checkboxes.forEach(cb => cb.checked = false);
+                    this.updateSelectedCount();
+                });
+                
+                document.getElementById('selectInternalBtn').addEventListener('click', () => {
+                    const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+                    checkboxes.forEach(cb => {
+                        cb.checked = cb.value.startsWith('internal_');
+                    });
+                    this.updateSelectedCount();
+                });
+                
+                // Add change listeners to all checkboxes
+                document.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                    cb.addEventListener('change', () => this.updateSelectedCount());
                 });
             }
             
@@ -553,15 +727,22 @@
                 const typingDiv = this.addTypingIndicator();
                 
                 try {
+                    const selectedDatabases = this.getSelectedDatabases();
+                    const requestBody = {
+                        messages: messages,
+                        stream: true
+                    };
+                    
+                    if (selectedDatabases) {
+                        requestBody.db_names = selectedDatabases;
+                    }
+                    
                     const response = await fetch(`${this.apiUrl}/chat`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
                         },
-                        body: JSON.stringify({
-                            messages: messages,
-                            stream: true
-                        })
+                        body: JSON.stringify(requestBody)
                     });
                     
                     if (!response.ok) {
@@ -647,6 +828,28 @@
             
             scrollToBottom() {
                 this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+            }
+            
+            getSelectedDatabases() {
+                const checkboxes = document.querySelectorAll('input[type="checkbox"]:checked');
+                const selected = Array.from(checkboxes).map(cb => cb.value);
+                return selected.length > 0 ? selected : null;
+            }
+            
+            updateSelectedCount() {
+                const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+                const selectedCheckboxes = document.querySelectorAll('input[type="checkbox"]:checked');
+                const total = checkboxes.length;
+                const selected = selectedCheckboxes.length;
+                
+                const countElement = document.getElementById('selectedCount');
+                if (selected === 0) {
+                    countElement.textContent = 'No databases selected';
+                } else if (selected === total) {
+                    countElement.textContent = `All databases (${total})`;
+                } else {
+                    countElement.textContent = `${selected} of ${total} databases`;
+                }
             }
         }
         
