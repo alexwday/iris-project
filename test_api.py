@@ -9,7 +9,7 @@ Usage:
     python test_api.py
 
 Make sure the API server is running first:
-    uvicorn iris.src.api:app --host 0.0.0.0 --port 8000
+    uvicorn services.src.api:app --host 0.0.0.0 --port 8000
 """
 
 import requests
@@ -213,7 +213,7 @@ def test_fastapi_client():
     
     try:
         from fastapi.testclient import TestClient
-        from iris.src.api import app
+        from services.src.api import app
         
         client = TestClient(app)
         
@@ -257,7 +257,7 @@ def main():
     except requests.exceptions.RequestException:
         print(f"❌ Cannot connect to API server at {API_BASE_URL}")
         print("Make sure to start the server first:")
-        print("uvicorn iris.src.api:app --host 0.0.0.0 --port 8000")
+        print("uvicorn services.src.api:app --host 0.0.0.0 --port 8000")
         return
     
     print("=" * 50)

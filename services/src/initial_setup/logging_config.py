@@ -13,7 +13,7 @@ Functions:
 Dependencies:
     - logging
     - sys
-    - iris.src.initial_setup.env_config
+    - services.src.initial_setup.env_config
 """
 
 import logging

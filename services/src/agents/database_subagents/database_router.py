@@ -144,11 +144,8 @@ def route_query_sync(
         )  # Return tuple with None for file_links, page_refs, section_content, reference_index
 
     try:
-        # Use relative import - subagent in sibling directory
-        module_path = f".{database}.subagent"
-        # Get current package name dynamically (e.g., 'iris.src.agents.database_subagents')
-        current_package = '.'.join(__name__.split('.')[:-1])
-        subagent_module = importlib.import_module(module_path, package=current_package)
+        module_path = f"services.src.agents.database_subagents.{database}.subagent"
+        subagent_module = importlib.import_module(module_path)
         logger.debug(f"Successfully imported module: {module_path}")
 
         if not hasattr(subagent_module, "query_database_sync"):
