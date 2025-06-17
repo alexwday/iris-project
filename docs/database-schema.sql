@@ -5,12 +5,13 @@ This file contains the complete PostgreSQL database schema for the IRIS system, 
 
 ## Overview
 
-The IRIS database schema supports document management, content storage, and process monitoring for the intelligent retrieval and interaction system. The schema includes three primary tables designed to handle document cataloging, content storage, and operational monitoring. The design supports vector embeddings for semantic search, comprehensive process tracking, and efficient content retrieval across multiple document sources.
+The IRIS database schema supports document management, content storage, and process monitoring for the intelligent retrieval and interaction system. The schema includes four primary tables designed to handle document cataloging, content storage, external textbook management, and operational monitoring. The design supports vector embeddings for semantic search, comprehensive process tracking, and efficient content retrieval across multiple document sources.
 
 ## Key Components
 
 * **apg_catalog**: Document metadata and catalog information with vector embeddings
 * **apg_content**: Document content storage with section-based organization
+* **iris_textbook_database**: External textbook content with embeddings for semantic search
 * **process_monitor_logs**: Comprehensive process monitoring and execution tracking
 
 ## Core Functions/Classes
@@ -37,6 +38,18 @@ Stores actual document content organized by sections for efficient retrieval and
 * **Document References**: Links to catalog entries via source, type, and name
 * **Content Organization**: Section-based content storage with summaries
 * **Navigation Fields**: Page numbers and section ordering for content location
+
+### External Textbook Table (iris_textbook_database)
+
+#### Purpose
+Stores external accounting guidance content from providers like EY, PwC, KPMG, and IASB with detailed structural metadata and vector embeddings for semantic search.
+
+#### Key Fields
+* **System Fields**: Unique identifiers and creation timestamps
+* **Structural Positioning**: Document hierarchy with chapter, section, part, and sequence numbering
+* **Chapter Metadata**: Names, tags, summaries, and token counts for chapter-level organization
+* **Section Metadata**: Pagination, importance scoring, hierarchy, titles, and standards references
+* **Content & Embeddings**: Actual textbook content with vector embeddings and full-text search support
 
 ### Process Monitoring Table (process_monitor_logs)
 
@@ -76,6 +89,14 @@ INSERT INTO apg_catalog (document_source, document_type, document_name, document
 VALUES ('internal_capm', 'policy', 'Revenue Recognition Policy', 'Comprehensive policy for revenue recognition procedures');
 ```
 
+### External Textbook Query
+```sql
+SELECT document_id, chapter_name, section_title, content 
+FROM iris_textbook_database 
+WHERE section_standard_codes && ARRAY['IFRS 16'] 
+ORDER BY chapter_number, section_number, sequence_number;
+```
+
 ### Process Monitoring Query
 ```sql
 SELECT run_uuid, stage_name, duration_ms, total_cost 
@@ -88,8 +109,9 @@ ORDER BY stage_start_time DESC;
 
 The database schema integrates with multiple IRIS system components:
 
-* **Database Subagents**: Query apg_catalog and apg_content for document retrieval
-* **Vector Search**: Embedding fields support semantic similarity searches
+* **Database Subagents**: Query apg_catalog, apg_content, and iris_textbook_database for document retrieval
+* **External Subagents**: PwC, EY, KPMG, and IASB subagents use iris_textbook_database for textbook searches
+* **Vector Search**: Embedding fields support semantic similarity searches across all content tables
 * **Process Monitoring**: All system components log execution details to process_monitor_logs
 * **Content Management**: Document upload and refresh processes update catalog and content tables
 * **Analytics**: Monitoring data supports performance analysis and system optimization
@@ -184,7 +206,45 @@ CREATE TABLE apg_content (
     page_number INTEGER                           -- Page number for content breakdown
 );
 
--- 3. process_monitor_logs Table
+-- 3. iris_textbook_database Table
+CREATE TABLE iris_textbook_database (
+  -- SYSTEM FIELDS
+  id SERIAL PRIMARY KEY,  -- Unique identifier for each chunk
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),  -- Record creation timestamp
+
+  -- STRUCTURAL POSITIONING FIELDS
+  document_id TEXT,              -- E.g., "IFRS_Handbook_2023" or "EY_GAAP_Guide_2024"
+  chapter_number INT,           -- E.g., 4
+  section_number INT,           -- E.g., 2
+  part_number INT,              -- E.g., 1
+  sequence_number INT,          -- E.g., 14 (position in chunk order)
+
+  -- CHAPTER-LEVEL METADATA
+  chapter_name TEXT,            -- E.g., "Leases" or "Revenue Recognition"
+  chapter_tags TEXT[],          -- E.g., {"Financial_Instruments", "Disclosure_Requirements"}
+  chapter_summary TEXT,         -- E.g., "This chapter explains revenue recognition..."
+  chapter_token_count INT,      -- Total token count across the full chapter
+
+  -- SECTION-LEVEL PAGINATION & IMPORTANCE
+  section_start_page INT,       -- E.g., 142 (start page of section)
+  section_end_page INT,         -- E.g., 143 (end page of section)
+  section_importance_score FLOAT,  -- E.g., 0.85 (importance of this section)
+  section_token_count INT,      -- Total token count for this section
+
+  -- SECTION-LEVEL METADATA
+  section_hierarchy TEXT,       -- E.g., "Chapter 4 > Section 4.2 > Subsection 4.2.3"
+  section_title TEXT,           -- E.g., "Identification of Separate Performance Obligations"
+  section_standard TEXT,        -- E.g., "IFRS", "US_GAAP", "AASB"
+  section_standard_codes TEXT[], -- E.g., {"IFRS 16", "IAS 17", "IFRS 9"}
+  section_references TEXT[],    -- E.g., {"Section 3.4", "IAS 36 Para 12-15"}
+
+  -- CONTENT & EMBEDDING
+  content TEXT NOT NULL,        -- The actual textbook content in this chunk
+  embedding VECTOR(2000),       -- OpenAI's text-embedding-3-large model vector
+  text_search_vector TSVECTOR GENERATED ALWAYS AS (to_tsvector('english', content)) STORED
+);
+
+-- 4. process_monitor_logs Table
 CREATE TABLE IF NOT EXISTS process_monitor_logs (
     -- Core Fields --
     log_id BIGSERIAL PRIMARY KEY,                         -- Auto-incrementing unique ID for each log entry
