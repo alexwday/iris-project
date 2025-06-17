@@ -144,7 +144,10 @@ def route_query_sync(
         )  # Return tuple with None for file_links, page_refs, section_content, reference_index
 
     try:
-        module_path = f"services.src.agents.database_subagents.{database}.subagent"
+        # Get the current module's base path dynamically
+        current_module = __name__  # e.g., 'iris.src.agents.database_subagents.database_router'
+        base_path = '.'.join(current_module.split('.')[:-1])  # e.g., 'iris.src.agents.database_subagents'
+        module_path = f"{base_path}.{database}.subagent"
         subagent_module = importlib.import_module(module_path)
         logger.debug(f"Successfully imported module: {module_path}")
 
