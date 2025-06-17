@@ -63,9 +63,9 @@ class Config:
     OAUTH_CLIENT_SECRET: str = os.getenv("CLIENT_SECRET", "")
     
     # SSL Configuration
-    SSL_CERT_FILENAME: str = os.getenv("SSL_CERT_FILENAME", "rbc-ca-bundle.cer")
-    SSL_CHECK_CERT_EXPIRY: bool = os.getenv("SSL_CHECK_CERT_EXPIRY", "true").lower() == "true"
-    SSL_EXPIRY_WARNING_DAYS: int = int(os.getenv("SSL_EXPIRY_WARNING_DAYS", "30"))
+    SSL_CERT_FILENAME: str = os.getenv("IRIS_SSL_CERT_FILENAME", "rbc-ca-bundle.cer")
+    SSL_CHECK_CERT_EXPIRY: bool = os.getenv("IRIS_SSL_CHECK_CERT_EXPIRY", "true").lower() == "true"
+    SSL_EXPIRY_WARNING_DAYS: int = int(os.getenv("IRIS_SSL_EXPIRY_WARNING_DAYS", "30"))
     
     # Request Configuration
     REQUEST_TIMEOUT: int = int(os.getenv("REQUEST_TIMEOUT", "180"))
@@ -73,28 +73,28 @@ class Config:
     RETRY_DELAY_SECONDS: int = int(os.getenv("RETRY_DELAY_SECONDS", "2"))
     
     # Model Configuration
-    MODEL_SMALL: str = os.getenv("MODEL_SMALL", "gpt-4o-mini-2024-07-18")
-    MODEL_LARGE: str = os.getenv("MODEL_LARGE", "gpt-4o-2024-05-13")
-    MODEL_EMBEDDING: str = os.getenv("MODEL_EMBEDDING", "text-embedding-3-large")
+    MODEL_SMALL: str = os.getenv("IRIS_MODEL_SMALL", "gpt-4o-mini-2024-07-18")
+    MODEL_LARGE: str = os.getenv("IRIS_MODEL_LARGE", "gpt-4o-2024-05-13")
+    MODEL_EMBEDDING: str = os.getenv("IRIS_MODEL_EMBEDDING", "text-embedding-3-large")
     
-    MODEL_SMALL_PROMPT_COST: float = float(os.getenv("MODEL_SMALL_PROMPT_COST", "0.00016238"))
-    MODEL_SMALL_COMPLETION_COST: float = float(os.getenv("MODEL_SMALL_COMPLETION_COST", "0.00065175"))
-    MODEL_LARGE_PROMPT_COST: float = float(os.getenv("MODEL_LARGE_PROMPT_COST", "0.00064952"))
-    MODEL_LARGE_COMPLETION_COST: float = float(os.getenv("MODEL_LARGE_COMPLETION_COST", "0.00260748"))
-    MODEL_EMBEDDING_PROMPT_COST: float = float(os.getenv("MODEL_EMBEDDING_PROMPT_COST", "0.0001"))
-    MODEL_EMBEDDING_COMPLETION_COST: float = float(os.getenv("MODEL_EMBEDDING_COMPLETION_COST", "0.0001"))
+    MODEL_SMALL_PROMPT_COST: float = float(os.getenv("IRIS_MODEL_SMALL_PROMPT_COST", "0.00016238"))
+    MODEL_SMALL_COMPLETION_COST: float = float(os.getenv("IRIS_MODEL_SMALL_COMPLETION_COST", "0.00065175"))
+    MODEL_LARGE_PROMPT_COST: float = float(os.getenv("IRIS_MODEL_LARGE_PROMPT_COST", "0.00064952"))
+    MODEL_LARGE_COMPLETION_COST: float = float(os.getenv("IRIS_MODEL_LARGE_COMPLETION_COST", "0.00260748"))
+    MODEL_EMBEDDING_PROMPT_COST: float = float(os.getenv("IRIS_MODEL_EMBEDDING_PROMPT_COST", "0.0001"))
+    MODEL_EMBEDDING_COMPLETION_COST: float = float(os.getenv("IRIS_MODEL_EMBEDDING_COMPLETION_COST", "0.0001"))
     
     # Conversation Configuration
-    MAX_HISTORY_LENGTH: int = int(os.getenv("MAX_HISTORY_LENGTH", "10"))
-    INCLUDE_SYSTEM_MESSAGES: bool = os.getenv("INCLUDE_SYSTEM_MESSAGES", "false").lower() == "true"
+    MAX_HISTORY_LENGTH: int = int(os.getenv("IRIS_MAX_HISTORY_LENGTH", "10"))
+    INCLUDE_SYSTEM_MESSAGES: bool = os.getenv("IRIS_INCLUDE_SYSTEM_MESSAGES", "false").lower() == "true"
     
     # Logging Configuration
-    LOG_LEVEL: str = os.getenv("LOG_LEVEL", "DEBUG")
-    TOKEN_PREVIEW_LENGTH: int = int(os.getenv("TOKEN_PREVIEW_LENGTH", "7"))
-    SHOW_USAGE_SUMMARY: bool = os.getenv("SHOW_USAGE_SUMMARY", "true").lower() == "true"
+    LOG_LEVEL: str = os.getenv("IRIS_LOG_LEVEL", "DEBUG")
+    TOKEN_PREVIEW_LENGTH: int = int(os.getenv("IRIS_TOKEN_PREVIEW_LENGTH", "7"))
+    SHOW_USAGE_SUMMARY: bool = os.getenv("IRIS_SHOW_USAGE_SUMMARY", "true").lower() == "true"
     
     # Process Monitoring
-    PROCESS_MONITOR_MODEL_NAME: str = os.getenv("PROCESS_MONITOR_MODEL_NAME", "iris")
+    PROCESS_MONITOR_MODEL_NAME: str = os.getenv("IRIS_PROCESS_MONITOR_MODEL_NAME", "iris")
     
     # Static Constants (not from environment)
     ALLOWED_ROLES: list = ["user", "assistant"]  # Roles for conversation processing
@@ -125,7 +125,17 @@ class Config:
         missing_fields = []
         for field_name, field_value in required_fields:
             if not field_value:
-                missing_fields.append(f"{field_name}")
+                # Add appropriate prefix based on the field
+                if field_name.startswith("DB_"):
+                    missing_fields.append(f"VECTOR_POSTGRES_{field_name}")
+                elif field_name in ["OAUTH_URL"]:
+                    missing_fields.append(field_name)
+                elif field_name == "OAUTH_CLIENT_ID":
+                    missing_fields.append("CLIENT_ID")
+                elif field_name == "OAUTH_CLIENT_SECRET":
+                    missing_fields.append("CLIENT_SECRET")
+                else:
+                    missing_fields.append(f"IRIS_{field_name}")
         
         if missing_fields:
             logger.error(f"Missing required environment variables: {', '.join(missing_fields)}")
