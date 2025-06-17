@@ -125,17 +125,7 @@ class Config:
         missing_fields = []
         for field_name, field_value in required_fields:
             if not field_value:
-                # Add appropriate prefix based on the field
-                if field_name.startswith("DB_"):
-                    missing_fields.append(f"VECTOR_POSTGRES_{field_name}")
-                elif field_name in ["OAUTH_URL"]:
-                    missing_fields.append(field_name)
-                elif field_name == "OAUTH_CLIENT_ID":
-                    missing_fields.append("CLIENT_ID")
-                elif field_name == "OAUTH_CLIENT_SECRET":
-                    missing_fields.append("CLIENT_SECRET")
-                else:
-                    missing_fields.append(f"IRIS_{field_name}")
+                missing_fields.append(f"IRIS_{field_name}")
         
         if missing_fields:
             logger.error(f"Missing required environment variables: {', '.join(missing_fields)}")

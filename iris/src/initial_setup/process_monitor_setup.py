@@ -16,13 +16,11 @@ Dependencies:
     - typing
 """
 
-import time
 import logging
 import uuid  # Import uuid
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone
 import json
-import psycopg2 # Use project's standard DB connection method
 from psycopg2.extras import Json # For inserting JSONB
 from ..initial_setup.env_config import config
 
