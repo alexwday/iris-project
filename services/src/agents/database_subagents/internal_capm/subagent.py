@@ -67,143 +67,39 @@ def format_catalog_for_llm(catalog_records: List[Dict[str, Any]]) -> str:
     return formatted_catalog.strip()
 
 
-def build_structured_reference_index(
-    page_numbers: List[int], 
-    file_links: List[FileLink], 
-    section_content_map: Dict[str, str]
-) -> ReferenceIndex:
-    """
-    Build reference index from structured data instead of parsing citations.
-    Creates simple page-based references with combined section text for highlighting.
-
-    Args:
-        page_numbers: List of page numbers referenced in the research
-        file_links: File links for the documents
-        section_content_map: Maps "page_num:section_id" to section content
-
-    Returns:
-        Reference index mapping ref_id to {file_link, page, doc_name, highlight_text}
-    """
-    import re
-
-    logger.error(f"DEBUG STRUCTURED_REF: Building reference index from {len(page_numbers)} pages")
-    logger.error(f"DEBUG STRUCTURED_REF: file_links: {file_links}")
-    logger.error(f"DEBUG STRUCTURED_REF: section_content_map keys: {list(section_content_map.keys())}")
-
-    # Build document name to file link mapping
-    doc_to_file = {}
-    for link_info in file_links:
-        doc_name = link_info.get("document_name", "")
-        file_link = link_info.get("file_link", "")
-        if doc_name and file_link:
-            doc_to_file[doc_name] = file_link
-
-    logger.error(f"DEBUG STRUCTURED_REF: doc_to_file mapping: {doc_to_file}")
-
-    reference_index = {}
-    ref_counter = 1
-
-    # Create one reference per page
-    for page_num in sorted(set(page_numbers)):  # Remove duplicates and sort
-        # Find all sections for this page in section_content_map
-        page_sections = []
-        for key, content in section_content_map.items():
-            if key.startswith(f"{page_num}:"):
-                page_sections.append(content)
-
-        # Combine all section content for this page
-        combined_content = " ".join(page_sections)
-        
-        # Clean the content for highlighting
-        content_clean = re.sub(r"[|*#`_~\[\]{}\\<>@$%^&+=]", " ", combined_content)
-        content_clean = re.sub(r'["\']', "", content_clean)
-        content_clean = re.sub(r"\s+", " ", content_clean).strip()
-        
-        # Use first file_link available (assuming single document for now)
-        file_link = ""
-        doc_name = "Unknown Document"
-        if file_links:
-            file_link = file_links[0].get("file_link", "")
-            doc_name = file_links[0].get("document_name", "Unknown Document")
-
-        ref_id = str(ref_counter)
-        reference_index[ref_id] = {
-            "doc_name": doc_name,
-            "file_link": file_link,
-            "page": page_num,
-            "section_name": f"Page {page_num}",
-            "highlight_text": content_clean,
-        }
-
-        logger.error(f"DEBUG STRUCTURED_REF: Created ref {ref_id} for page {page_num}, file_link='{file_link}', highlight_length={len(content_clean)}")
-        ref_counter += 1
-
-    logger.error(f"DEBUG STRUCTURED_REF: Final reference_index: {reference_index}")
-    return reference_index
+# Note: build_structured_reference_index function removed - no longer needed with new page-based approach
+# Reference numbering is now handled at the database_router level after aggregating all subagent results
 
 
 def format_documents_for_llm(documents: List[Dict[str, Any]]) -> str:
     """
     Format retrieved documents into a string that is optimized for LLM analysis.
-    Now reconstructs documents from page/section records in correct order and formats
-    for clear section separation with page/section references that the LLM can cite.
+    Reconstructs documents from page records in correct order with clear page markers.
     """
     formatted_docs = ""
     for doc in documents:
         doc_name = doc.get("document_name", "Untitled")
         formatted_docs += f"# {doc_name}\n\n"
 
-        # Get page_sections and reconstruct document in proper order
+        # Get page_sections and sort by page_number
         page_sections = doc.get("page_sections", [])
         if not page_sections:
             formatted_docs += "No content available.\n\n"
             continue
 
-        # Group sections by page number for clear organization
-        pages_dict: Dict[int, List[Dict[str, Any]]] = {}
-        for section in page_sections:
-            page_num = section.get("page_number", 0)
-            if page_num not in pages_dict:
-                pages_dict[page_num] = []
-            pages_dict[page_num].append(section)
+        # Sort pages by page_number for proper document reconstruction
+        sorted_pages = sorted(page_sections, key=lambda x: x.get("page_number", 0))
 
-        # Process pages in order
-        for page_num in sorted(pages_dict.keys()):
-            formatted_docs += f"## Page {page_num}\n\n"
+        # Process each page
+        for section in sorted_pages:
+            page_number = section.get("page_number", 0)
+            section_summary = section.get("section_summary", f"Page {page_number}")
+            section_content = section.get("section_content", "No content available")
 
-            # Process sections within the page in order
-            page_sections_list = sorted(
-                pages_dict[page_num], key=lambda x: x.get("section_id", 0)
-            )
-
-            for section in page_sections_list:
-                section_id = section.get("section_id", 0)
-                section_content = section.get("section_content", "No content available")
-                section_name = section.get("section_name", f"Section {section_id}")
-                section_summary = section.get(
-                    "section_summary", f"Page {page_num}, Section {section_id}"
-                )
-
-                # Format each section with CLEAR metadata for LLM reference
-                logger.info(
-                    f"CAPM DEBUG: Formatting section - Page {page_num}, Section {section_id}, Name: '{section_name}'"
-                )
-                formatted_docs += (
-                    f"### [PAGE: {page_num}, SECTION: {section_id}] {section_name}\n"
-                )
-                formatted_docs += f"**Section Summary:** {section_summary}\n\n"
-                # Add explicit instruction about section naming for citations
-                if section_name and not section_name.startswith("Section "):
-                    formatted_docs += f"**CITATION NOTE: When referencing this content, use the section name '{section_name}' rather than just the section number.**\n\n"
-                    logger.info(
-                        f"CAPM DEBUG: Added citation note for descriptive section name: '{section_name}'"
-                    )
-                else:
-                    logger.info(
-                        f"CAPM DEBUG: Generic section name detected: '{section_name}' - LLM should extract from content"
-                    )
-                formatted_docs += f"{section_content}\n\n"
-
+            # Create clear page header for LLM understanding
+            formatted_docs += f"## {section_summary}\n\n"
+            formatted_docs += f"**PAGE {page_number}**\n\n"
+            formatted_docs += f"{section_content}\n\n"
             formatted_docs += "---\n\n"
 
     return formatted_docs.strip()
@@ -525,39 +421,35 @@ def select_relevant_documents(
 SYNTHESIS_TOOL_SCHEMA = {
     "type": "function",
     "function": {
-        "name": "synthesize_research_findings",
-        "description": "Synthesizes research findings from provided documents and generates a status summary with page/section references.",
+        "name": "extract_page_based_research",
+        "description": "Extracts research findings from a document on a per-page basis, providing detailed research for each relevant page.",
         "parameters": {
             "type": "object",
             "properties": {
                 "status_summary": {
                     "type": "string",
-                    "description": "Concise status summary (1 sentence) indicating finding relevance (e.g., '✅ Found direct answer.', '📄 No relevant info found.').",
+                    "description": "Concise status summary indicating overall document relevance (e.g., '✅ Found relevant info on 3 pages.', '📄 No relevant info found.').",
                 },
-                "detailed_research": {
-                    "type": "string",
-                    "description": "Detailed, structured markdown report synthesizing information from documents. Include citations on separate lines after each paragraph using: ***Source: Document Name, Page X, Section Name*** in bold italic format. CRITICAL: Extract actual section names/titles from within the document content (look for headers, bold titles, topic names) rather than using generic 'Section X' labels.",
-                },
-                "page_numbers": {
+                "page_research": {
                     "type": "array",
-                    "items": {"type": "integer"},
-                    "description": "List of page numbers referenced in the research findings (extracted from the document sections used).",
-                },
-                "section_ids_by_page": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "array",
-                        "items": {"type": "integer"},
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "page_number": {
+                                "type": "integer",
+                                "description": "The page number containing relevant information."
+                            },
+                            "research_content": {
+                                "type": "string",
+                                "description": "Detailed research findings extracted from this specific page. Use markdown formatting."
+                            }
+                        },
+                        "required": ["page_number", "research_content"]
                     },
-                    "description": "Object mapping page numbers (as string keys) to arrays of section IDs referenced on that page.",
-                },
+                    "description": "Array of research findings organized by page number. Only include pages with relevant information."
+                }
             },
-            "required": [
-                "status_summary",
-                "detailed_research",
-                "page_numbers",
-                "section_ids_by_page",
-            ],
+            "required": ["status_summary", "page_research"]
         },
     },
 }
@@ -573,11 +465,17 @@ def process_single_document(
     stage_name: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Process a single document and return research findings.
+    Process a single document and return page-based research findings.
     This function is called in parallel for each document.
     """
     doc_name = document.get("document_name", "Unknown Document")
     logger.info(f"Processing single CAPM document: {doc_name}")
+    
+    # Get file link from document metadata
+    file_link = ""
+    # Check if document has file_link directly
+    if "file_link" in document:
+        file_link = document.get("file_link", "")
     
     # Format single document for LLM
     formatted_doc = format_documents_for_llm([document])
@@ -610,10 +508,9 @@ def process_single_document(
             logger.error(f"get_completion failed for {doc_name}: {synthesis_response_obj}")
             return {
                 "document_name": doc_name,
+                "file_link": file_link,
                 "status_summary": f"❌ Error processing {doc_name}.",
-                "detailed_research": f"Error processing document {doc_name}: {synthesis_response_obj}",
-                "page_numbers": [],
-                "section_ids_by_page": {},
+                "page_research": [],
             }
 
         # Process Tool Call Response
@@ -630,65 +527,54 @@ def process_single_document(
                 arguments_str = tool_call.function.arguments
                 try:
                     arguments = json.loads(arguments_str)
-                    required_keys = [
-                        "status_summary",
-                        "detailed_research", 
-                        "page_numbers",
-                        "section_ids_by_page",
-                    ]
+                    required_keys = ["status_summary", "page_research"]
                     if all(key in arguments for key in required_keys):
                         return {
                             "document_name": doc_name,
+                            "file_link": file_link,
                             "status_summary": arguments.get("status_summary", ""),
-                            "detailed_research": arguments.get("detailed_research", ""),
-                            "page_numbers": arguments.get("page_numbers", []),
-                            "section_ids_by_page": arguments.get("section_ids_by_page", {}),
+                            "page_research": arguments.get("page_research", []),
                         }
                     else:
                         logger.error(f"Missing required keys in tool arguments for {doc_name}")
                         return {
                             "document_name": doc_name,
+                            "file_link": file_link,
                             "status_summary": f"❌ Missing required keys for {doc_name}.",
-                            "detailed_research": f"Error: Tool call arguments missing required keys for {doc_name}.",
-                            "page_numbers": [],
-                            "section_ids_by_page": {},
+                            "page_research": [],
                         }
                 except json.JSONDecodeError as json_err:
                     logger.error(f"Failed to parse tool arguments JSON for {doc_name}: {json_err}")
                     return {
                         "document_name": doc_name,
+                        "file_link": file_link,
                         "status_summary": f"❌ JSON decode error for {doc_name}.",
-                        "detailed_research": f"Error parsing tool arguments for {doc_name}: {json_err}",
-                        "page_numbers": [],
-                        "section_ids_by_page": {},
+                        "page_research": [],
                     }
             else:
                 logger.error(f"Unexpected tool called for {doc_name}: {tool_call.function.name}")
                 return {
                     "document_name": doc_name,
+                    "file_link": file_link,
                     "status_summary": f"❌ Unexpected tool for {doc_name}.",
-                    "detailed_research": f"Error: Unexpected tool called for {doc_name}: {tool_call.function.name}",
-                    "page_numbers": [],
-                    "section_ids_by_page": {},
+                    "page_research": [],
                 }
         else:
             logger.error(f"No tool call received for {doc_name} synthesis")
             return {
                 "document_name": doc_name,
+                "file_link": file_link,
                 "status_summary": f"❌ No tool call for {doc_name}.",
-                "detailed_research": f"Error: No tool call received for {doc_name}.",
-                "page_numbers": [],
-                "section_ids_by_page": {},
+                "page_research": [],
             }
 
     except Exception as e:
         logger.error(f"Exception during synthesis for {doc_name}: {str(e)}", exc_info=True)
         return {
             "document_name": doc_name,
+            "file_link": file_link,
             "status_summary": f"❌ Exception processing {doc_name}.",
-            "detailed_research": f"Error during synthesis for {doc_name}: {str(e)}",
-            "page_numbers": [],
-            "section_ids_by_page": {},
+            "page_research": [],
         }
 
 
@@ -696,22 +582,35 @@ def process_single_document(
 def synthesize_response_and_status(
     query: str,
     documents: List[Dict[str, Any]],
+    file_links: List[FileLink],
     token: Optional[str] = None,
     database_name: str = "internal_capm",
     process_monitor=None,
     stage_name: Optional[str] = None,
-) -> ResearchResponse:
+) -> Dict[str, Any]:
     """
-    Process each document in parallel, then combine the results into a final research response.
+    Process each document in parallel, then return structured page-based research.
+    Returns a dictionary with document names as keys, containing page-based research.
     """
     logger.info(f"Synthesizing response for {len(documents)} CAPM documents using parallel processing")
     
     if not documents:
         logger.warning(f"No documents provided for {database_name} synthesis.")
-        return {
-            "detailed_research": f"No detailed research generated for {database_name} due to missing documents.",
-            "status_summary": f"📄 No relevant information found in {database_name}.",
-        }
+        return {}
+
+    # Create file link mapping
+    file_link_map = {}
+    for link_info in file_links:
+        doc_name = link_info.get("document_name", "")
+        file_link = link_info.get("file_link", "")
+        if doc_name:
+            file_link_map[doc_name] = file_link
+
+    # Add file links to documents before processing
+    for doc in documents:
+        doc_name = doc.get("document_name", "")
+        if doc_name in file_link_map:
+            doc["file_link"] = file_link_map[doc_name]
 
     # Process documents in parallel using ThreadPoolExecutor
     document_results = []
@@ -742,62 +641,41 @@ def synthesize_response_and_status(
                 logger.error(f"Exception processing document {doc_name}: {str(e)}")
                 document_results.append({
                     "document_name": doc_name,
+                    "file_link": file_link_map.get(doc_name, ""),
                     "status_summary": f"❌ Exception processing {doc_name}.",
-                    "detailed_research": f"Error processing {doc_name}: {str(e)}",
-                    "page_numbers": [],
-                    "section_ids_by_page": {},
+                    "page_research": [],
                 })
 
-    # Combine all results into final response
-    logger.info(f"Combining results from {len(document_results)} processed documents")
-    
-    # Aggregate status summaries
-    successful_docs = [doc for doc in document_results if not doc["status_summary"].startswith("❌")]
-    failed_docs = [doc for doc in document_results if doc["status_summary"].startswith("❌")]
-    
-    if successful_docs:
-        if failed_docs:
-            combined_status = f"✅ Found information in {len(successful_docs)}/{len(document_results)} CAPM documents."
-        else:
-            combined_status = f"✅ Found information in all {len(successful_docs)} CAPM documents."
-    else:
-        combined_status = "📄 No relevant information found in CAPM documents."
-
-    # Combine detailed research from all documents
-    combined_research = f"# CAPM Research Results\n\n"
-    combined_research += f"*Query: {query}*\n\n"
-    
-    all_page_numbers = []
-    all_section_ids_by_page = {}
+    # Build structured output: document -> page -> research
+    structured_output = {}
     
     for result in document_results:
         doc_name = result.get("document_name", "Unknown Document")
-        research = result.get("detailed_research", "")
-        page_numbers = result.get("page_numbers", [])
-        section_ids_by_page = result.get("section_ids_by_page", {})
+        file_link = result.get("file_link", "")
+        page_research = result.get("page_research", [])
         
-        if research and not result["status_summary"].startswith("❌"):
-            combined_research += f"## {doc_name}\n\n"
-            combined_research += f"{research}\n\n"
-            combined_research += "---\n\n"
+        # Only include documents with actual research findings
+        if page_research and not result["status_summary"].startswith("❌"):
+            doc_output = {}
             
-            # Aggregate page numbers and section mappings
-            all_page_numbers.extend(page_numbers)
-            for page_str, section_ids in section_ids_by_page.items():
-                if page_str not in all_section_ids_by_page:
-                    all_section_ids_by_page[page_str] = []
-                all_section_ids_by_page[page_str].extend(section_ids)
+            for page_item in page_research:
+                page_number = page_item.get("page_number", 0)
+                research_content = page_item.get("research_content", "")
+                
+                # Create page key (e.g., "page_3")
+                page_key = f"page_{page_number}"
+                
+                doc_output[page_key] = {
+                    "research_content": research_content,
+                    "file_link": file_link,
+                    "page_number": page_number
+                }
+            
+            if doc_output:  # Only add document if it has page research
+                structured_output[doc_name] = doc_output
 
-    if not successful_docs:
-        combined_research += "No detailed findings available from the processed documents.\n"
-
-    # Return the combined result with aggregated page/section references
-    return {
-        "status_summary": combined_status,
-        "detailed_research": combined_research.strip(),
-        "page_numbers": sorted(list(set(all_page_numbers))),  # Remove duplicates and sort
-        "section_ids_by_page": all_section_ids_by_page,
-    }
+    logger.info(f"Structured output contains research from {len(structured_output)} documents")
+    return structured_output
 
 
 def query_database_sync(
@@ -931,119 +809,61 @@ def query_database_sync(
             )  # Return metadata, IDs, file links, and None page_sections/content/refs (metadata scope doesn't need them)
 
         elif scope == "research":
-            # Collect file links from catalog before fetching content (including blank ones)
+            # Collect file links from catalog before fetching content
             file_links = []
-            logger.error(f"DEBUG CAPM: Building file_links from catalog with {len(catalog)} items")
             for item in catalog:
                 if item.get("id") in selected_doc_ids:
                     file_link_value = item.get("file_link", "")
                     doc_name_value = item.get("document_name", "Unknown")
-                    logger.error(f"DEBUG CAPM: Adding file_link for doc '{doc_name_value}': '{file_link_value}'")
                     file_links.append(
                         {
-                            "file_link": file_link_value,  # Use empty string if None
+                            "file_link": file_link_value,
                             "document_name": doc_name_value,
                         }
                     )
-            logger.error(f"DEBUG CAPM: Final file_links list: {file_links}")
 
             # Fetch content and synthesize using parallel processing
-            documents = fetch_document_content(selected_doc_ids)  # Use capm function
+            documents = fetch_document_content(selected_doc_ids)
             logger.info(
                 f"Retrieved content for {len(documents)} CAPM documents for research."
             )
 
-            # Get research synthesis using parallel processing
+            # Get research synthesis using new page-based parallel processing
+            # This now returns structured output: {doc_name: {page_x: {research_content, file_link}}}
             research_result = synthesize_response_and_status(
-                query, documents, token, database_name, process_monitor, stage_name
+                query, documents, file_links, token, database_name, process_monitor, stage_name
             )
 
-            # Extract page/section references from the combined tool response
-            page_numbers: List[int] = research_result.get("page_numbers", [])
-            section_ids_by_page_str: Dict[str, Any] = research_result.get(
-                "section_ids_by_page", {}
-            )
-
-            logger.info(
-                f"CAPM DEBUG: Raw research_result keys: {list(research_result.keys())}"
-            )
-            logger.info(f"CAPM DEBUG: Raw page_numbers from combined result: {page_numbers}")
-            logger.info(
-                f"CAPM DEBUG: Raw section_ids_by_page from combined result: {section_ids_by_page_str}"
-            )
-
-            # Convert string keys to integers for page_section_refs
-            page_section_refs = {}
-            if isinstance(section_ids_by_page_str, dict):
-                for page_str, section_list in section_ids_by_page_str.items():
-                    try:
-                        page_num = int(page_str)
-                        page_section_refs[page_num] = (
-                            section_list if isinstance(section_list, list) else []
-                        )
-                    except (ValueError, TypeError):
-                        logger.warning(
-                            f"Could not convert page key to integer: {page_str}"
-                        )
-                        continue
-
-            logger.info(
-                f"Extracted page/section references from combined result: {page_section_refs}"
-            )
-
-            # Build section content map for referenced sections
-            section_content_map = {}
-            logger.info(
-                f"CAPM DEBUG: Retrieved {len(documents)} documents from database"
-            )
-            for doc in documents:
-                logger.info(f"CAPM DEBUG: Document keys: {list(doc.keys())}")
-                page_sections = doc.get("page_sections", [])
-                sections = doc.get("sections", [])  # Check old format too
-                logger.info(
-                    f"CAPM DEBUG: Document '{doc.get('document_name', 'Unknown')}' has {len(page_sections)} page_sections and {len(sections)} old sections"
-                )
-                if page_sections:
-                    logger.info(
-                        f"CAPM DEBUG: First page_section sample: {page_sections[0]}"
-                    )
-                elif sections:
-                    logger.info(f"CAPM DEBUG: First old section sample: {sections[0]}")
-                else:
-                    logger.info(f"CAPM DEBUG: Document has no sections at all!")
-                for section in page_sections:
-                    page_num = section.get("page_number")
-                    section_id = section.get("section_id")
-                    section_content = section.get("section_content", "")
-
-                    # Check if this section was referenced in the research
-                    if (
-                        page_num in page_section_refs
-                        and section_id in page_section_refs[page_num]
-                    ):
-                        key = f"{page_num}:{section_id}"
-                        section_content_map[key] = section_content
-
-            logger.info(
-                f"Built section content map for {len(section_content_map)} referenced sections"
-            )
-            logger.info(
-                f"CAPM DEBUG: Final section_content_map keys: {list(section_content_map.keys())}"
-            )
-
-            # Build reference index from structured data
-            page_numbers = research_result.get("page_numbers", [])
-            if page_numbers and section_content_map:
-                reference_index = build_structured_reference_index(
-                    page_numbers, file_links, section_content_map
-                )
-                logger.info(
-                    f"Built structured reference index with {len(reference_index)} page references"
-                )
-                logger.error(f"DEBUG CAPM: Final reference_index: {reference_index}")
+            # For backward compatibility, we need to create a response in the expected format
+            # The new structure will be passed through reference_index for downstream processing
+            
+            # Create status summary based on results
+            if research_result:
+                doc_count = len(research_result)
+                total_pages = sum(len(doc_data) for doc_data in research_result.values())
+                status_summary = f"✅ Found relevant information in {doc_count} document(s) across {total_pages} page(s)."
             else:
-                reference_index = {}
-                logger.warning("No page numbers or section content available for reference index")
+                status_summary = "📄 No relevant information found in CAPM documents."
+
+            # Create a simplified detailed_research for backward compatibility
+            detailed_research = f"# CAPM Research Results\n\n*Query: {query}*\n\n"
+            if research_result:
+                detailed_research += f"Found relevant information in {len(research_result)} document(s).\n\n"
+                for doc_name, doc_data in research_result.items():
+                    page_count = len(doc_data)
+                    detailed_research += f"- **{doc_name}**: {page_count} relevant page(s)\n"
+            else:
+                detailed_research += "No relevant information found in the selected documents.\n"
+
+            # Build the response in the expected format
+            response = {
+                "detailed_research": detailed_research.strip(),
+                "status_summary": status_summary,
+            }
+
+            # The structured research_result will be passed as reference_index
+            # This maintains backward compatibility while providing the new structure
+            reference_index = research_result
 
             # Add details to process monitor before returning
             if process_monitor:
@@ -1051,26 +871,20 @@ def query_database_sync(
                     stage_name,
                     result_count=len(documents),
                     document_ids=selected_doc_ids,
-                    status_summary=research_result.get("status_summary", ""),
+                    status_summary=status_summary,
                 )
 
-            # DEBUG: Log what we're about to return
-            logger.error(f"DEBUG CAPM: About to return 6-element tuple")
-            logger.error(f"DEBUG CAPM: research_result type: {type(research_result)}")
-            logger.error(f"DEBUG CAPM: selected_doc_ids: {selected_doc_ids}")
-            logger.error(f"DEBUG CAPM: file_links count: {len(file_links) if file_links else 0}")
-            logger.error(f"DEBUG CAPM: page_section_refs: {page_section_refs}")
-            logger.error(f"DEBUG CAPM: section_content_map count: {len(section_content_map) if section_content_map else 0}")
-            logger.error(f"DEBUG CAPM: reference_index count: {len(reference_index) if reference_index else 0}")
+            logger.info(f"Returning research results with {len(research_result)} documents")
 
+            # Return with new structure in reference_index position
             return (
-                research_result,
+                response,
                 selected_doc_ids,
                 file_links,
-                page_section_refs,
-                section_content_map,
-                reference_index,
-            )  # Return research result, IDs, file links, page/section refs, section content, and reference index
+                None,  # page_section_refs no longer needed
+                None,  # section_content_map no longer needed
+                reference_index,  # This now contains the structured research output
+            )
 
         else:
             logger.error(f"Invalid scope provided to internal_capm subagent: {scope}")
