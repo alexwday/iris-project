@@ -526,6 +526,8 @@ def process_single_document(
             if tool_call.function.name == SYNTHESIS_TOOL_SCHEMA["function"]["name"]:
                 arguments_str = tool_call.function.arguments
                 try:
+                    # Log the raw arguments string for debugging
+                    logger.error(f"DEBUG JSON: Raw tool arguments for {doc_name}: {arguments_str[:500]}...")
                     arguments = json.loads(arguments_str)
                     required_keys = ["status_summary", "page_research"]
                     if all(key in arguments for key in required_keys):
@@ -537,6 +539,7 @@ def process_single_document(
                         }
                     else:
                         logger.error(f"Missing required keys in tool arguments for {doc_name}")
+                        logger.error(f"Available keys: {list(arguments.keys())}")
                         return {
                             "document_name": doc_name,
                             "file_link": file_link,
@@ -545,6 +548,11 @@ def process_single_document(
                         }
                 except json.JSONDecodeError as json_err:
                     logger.error(f"Failed to parse tool arguments JSON for {doc_name}: {json_err}")
+                    logger.error(f"Raw arguments string (first 1000 chars): {arguments_str[:1000]}")
+                    # Try to find where the JSON breaks
+                    lines = arguments_str.split('\n')
+                    for i, line in enumerate(lines[:10]):  # Check first 10 lines
+                        logger.error(f"Line {i}: {line}")
                     return {
                         "document_name": doc_name,
                         "file_link": file_link,

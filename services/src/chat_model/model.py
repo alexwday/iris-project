@@ -935,23 +935,24 @@ def _model_generator(
                                     ref_counter += 1
 
                         # Convert structured research to combined research text for summarizer
-                        for db_name, db_research in structured_research_with_refs.items():
-                            combined_research = f"# {db_name.upper()} Research Results\n\n"
-                            
-                            for doc_name, doc_data in db_research.items():
-                                combined_research += f"## {doc_name}\n\n"
+                        if structured_research_with_refs:  # Only process if we have structured research
+                            for db_name, db_research in structured_research_with_refs.items():
+                                combined_research = f"# {db_name.upper()} Research Results\n\n"
                                 
-                                for page_key, page_data in doc_data.items():
-                                    page_number = page_data.get("page_number", 0)
-                                    research_content = page_data.get("research_content", "")
+                                for doc_name, doc_data in db_research.items():
+                                    combined_research += f"## {doc_name}\n\n"
                                     
-                                    combined_research += f"### Page {page_number}\n\n"
-                                    combined_research += f"{research_content}\n\n"
+                                    for page_key, page_data in doc_data.items():
+                                        page_number = page_data.get("page_number", 0)
+                                        research_content = page_data.get("research_content", "")
+                                        
+                                        combined_research += f"### Page {page_number}\n\n"
+                                        combined_research += f"{research_content}\n\n"
+                                    
+                                    combined_research += "---\n\n"
                                 
-                                combined_research += "---\n\n"
-                            
-                            # Update aggregated research with the combined version
-                            aggregated_detailed_research[db_name] = combined_research.strip()
+                                # Update aggregated research with the combined version
+                                aggregated_detailed_research[db_name] = combined_research.strip()
 
                         logger.info(
                             f"Created master reference index with {len(master_reference_index)} total references"
