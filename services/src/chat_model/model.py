@@ -913,6 +913,7 @@ def _model_generator(
                                             
                                             ref_counter += 1
                                 
+                                # Store the completed db_research_with_refs for this database
                                 structured_research_with_refs[db_name] = db_research_with_refs
                                 
                             else:
