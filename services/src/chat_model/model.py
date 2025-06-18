@@ -850,26 +850,107 @@ def _model_generator(
                             sources=list(aggregated_detailed_research.keys()),
                         )
 
-                        # Create master reference index with unique IDs across all databases
+                        # Process both old format (reference indices) and new format (structured research)
                         master_reference_index = {}
+                        structured_research_with_refs = {}
                         ref_counter = 1
 
-                        # Re-map reference IDs to be globally unique
+                        # First, process new structured research format and assign REF numbers
                         for db_name, ref_index in all_reference_indices.items():
-                            for old_ref_id, ref_data in ref_index.items():
-                                new_ref_id = str(ref_counter)
-                                master_reference_index[new_ref_id] = {
-                                    **ref_data,
-                                    "source_db": db_name,
-                                }
-                                # Update the research text with new reference IDs
-                                if db_name in aggregated_detailed_research:
-                                    aggregated_detailed_research[
-                                        db_name
-                                    ] = aggregated_detailed_research[db_name].replace(
-                                        f"[REF:{old_ref_id}]", f"[REF:{new_ref_id}]"
+                            if isinstance(ref_index, dict) and any(
+                                isinstance(doc_data, dict) and any(
+                                    isinstance(page_data, dict) and "research_content" in page_data
+                                    for page_data in doc_data.values()
+                                    if isinstance(page_data, dict)
+                                )
+                                for doc_data in ref_index.values()
+                                if isinstance(doc_data, dict)
+                            ):
+                                # New structured format: {doc_name: {page_x: {research_content, file_link, page_number}}}
+                                logger.info(f"Processing new structured research format from {db_name}")
+                                db_research_with_refs = {}
+                                
+                                # Sort by document name, then by page number for consistent REF ordering
+                                for doc_name in sorted(ref_index.keys()):
+                                    doc_data = ref_index[doc_name]
+                                    doc_research_with_refs[doc_name] = {}
+                                    
+                                    # Sort pages by page number
+                                    sorted_pages = sorted(
+                                        doc_data.items(),
+                                        key=lambda x: x[1].get("page_number", 0) if isinstance(x[1], dict) else 0
                                     )
-                                ref_counter += 1
+                                    
+                                    for page_key, page_data in sorted_pages:
+                                        if isinstance(page_data, dict) and "research_content" in page_data:
+                                            page_number = page_data.get("page_number", 0)
+                                            research_content = page_data.get("research_content", "")
+                                            file_link = page_data.get("file_link", "")
+                                            
+                                            # Assign REF number
+                                            ref_id = str(ref_counter)
+                                            ref_tag = f"REF:{ref_id}"
+                                            
+                                            # Add REF tag to research content
+                                            research_with_ref = f"{research_content} [{ref_tag}]"
+                                            
+                                            # Store in structured format
+                                            doc_research_with_refs[doc_name][page_key] = {
+                                                "research_content": research_with_ref,
+                                                "file_link": file_link,
+                                                "page_number": page_number,
+                                                "ref_id": ref_id
+                                            }
+                                            
+                                            # Build master reference index for href generation
+                                            master_reference_index[ref_id] = {
+                                                "doc_name": doc_name,
+                                                "file_link": file_link,
+                                                "page": page_number,
+                                                "highlight_text": "",  # Empty as requested
+                                                "source_db": db_name,
+                                            }
+                                            
+                                            ref_counter += 1
+                                
+                                structured_research_with_refs[db_name] = db_research_with_refs
+                                
+                            else:
+                                # Old format: simple reference index with ID mappings
+                                logger.info(f"Processing old reference index format from {db_name}")
+                                for old_ref_id, ref_data in ref_index.items():
+                                    new_ref_id = str(ref_counter)
+                                    master_reference_index[new_ref_id] = {
+                                        **ref_data,
+                                        "source_db": db_name,
+                                    }
+                                    # Update the research text with new reference IDs
+                                    if db_name in aggregated_detailed_research:
+                                        aggregated_detailed_research[
+                                            db_name
+                                        ] = aggregated_detailed_research[db_name].replace(
+                                            f"[REF:{old_ref_id}]", f"[REF:{new_ref_id}]"
+                                        )
+                                    ref_counter += 1
+
+                        # Convert structured research to combined research text for summarizer
+                        for db_name, db_research in structured_research_with_refs.items():
+                            combined_research = f"# {db_name.upper()} Research Results\n\n"
+                            
+                            for doc_name, doc_data in db_research.items():
+                                combined_research += f"## {doc_name}\n\n"
+                                
+                                for page_key, page_data in doc_data.items():
+                                    page_number = page_data.get("page_number", 0)
+                                    research_content = page_data.get("research_content", "")
+                                    
+                                    combined_research += f"### Page {page_number}\n\n"
+                                    combined_research += f"{research_content}\n\n"
+                                
+                                combined_research += "---\n\n"
+                            
+                            # Update aggregated research with the combined version
+                            aggregated_detailed_research[db_name] = combined_research.strip()
 
                         logger.info(
                             f"Created master reference index with {len(master_reference_index)} total references"
