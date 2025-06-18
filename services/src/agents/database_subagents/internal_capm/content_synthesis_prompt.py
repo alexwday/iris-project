@@ -51,7 +51,7 @@ A mandatory tool call to `extract_page_based_research` containing:
 1. `status_summary`: A single-line status flag indicating overall document relevance (e.g., "✅ Found relevant info on 3 pages.", "📄 No relevant info found.").
 2. `page_research`: An array of objects, each containing:
    - `page_number`: The page number (integer)
-   - `research_content`: The research findings extracted from that specific page (Markdown string)
+   - `research_content`: Plain text research findings from that page (avoid quotes and complex formatting)
 """
 
 
@@ -105,9 +105,10 @@ def get_content_synthesis_prompt(user_query: str, formatted_documents: str) -> s
         "2. **Identify Relevant Pages:** Determine which pages contain information relevant to the user query. Skip pages with no relevant content.",
         "3. **Extract Page-Specific Research:** For EACH relevant page:",
         "   * Extract ONLY the information from that specific page that addresses the query",
-        "   * Create a research summary for that page in Markdown format",
+        "   * Create a concise research summary for that page (avoid complex markdown)",
         "   * Do NOT combine information across pages - keep each page's findings separate",
         "   * Include key facts, figures, policies, or procedures found on that page",
+        "   * Keep content simple to avoid JSON formatting issues - use plain text with minimal formatting",
         "   **Strict Adherence to Data Sourcing:** Your research MUST be derived *exclusively* from the text within each page. Do NOT introduce any external knowledge.",
         "4. **Apply Filters:**",
         "   * **CRITICAL STANDARD FILTERING:** Focus *only* on information relevant to the accounting standard specified in the query (defaulting to IFRS if none specified). Ignore other standards unless explicitly requested.",
@@ -118,7 +119,7 @@ def get_content_synthesis_prompt(user_query: str, formatted_documents: str) -> s
         "   * Include the count of pages with relevant information",
         "6. **Format Output:** Create the page_research array with one entry per relevant page, containing:",
         "   * page_number: The integer page number",
-        "   * research_content: The Markdown-formatted research extracted from that page only",
+        "   * research_content: Plain text research extracted from that page (avoid quotes, complex formatting)",
         "</INSTRUCTIONS>",
         "<OUTPUT_SPECIFICATION>",
         "You MUST call the `extract_page_based_research` tool.",

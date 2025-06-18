@@ -441,7 +441,7 @@ SYNTHESIS_TOOL_SCHEMA = {
                             },
                             "research_content": {
                                 "type": "string",
-                                "description": "Detailed research findings extracted from this specific page. Use markdown formatting."
+                                "description": "Research findings extracted from this specific page. Use plain text with minimal formatting to avoid JSON parsing issues."
                             }
                         },
                         "required": ["page_number", "research_content"]
