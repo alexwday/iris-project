@@ -532,8 +532,10 @@ def process_single_document(
             and synthesis_response_obj.choices[0].message.tool_calls
         ):
             tool_call = synthesis_response_obj.choices[0].message.tool_calls[0]
+            logger.info(f"Tool call function name: {tool_call.function.name}")
             if tool_call.function.name == SYNTHESIS_TOOL_SCHEMA["function"]["name"]:
                 arguments_str = tool_call.function.arguments
+                logger.info(f"Arguments string type: {type(arguments_str)}, length: {len(arguments_str)}")
                 try:
                     # Clean up common JSON issues before parsing
                     cleaned_json = arguments_str.replace('\n', ' ').replace('\r', ' ')
@@ -565,7 +567,18 @@ def process_single_document(
                         }
                 except json.JSONDecodeError as json_err:
                     logger.error(f"Failed to parse tool arguments JSON for {doc_name}: {json_err}")
-                    logger.debug(f"JSON error at position {getattr(json_err, 'pos', 'unknown')} in {len(arguments_str)} char string")
+                    logger.error(f"Raw JSON first 100 chars: {repr(arguments_str[:100])}")
+                    logger.error(f"Raw JSON last 100 chars: {repr(arguments_str[-100:])}")
+                    # Show character at error position
+                    error_pos = getattr(json_err, 'pos', 0)
+                    if error_pos < len(arguments_str):
+                        char_at_error = arguments_str[error_pos] if error_pos < len(arguments_str) else 'EOF'
+                        logger.error(f"Character at error position {error_pos}: {repr(char_at_error)}")
+                        # Show context around error
+                        start = max(0, error_pos - 20)
+                        end = min(len(arguments_str), error_pos + 20)
+                        context = arguments_str[start:end]
+                        logger.error(f"Context around error: {repr(context)}")
                     return {
                         "document_name": doc_name,
                         "file_link": file_link,
@@ -581,6 +594,13 @@ def process_single_document(
                     "page_research": [],
                 }
         else:
+            # Debug what we actually got
+            if synthesis_response_obj.choices:
+                message = synthesis_response_obj.choices[0].message
+                logger.error(f"No tool call for {doc_name}. Message content: {getattr(message, 'content', 'No content')[:100]}")
+                logger.error(f"Tool calls present: {hasattr(message, 'tool_calls')} - {getattr(message, 'tool_calls', None)}")
+            else:
+                logger.error(f"No choices in response for {doc_name}")
             logger.error(f"No tool call received for {doc_name} synthesis")
             return {
                 "document_name": doc_name,
