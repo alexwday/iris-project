@@ -38,6 +38,9 @@ from ..llm_connectors.rbc_openai import (
 # Import sync version of route_query
 from ..agents.database_subagents.database_router import route_query_sync
 
+# Import config for global access
+from ..initial_setup.env_config import config
+
 
 # --- Formatting Function (Remains Synchronous) ---
 # This function might need adjustment later if debug_data structure changes significantly
@@ -497,7 +500,6 @@ def _model_generator(
     from ..initial_setup.logging_config import configure_logging
     from ..initial_setup.oauth_setup import setup_oauth
     from ..initial_setup.ssl_setup import setup_ssl
-    from ..initial_setup.env_config import config
     from ..initial_setup.db_config import connect_to_db
 
     # Get settings from config
