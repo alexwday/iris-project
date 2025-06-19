@@ -873,7 +873,7 @@ def _model_generator(
                                 # Sort by document name, then by page number for consistent REF ordering
                                 for doc_name in sorted(ref_index.keys()):
                                     doc_data = ref_index[doc_name]
-                                    doc_research_with_refs[doc_name] = {}
+                                    db_research_with_refs[doc_name] = {}
                                     
                                     # Sort pages by page number
                                     sorted_pages = sorted(
@@ -895,7 +895,7 @@ def _model_generator(
                                             research_with_ref = f"{research_content} [{ref_tag}]"
                                             
                                             # Store in structured format
-                                            doc_research_with_refs[doc_name][page_key] = {
+                                            db_research_with_refs[doc_name][page_key] = {
                                                 "research_content": research_with_ref,
                                                 "file_link": file_link,
                                                 "page_number": page_number,
