@@ -125,14 +125,14 @@ def call_llm(
     # Now create the OpenAI client with the properly formed URL
     client = OpenAI(api_key=oauth_token, base_url=api_base_url)
 
-    # Log token preview for security
+    # Log token preview for security (only at debug level)
     token_preview = (
         oauth_token[:TOKEN_PREVIEW_LENGTH] + "..."
         if len(oauth_token) > TOKEN_PREVIEW_LENGTH
         else oauth_token
     )
-    logger.info(f"Using OAuth token: {token_preview}")
-    logger.info(f"Using API base URL: {api_base_url}")
+    logger.debug(f"Using OAuth token: {token_preview}")
+    logger.debug(f"Using API base URL: {api_base_url}")
 
     # Set timeout if not provided
     if "timeout" not in params:
@@ -147,10 +147,10 @@ def call_llm(
         # Ensure stream_options includes usage for the final chunk
         params["stream_options"] = {"include_usage": True}
 
-    # Log key parameters
-    model_name = params.get("model", "unknown") # Capture model name
+    # Capture model name for usage tracking
+    model_name = params.get("model", "unknown")
     has_tools = "tools" in params
-    logger.info(
+    logger.debug(
         f"Making {'streaming' if is_streaming else 'non-streaming'} call to model: {model_name}"
         f"{' with tools' if has_tools else ''} in RBC environment"
     )
@@ -160,7 +160,7 @@ def call_llm(
         attempts += 1
 
         try:
-            logger.info(
+            logger.debug(
                 f"Attempt {attempts}/{MAX_RETRY_ATTEMPTS}: Sending request to OpenAI API"
             )
 
@@ -170,7 +170,7 @@ def call_llm(
                 for k, v in params.items()
                 if k not in ["messages", "tools", "tool_choice"]
             }
-            logger.info(
+            logger.debug(
                 f"API call parameters (excluding message/input content): {safe_params}"
             )
 
@@ -186,18 +186,18 @@ def call_llm(
                 }
                 # Filter out None values
                 embedding_params = {k: v for k, v in embedding_params.items() if v is not None}
-                logger.info(f"Calling embeddings endpoint with params: {embedding_params}")
+                logger.debug(f"Calling embeddings endpoint with model: {embedding_params.get('model', 'unknown')}")
                 api_response = client.embeddings.create(**embedding_params)
                 # Embedding responses don't stream and have different structure
                 # Cost calculation might need specific handling based on input tokens if required
                 # For now, just return the response object. Cost logging is skipped here.
-                logger.info("Received embedding response.")
+                logger.debug("Received embedding response.")
                 return api_response # Return embedding response directly
 
             else: # It's a chat completion call
                 api_response = client.chat.completions.create(**params)
                 attempt_response_time_ms = int((time.time() - attempt_start_time) * 1000)
-                logger.info(
+                logger.debug(
                     f"Received {'initial stream chunk' if is_streaming else 'response'} "
                     f"for attempt {attempts} in {attempt_response_time_ms} ms"
                 )
@@ -229,7 +229,7 @@ def call_llm(
                         'cost': cost,
                         'response_time_ms': attempt_response_time_ms # Time for this successful attempt
                     }
-                    logger.info(f"Non-streaming usage: {usage_details}")
+                    logger.debug(f"Non-streaming usage: {usage_details}")
 
                 # Return the response object AND usage details (if applicable)
                 # Caller needs to handle this tuple format
@@ -239,11 +239,11 @@ def call_llm(
             last_exception = e
             attempt_time_secs = time.time() - attempt_start_time
             logger.warning(
-                f"Call attempt {attempts} failed after {attempt_time_secs:.2f} seconds: {str(e)}"
+                f"Call attempt {attempts} failed after {attempt_time_secs:.2f} seconds: {type(e).__name__}"
             )
 
             if attempts < MAX_RETRY_ATTEMPTS:
-                logger.info(f"Retrying in {RETRY_DELAY_SECONDS} seconds...")
+                logger.debug(f"Retrying in {RETRY_DELAY_SECONDS} seconds...")
                 time.sleep(RETRY_DELAY_SECONDS)
 
     # If we've exhausted all retries, raise the last exception
@@ -293,7 +293,7 @@ def _stream_wrapper(
                 'cost': cost,
                 'response_time_ms': total_response_time_ms # Total time for the call
             }
-            logger.info(f"Stream finished. Final usage: {usage_details}")
+            logger.debug(f"Stream finished. Final usage: {usage_details}")
             # Yield the usage details as the very last item
             yield {'usage_details': usage_details}
         else:

@@ -97,9 +97,7 @@ def _process_final_references(buffer: str, reference_index: Dict[str, Dict[str, 
     """
     import re
     
-    # DEBUG: Log final processing
     logger = logging.getLogger(__name__)
-    logger.debug(f"Processing final buffer with {len(buffer)} chars and {len(reference_index)} refs")
     
     # Process all remaining content
     # Find all [REF:X] or [REF:X,Y,Z] patterns
@@ -123,8 +121,7 @@ def _process_final_references(buffer: str, reference_index: Dict[str, Dict[str, 
             else:
                 ref_ids.append(part)
         
-        logger.debug(f"Found reference {match.group(0)} with {len(ref_ids)} IDs")
-
+    
         # Generate href links - group by page to avoid duplicates
         page_links = {}  # Map (doc_name, page) -> href
         for ref_id in ref_ids:
@@ -145,7 +142,6 @@ def _process_final_references(buffer: str, reference_index: Dict[str, Dict[str, 
                     link_text = f"📄 {doc_name} Page {page}"
                     href = f'<a href=\'javascript:window.maven.openPdf("{s3_url}", {page}, "{highlight_text}")\'>{link_text}</a>'
                     page_links[page_key] = href
-                    logger.debug(f"Created href for ref {ref_id}")
             else:
                 logger.warning(f"Reference {ref_id} not found in index")
 
@@ -154,14 +150,11 @@ def _process_final_references(buffer: str, reference_index: Dict[str, Dict[str, 
         # Return the reference line with links
         if links:
             result = f"\n\n{' '.join(links)}\n\n"
-            logger.debug(f"Returning {len(links)} links")
             return result
         else:
-            logger.debug(f"No links found for {match.group(0)}")
             return match.group(0)  # Keep original if no match
 
     processed = re.sub(r"\[REF:([\d,\s\-]+)\]", replace_refs, buffer)
-    logger.debug(f"Final processed content: {len(processed)} chars")
     yield processed
 
 
@@ -174,7 +167,6 @@ def _process_reference_buffer(buffer: str, reference_index: Dict[str, Dict[str, 
     import re
     
     logger = logging.getLogger(__name__)
-    logger.debug(f"Processing stream buffer with {len(reference_index)} refs available")
     
     # If buffer is shorter than buffer_size and doesn't contain complete references, keep buffering
     ref_pattern = r"\[REF:([\d,\s\-]+)\]"
@@ -192,7 +184,6 @@ def _process_reference_buffer(buffer: str, reference_index: Dict[str, Dict[str, 
     
     if refs_in_buffer:
         # Process each reference pattern found
-        logger.debug(f"Found {len(refs_in_buffer)} references in buffer")
         
         # Process references from end to start to maintain string positions
         for match in reversed(refs_in_buffer):
@@ -238,7 +229,6 @@ def _process_reference_buffer(buffer: str, reference_index: Dict[str, Dict[str, 
                         link_text = f"📄 {doc_name} Page {page}"
                         href = f'<a href=\'javascript:window.maven.openPdf("{s3_url}", {page}, "{highlight_text}")\'>{link_text}</a>'
                         page_links[page_key] = href
-                        logger.debug(f"Created href for page {page}")
             
             links = list(page_links.values())
             
@@ -246,7 +236,6 @@ def _process_reference_buffer(buffer: str, reference_index: Dict[str, Dict[str, 
             if links:
                 replacement = f" {' '.join(links)} "
                 remaining_buffer = remaining_buffer[:match.start()] + replacement + remaining_buffer[match.end():]
-                logger.debug(f"Replaced {match.group(0)} with {len(links)} links")
         
         # Output everything up to and including the processed references
         processed_content = remaining_buffer
@@ -266,7 +255,6 @@ def _process_reference_buffer(buffer: str, reference_index: Dict[str, Dict[str, 
             processed_content = buffer[:-keep_chars] if keep_chars > 0 else buffer
             remaining_buffer = buffer[-keep_chars:] if keep_chars > 0 else ""
     
-    logger.debug(f"Output: {len(processed_content)} chars, buffer: {len(remaining_buffer)} chars")
     return processed_content, remaining_buffer
 
 
@@ -320,8 +308,6 @@ def _execute_query_worker(
             query_stage_name=query_stage_name,
         )  # ADDED query_stage_name
 
-        # DEBUG: Log what we got back from route_query_sync
-        logger.debug(f"{db_name} returned tuple with {len(result_tuple) if hasattr(result_tuple, '__len__') else 'unknown'} elements")
 
         # Handle different tuple lengths for backward compatibility
         if len(result_tuple) == 6:
@@ -807,30 +793,16 @@ def _model_generator(
 
                             # Collect file links if available
                             if file_links:
-                                logger.info(
-                                    f"Collected {len(file_links)} file links from {db_name}"
-                                )
                                 all_file_links.extend(file_links)
-                            else:
-                                logger.debug(f"No file links returned from {db_name}")
 
                             # Collect page/section data if available
                             if page_section_refs:
-                                logger.info(
-                                    f"Collected page/section refs from {db_name}: {page_section_refs}"
-                                )
                                 all_page_section_refs[db_name] = page_section_refs
                             if section_content_map:
-                                logger.info(
-                                    f"Collected section content map from {db_name} with {len(section_content_map)} sections"
-                                )
                                 all_section_content_maps[db_name] = section_content_map
 
                             # Collect reference indices if available
                             if reference_index:
-                                logger.info(
-                                    f"Collected reference index from {db_name} with {len(reference_index)} references"
-                                )
                                 all_reference_indices[db_name] = reference_index
 
                             status_block = f"**Database:** {db_display_name}\n{status_summary}\n---\n"
@@ -871,7 +843,6 @@ def _model_generator(
                                 if isinstance(doc_data, dict)
                             ):
                                 # New structured format: {doc_name: {page_x: {research_content, file_link, page_number}}}
-                                logger.info(f"Processing new structured research format from {db_name}")
                                 db_research_with_refs = {}
                                 
                                 # Sort by document name, then by page number for consistent REF ordering
@@ -925,7 +896,6 @@ def _model_generator(
                                 
                             else:
                                 # Old format: simple reference index with ID mappings
-                                logger.info(f"Processing old reference index format from {db_name}")
                                 for old_ref_id, ref_data in ref_index.items():
                                     new_ref_id = str(ref_counter)
                                     master_reference_index[new_ref_id] = {
@@ -961,9 +931,6 @@ def _model_generator(
                                 # Update aggregated research with the combined version
                                 aggregated_detailed_research[db_name] = combined_research.strip()
 
-                        logger.info(
-                            f"Created master reference index with {len(master_reference_index)} total references"
-                        )
 
                         # --- Legacy Debug Block Removed ---
                         try:

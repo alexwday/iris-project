@@ -535,15 +535,15 @@ def process_single_document(
             if tool_call.function.name == SYNTHESIS_TOOL_SCHEMA["function"]["name"]:
                 arguments_str = tool_call.function.arguments
                 try:
-                    # Log JSON parsing for debugging
-                    logger.debug(f"Parsing JSON arguments for {doc_name} ({len(arguments_str)} chars)")
-                    
                     # Clean up common JSON issues before parsing
                     cleaned_json = arguments_str.replace('\n', ' ').replace('\r', ' ')
                     # Remove unescaped quotes in content (basic fix)
                     import re
                     # This is a simple fix - replace unescaped quotes in values
                     cleaned_json = re.sub(r'(?<!\\)"(?![:,\]}])', r'\\"', cleaned_json)
+                    
+                    # Show JSON sample for debugging
+                    logger.info(f"JSON sample for {doc_name}: {cleaned_json[:200]}...")
                     
                     arguments = json.loads(cleaned_json)
                     required_keys = ["status_summary", "page_research"]
