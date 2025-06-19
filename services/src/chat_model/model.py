@@ -99,10 +99,7 @@ def _process_final_references(buffer: str, reference_index: Dict[str, Dict[str, 
     
     # DEBUG: Log final processing
     logger = logging.getLogger(__name__)
-    logger.error(f"DEBUG FINAL: Processing final buffer with length {len(buffer)}")
-    logger.error(f"DEBUG FINAL: Buffer content: {repr(buffer)}")
-    logger.error(f"DEBUG FINAL: Reference index keys: {list(reference_index.keys())}")
-    logger.error(f"DEBUG FINAL: Complete reference_index: {reference_index}")
+    logger.debug(f"Processing final buffer with {len(buffer)} chars and {len(reference_index)} refs")
     
     # Process all remaining content
     # Find all [REF:X] or [REF:X,Y,Z] patterns
@@ -126,7 +123,7 @@ def _process_final_references(buffer: str, reference_index: Dict[str, Dict[str, 
             else:
                 ref_ids.append(part)
         
-        logger.error(f"DEBUG FINAL REPLACE: Found reference {match.group(0)} with IDs: {ref_ids}")
+        logger.debug(f"Found reference {match.group(0)} with {len(ref_ids)} IDs")
 
         # Generate href links - group by page to avoid duplicates
         page_links = {}  # Map (doc_name, page) -> href
@@ -148,23 +145,23 @@ def _process_final_references(buffer: str, reference_index: Dict[str, Dict[str, 
                     link_text = f"📄 {doc_name} Page {page}"
                     href = f'<a href=\'javascript:window.maven.openPdf("{s3_url}", {page}, "{highlight_text}")\'>{link_text}</a>'
                     page_links[page_key] = href
-                    logger.error(f"DEBUG FINAL REPLACE: Created href for ref {ref_id}: {href}")
+                    logger.debug(f"Created href for ref {ref_id}")
             else:
-                logger.error(f"DEBUG FINAL REPLACE: Reference {ref_id} not found in index")
+                logger.warning(f"Reference {ref_id} not found in index")
 
         links = list(page_links.values())
 
         # Return the reference line with links
         if links:
             result = f"\n\n{' '.join(links)}\n\n"
-            logger.error(f"DEBUG FINAL REPLACE: Returning links: {result}")
+            logger.debug(f"Returning {len(links)} links")
             return result
         else:
-            logger.error(f"DEBUG FINAL REPLACE: No links found, keeping original: {match.group(0)}")
+            logger.debug(f"No links found for {match.group(0)}")
             return match.group(0)  # Keep original if no match
 
     processed = re.sub(r"\[REF:([\d,\s\-]+)\]", replace_refs, buffer)
-    logger.error(f"DEBUG FINAL: Final processed content: {repr(processed)}")
+    logger.debug(f"Final processed content: {len(processed)} chars")
     yield processed
 
 
@@ -177,8 +174,7 @@ def _process_reference_buffer(buffer: str, reference_index: Dict[str, Dict[str, 
     import re
     
     logger = logging.getLogger(__name__)
-    logger.error(f"DEBUG STREAM: _process_reference_buffer called with reference_index keys: {list(reference_index.keys())}")
-    logger.error(f"DEBUG STREAM: Complete reference_index: {reference_index}")
+    logger.debug(f"Processing stream buffer with {len(reference_index)} refs available")
     
     # If buffer is shorter than buffer_size and doesn't contain complete references, keep buffering
     ref_pattern = r"\[REF:([\d,\s\-]+)\]"
@@ -196,7 +192,7 @@ def _process_reference_buffer(buffer: str, reference_index: Dict[str, Dict[str, 
     
     if refs_in_buffer:
         # Process each reference pattern found
-        logger.error(f"DEBUG STREAM: Found {len(refs_in_buffer)} references in buffer: {buffer}")
+        logger.debug(f"Found {len(refs_in_buffer)} references in buffer")
         
         # Process references from end to start to maintain string positions
         for match in reversed(refs_in_buffer):
@@ -233,8 +229,8 @@ def _process_reference_buffer(buffer: str, reference_index: Dict[str, Dict[str, 
                     # Create S3 URL using S3_BASE_PATH + file_name
                     s3_url = f"{config.S3_BASE_PATH}/{file_name}"
                     
-                    # DEBUG: Log what we're putting in the href
-                    logger.error(f"DEBUG STREAM: Ref {ref_id} data: file='{s3_url}', page={page}, highlight='{highlight_text[:50]}...'")
+                    # Log file_name for debugging
+                    logger.info(f"REF {ref_id}: file_name='{file_name}', s3_url='{s3_url[:50]}...', page={page}")
                     
                     # Create href link with 3-parameter format: filename, page, highlight_text
                     page_key = (doc_name, page)
@@ -242,7 +238,7 @@ def _process_reference_buffer(buffer: str, reference_index: Dict[str, Dict[str, 
                         link_text = f"📄 {doc_name} Page {page}"
                         href = f'<a href=\'javascript:window.maven.openPdf("{s3_url}", {page}, "{highlight_text}")\'>{link_text}</a>'
                         page_links[page_key] = href
-                        logger.error(f"DEBUG STREAM: Created href: {href[:100]}...")
+                        logger.debug(f"Created href for page {page}")
             
             links = list(page_links.values())
             
@@ -250,7 +246,7 @@ def _process_reference_buffer(buffer: str, reference_index: Dict[str, Dict[str, 
             if links:
                 replacement = f" {' '.join(links)} "
                 remaining_buffer = remaining_buffer[:match.start()] + replacement + remaining_buffer[match.end():]
-                logger.error(f"DEBUG STREAM: Replaced {match.group(0)} with {replacement}")
+                logger.debug(f"Replaced {match.group(0)} with {len(links)} links")
         
         # Output everything up to and including the processed references
         processed_content = remaining_buffer
@@ -270,7 +266,7 @@ def _process_reference_buffer(buffer: str, reference_index: Dict[str, Dict[str, 
             processed_content = buffer[:-keep_chars] if keep_chars > 0 else buffer
             remaining_buffer = buffer[-keep_chars:] if keep_chars > 0 else ""
     
-    logger.error(f"DEBUG STREAM: Outputting {len(processed_content)} chars, keeping {len(remaining_buffer)} chars")
+    logger.debug(f"Output: {len(processed_content)} chars, buffer: {len(remaining_buffer)} chars")
     return processed_content, remaining_buffer
 
 
@@ -325,9 +321,7 @@ def _execute_query_worker(
         )  # ADDED query_stage_name
 
         # DEBUG: Log what we got back from route_query_sync
-        logger.error(f"DEBUG TUPLE: {db_name} returned tuple type: {type(result_tuple)}")
-        logger.error(f"DEBUG TUPLE: {db_name} returned tuple length: {len(result_tuple) if hasattr(result_tuple, '__len__') else 'No length'}")
-        logger.error(f"DEBUG TUPLE: {db_name} returned tuple content: {result_tuple}")
+        logger.debug(f"{db_name} returned tuple with {len(result_tuple) if hasattr(result_tuple, '__len__') else 'unknown'} elements")
 
         # Handle different tuple lengths for backward compatibility
         if len(result_tuple) == 6:

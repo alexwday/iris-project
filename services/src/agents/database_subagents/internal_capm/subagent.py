@@ -139,6 +139,10 @@ def fetch_capm_catalog() -> List[Dict[str, Any]]:
         logger.info(
             f"Retrieved {len(catalog_records)} CAPM catalog entries from database"
         )
+        # Debug file_name data
+        if catalog_records:
+            first_record = catalog_records[0]
+            logger.info(f"DEBUG file_name: First record has file_name='{first_record.get('file_name', 'MISSING')}', file_link='{first_record.get('file_link', 'MISSING')[:50]}...'")
     except Exception as e:
         logger.error(f"Error fetching CAPM catalog from database: {str(e)}")
     finally:
@@ -531,8 +535,8 @@ def process_single_document(
             if tool_call.function.name == SYNTHESIS_TOOL_SCHEMA["function"]["name"]:
                 arguments_str = tool_call.function.arguments
                 try:
-                    # Log the raw arguments string for debugging
-                    logger.error(f"DEBUG JSON: Raw tool arguments for {doc_name}: {arguments_str[:500]}...")
+                    # Log JSON parsing for debugging
+                    logger.debug(f"Parsing JSON arguments for {doc_name} ({len(arguments_str)} chars)")
                     arguments = json.loads(arguments_str)
                     required_keys = ["status_summary", "page_research"]
                     if all(key in arguments for key in required_keys):
@@ -553,11 +557,7 @@ def process_single_document(
                         }
                 except json.JSONDecodeError as json_err:
                     logger.error(f"Failed to parse tool arguments JSON for {doc_name}: {json_err}")
-                    logger.error(f"Raw arguments string (first 1000 chars): {arguments_str[:1000]}")
-                    # Try to find where the JSON breaks
-                    lines = arguments_str.split('\n')
-                    for i, line in enumerate(lines[:10]):  # Check first 10 lines
-                        logger.error(f"Line {i}: {line}")
+                    logger.debug(f"JSON error at position {getattr(json_err, 'pos', 'unknown')} in {len(arguments_str)} char string")
                     return {
                         "document_name": doc_name,
                         "file_link": file_link,
@@ -835,10 +835,12 @@ def query_database_sync(
             for item in catalog:
                 if item.get("id") in selected_doc_ids:
                     file_link_value = item.get("file_link", "")
+                    file_name_value = item.get("file_name", "")
                     doc_name_value = item.get("document_name", "Unknown")
                     file_links.append(
                         {
                             "file_link": file_link_value,
+                            "file_name": file_name_value,
                             "document_name": doc_name_value,
                         }
                     )
