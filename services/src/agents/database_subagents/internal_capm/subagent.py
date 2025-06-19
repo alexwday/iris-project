@@ -537,17 +537,11 @@ def process_single_document(
                 arguments_str = tool_call.function.arguments
                 logger.info(f"Arguments string type: {type(arguments_str)}, length: {len(arguments_str)}")
                 try:
-                    # Clean up common JSON issues before parsing
-                    cleaned_json = arguments_str.replace('\n', ' ').replace('\r', ' ')
-                    # Remove unescaped quotes in content (basic fix)
-                    import re
-                    # This is a simple fix - replace unescaped quotes in values
-                    cleaned_json = re.sub(r'(?<!\\)"(?![:,\]}])', r'\\"', cleaned_json)
+                    # Show JSON sample for debugging (first 200 chars)
+                    logger.info(f"JSON sample for {doc_name}: {arguments_str[:200]}...")
                     
-                    # Show JSON sample for debugging
-                    logger.info(f"JSON sample for {doc_name}: {cleaned_json[:200]}...")
-                    
-                    arguments = json.loads(cleaned_json)
+                    # Parse JSON directly like internal_par does (no aggressive cleaning)
+                    arguments = json.loads(arguments_str)
                     required_keys = ["status_summary", "page_research"]
                     if all(key in arguments for key in required_keys):
                         return {
