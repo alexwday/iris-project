@@ -120,7 +120,7 @@ def fetch_capm_catalog() -> List[Dict[str, Any]]:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT id, document_name, document_description, file_link
+                SELECT id, document_name, document_description, file_link, file_name
                 FROM apg_catalog
                 WHERE document_source = 'internal_capm'
                 ORDER BY document_name
@@ -133,6 +133,7 @@ def fetch_capm_catalog() -> List[Dict[str, Any]]:
                         "document_name": row[1],
                         "document_description": row[2],
                         "file_link": row[3] if row[3] else None,
+                        "file_name": row[4] if row[4] else None,
                     }
                 )
         logger.info(
@@ -471,11 +472,15 @@ def process_single_document(
     doc_name = document.get("document_name", "Unknown Document")
     logger.info(f"Processing single CAPM document: {doc_name}")
     
-    # Get file link from document metadata
+    # Get file link and file name from document metadata
     file_link = ""
+    file_name = ""
     # Check if document has file_link directly
     if "file_link" in document:
         file_link = document.get("file_link", "")
+    # Check if document has file_name directly
+    if "file_name" in document:
+        file_name = document.get("file_name", "")
     
     # Format single document for LLM
     formatted_doc = format_documents_for_llm([document])
@@ -606,19 +611,23 @@ def synthesize_response_and_status(
         logger.warning(f"No documents provided for {database_name} synthesis.")
         return {}
 
-    # Create file link mapping
+    # Create file link and file name mapping
     file_link_map = {}
+    file_name_map = {}
     for link_info in file_links:
         doc_name = link_info.get("document_name", "")
         file_link = link_info.get("file_link", "")
+        file_name = link_info.get("file_name", "")
         if doc_name:
             file_link_map[doc_name] = file_link
+            file_name_map[doc_name] = file_name
 
-    # Add file links to documents before processing
+    # Add file links and file names to documents before processing
     for doc in documents:
         doc_name = doc.get("document_name", "")
         if doc_name in file_link_map:
             doc["file_link"] = file_link_map[doc_name]
+            doc["file_name"] = file_name_map[doc_name]
 
     # Process documents in parallel using ThreadPoolExecutor
     document_results = []
@@ -676,6 +685,7 @@ def synthesize_response_and_status(
                 doc_output[page_key] = {
                     "research_content": research_content,
                     "file_link": file_link,
+                    "file_name": file_name,
                     "page_number": page_number
                 }
             
@@ -794,6 +804,9 @@ def query_database_sync(
                     {
                         "file_link": item.get(
                             "file_link", ""
+                        ),  # Use empty string if None
+                        "file_name": item.get(
+                            "file_name", ""
                         ),  # Use empty string if None
                         "document_name": item.get("document_name", "Unknown"),
                     }

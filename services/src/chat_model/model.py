@@ -131,15 +131,19 @@ def _process_final_references(buffer: str, reference_index: Dict[str, Dict[str, 
             if ref_id in reference_index:
                 ref_data = reference_index[ref_id]
                 file_link = ref_data.get("file_link", "")
+                file_name = ref_data.get("file_name", "")
                 page = ref_data.get("page", 1)
                 highlight_text = ref_data.get("highlight_text", "")
                 doc_name = ref_data.get("doc_name", "Unknown Document")
+
+                # Create S3 URL using S3_BASE_PATH + file_name
+                s3_url = f"{config.S3_BASE_PATH}/{file_name}"
 
                 # Create href link with 3-parameter format: filename, page, highlight_text
                 page_key = (doc_name, page)
                 if page_key not in page_links:
                     link_text = f"📄 {doc_name} Page {page}"
-                    href = f'<a href=\'javascript:window.maven.openPdf("{file_link}", {page}, "{highlight_text}")\'>{link_text}</a>'
+                    href = f'<a href=\'javascript:window.maven.openPdf("{s3_url}", {page}, "{highlight_text}")\'>{link_text}</a>'
                     page_links[page_key] = href
                     logger.error(f"DEBUG FINAL REPLACE: Created href for ref {ref_id}: {href}")
             else:
@@ -218,18 +222,22 @@ def _process_reference_buffer(buffer: str, reference_index: Dict[str, Dict[str, 
                 if ref_id in reference_index:
                     ref_data = reference_index[ref_id]
                     file_link = ref_data.get("file_link", "")
+                    file_name = ref_data.get("file_name", "")
                     page = ref_data.get("page", 1)
                     highlight_text = ref_data.get("highlight_text", "")
                     doc_name = ref_data.get("doc_name", "Unknown Document")
                     
+                    # Create S3 URL using S3_BASE_PATH + file_name
+                    s3_url = f"{config.S3_BASE_PATH}/{file_name}"
+                    
                     # DEBUG: Log what we're putting in the href
-                    logger.error(f"DEBUG STREAM: Ref {ref_id} data: file='{file_link}', page={page}, highlight='{highlight_text[:50]}...'")
+                    logger.error(f"DEBUG STREAM: Ref {ref_id} data: file='{s3_url}', page={page}, highlight='{highlight_text[:50]}...'")
                     
                     # Create href link with 3-parameter format: filename, page, highlight_text
                     page_key = (doc_name, page)
                     if page_key not in page_links:
                         link_text = f"📄 {doc_name} Page {page}"
-                        href = f'<a href=\'javascript:window.maven.openPdf("{file_link}", {page}, "{highlight_text}")\'>{link_text}</a>'
+                        href = f'<a href=\'javascript:window.maven.openPdf("{s3_url}", {page}, "{highlight_text}")\'>{link_text}</a>'
                         page_links[page_key] = href
                         logger.error(f"DEBUG STREAM: Created href: {href[:100]}...")
             
@@ -886,6 +894,7 @@ def _model_generator(
                                             page_number = page_data.get("page_number", 0)
                                             research_content = page_data.get("research_content", "")
                                             file_link = page_data.get("file_link", "")
+                                            file_name = page_data.get("file_name", "")
                                             
                                             # Assign REF number
                                             ref_id = str(ref_counter)
@@ -898,6 +907,7 @@ def _model_generator(
                                             db_research_with_refs[doc_name][page_key] = {
                                                 "research_content": research_with_ref,
                                                 "file_link": file_link,
+                                                "file_name": file_name,
                                                 "page_number": page_number,
                                                 "ref_id": ref_id
                                             }
@@ -906,6 +916,7 @@ def _model_generator(
                                             master_reference_index[ref_id] = {
                                                 "doc_name": doc_name,
                                                 "file_link": file_link,
+                                                "file_name": file_name,
                                                 "page": page_number,
                                                 "highlight_text": "",  # Empty as requested
                                                 "source_db": db_name,

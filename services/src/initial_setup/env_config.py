@@ -96,6 +96,9 @@ class Config:
     # Process Monitoring
     PROCESS_MONITOR_MODEL_NAME: str = os.getenv("IRIS_PROCESS_MONITOR_MODEL_NAME", "iris")
     
+    # S3 Configuration
+    S3_BASE_PATH: str = os.getenv("S3_BASE_PATH", "")
+    
     # Static Constants (not from environment)
     ALLOWED_ROLES: list = ["user", "assistant"]  # Roles for conversation processing
     USE_SSL: bool = True  # Always true for RBC
