@@ -169,7 +169,7 @@ def _process_final_references(buffer: str, reference_index: Dict[str, Dict[str, 
     yield processed
 
 
-def _process_reference_buffer(buffer: str, reference_index: Dict[str, Dict[str, Any]], buffer_size: int = 25) -> tuple[str, str]:
+def _process_reference_buffer(buffer: str, reference_index: Dict[str, Dict[str, Any]], buffer_size: int = 80) -> tuple[str, str]:
     """
     Smart buffering: accumulate chunks and process complete reference patterns immediately.
     This ensures href links are sent in the stream before the UI displays [REF:X] tags.
@@ -179,65 +179,125 @@ def _process_reference_buffer(buffer: str, reference_index: Dict[str, Dict[str, 
     
     logger = logging.getLogger(__name__)
     
-    # Support both individual [REF:x] and legacy comma-separated/range formats for backward compatibility
-    # Primary pattern: individual references [REF:1][REF:2][REF:3]
+    # Look for complete reference patterns that won't be broken by string replacement
+    # Pattern to find sequences of individual references: [REF:1][REF:2][REF:3]...
+    ref_sequence_pattern = r"(?:\[REF:\d+\])+"
+    # Individual reference pattern for processing
     individual_pattern = r"\[REF:(\d+)\]"
     # Legacy patterns: comma-separated [REF:1,2,3] and ranges [REF:1-12]
     legacy_pattern = r"\[REF:([\d,\s\-]+)\]"
     
-    # Find all individual references first (preferred format)
-    individual_refs = list(re.finditer(individual_pattern, buffer))
-    # Find legacy format references
-    legacy_refs = list(re.finditer(legacy_pattern, buffer))
-    
-    # Remove individual refs from legacy refs to avoid double-processing
-    all_refs = individual_refs[:]
-    for legacy_match in legacy_refs:
+    # Find complete reference sequences first
+    ref_sequences = list(re.finditer(ref_sequence_pattern, buffer))
+    # Find legacy format references that aren't part of sequences
+    legacy_refs = []
+    for legacy_match in re.finditer(legacy_pattern, buffer):
         legacy_text = legacy_match.group(1)
         # Only include if it's actually comma-separated or range format (not just a single number)
-        if "," in legacy_text or "-" in legacy_text:
-            all_refs.append(legacy_match)
+        # and not overlapping with an individual reference sequence
+        if ("," in legacy_text or "-" in legacy_text):
+            # Check if this legacy ref overlaps with any sequence
+            overlaps = False
+            for seq in ref_sequences:
+                if (legacy_match.start() < seq.end() and legacy_match.end() > seq.start()):
+                    overlaps = True
+                    break
+            if not overlaps:
+                legacy_refs.append(legacy_match)
     
-    if not all_refs and len(buffer) < buffer_size:
-        # No complete references and buffer not full yet - keep buffering
-        return "", buffer
+    all_matches = ref_sequences + legacy_refs
     
-    # We have either complete references or a full buffer - process what we can
-    processed_content = ""
-    remaining_buffer = buffer
+    # Check if we have complete patterns or need to keep buffering
+    if not all_matches and len(buffer) < buffer_size:
+        # Check for incomplete references at the end of buffer
+        if buffer.endswith('[') or re.search(r'\[REF:?\d*$', buffer):
+            # Incomplete reference at end, keep buffering
+            return "", buffer
+        # No references and not an incomplete pattern, output what we have
+        return buffer, ""
     
-    if all_refs:
-        # Sort by position and process from end to start to maintain string positions
-        all_refs.sort(key=lambda x: x.start(), reverse=True)
+    if not all_matches:
+        # No references but buffer is full - handle partial references
+        potential_ref_start = buffer.rfind("[")
+        if potential_ref_start != -1 and potential_ref_start > len(buffer) - 15:
+            # Keep potential reference start in buffer
+            processed_content = buffer[:potential_ref_start]
+            remaining_buffer = buffer[potential_ref_start:]
+            return processed_content, remaining_buffer
+        else:
+            # No potential reference at end - output most of buffer but keep a small amount
+            keep_chars = min(10, len(buffer) // 3)
+            processed_content = buffer[:-keep_chars] if keep_chars > 0 else buffer
+            remaining_buffer = buffer[-keep_chars:] if keep_chars > 0 else ""
+            return processed_content, remaining_buffer
+    
+    # Process matches from end to start to maintain string positions
+    all_matches.sort(key=lambda x: x.start(), reverse=True)
+    processed_content = buffer
+    
+    for match in all_matches:
+        match_text = match.group(0)
         
-        for match in all_refs:
-            ref_text = match.group(1)
+        if re.match(ref_sequence_pattern, match_text):
+            # This is a sequence of individual references: [REF:1][REF:2][REF:3]
+            individual_refs_in_sequence = re.findall(individual_pattern, match_text)
             
-            # Parse reference IDs based on format
-            ref_ids = []
-            if "," in ref_text or "-" in ref_text:
-                # Legacy format: comma-separated or range
-                for part in ref_text.split(","):
-                    part = part.strip()
-                    if "-" in part:
-                        # Handle ranges like "1-12"
-                        try:
-                            start, end = part.split("-", 1)
-                            start_num = int(start.strip())
-                            end_num = int(end.strip())
-                            ref_ids.extend(str(i) for i in range(start_num, end_num + 1))
-                        except ValueError:
-                            # If parsing fails, treat as regular ID
-                            ref_ids.append(part)
-                    else:
-                        ref_ids.append(part)
-            else:
-                # Individual format: single reference ID
-                ref_ids = [ref_text]
-            
-            # Generate href links - group by page to avoid duplicates
+            # Generate href links for each reference
             page_links = {}  # Map (doc_name, page) -> href
-            found_refs = []  # Track which refs were actually found
+            found_refs = []
+            
+            for ref_id in individual_refs_in_sequence:
+                if ref_id in reference_index:
+                    found_refs.append(ref_id)
+                    ref_data = reference_index[ref_id]
+                    file_link = ref_data.get("file_link", "")
+                    file_name = ref_data.get("file_name", "")
+                    page = ref_data.get("page", 1)
+                    highlight_text = ref_data.get("highlight_text", "")
+                    doc_name = ref_data.get("doc_name", "Unknown Document")
+                    
+                    # Create S3 URL using S3_BASE_PATH + file_name
+                    s3_url = f"{config.S3_BASE_PATH}/{file_name}"
+                    
+                    # Create href link with 3-parameter format: filename, page, highlight_text
+                    page_key = (doc_name, page)
+                    if page_key not in page_links:
+                        link_text = f"📄 {doc_name} Page {page}"
+                        href = f'<a href=\'javascript:window.maven.openPdf("{s3_url}", {page}, "{highlight_text}")\'>{link_text}</a>'
+                        page_links[page_key] = href
+                else:
+                    logger.warning(f"Reference {ref_id} not found in index")
+            
+            links = list(page_links.values())
+            
+            if links:
+                replacement = f" {' '.join(links)} "
+                processed_content = processed_content[:match.start()] + replacement + processed_content[match.end():]
+                logger.info(f"Replaced sequence {match_text} with {len(links)} link(s) for refs: {found_refs}")
+        
+        else:
+            # This is a legacy format reference: [REF:1,2,3] or [REF:1-12]
+            ref_text = match.group(1)
+            ref_ids = []
+            
+            for part in ref_text.split(","):
+                part = part.strip()
+                if "-" in part:
+                    # Handle ranges like "1-12"
+                    try:
+                        start, end = part.split("-", 1)
+                        start_num = int(start.strip())
+                        end_num = int(end.strip())
+                        ref_ids.extend(str(i) for i in range(start_num, end_num + 1))
+                    except ValueError:
+                        # If parsing fails, treat as regular ID
+                        ref_ids.append(part)
+                else:
+                    ref_ids.append(part)
+            
+            # Generate href links
+            page_links = {}
+            found_refs = []
             
             for ref_id in ref_ids:
                 if ref_id in reference_index:
@@ -252,9 +312,6 @@ def _process_reference_buffer(buffer: str, reference_index: Dict[str, Dict[str, 
                     # Create S3 URL using S3_BASE_PATH + file_name
                     s3_url = f"{config.S3_BASE_PATH}/{file_name}"
                     
-                    # Log for debugging
-                    logger.info(f"Processing REF {ref_id}: file_name='{file_name}', page={page}")
-                    
                     # Create href link with 3-parameter format: filename, page, highlight_text
                     page_key = (doc_name, page)
                     if page_key not in page_links:
@@ -266,31 +323,13 @@ def _process_reference_buffer(buffer: str, reference_index: Dict[str, Dict[str, 
             
             links = list(page_links.values())
             
-            # Replace the reference with links or keep original if no valid refs found
             if links:
                 replacement = f" {' '.join(links)} "
-                remaining_buffer = remaining_buffer[:match.start()] + replacement + remaining_buffer[match.end():]
-                logger.info(f"Replaced {match.group(0)} with {len(links)} link(s) for refs: {found_refs}")
-        
-        # Output everything up to and including the processed references
-        processed_content = remaining_buffer
-        remaining_buffer = ""
-        
-    else:
-        # No references but buffer is full - output some content but keep potential partial refs
-        # Look for potential start of reference pattern at the end
-        potential_ref_start = buffer.rfind("[")
-        if potential_ref_start != -1 and potential_ref_start > len(buffer) - 10:
-            # Keep potential reference start in buffer
-            processed_content = buffer[:potential_ref_start]
-            remaining_buffer = buffer[potential_ref_start:]
-        else:
-            # No potential reference at end - output most of buffer but keep a small amount
-            keep_chars = min(5, len(buffer) // 2)
-            processed_content = buffer[:-keep_chars] if keep_chars > 0 else buffer
-            remaining_buffer = buffer[-keep_chars:] if keep_chars > 0 else ""
+                processed_content = processed_content[:match.start()] + replacement + processed_content[match.end():]
+                logger.info(f"Replaced legacy {match.group(0)} with {len(links)} link(s) for refs: {found_refs}")
     
-    return processed_content, remaining_buffer
+    # Return all processed content and empty remaining buffer
+    return processed_content, ""
 
 
 # --- Worker Function for Threaded Query Execution ---

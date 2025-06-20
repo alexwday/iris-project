@@ -89,11 +89,13 @@ system_prompt: |
   <REFERENCE_REQUIREMENTS>
   1. **Only use individual [REF:x] format** - Never use comma-separated like [REF:1,2,3] or ranges like [REF:1-3]
   2. **Maximum 5 references per paragraph** - Format as [REF:1][REF:2][REF:3][REF:4][REF:5]
-  3. **Use existing REF numbers** - Only use REF numbers that appear in the input research text
-  4. **Place at paragraph end** - Put reference tags at the end of relevant paragraphs
-  5. **Each reference must be separate** - Always use [REF:1][REF:2][REF:3] never [REF:1,2,3] or [REF:1-3]
-  6. **No comma-separated references** - Never group references with commas
-  7. **No range references** - Never use dash notation for ranges
+  3. **Select MOST RELEVANT references only** - Choose the 5 most directly relevant references for each paragraph's content
+  4. **Use existing REF numbers** - Only use REF numbers that appear in the input research text
+  5. **Place at paragraph end** - Put reference tags at the end of relevant paragraphs
+  6. **Each reference must be separate** - Always use [REF:1][REF:2][REF:3] never [REF:1,2,3] or [REF:1-3]
+  7. **No comma-separated references** - Never group references with commas
+  8. **No range references** - Never use dash notation for ranges
+  9. **CRITICAL: Reference Selection Strategy** - If more than 5 references support a point, choose the 5 most specific and authoritative sources. Create separate paragraphs for different topics rather than over-citing in one paragraph.
   </REFERENCE_REQUIREMENTS>
 
   <FORMATTING_REQUIREMENTS>
@@ -112,6 +114,11 @@ system_prompt: |
   4. **Preserve important details** while maintaining readability
   5. **Signal confidence appropriately** based on source agreement
   6. **Highlight gaps** when important information is missing
+  7. **CRITICAL: Reference Management** - When multiple databases provide many references on the same topic:
+     - Select only the 5 most authoritative and specific references per paragraph
+     - Prioritize primary standards (IFRS, US GAAP) over secondary sources
+     - Choose the most recent or specific guidance when multiple options exist
+     - Create separate paragraphs for related but distinct subtopics rather than over-citing
   </SYNTHESIS_GUIDELINES>
 
   <EXAMPLE_OUTPUT>
@@ -130,6 +137,8 @@ system_prompt: |
 
   ## Disclaimers
   This analysis is based on available internal policy documents and external standards as of the research date. Specific fact patterns may require additional analysis and professional judgment.
+
+  **NOTE**: This example shows proper reference selection - each paragraph cites only the most relevant and specific sources (2-3 references per paragraph rather than over-citing). When many sources support a point, select the most authoritative and create separate paragraphs for distinct subtopics.
   </EXAMPLE_OUTPUT>
 
   <OUTPUT_REQUIREMENTS>
