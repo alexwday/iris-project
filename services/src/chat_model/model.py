@@ -985,7 +985,6 @@ def _model_generator(
                                 "summary", error=str(summary_exc)
                             )
                         # --- Legacy Debug Block Removed ---
-                        yield "\n\n---"
 
                         logger.info(f"Completed process for scope '{scope}'")
                 elif scope == "metadata":
@@ -1029,7 +1028,6 @@ def _model_generator(
                                 yield "- No unique items found.\n"
                         else:
                             yield "- No relevant items found.\n"
-                    yield "\n---"
                     logger.info(
                         f"Completed process for scope '{scope}', returning {total_metadata_items} items internally."
                     )
