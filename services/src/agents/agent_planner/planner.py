@@ -267,8 +267,10 @@ def create_database_selection_plan(research_statement, token, available_database
     """
     usage_details = None # Initialize usage details
     try:
-        # Generate dynamic system prompt with filtered databases
-        system_prompt = construct_system_prompt(available_databases)
+        # Generate dynamic configuration with filtered databases
+        agent_config = load_agent_config(available_databases)
+        system_prompt = agent_config['system_prompt']
+        tool_definitions = agent_config['tool_definitions']
         system_message = {"role": "system", "content": system_prompt}
 
         # Prepare the research statement as user message
@@ -288,8 +290,7 @@ def create_database_selection_plan(research_statement, token, available_database
         logger.info(f"Available databases: {list(available_databases.keys())}")
         logger.info("Initiating Planner API call for database selection")
 
-        # Generate tool definitions with filtered databases
-        tool_definitions = get_tool_definitions(available_databases)
+        # Tool definitions already loaded from agent_config above
 
         # Make the API call with tool calling (non-streaming returns tuple)
         response, usage_details = call_llm(
