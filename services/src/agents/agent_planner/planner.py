@@ -24,9 +24,10 @@ from ...llm_connectors.rbc_openai import call_llm
 from .planner_settings import (
     MAX_TOKENS,
     MODEL_CAPABILITY,
-    SYSTEM_PROMPT,
+    DEFAULT_SYSTEM_PROMPT,
     TEMPERATURE,
     get_tool_definitions,
+    construct_system_prompt,
 )
 
 # Get module logger (no configuration here - using centralized config)
@@ -71,8 +72,9 @@ def create_database_selection_plan(research_statement, token, available_database
     """
     usage_details = None # Initialize usage details
     try:
-        # Prepare system message with planner prompt
-        system_message = {"role": "system", "content": SYSTEM_PROMPT}
+        # Generate dynamic system prompt with filtered databases
+        system_prompt = construct_system_prompt(available_databases)
+        system_message = {"role": "system", "content": system_prompt}
 
         # Prepare the research statement as user message
         continuation_prefix = "[CONTINUATION REQUEST] " if is_continuation else ""

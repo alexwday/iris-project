@@ -163,11 +163,15 @@ No additional text or explanation should be included.
 
 
 # Construct the complete system prompt by combining the necessary statements
-def construct_system_prompt():
+def construct_system_prompt(available_databases=None):
     # Get all the required statements
     project_statement = get_project_statement()
     fiscal_statement = get_fiscal_statement()
-    database_statement = get_database_statement()
+    # Use filtered database statement if available_databases provided
+    if available_databases is not None:
+        database_statement = get_filtered_database_statement(available_databases)
+    else:
+        database_statement = get_database_statement()
     restrictions_statement = get_restrictions_statement()
 
     # Combine into a formatted system prompt using CO-STAR framework
@@ -198,8 +202,65 @@ def construct_system_prompt():
     return "\n\n".join(prompt_parts)
 
 
-# Generate the complete system prompt
-SYSTEM_PROMPT = construct_system_prompt()
+def get_filtered_database_statement(available_databases):
+    """
+    Generate a filtered database statement containing only the specified databases.
+    
+    Args:
+        available_databases (dict): Dictionary of available database configurations
+        
+    Returns:
+        str: Formatted database statement with only filtered databases
+    """
+    statement = """<AVAILABLE_DATABASES>
+The following databases are available for research:
+
+"""
+    
+    # Group databases by type for better organization
+    internal_dbs = {
+        k: v for k, v in available_databases.items() if k.startswith("internal_")
+    }
+    external_dbs = {
+        k: v for k, v in available_databases.items() if k.startswith("external_")
+    }
+    
+    # Add internal databases section if any exist
+    if internal_dbs:
+        statement += "<INTERNAL_DATABASES>\n"
+        for db_name, db_info in internal_dbs.items():
+            statement += f"""<DATABASE id="{db_name}">
+  <NAME>{db_info['name']}</NAME>
+  <DESCRIPTION>{db_info['description']}</DESCRIPTION>
+  <CONTENT_TYPE>{db_info['content_type']}</CONTENT_TYPE>
+  <QUERY_TYPE>{db_info['query_type']}</QUERY_TYPE>
+  <USAGE>{db_info['use_when']}</USAGE>
+</DATABASE>
+
+"""
+        statement += "</INTERNAL_DATABASES>\n\n"
+    
+    # Add external databases section if any exist
+    if external_dbs:
+        statement += "<EXTERNAL_DATABASES>\n"
+        for db_name, db_info in external_dbs.items():
+            statement += f"""<DATABASE id="{db_name}">
+  <NAME>{db_info['name']}</NAME>
+  <DESCRIPTION>{db_info['description']}</DESCRIPTION>
+  <CONTENT_TYPE>{db_info['content_type']}</CONTENT_TYPE>
+  <QUERY_TYPE>{db_info['query_type']}</QUERY_TYPE>
+  <USAGE>{db_info['use_when']}</USAGE>
+</DATABASE>
+
+"""
+        statement += "</EXTERNAL_DATABASES>\n\n"
+    
+    statement += "</AVAILABLE_DATABASES>"
+    return statement
+
+
+# Generate the default system prompt (used as fallback)
+DEFAULT_SYSTEM_PROMPT = construct_system_prompt()
 
 def get_tool_definitions(available_databases):
     """
