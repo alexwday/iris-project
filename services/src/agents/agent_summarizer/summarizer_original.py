@@ -16,14 +16,17 @@ Dependencies:
 
 import logging
 import json
-import os
-from typing import Any, Dict, List, Optional, Union, Generator
+from typing import Any, Dict, List, Optional, Union, Generator  # Keep Generator
 
 from ...initial_setup.env_config import config
-from ...llm_connectors.rbc_openai import call_llm
-from ...global_prompts.project_statement import get_project_statement
-from ...global_prompts.fiscal_statement import get_fiscal_statement
-from ...global_prompts.restrictions_statement import get_restrictions_statement
+
+from ...llm_connectors.rbc_openai import call_llm  # Remove log_usage_statistics
+from .summarizer_settings import (
+    MAX_TOKENS,
+    MODEL_CAPABILITY,
+    SYSTEM_PROMPT,
+    TEMPERATURE,
+)
 
 # Get module logger
 logger = logging.getLogger(__name__)
@@ -31,87 +34,8 @@ logger = logging.getLogger(__name__)
 
 class SummarizerError(Exception):
     """Base exception class for summarizer-related errors."""
+
     pass
-
-
-def load_agent_config():
-    """
-    Load agent configuration from YAML file and resolve dynamic context.
-    NOTE: Summarizer excludes database_statement (unlike other agents)
-    
-    Returns:
-        dict: Configuration dictionary with resolved system prompt and settings
-    """
-    try:
-        # Build context statements dynamically (excluding database_statement)
-        context_parts = [
-            get_project_statement(),
-            get_fiscal_statement(), 
-            get_restrictions_statement()  # Note: NO database_statement for summarizer
-        ]
-        
-        # Build the complete context block
-        context_block = "\n\n".join(context_parts)
-        
-        # Read the system prompt template from YAML file
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        yaml_path = os.path.join(current_dir, 'summarizer_prompt.yaml')
-        
-        with open(yaml_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-        
-        # Extract the system prompt (everything between system_prompt: | and # Tool definitions)
-        start_marker = "system_prompt: |"
-        end_marker = "# Tool definitions"
-        
-        start_idx = content.find(start_marker)
-        end_idx = content.find(end_marker)
-        
-        if start_idx == -1 or end_idx == -1:
-            raise Exception("Could not find system prompt in YAML file")
-        
-        # Extract and clean the system prompt
-        system_prompt = content[start_idx + len(start_marker):end_idx].strip()
-        
-        # Replace the context placeholder
-        system_prompt = system_prompt.replace('{{CONTEXT_START}}', f"<CONTEXT>\n{context_block}\n</CONTEXT>")
-        
-        return {
-            'model_capability': 'large',
-            'max_tokens': 4096,
-            'temperature': 0.1,
-            'system_prompt': system_prompt
-        }
-        
-    except Exception as e:
-        logger.error(f"Error loading agent configuration: {str(e)}", exc_info=True)
-        raise SummarizerError(f"Failed to load agent configuration: {str(e)}") from e
-
-
-# Load configuration once at module level
-try:
-    _config = load_agent_config()
-    MODEL_CAPABILITY = _config['model_capability']
-    MAX_TOKENS = _config['max_tokens']
-    TEMPERATURE = _config['temperature']
-    SYSTEM_PROMPT = _config['system_prompt']
-    
-    logger.debug("Summarizer agent configuration loaded from YAML successfully")
-    
-except Exception as e:
-    logger.error(f"Failed to initialize summarizer agent from YAML: {str(e)}", exc_info=True)
-    # Fallback to original settings if YAML loading fails
-    try:
-        from .summarizer_settings import (
-            MAX_TOKENS,
-            MODEL_CAPABILITY,
-            SYSTEM_PROMPT,
-            TEMPERATURE,
-        )
-        logger.warning("Fell back to original summarizer_settings.py due to YAML loading error")
-    except Exception as fallback_error:
-        logger.error(f"Failed to load fallback settings: {str(fallback_error)}", exc_info=True)
-        raise
 
 
 # --- Main Synchronous Summarizer Function ---

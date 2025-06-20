@@ -17,18 +17,15 @@ Dependencies:
 
 import json
 import logging
-from typing import Tuple, Dict, Optional, Any # Added Tuple, Dict, Optional, Any
+import os
+from typing import Tuple, Dict, Optional, Any
 
 from ...initial_setup.env_config import config
 from ...llm_connectors.rbc_openai import call_llm
-from .planner_settings import (
-    MAX_TOKENS,
-    MODEL_CAPABILITY,
-    DEFAULT_SYSTEM_PROMPT,
-    TEMPERATURE,
-    get_tool_definitions,
-    construct_system_prompt,
-)
+from ...global_prompts.project_statement import get_project_statement
+from ...global_prompts.fiscal_statement import get_fiscal_statement
+from ...global_prompts.database_statement import get_database_statement
+from ...global_prompts.restrictions_statement import get_restrictions_statement
 
 # Get module logger (no configuration here - using centralized config)
 logger = logging.getLogger(__name__)
@@ -36,17 +33,215 @@ logger = logging.getLogger(__name__)
 # Tool name constant
 PLANNER_TOOL_NAME = "submit_database_selection_plan"
 
+
+class PlannerError(Exception):
+    """Base exception class for planner-related errors."""
+    pass
+
+
+def get_filtered_database_statement(available_databases):
+    """
+    Generate a filtered database statement containing only the specified databases.
+    
+    Args:
+        available_databases (dict): Dictionary of available database configurations
+        
+    Returns:
+        str: Formatted database statement with only filtered databases
+    """
+    statement = """<AVAILABLE_DATABASES>
+The following databases are available for research:
+
+"""
+    
+    # Group databases by type for better organization
+    internal_dbs = {
+        k: v for k, v in available_databases.items() if k.startswith("internal_")
+    }
+    external_dbs = {
+        k: v for k, v in available_databases.items() if k.startswith("external_")
+    }
+    
+    # Add internal databases section if any exist
+    if internal_dbs:
+        statement += "<INTERNAL_DATABASES>\n"
+        for db_name, db_info in internal_dbs.items():
+            statement += f"""<DATABASE id="{db_name}">
+  <NAME>{db_info['name']}</NAME>
+  <DESCRIPTION>{db_info['description']}</DESCRIPTION>
+  <CONTENT_TYPE>{db_info['content_type']}</CONTENT_TYPE>
+  <QUERY_TYPE>{db_info['query_type']}</QUERY_TYPE>
+  <USAGE>{db_info['use_when']}</USAGE>
+</DATABASE>
+
+"""
+        statement += "</INTERNAL_DATABASES>\n\n"
+    
+    # Add external databases section if any exist
+    if external_dbs:
+        statement += "<EXTERNAL_DATABASES>\n"
+        for db_name, db_info in external_dbs.items():
+            statement += f"""<DATABASE id="{db_name}">
+  <NAME>{db_info['name']}</NAME>
+  <DESCRIPTION>{db_info['description']}</DESCRIPTION>
+  <CONTENT_TYPE>{db_info['content_type']}</CONTENT_TYPE>
+  <QUERY_TYPE>{db_info['query_type']}</QUERY_TYPE>
+  <USAGE>{db_info['use_when']}</USAGE>
+</DATABASE>
+
+"""
+        statement += "</EXTERNAL_DATABASES>\n\n"
+    
+    statement += "</AVAILABLE_DATABASES>"
+    return statement
+
+
+def get_tool_definitions(available_databases):
+    """
+    Generate tool definitions with dynamic database enum based on available databases.
+    
+    Args:
+        available_databases (dict): Dictionary of available database configurations
+        
+    Returns:
+        list: Tool definitions for the planner agent
+    """
+    return [
+        {
+            "type": "function",
+            "function": {
+                "name": "submit_database_selection_plan",
+                "description": "Submit a plan of selected databases based on the research statement.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "databases": {
+                            "type": "array",
+                            "description": "The list of database names to query using the full research statement.",
+                            "items": {
+                                "type": "string",
+                                "description": "The name of the database to query.",
+                                "enum": list(available_databases.keys()),  # Dynamic enum
+                            },
+                            "minItems": 1,
+                            "maxItems": 5,
+                        }
+                    },
+                    "required": ["databases"],
+                },
+            },
+        }
+    ]
+
+
+def load_agent_config(available_databases=None):
+    """
+    Load agent configuration from YAML file and resolve dynamic context.
+    NOTE: Planner requires available_databases for filtered database_statement and dynamic tools
+    
+    Args:
+        available_databases (dict): Dictionary of available database configurations
+    
+    Returns:
+        dict: Configuration dictionary with resolved system prompt and settings
+    """
+    try:
+        # Build context statements dynamically
+        context_parts = [
+            get_project_statement(),
+            get_fiscal_statement()
+        ]
+        
+        # Handle database statement - use filtered version if available_databases provided
+        if available_databases is not None:
+            context_parts.append(get_filtered_database_statement(available_databases))
+        else:
+            context_parts.append(get_database_statement())
+            
+        context_parts.append(get_restrictions_statement())
+        
+        # Build the complete context block
+        context_block = "\n\n".join(context_parts)
+        
+        # Read the system prompt template from YAML file
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        yaml_path = os.path.join(current_dir, 'planner_prompt.yaml')
+        
+        with open(yaml_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        # Extract the system prompt (everything between system_prompt: | and # Tool definitions)
+        start_marker = "system_prompt: |"
+        end_marker = "# Tool definitions"
+        
+        start_idx = content.find(start_marker)
+        end_idx = content.find(end_marker)
+        
+        if start_idx == -1 or end_idx == -1:
+            raise Exception("Could not find system prompt in YAML file")
+        
+        # Extract and clean the system prompt
+        system_prompt = content[start_idx + len(start_marker):end_idx].strip()
+        
+        # Replace the context placeholder
+        system_prompt = system_prompt.replace('{{CONTEXT_START}}', f"<CONTEXT>\n{context_block}\n</CONTEXT>")
+        
+        # Generate dynamic tools if available_databases provided
+        if available_databases is not None:
+            tools = get_tool_definitions(available_databases)
+        else:
+            # Fallback to basic tool structure
+            tools = [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "submit_database_selection_plan",
+                        "description": "Submit a plan of selected databases based on the research statement.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "databases": {
+                                    "type": "array",
+                                    "description": "The list of database names to query using the full research statement.",
+                                    "items": {
+                                        "type": "string",
+                                        "description": "The name of the database to query.",
+                                    },
+                                    "minItems": 1,
+                                    "maxItems": 5,
+                                }
+                            },
+                            "required": ["databases"],
+                        },
+                    },
+                }
+            ]
+        
+        return {
+            'model_capability': 'small',
+            'max_tokens': 4096,
+            'temperature': 0.0,
+            'system_prompt': system_prompt,
+            'tool_definitions': tools
+        }
+        
+    except Exception as e:
+        logger.error(f"Error loading agent configuration: {str(e)}", exc_info=True)
+        raise PlannerError(f"Failed to load agent configuration: {str(e)}") from e
+
+
+# Module-level configuration variables (will be set by the functions that call the planner)
+MODEL_CAPABILITY = 'small'
+MAX_TOKENS = 4096
+TEMPERATURE = 0.0
+
 # Get model configuration based on capability
 model_config = config.get_model_config(MODEL_CAPABILITY)
 MODEL_NAME = model_config["name"]
 PROMPT_TOKEN_COST = model_config["prompt_token_cost"]
 COMPLETION_TOKEN_COST = model_config["completion_token_cost"]
 
-
-class PlannerError(Exception):
-    """Base exception class for planner-related errors."""
-
-    pass
+logger.debug("Planner agent configuration loaded successfully")
 
 
 def create_database_selection_plan(research_statement, token, available_databases, is_continuation=False) -> Tuple[Dict[str, Any], Optional[Dict[str, Any]]]:
