@@ -17,6 +17,7 @@ Dependencies:
 import logging
 import json
 import os
+import yaml
 from typing import Any, Dict, List, Optional, Union, Generator
 
 from ...initial_setup.env_config import config
@@ -53,33 +54,31 @@ def load_agent_config():
         # Build the complete context block
         context_block = "\n\n".join(context_parts)
         
-        # Read the system prompt template from YAML file
+        # Read and parse the YAML file
         current_dir = os.path.dirname(os.path.abspath(__file__))
         yaml_path = os.path.join(current_dir, 'summarizer_prompt.yaml')
         
         with open(yaml_path, 'r', encoding='utf-8') as f:
-            content = f.read()
+            yaml_config = yaml.safe_load(f)
         
-        # Extract the system prompt (everything between system_prompt: | and # Tool definitions)
-        start_marker = "system_prompt: |"
-        end_marker = "# Tool definitions"
+        # Extract model configuration from YAML
+        model_config = yaml_config.get('model', {})
+        capability = model_config.get('capability', 'large')  # Default fallback
+        max_tokens = model_config.get('max_tokens', 4096)
+        temperature = model_config.get('temperature', 0.1)
         
-        start_idx = content.find(start_marker)
-        end_idx = content.find(end_marker)
-        
-        if start_idx == -1 or end_idx == -1:
-            raise Exception("Could not find system prompt in YAML file")
-        
-        # Extract and clean the system prompt
-        system_prompt = content[start_idx + len(start_marker):end_idx].strip()
+        # Extract system prompt from YAML
+        system_prompt = yaml_config.get('system_prompt', '')
+        if not system_prompt:
+            raise Exception("No system_prompt found in YAML configuration")
         
         # Replace the context placeholder
         system_prompt = system_prompt.replace('{{CONTEXT_START}}', f"<CONTEXT>\n{context_block}\n</CONTEXT>")
         
         return {
-            'model_capability': 'large',
-            'max_tokens': 4096,
-            'temperature': 0.1,
+            'model_capability': capability,
+            'max_tokens': max_tokens,
+            'temperature': temperature,
             'system_prompt': system_prompt
         }
         
