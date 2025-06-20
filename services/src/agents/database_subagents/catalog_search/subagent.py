@@ -240,7 +240,7 @@ def fetch_document_content(doc_ids: List[str], document_source: str) -> List[Dic
 def get_completion(
     capability: str,
     prompt: str,
-    max_tokens: int = 1000,
+    max_tokens: int = 32768,
     temperature: float = 0.7,
     token: Optional[str] = None,
     database_name: Optional[str] = None,
@@ -369,7 +369,7 @@ def select_relevant_documents(
         selection_response_str, selection_usage = get_completion(
             capability="small",
             prompt=selection_prompt,
-            max_tokens=200,
+            max_tokens=4096,
             token=token,
             database_name=database_name,  # Pass the specific database name
         )
@@ -509,7 +509,7 @@ def process_single_document(
         synthesis_response_obj, synthesis_usage = get_completion(
             capability="large",
             prompt=synthesis_prompt,
-            max_tokens=1500,  # Smaller since it's per document
+            max_tokens=32768,  # Allow full response generation
             temperature=0.2,
             token=token,
             database_name=f"{database_name}_{doc_name}",
