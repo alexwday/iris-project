@@ -147,7 +147,7 @@ def create_database_selection_plan(research_statement, token, available_database
         for i, db_name in enumerate(selected_databases):
             if not isinstance(db_name, str):
                 raise PlannerError(f"Database entry {i+1} is not a string: {db_name}")
-            if db_name not in AVAILABLE_DATABASES:
+            if db_name not in available_databases:
                 raise PlannerError(f"Selected database {i+1} is unknown: {db_name}")
             validated_databases.append(db_name)
 
