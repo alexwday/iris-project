@@ -3,7 +3,7 @@
 
 # Model Configuration
 model:
-  capability: "small"
+  capability: "large"
   max_tokens: 4096
   temperature: 0.0
 
