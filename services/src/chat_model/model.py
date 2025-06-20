@@ -243,11 +243,20 @@ def _process_reference_buffer(buffer: str, reference_index: Dict[str, Dict[str, 
                 logger.info(f"Buffer full, no refs, keeping {keep_chars} chars")
                 return processed_content, remaining_buffer
     
+    # Before processing, check if there's content after the last complete reference that needs to be preserved
+    # Find the rightmost complete reference position in the original buffer
+    rightmost_ref_end = 0
+    for match in all_matches:
+        rightmost_ref_end = max(rightmost_ref_end, match.end())
+    
+    # Check what comes after the last complete reference
+    trailing_content = buffer[rightmost_ref_end:] if rightmost_ref_end < len(buffer) else ""
+    
+    logger.info(f"Processing {len(all_matches)} references in buffer, trailing content: '{trailing_content}'")
+    
     # Process matches from end to start to maintain string positions
     all_matches.sort(key=lambda x: x.start(), reverse=True)
     processed_content = buffer
-    
-    logger.info(f"Processing {len(all_matches)} references in buffer")
     
     for match in all_matches:
         match_text = match.group(0)
@@ -331,7 +340,34 @@ def _process_reference_buffer(buffer: str, reference_index: Dict[str, Dict[str, 
                 processed_content = processed_content[:match.start()] + replacement + processed_content[match.end():]
                 logger.info(f"Replaced legacy {match.group(0)} with {len(links)} link(s) for refs: {found_refs}")
     
-    # Return all processed content and empty remaining buffer
+    # Check if trailing content looks like the start of an incomplete reference
+    if trailing_content and (trailing_content.startswith('[') or re.search(r'\[REF:?\d*$', trailing_content)):
+        # There's an incomplete reference after our processed references
+        # Find where this trailing content starts in the processed buffer and preserve it
+        # Since we processed from right to left, the trailing incomplete reference should still be at the end
+        logger.info(f"Preserving incomplete reference in buffer: '{trailing_content}'")
+        
+        # Find where the trailing content starts in the processed content
+        # Look for the pattern at the end of the processed content
+        if processed_content.endswith(trailing_content):
+            # The trailing content is still there unchanged at the end
+            final_processed = processed_content[:-len(trailing_content)]
+            remaining_buffer = trailing_content
+        else:
+            # The trailing content might have been affected by replacements
+            # Use a more conservative approach - look for incomplete patterns at the end
+            incomplete_match = re.search(r'\[REF:?\d*$', processed_content)
+            if incomplete_match:
+                final_processed = processed_content[:incomplete_match.start()]
+                remaining_buffer = processed_content[incomplete_match.start():]
+            else:
+                # Fallback - if we can't find the pattern, just preserve what we detected originally
+                final_processed = processed_content[:-len(trailing_content)] if len(trailing_content) <= len(processed_content) else processed_content
+                remaining_buffer = trailing_content
+        
+        return final_processed, remaining_buffer
+    
+    # No incomplete references after processing, return all processed content
     logger.info(f"Returning processed content, length: {len(processed_content)}")
     return processed_content, ""
 
