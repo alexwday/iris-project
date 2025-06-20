@@ -37,7 +37,7 @@ AVAILABLE_DATABASES = {
     },
     "internal_memos": {  # Renamed from internal_memo to match existing key
         "name": "Internal Accounting Memos",
-        "description": "Internal memos on accounting topics, written by finance, approved by RBC Finance."
+        "description": "Internal memos on accounting topics, written by finance, approved by RBC Finance.",
         "query_type": "semantic search",
         "content_type": "technical analysis",
         "use_when": "Accounting Supportive Material: Approved analysis on complex issues. **Strategy:** Consult after CAPM/Wiki/Cheatsheet for deeper analysis on specific complex topics where a memo might exist. **Query:** Focus on application, specific conclusions, industry/scenario terms.",
