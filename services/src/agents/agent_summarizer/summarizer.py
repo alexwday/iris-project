@@ -100,18 +100,7 @@ try:
     
 except Exception as e:
     logger.error(f"Failed to initialize summarizer agent from YAML: {str(e)}", exc_info=True)
-    # Fallback to original settings if YAML loading fails
-    try:
-        from .summarizer_settings import (
-            MAX_TOKENS,
-            MODEL_CAPABILITY,
-            SYSTEM_PROMPT,
-            TEMPERATURE,
-        )
-        logger.warning("Fell back to original summarizer_settings.py due to YAML loading error")
-    except Exception as fallback_error:
-        logger.error(f"Failed to load fallback settings: {str(fallback_error)}", exc_info=True)
-        raise
+    raise
 
 
 # --- Main Synchronous Summarizer Function ---

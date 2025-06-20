@@ -106,17 +106,7 @@ try:
     
 except Exception as e:
     logger.error(f"Failed to initialize direct response agent from YAML: {str(e)}", exc_info=True)
-    # Fallback to original settings if YAML loading fails
-    try:
-        from .response_settings import MAX_TOKENS, MODEL_CAPABILITY, SYSTEM_PROMPT, TEMPERATURE
-        model_config = config.get_model_config(MODEL_CAPABILITY)
-        MODEL_NAME = model_config["name"]
-        PROMPT_TOKEN_COST = model_config["prompt_token_cost"]
-        COMPLETION_TOKEN_COST = model_config["completion_token_cost"]
-        logger.warning("Fell back to original response_settings.py due to YAML loading error")
-    except Exception as fallback_error:
-        logger.error(f"Failed to load fallback settings: {str(fallback_error)}", exc_info=True)
-        raise
+    raise
 
 
 def response_from_conversation(conversation, token) -> Generator[Any, None, None]:
