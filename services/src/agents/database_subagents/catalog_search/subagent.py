@@ -14,8 +14,10 @@ Functions:
 import asyncio
 import json
 import logging
+import os
 import re
 import time
+import yaml
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Optional, Union, cast, Tuple
 
@@ -42,13 +44,122 @@ SubagentResult = Tuple[
 from ....initial_setup.env_config import config
 from ....initial_setup.db_config import connect_to_db
 from ....llm_connectors.rbc_openai import call_llm
-from .catalog_selection_prompt import get_catalog_selection_prompt
-from .content_synthesis_prompt import (
-    get_content_synthesis_prompt,
-)  # Will need simplification
 
 # Get module logger
 logger = logging.getLogger(__name__)
+
+
+def load_catalog_selection_config():
+    """
+    Load catalog selection configuration from YAML file.
+    
+    Returns:
+        dict: Configuration with resolved system prompt and settings
+    """
+    try:
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        yaml_path = os.path.join(current_dir, 'catalog_selection_prompt.yaml')
+        
+        with open(yaml_path, 'r', encoding='utf-8') as f:
+            yaml_config = yaml.safe_load(f)
+        
+        # Extract system prompt from YAML
+        system_prompt = yaml_config.get('system_prompt', '')
+        if not system_prompt:
+            raise Exception("No system_prompt found in catalog selection YAML configuration")
+        
+        # No context replacement needed for catalog selection (minimal context)
+        return yaml_config
+        
+    except Exception as e:
+        logger.error(f"Failed to load catalog selection YAML config: {str(e)}")
+        raise
+
+
+def load_content_synthesis_config():
+    """
+    Load content synthesis configuration from YAML file.
+    
+    Returns:
+        dict: Configuration with system prompt and settings
+    """
+    try:
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        yaml_path = os.path.join(current_dir, 'content_synthesis_prompt.yaml')
+        
+        with open(yaml_path, 'r', encoding='utf-8') as f:
+            yaml_config = yaml.safe_load(f)
+        
+        # Extract system prompt from YAML
+        system_prompt = yaml_config.get('system_prompt', '')
+        if not system_prompt:
+            raise Exception("No system_prompt found in content synthesis YAML configuration")
+        
+        # No context replacement needed for content synthesis (focused extraction task)
+        return yaml_config
+        
+    except Exception as e:
+        logger.error(f"Failed to load content synthesis YAML config: {str(e)}")
+        raise
+
+
+def get_catalog_selection_prompt(query: str, formatted_catalog: str) -> str:
+    """
+    Generate a prompt for selecting relevant documents from an internal catalog using YAML config.
+    
+    Args:
+        query (str): The research statement (query)
+        formatted_catalog (str): The formatted catalog of internal documents
+    
+    Returns:
+        str: The formatted prompt for the LLM
+    """
+    config = load_catalog_selection_config()
+    system_prompt = config.get('system_prompt', '')
+    
+    # Replace template variables
+    system_prompt = system_prompt.replace('{{query}}', query)
+    system_prompt = system_prompt.replace('{{formatted_catalog}}', formatted_catalog)
+    
+    return system_prompt
+
+
+def get_content_synthesis_prompt(user_query: str, formatted_documents: str) -> str:
+    """
+    Generate a prompt for synthesizing content from retrieved internal documents using YAML config.
+    
+    Args:
+        user_query (str): The original user query from the research statement
+        formatted_documents (str): The formatted content of retrieved internal document sections
+    
+    Returns:
+        str: The formatted prompt for the LLM
+    """
+    config = load_content_synthesis_config()
+    system_prompt = config.get('system_prompt', '')
+    
+    # Replace template variables
+    system_prompt = system_prompt.replace('{{user_query}}', user_query)
+    system_prompt = system_prompt.replace('{{formatted_documents}}', formatted_documents)
+    
+    return system_prompt
+
+
+def get_synthesis_tool_schema() -> Dict[str, Any]:
+    """
+    Get the synthesis tool schema from YAML configuration.
+    
+    Returns:
+        dict: Tool schema for content synthesis
+    """
+    config = load_content_synthesis_config()
+    tools = config.get('tools', [])
+    
+    if not tools:
+        raise Exception("No tools found in content synthesis YAML configuration")
+    
+    # Return the first tool (should be extract_page_based_research)
+    return tools[0]
 
 
 # Formatting functions remain synchronous as they are CPU-bound
@@ -436,42 +547,6 @@ def select_relevant_documents(
         return []
 
 
-# Define the tool schema for research synthesis
-SYNTHESIS_TOOL_SCHEMA = {
-    "type": "function",
-    "function": {
-        "name": "extract_page_based_research",
-        "description": "Extracts research findings from a document on a per-page basis, providing detailed research for each relevant page.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "status_summary": {
-                    "type": "string",
-                    "description": "Concise status summary indicating overall document relevance (e.g., '✅ Found relevant info on 3 pages.', '📄 No relevant info found.').",
-                },
-                "page_research": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "page_number": {
-                                "type": "integer",
-                                "description": "The page number containing relevant information."
-                            },
-                            "research_content": {
-                                "type": "string",
-                                "description": "Research findings extracted from this specific page. Use plain text with minimal formatting to avoid JSON parsing issues."
-                            }
-                        },
-                        "required": ["page_number", "research_content"]
-                    },
-                    "description": "Array of research findings organized by page number. Only include pages with relevant information."
-                }
-            },
-            "required": ["status_summary", "page_research"]
-        },
-    },
-}
 
 
 # Function to process a single document (for parallel processing)
@@ -506,6 +581,7 @@ def process_single_document(
     
     try:
         logger.info(f"Initiating Single Document Synthesis API call for {doc_name} from {database_name}")
+        synthesis_tool_schema = get_synthesis_tool_schema()
         synthesis_response_obj, synthesis_usage = get_completion(
             capability="large",
             prompt=synthesis_prompt,
@@ -513,10 +589,10 @@ def process_single_document(
             temperature=0.2,
             token=token,
             database_name=f"{database_name}_{doc_name}",
-            tools=[SYNTHESIS_TOOL_SCHEMA],
+            tools=[synthesis_tool_schema],
             tool_choice={
                 "type": "function",
-                "function": {"name": SYNTHESIS_TOOL_SCHEMA["function"]["name"]},
+                "function": {"name": synthesis_tool_schema["function"]["name"]},
             },
         )
 
@@ -547,7 +623,8 @@ def process_single_document(
         ):
             tool_call = synthesis_response_obj.choices[0].message.tool_calls[0]
             logger.info(f"Tool call function name: {tool_call.function.name}")
-            if tool_call.function.name == SYNTHESIS_TOOL_SCHEMA["function"]["name"]:
+            synthesis_tool_schema = get_synthesis_tool_schema()
+            if tool_call.function.name == synthesis_tool_schema["function"]["name"]:
                 arguments_str = tool_call.function.arguments
                 logger.info(f"Arguments string type: {type(arguments_str)}, length: {len(arguments_str)}")
                 try:

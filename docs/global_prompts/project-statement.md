@@ -4,7 +4,7 @@ This module generates a project context statement that provides essential contex
 
 ## Overview
 
-This module provides standardized project context for the IRIS system, generating XML-formatted statements that describe the system's purpose, capabilities, and scope. The module serves as a foundational component for establishing consistent context across all agent interactions, ensuring all parts of the system understand their role in serving RBC's Accounting Policy Group through intelligent research and response capabilities.
+This module provides standardized project context for the IRIS system, generating XML-formatted statements that describe the system's purpose, capabilities, and scope. The module serves as a foundational component for establishing consistent context across all agent interactions, ensuring all parts of the system understand their role in serving RBC Finance through intelligent research and response capabilities.
 
 ## Key Components
 
@@ -98,7 +98,7 @@ This module is used throughout the IRIS system:
 ## Key Messages Conveyed
 
 ### To AI Agents
-1. **Primary Mission**: Serve RBC's Accounting Policy Group
+1. **Primary Mission**: Serve RBC Finance
 2. **Core Technology**: RAG-based research and response system
 3. **Dual Capability**: Conversation-based and research-based responses
 4. **Quality Focus**: Accurate, policy-compliant guidance

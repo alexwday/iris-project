@@ -4,7 +4,7 @@ IRIS (Intelligent Retrieval & Interaction System) is an advanced AI agent-based 
 
 ## Overview
 
-IRIS serves RBC's Accounting Policy Group by implementing an intelligent research and response system for accounting policy inquiries. The system combines comprehensive internal and external accounting policy documentation with an autonomous agent-based RAG (Retrieval-Augmented Generation) process. Users can engage in natural conversations about accounting policies, and the system independently researches and generates responses as needed. The architecture employs a modular pipeline of specialized agents that coordinate to handle complex queries across multiple data sources while maintaining security, compliance, and performance standards.
+IRIS serves RBC Finance by implementing an intelligent research and response system for finance policy inquiries. The system combines comprehensive internal and external finance policy documentation with an autonomous agent-based RAG (Retrieval-Augmented Generation) process. Users can engage in natural conversations about finance policies, and the system independently researches and generates responses as needed. The architecture employs a modular pipeline of specialized agents that coordinate to handle complex queries across multiple data sources while maintaining security, compliance, and performance standards.
 
 ## Key Components
 
@@ -120,7 +120,7 @@ result = await process_request_async(conversation_messages, stream=False)
 
 The IRIS system integrates with multiple external and internal systems:
 
-* **Database Sources**: PostgreSQL databases containing internal and external accounting policy documentation
+* **Database Sources**: PostgreSQL databases containing internal and external finance policy documentation
 * **OpenAI API**: Language model services for agent processing and response generation
 * **Web Interfaces**: FastAPI integration for web-based user interactions
 * **Process Monitoring**: Database logging for execution tracking and performance analysis
@@ -171,4 +171,4 @@ Comprehensive error handling throughout the system:
 
 ---
 
-The IRIS system provides a comprehensive, secure, and efficient platform for intelligent accounting policy research and response generation, serving RBC's Accounting Policy Group with advanced AI-powered capabilities.
+The IRIS system provides a comprehensive, secure, and efficient platform for intelligent finance policy research and response generation, serving RBC Finance with advanced AI-powered capabilities.

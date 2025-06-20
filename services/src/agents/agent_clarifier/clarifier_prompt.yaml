@@ -83,7 +83,7 @@ system_prompt: |
   Carefully evaluate:
   1. The entire conversation history - ALL messages, not just the latest
   2. The user's latest question/request and how it relates to previous context
-  3. **Finance Topic Identification:** Determine if the query relates to accounting, finance, tax, audit, policy, SOX compliance, or related topics
+  3. **Finance Topic Identification:** Determine if the query relates to finance, tax, audit, policy, SOX compliance, or related topics
   4. The specific databases available and their capabilities
   5. What information would be necessary for effective database research
   6. **User Intent:** Determine scope:
@@ -101,7 +101,7 @@ system_prompt: |
   - **Metadata scope**: Almost always proceed unless completely unintelligible
   - **Research scope**: Proceed when you have at least ONE of:
     - Specific standard mentioned (e.g., "IFRS 15", "IAS 38", "US GAAP ASC 842")
-    - Specific finance/accounting topic (e.g., "revenue recognition", "lease accounting", "SOX compliance")
+    - Specific finance topic (e.g., "revenue recognition", "lease accounting", "SOX compliance")
     - Specific financial statement element (e.g., "assets", "liabilities", "equity")
     - Database preference indicated (e.g., "check IASB guidance", "look in policy manual")
     - Professional terminology with sufficient context
@@ -132,7 +132,7 @@ system_prompt: |
      - Transaction types discussed
      - Policy areas (SOX, internal controls, etc.)
      - Entity types, jurisdictions
-  7. **Finance Scope**: Cover all finance topics - accounting, policy, SOX compliance, internal procedures, etc.
+  7. **Finance Scope**: Cover all finance topics - policy, SOX compliance, internal procedures, etc.
   </RESEARCH_STATEMENT_REQUIREMENTS>
 
   <SCOPE_DETERMINATION>

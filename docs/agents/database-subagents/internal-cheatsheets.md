@@ -1,16 +1,16 @@
 # Internal Cheatsheets Subagent (`iris/src/agents/database_subagents/internal_cheatsheets/`)
 
-Implementation of the internal database subagent for querying internal APG Cheatsheets documents.
+Implementation of the internal database subagent for querying internal RBC Finance Cheatsheets documents.
 
 ## Overview
 
-The Internal Cheatsheets subagent is one of the standard internal database subagents that query and synthesize research from internal RBC content. This implementation targets the APG Cheatsheets database containing quick reference guides and procedural summaries.
+The Internal Cheatsheets subagent is one of the standard internal database subagents that query and synthesize research from internal RBC content. This implementation targets the RBC Finance Cheatsheets database containing quick reference guides and procedural summaries.
 
 ## Key Differences
 
 This subagent uses the following specific configurations:
 * **DATABASE_NAME**: "internal_cheatsheets"
-* **Content Focus**: APG Cheatsheets and quick reference guides
+* **Content Focus**: RBC Finance Cheatsheets and quick reference guides
 
 ## Documentation
 

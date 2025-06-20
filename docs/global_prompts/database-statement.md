@@ -111,7 +111,7 @@ database_names = {db_id: db_info['name'] for db_id, db_info in databases.items()
 
 ### Strategic Query Planning
 ```python
-# Example for accounting policy queries
+# Example for finance policy queries
 priority_order = [
     'internal_capm',  # Always first
     'internal_cheatsheets',  # Context

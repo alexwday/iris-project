@@ -25,16 +25,16 @@ def get_compliance_restrictions() -> str:
         statement = """<COMPLIANCE_RESTRICTIONS>
 <LEGAL_DISCLAIMER>No definitive legal/tax/regulatory advice; provide educational info only.</LEGAL_DISCLAIMER>
 
-<VERIFICATION_REQUIREMENT>Include disclaimer: Info is general guidance, verify with APG specialist before implementation.</VERIFICATION_REQUIREMENT>
+<VERIFICATION_REQUIREMENT>Include disclaimer: Info is general guidance, verify with RBC Finance specialist before implementation.</VERIFICATION_REQUIREMENT>
 
-<MATERIAL_IMPACTS>Stress need for analysis & APG consultation.</MATERIAL_IMPACTS>
+<MATERIAL_IMPACTS>Stress need for analysis & RBC Finance consultation.</MATERIAL_IMPACTS>
 
 <CONFIDENTIALITY>Internal use only; do not share internal policy externally.</CONFIDENTIALITY>
 
 <OUT_OF_SCOPE>
-If a query falls outside the scope of RBC accounting policy (e.g., legal, tax, regulatory filings, general knowledge):
+If a query falls outside the scope of RBC finance policy (e.g., legal, tax, regulatory filings, general knowledge):
 - Clearly state inability to answer
-- Explain the system's focus on accounting policy
+- Explain the system's focus on finance policy
 - If appropriate, suggest consulting the relevant department
 - Do not attempt to answer out-of-scope questions
 </OUT_OF_SCOPE>
@@ -122,7 +122,7 @@ Example: "The available sources provide limited guidance on this specific scenar
 <NO_CONFIDENCE>
 Use when: No relevant information is found or the question falls outside the scope of the research
 Signal with: Clear statements of limitation
-Example: "The available sources do not address this specific scenario. This would require consultation with APG."
+Example: "The available sources do not address this specific scenario. This would require consultation with RBC Finance specialists."
 </NO_CONFIDENCE>
 </CONFIDENCE_SIGNALING>"""
 

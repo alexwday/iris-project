@@ -25,7 +25,7 @@ Generates comprehensive compliance restrictions in XML format that all agents mu
 
 #### Workflow
 1. **Generate Legal Disclaimers**: Create disclaimers for legal/tax/regulatory advice limitations
-2. **Add Verification Requirements**: Include requirements for APG specialist verification
+2. **Add Verification Requirements**: Include requirements for RBC Finance specialist verification
 3. **Set Confidentiality Rules**: Define internal use only restrictions
 4. **Define Scope Boundaries**: Establish out-of-scope handling procedures
 5. **Enforce Data Sourcing**: Specify exclusive use of provided context only
@@ -167,7 +167,7 @@ This module is used throughout the IRIS system:
 ### Professional Standards
 * **Appropriate Disclaimers**: Ensures professional accountability
 * **Specialist Consultation**: Directs users to appropriate experts
-* **Scope Boundaries**: Maintains system focus on accounting policy
+* **Scope Boundaries**: Maintains system focus on finance policy
 
 ### Quality Consistency
 * **Structural Standards**: Consistent response formatting

@@ -42,7 +42,7 @@ Stores actual document content organized by sections for efficient retrieval and
 ### External Textbook Table (iris_textbook_database)
 
 #### Purpose
-Stores external accounting guidance content from providers like EY, PwC, KPMG, and IASB with detailed structural metadata and vector embeddings for semantic search.
+Stores external finance guidance content from providers like EY, PwC, KPMG, and IASB with detailed structural metadata and vector embeddings for semantic search.
 
 #### Key Fields
 * **System Fields**: Unique identifiers and creation timestamps

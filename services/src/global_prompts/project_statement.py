@@ -26,7 +26,7 @@ def get_project_statement() -> str:
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         statement = f"""<PROJECT_CONTEXT timestamp="{current_time}">
-This project serves RBC's Accounting Policy Group by implementing an intelligent research and response system for accounting policy inquiries. The system combines comprehensive internal and external accounting policy documentation with an autonomous agent-based RAG (Retrieval-Augmented Generation) process. Users can engage in natural conversations about accounting policies, and the system will independently research and generate responses as needed.
+This project serves RBC Finance by implementing an intelligent research and response system for finance policy inquiries. The system combines comprehensive internal and external finance policy documentation with an autonomous agent-based RAG (Retrieval-Augmented Generation) process. Users can engage in natural conversations about finance policies, and the system will independently research and generate responses as needed.
 
 <KNOWLEDGE_SOURCES>
 <INTERNAL_SOURCES>
@@ -36,7 +36,7 @@ reference documents, guidelines, and other internal documentation.
 
 <EXTERNAL_SOURCES>
 The system may access external knowledge sources, which may include accounting standards, 
-professional guidance, and interpretations from standard-setting bodies and accounting firms.
+professional guidance, and interpretations from standard-setting bodies and professional firms.
 </EXTERNAL_SOURCES>
 </KNOWLEDGE_SOURCES>
 
@@ -51,4 +51,4 @@ policy-compliant guidance. The specific sources available depend on your access 
     except Exception as e:
         logger.error(f"Error generating project statement: {str(e)}")
         # Fallback basic statement in case of errors
-        return """<PROJECT_CONTEXT>This project serves RBC's Accounting Policy Group by implementing an intelligent research and response system for accounting policy inquiries using RAG (Retrieval-Augmented Generation).</PROJECT_CONTEXT>"""
+        return """<PROJECT_CONTEXT>This project serves RBC Finance by implementing an intelligent research and response system for finance policy inquiries using RAG (Retrieval-Augmented Generation).</PROJECT_CONTEXT>"""

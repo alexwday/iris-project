@@ -12,9 +12,11 @@ Functions:
 
 import json
 import logging
+import os
 import time
 import traceback
 import itertools
+import yaml
 from typing import Any, Dict, List, Optional, Tuple, Union, cast
 
 import psycopg2
@@ -35,10 +37,6 @@ except ImportError:
 from ....initial_setup.env_config import config
 from ....initial_setup.db_config import connect_to_db
 from ....llm_connectors.rbc_openai import call_llm
-from .content_synthesis_prompt import (
-    get_content_synthesis_prompt,
-    SYNTHESIS_TOOL_SCHEMA,
-)
 
 # Define response types consistent with database_router and catalog_search
 MetadataResponse = List[Dict[str, Any]]
@@ -60,6 +58,72 @@ SubagentResult = Tuple[
 
 # Get module logger
 logger = logging.getLogger(__name__)
+
+
+def load_content_synthesis_config():
+    """
+    Load content synthesis configuration from YAML file.
+    
+    Returns:
+        dict: Configuration with system prompt and settings
+    """
+    try:
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        yaml_path = os.path.join(current_dir, 'content_synthesis_prompt.yaml')
+        
+        with open(yaml_path, 'r', encoding='utf-8') as f:
+            yaml_config = yaml.safe_load(f)
+        
+        # Extract system prompt from YAML
+        system_prompt = yaml_config.get('system_prompt', '')
+        if not system_prompt:
+            raise Exception("No system_prompt found in semantic search content synthesis YAML configuration")
+        
+        # No context replacement needed for content synthesis (focused extraction task)
+        return yaml_config
+        
+    except Exception as e:
+        logger.error(f"Failed to load semantic search content synthesis YAML config: {str(e)}")
+        raise
+
+
+def get_content_synthesis_prompt(query: str, formatted_cards: str) -> str:
+    """
+    Generate a prompt for synthesizing content from IASB context cards using YAML config.
+    
+    Args:
+        query (str): The user's original query
+        formatted_cards (str): The string containing all context cards formatted for the LLM
+    
+    Returns:
+        str: The formatted prompt for the LLM
+    """
+    config = load_content_synthesis_config()
+    system_prompt = config.get('system_prompt', '')
+    
+    # Replace template variables
+    system_prompt = system_prompt.replace('{{query}}', query)
+    system_prompt = system_prompt.replace('{{formatted_cards}}', formatted_cards)
+    
+    return system_prompt
+
+
+def get_synthesis_tool_schema() -> Dict[str, Any]:
+    """
+    Get the synthesis tool schema from YAML configuration.
+    
+    Returns:
+        dict: Tool schema for content synthesis
+    """
+    config = load_content_synthesis_config()
+    tools = config.get('tools', [])
+    
+    if not tools:
+        raise Exception("No tools found in semantic search content synthesis YAML configuration")
+    
+    # Return the first tool (should be synthesize_research_findings)
+    return tools[0]
+
 
 # --- Configuration Constants ---
 TARGET_TABLE = "iris_textbook_database"
@@ -891,10 +955,10 @@ def _generate_response_from_chunks(
             ],
             "max_tokens": MAX_RESPONSE_TOKENS,
             "temperature": RESPONSE_TEMPERATURE,
-            "tools": [SYNTHESIS_TOOL_SCHEMA],
+            "tools": [get_synthesis_tool_schema()],
             "tool_choice": {
                 "type": "function",
-                "function": {"name": SYNTHESIS_TOOL_SCHEMA["function"]["name"]},
+                "function": {"name": get_synthesis_tool_schema()["function"]["name"]},
             },
             "database_name": "external_database",
             "stream": False, # Tool calls require stream=False
@@ -926,7 +990,8 @@ def _generate_response_from_chunks(
             and response.choices[0].message.tool_calls
         ):
             tool_call = response.choices[0].message.tool_calls[0]
-            if tool_call.function.name == SYNTHESIS_TOOL_SCHEMA["function"]["name"]:
+            synthesis_tool_schema = get_synthesis_tool_schema()
+            if tool_call.function.name == synthesis_tool_schema["function"]["name"]:
                 arguments_str = tool_call.function.arguments
                 logger.debug(f"Received tool arguments string: {arguments_str}")
                 try:

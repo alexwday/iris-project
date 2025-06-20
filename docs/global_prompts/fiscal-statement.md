@@ -4,7 +4,7 @@ This module generates fiscal context statements based on the current date and RB
 
 ## Overview
 
-High-level fiscal calendar utility that provides temporal context for the IRIS system. It automatically calculates current fiscal periods based on RBC's fiscal year structure (November 1st through October 31st) and generates standardized fiscal context statements for use in agent prompts. The module ensures all agents have consistent temporal awareness for time-sensitive accounting policy queries.
+High-level fiscal calendar utility that provides temporal context for the IRIS system. It automatically calculates current fiscal periods based on RBC's fiscal year structure (November 1st through October 31st) and generates standardized fiscal context statements for use in agent prompts. The module ensures all agents have consistent temporal awareness for time-sensitive finance policy queries.
 
 ## Key Components
 
@@ -130,7 +130,7 @@ from iris.src.global_prompts.fiscal_statement import get_fiscal_statement
 system_prompt = f"""
 {get_fiscal_statement()}
 
-You are an accounting policy assistant...
+You are a finance policy assistant...
 """
 ```
 
@@ -181,4 +181,4 @@ Comprehensive error handling approach:
 
 ---
 
-This module ensures all IRIS agents have consistent and accurate fiscal context for time-sensitive accounting policy queries and responses.
+This module ensures all IRIS agents have consistent and accurate fiscal context for time-sensitive finance policy queries and responses.

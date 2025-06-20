@@ -4,7 +4,7 @@ The IRIS agents directory contains the core AI agents that form the intelligent 
 
 ## Overview
 
-The IRIS agent system implements a sophisticated multi-agent architecture designed to process accounting and finance queries through intelligent routing, clarification, planning, research, and synthesis. Each agent has a specific role in the pipeline, using advanced prompt engineering techniques (CO-STAR framework) and LLM tool calling for deterministic, reliable processing. The system supports both direct conversation-based responses and comprehensive database research workflows, with all agents working together to deliver accurate, well-sourced information to users.
+The IRIS agent system implements a sophisticated multi-agent architecture designed to process finance queries through intelligent routing, clarification, planning, research, and synthesis. Each agent has a specific role in the pipeline, using advanced prompt engineering techniques (CO-STAR framework) and LLM tool calling for deterministic, reliable processing. The system supports both direct conversation-based responses and comprehensive database research workflows, with all agents working together to deliver accurate, well-sourced information to users.
 
 ## Key Components
 
@@ -53,9 +53,9 @@ Manages concurrent execution of specialized database queries across 17 different
 #### Key Subagents
 **Internal Sources (13)**:
 - Corporate Accounting Policy Manuals (CAPM)
-- APG Wiki Entries
-- APG Cheatsheets
-- Internal Accounting Memos
+- RBC Finance Wiki Entries
+- RBC Finance Cheatsheets
+- Internal Finance Memos
 - Project Approval Request (PAR)
 - Auditor Independence Office (AIO)
 - Internal Control over Financial Reporting (ICFR)
@@ -91,7 +91,7 @@ Common configuration patterns across agents:
 
 # Flow:
 1. Router → research_from_database
-2. Clarifier → Creates research statement with "Accounting Query:" flag
+2. Clarifier → Creates research statement with "Finance Query:" flag
 3. Planner → Selects ["internal_capm", "external_iasb"]
 4. Database queries execute in parallel
 5. Summarizer → Synthesizes findings with citations

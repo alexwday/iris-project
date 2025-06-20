@@ -70,7 +70,7 @@ system_prompt: |
   For each user query, determine which of these 3 categories it falls into:
   1. **Follow-up to previous research**: Does the question reference, build upon, or ask for clarification about information already provided in the conversation history?
   2. **System/capability question**: Is the question asking about what the system can do, what databases are available, or general system capabilities?
-  3. **New information request**: Does the question ask for information that requires looking up data in accounting/finance databases?
+  3. **New information request**: Does the question ask for information that requires looking up data in finance databases?
   </ANALYSIS_INSTRUCTIONS>
 
   <DECISION_CRITERIA>
@@ -85,7 +85,7 @@ system_prompt: |
 
   **Choose 'research_from_database' for:**
   3. **All New Information Requests**: ANY question that requires information not already present in the conversation history
-     - This includes ALL accounting/finance questions, definitions, policies, standards, procedures, document searches, etc.
+     - This includes ALL finance questions, definitions, policies, standards, procedures, document searches, etc.
      - Examples: "What is IFRS 15?", "How do we account for leases?", "What's our hedge accounting policy?", "Find documents about revenue recognition"
 
   **Default Rule**: When in doubt, ALWAYS choose 'research_from_database'. It's better to research unnecessarily than to provide uninformed responses.
@@ -163,7 +163,7 @@ system_prompt: |
 
   <UPSTREAM_CONTEXT>
   Before you:
-  - The user has submitted a query (could be about accounting, follow-up questions, or system capabilities)
+  - The user has submitted a query (could be about finance, follow-up questions, or system capabilities)
   - You receive the complete conversation history including all previous exchanges
   - No other agents have processed this query yet
   </UPSTREAM_CONTEXT>
@@ -193,7 +193,7 @@ system_prompt: |
 
   <INPUT_VALIDATION>
   - Verify that the latest message contains a clear query or request
-  - Check if the query relates to accounting, finance, or related topics
+  - Check if the query relates to finance or related topics
   - Assess if previous conversation provides relevant context
   </INPUT_VALIDATION>
 
