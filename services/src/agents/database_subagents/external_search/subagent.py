@@ -270,7 +270,7 @@ Provide your response as a single JSON object mapping each ID to 1 (relevant) or
         if isinstance(result, tuple) and len(result) == 2:
             response, usage_details = result # Assign usage_details here
             if usage_details:
-                logger.debug(f"Relevance Check Usage details for {database_name}: {usage_details}")
+                logger.debug(f"Relevance Check Usage details for external_database: {usage_details}")
         else:
             # For backward compatibility in case it doesn't return a tuple
             response = result
@@ -749,7 +749,7 @@ def _generate_response_from_chunks(
                 "type": "function",
                 "function": {"name": SYNTHESIS_TOOL_SCHEMA["function"]["name"]},
             },
-            "database_name": database_name,
+            "database_name": "external_database",
             "stream": False, # Tool calls require stream=False
         }
 
@@ -786,7 +786,7 @@ def _generate_response_from_chunks(
                     arguments = json.loads(arguments_str)
                     # Check for the CORRECT key name 'detailed_research_report'
                     if "status_summary" in arguments and "detailed_research_report" in arguments:
-                        logger.info(f"Successfully parsed synthesis tool call for {database_name}.")
+                        logger.info(f"Successfully parsed synthesis tool call for external_database.")
                         # Validate types
                         status = arguments.get("status_summary", "")
                         # Extract using the CORRECT key name 'detailed_research_report'
