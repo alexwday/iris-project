@@ -721,7 +721,7 @@ def synthesize_response_and_status(
                 doc_output[page_key] = {
                     "research_content": research_content,
                     "file_link": file_link,
-                    "file_name": file_name,
+                    "file_name": file_name_map.get(doc_name, ""),
                     "page_number": page_number
                 }
             
@@ -776,15 +776,15 @@ def query_database_sync(
 
     try:
         # Direct synchronous calls
-        catalog = fetch_capm_catalog()  # Use capm function
-        logger.info(f"Retrieved {len(catalog)} total CAPM catalog entries")
+        catalog = fetch_catalog(document_source)  # Use generic function with document_source
+        logger.info(f"Retrieved {len(catalog)} total {document_source} catalog entries")
         if not catalog:
             response: DatabaseResponse
             if scope == "metadata":
                 response = []
             else:
                 response = {
-                    "detailed_research": "No documents found in the Internal CAPM database catalog.",
+                    "detailed_research": f"No documents found in the {document_source} database catalog.",
                     "status_summary": "📄 No documents found in catalog.",
                 }
             return (
@@ -802,7 +802,7 @@ def query_database_sync(
         )
 
         logger.info(
-            f"LLM selected {len(selected_doc_ids)} relevant CAPM document IDs: {selected_doc_ids}"
+            f"LLM selected {len(selected_doc_ids)} relevant {document_source} document IDs: {selected_doc_ids}"
         )
         if not selected_doc_ids:
             if scope == "metadata":
@@ -833,7 +833,7 @@ def query_database_sync(
             selected_items = [
                 item for item in catalog if item.get("id") in selected_doc_ids
             ]
-            logger.info(f"Returning {len(selected_items)} selected CAPM metadata items.")
+            logger.info(f"Returning {len(selected_items)} selected {document_source} metadata items.")
 
             # Collect file links from selected items (including blank ones)
             file_links = []
@@ -884,9 +884,9 @@ def query_database_sync(
                     )
 
             # Fetch content and synthesize using parallel processing
-            documents = fetch_document_content(selected_doc_ids)
+            documents = fetch_document_content(selected_doc_ids, document_source)
             logger.info(
-                f"Retrieved content for {len(documents)} CAPM documents for research."
+                f"Retrieved content for {len(documents)} {document_source} documents for research."
             )
 
             # Get research synthesis using new page-based parallel processing
@@ -904,10 +904,10 @@ def query_database_sync(
                 total_pages = sum(len(doc_data) for doc_data in research_result.values())
                 status_summary = f"✅ Found relevant information in {doc_count} document(s) across {total_pages} page(s)."
             else:
-                status_summary = "📄 No relevant information found in CAPM documents."
+                status_summary = f"📄 No relevant information found in {document_source} documents."
 
             # Create a simplified detailed_research for backward compatibility
-            detailed_research = f"# CAPM Research Results\n\n*Query: {query}*\n\n"
+            detailed_research = f"# {document_source.replace('_', ' ').title()} Research Results\n\n*Query: {query}*\n\n"
             if research_result:
                 detailed_research += f"Found relevant information in {len(research_result)} document(s).\n\n"
                 for doc_name, doc_data in research_result.items():
@@ -948,7 +948,7 @@ def query_database_sync(
             )
 
         else:
-            logger.error(f"Invalid scope provided to internal_capm subagent: {scope}")
+            logger.error(f"Invalid scope provided to {document_source} subagent: {scope}")
             raise ValueError(f"Invalid scope: {scope}")  # Let the error propagate
 
     except Exception as e:

@@ -1,9 +1,9 @@
-# internal_capm/content_synthesis_prompt.py
+# catalog_search/content_synthesis_prompt.py
 """
-Prompt templates for synthesizing content AND status from retrieved CAPM documents.
+Prompt templates for synthesizing content AND status from retrieved internal documents.
 
 This module contains prompts used to guide the LLM in synthesizing
-content from multiple CAPM documents and providing a status summary.
+content from multiple internal documents and providing a status summary.
 
 This version implements advanced prompt engineering techniques:
 1. CO-STAR framework (Context, Objective, Style, Tone, Audience, Response Format)
@@ -17,11 +17,11 @@ from ....global_prompts.fiscal_statement import get_fiscal_statement
 from ....global_prompts.restrictions_statement import get_restrictions_statement
 
 # Define the subagent role
-SUBAGENT_ROLE = "an expert research assistant specializing in analyzing internal CAPM (Central Accounting Policy Manual) documents"
+SUBAGENT_ROLE = "an expert research assistant specializing in analyzing internal documents"
 
 # CO-STAR Framework Components
 SUBAGENT_OBJECTIVE = """
-To analyze provided CAPM document pages against a user query and generate page-based research findings.
+To analyze provided document pages against a user query and generate page-based research findings.
 Your objective is to:
 1. Determine the relevance of each page of the document to the user query.
 2. Generate a concise status flag summarizing the overall document relevance.
@@ -57,11 +57,11 @@ A mandatory tool call to `extract_page_based_research` containing:
 
 def get_content_synthesis_prompt(user_query: str, formatted_documents: str) -> str:
     """
-    Generate a prompt for synthesizing content AND status from retrieved CAPM documents.
+    Generate a prompt for synthesizing content AND status from retrieved internal documents.
 
     Args:
         user_query (str): The original user query from the research statement
-        formatted_documents (str): The formatted content of retrieved CAPM document sections
+        formatted_documents (str): The formatted content of retrieved internal document sections
 
     Returns:
         str: The formatted prompt for the LLM
@@ -75,7 +75,7 @@ def get_content_synthesis_prompt(user_query: str, formatted_documents: str) -> s
     prompt_parts = [
         f"You are {SUBAGENT_ROLE}.",
         "<CONTEXT>",
-        "You are analyzing sections from the internal CAPM (Central Accounting Policy Manual) database.",
+        "You are analyzing sections from an internal document database.",
         "Below is essential context about the project, available data, current fiscal period, and restrictions:",
         project_statement,
         database_statement,
@@ -101,7 +101,7 @@ def get_content_synthesis_prompt(user_query: str, formatted_documents: str) -> s
         f"<DOCUMENT_PAGES>{formatted_documents}</DOCUMENT_PAGES>",
         "</INPUT_DOCUMENTS>",
         "<INSTRUCTIONS>",
-        "1. **Analyze Each Page:** Carefully read the user query and examine EACH page of the provided CAPM document. The document is formatted with clear page markers (e.g., '## Page X of filename.pdf' followed by '**PAGE X**').",
+        "1. **Analyze Each Page:** Carefully read the user query and examine EACH page of the provided document. The document is formatted with clear page markers (e.g., '## Page X of filename.pdf' followed by '**PAGE X**').",
         "2. **Identify Relevant Pages:** Determine which pages contain information relevant to the user query. Skip pages with no relevant content.",
         "3. **Extract Page-Specific Research:** For EACH relevant page:",
         "   * Extract ONLY the information from that specific page that addresses the query",
@@ -135,4 +135,4 @@ def get_content_synthesis_prompt(user_query: str, formatted_documents: str) -> s
     return "\n\n".join(prompt_parts)
 
 
-# Note: Internal CAPM doesn't need the individual file synthesis function anymore since we're using parallel processing
+# Note: Catalog search doesn't need the individual file synthesis function anymore since we're using parallel processing
