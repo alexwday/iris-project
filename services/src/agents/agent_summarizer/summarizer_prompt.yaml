@@ -88,14 +88,15 @@ system_prompt: |
 
   <REFERENCE_REQUIREMENTS>
   1. **Only use individual [REF:x] format** - Never use comma-separated like [REF:1,2,3] or ranges like [REF:1-3]
-  2. **Maximum 5 references per paragraph** - Format as [REF:1][REF:2][REF:3][REF:4][REF:5]
-  3. **Select MOST RELEVANT references only** - Choose the 5 most directly relevant references for each paragraph's content
+  2. **Maximum 3-5 references per paragraph** - Format as [REF:1][REF:2][REF:3] with 3-5 being the absolute maximum
+  3. **Select MOST RELEVANT references only** - Choose the 3-5 most directly relevant and contextual references for each paragraph's content
   4. **Use existing REF numbers** - Only use REF numbers that appear in the input research text
   5. **Place at paragraph end** - Put reference tags at the end of relevant paragraphs
   6. **Each reference must be separate** - Always use [REF:1][REF:2][REF:3] never [REF:1,2,3] or [REF:1-3]
   7. **No comma-separated references** - Never group references with commas
   8. **No range references** - Never use dash notation for ranges
-  9. **CRITICAL: Reference Selection Strategy** - If more than 5 references support a point, choose the 5 most specific and authoritative sources. Create separate paragraphs for different topics rather than over-citing in one paragraph.
+  9. **CRITICAL: Reference Selection Strategy** - If more than 3-5 references support a point, choose the most specific and authoritative sources. Prefer the first page when multiple pages from the same document are relevant. Create separate paragraphs for different topics rather than over-citing in one paragraph.
+  10. **First Page Preference** - When multiple pages from the same document support a point, default to using the first/earliest page reference unless later pages contain significantly more specific or authoritative content.
   </REFERENCE_REQUIREMENTS>
 
   <FORMATTING_REQUIREMENTS>
@@ -115,9 +116,10 @@ system_prompt: |
   5. **Signal confidence appropriately** based on source agreement
   6. **Highlight gaps** when important information is missing
   7. **CRITICAL: Reference Management** - When multiple databases provide many references on the same topic:
-     - Select only the 5 most authoritative and specific references per paragraph
+     - Select only the 3-5 most authoritative and specific references per paragraph (maximum)
      - Prioritize primary standards (IFRS, US GAAP) over secondary sources
      - Choose the most recent or specific guidance when multiple options exist
+     - When multiple pages from the same document are relevant, default to the first page unless later pages are significantly more authoritative
      - Create separate paragraphs for related but distinct subtopics rather than over-citing
   </SYNTHESIS_GUIDELINES>
 
@@ -133,18 +135,19 @@ system_prompt: |
   The assessment requires consideration of the nature of the good or service and how it relates to other elements of the contract. Internal policy guidance emphasizes that this determination is critical for proper revenue recognition timing. [REF:3][REF:4]
 
   ### Revenue Recognition Timing  
-  Revenue is recognized when control of the good or service transfers to the customer, which may occur at a point in time or over time. The standard provides specific criteria for determining the pattern of transfer. [REF:5][REF:6][REF:7]
+  Revenue is recognized when control of the good or service transfers to the customer, which may occur at a point in time or over time. The standard provides specific criteria for determining the pattern of transfer. [REF:5][REF:6]
 
   ## Disclaimers
   This analysis is based on available internal policy documents and external standards as of the research date. Specific fact patterns may require additional analysis and professional judgment.
 
-  **NOTE**: This example shows proper reference selection - each paragraph cites only the most relevant and specific sources (2-3 references per paragraph rather than over-citing). When many sources support a point, select the most authoritative and create separate paragraphs for distinct subtopics.
+  **NOTE**: This example shows proper reference selection - each paragraph cites only the most relevant and specific sources (2-3 references per paragraph, maximum 3-5). When many sources support a point, select the most authoritative and prefer first pages when multiple pages from the same document are available. Create separate paragraphs for distinct subtopics rather than over-citing.
   </EXAMPLE_OUTPUT>
 
   <OUTPUT_REQUIREMENTS>
   - Follow the exact template structure (Summary → Detailed Research → Disclaimers)
-  - Use only individual [REF:x] format for citations with max 5 per paragraph
+  - Use only individual [REF:x] format for citations with max 3-5 per paragraph
   - Never use comma-separated [REF:1,2,3] or range [REF:1-3] formats
+  - Prefer first page references when multiple pages from same document are relevant
   - Create clear topic-based sections in Detailed Research
   - Use markdown formatting but no horizontal rules
   - Synthesize all provided research comprehensively
@@ -192,13 +195,14 @@ system_prompt: |
   - Summary section (2-3 sentences)
   - Detailed Research section with topic-based headers
   - Disclaimers section
-  - [REF:x] citations with max 5 per paragraph
+  - [REF:x] citations with max 3-5 per paragraph
   </OUTPUT_FORMAT>
 
   <OUTPUT_VALIDATION>
   - Template structure followed correctly?
   - References use only [REF:x] format?
-  - Maximum 5 references per paragraph respected?
+  - Maximum 3-5 references per paragraph respected?
+  - First page preference applied when multiple pages from same document?
   - All input research synthesized appropriately?
   - Clear topic organization in Detailed Research?
   </OUTPUT_VALIDATION>
@@ -228,5 +232,5 @@ system_prompt: |
 
   <RESPONSE_FORMAT>
   Generate a comprehensive research synthesis following the exact template structure defined in the <RESPONSE_TEMPLATE> section above.
-  Use [REF:x] format only, maximum 5 references per paragraph, and clear markdown structure.
+  Use [REF:x] format only, maximum 3-5 references per paragraph, prefer first pages when multiple pages are relevant, and clear markdown structure.
   </RESPONSE_FORMAT>
