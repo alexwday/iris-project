@@ -193,12 +193,12 @@ def route_query_sync(
                 query_stage_name=stage_name
             )
         elif database in EXTERNAL_DATABASES:
-            # Use the unified external_search subagent for external databases
-            from .external_search.subagent import query_database_sync
+            # Use the unified semantic_search subagent for external databases
+            from .semantic_search.subagent import query_database_sync
             document_config = EXTERNAL_DATABASES[database]
-            logger.debug(f"Using external_search subagent for {database} with config: {document_config}")
+            logger.debug(f"Using semantic_search subagent for {database} with config: {document_config}")
             
-            # Call the external_search subagent with the appropriate document configuration
+            # Call the semantic_search subagent with the appropriate document configuration
             result_tuple = query_database_sync(
                 query=query,
                 scope=scope,
