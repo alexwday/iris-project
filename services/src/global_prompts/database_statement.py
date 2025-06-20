@@ -16,20 +16,20 @@ logger = logging.getLogger(__name__)
 AVAILABLE_DATABASES = {
     "internal_capm": {
         "name": "Corporate Accounting Policy Manuals",
-        "description": "Internal RBC accounting policies (CAPMs) from RBC Finance. Notes IFRS/US GAAP differences.",
+        "description": "Internal RBC accounting policies (CAPMs) from APG. Notes IFRS/US GAAP differences.",
         "query_type": "semantic search",
         "content_type": "policies and procedures",
         "use_when": "Accounting Primary Source: Official RBC policy statements. **Strategy:** The primary source for RBC accounting policy. Always consult first for accounting questions. Check US GAAP flags. **Query:** Use RBC terms, policy areas; check US GAAP flags.",
     },
     "internal_cheatsheets": { # Renamed from internal_cheatsheet
-        "name": "RBC Finance Cheatsheets",
+        "name": "APG Cheatsheets",
         "description": "Internal RBC 1-2 page summaries/infographics on specific accounting topics (Cheatsheets).",
         "query_type": "semantic search", # Aligned with internal_par process
         "content_type": "summarized guidance / infographics",
         "use_when": "Accounting Core Context: Quick visual summaries. **Strategy:** Always included alongside CAPM for accounting queries to provide definitions/overviews. **Query:** Use concise, topic-focused queries suitable for semantic search.",
     },
     "internal_wiki": {
-        "name": "RBC Finance Wiki Entries",
+        "name": "APG Wiki Entries",
         "description": "Accounting conclusions for specific RBC transactions (Internal RBC).",
         "query_type": "semantic search",
         "content_type": "RBC-specific conclusions / guides",
@@ -37,7 +37,7 @@ AVAILABLE_DATABASES = {
     },
     "internal_memos": {  # Renamed from internal_memo to match existing key
         "name": "Internal Accounting Memos",
-        "description": "Internal memos on accounting topics, written by finance, approved by RBC Finance.",
+        "description": "Internal memos on accounting topics, written by finance, approved by APG.",
         "query_type": "semantic search",
         "content_type": "technical analysis",
         "use_when": "Accounting Supportive Material: Approved analysis on complex issues. **Strategy:** Consult after CAPM/Wiki/Cheatsheet for deeper analysis on specific complex topics where a memo might exist. **Query:** Focus on application, specific conclusions, industry/scenario terms.",
