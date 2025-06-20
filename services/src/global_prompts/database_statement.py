@@ -56,20 +56,6 @@ AVAILABLE_DATABASES = {
         "content_type": "policy documents / procedures / FAQs",
         "use_when": "Tier 1 (Domain Specific): Auditor Independence Office questions. **Strategy:** Query if statement relates to AIO policies, procedures, or FAQs; treat as primary within domain. **Query:** Use RBC terms, reference AIO processes/workflows.",
     },
-    "internal_icfr": {
-        "name": "Internal Control over Financial Reporting Policy",
-        "description": "RBC guidelines for financial reporting controls (ICFR): identification, evaluation, documentation, responsibilities.",
-        "query_type": "semantic search",
-        "content_type": "control documentation",
-        "use_when": "Tier 1 (Domain Specific): Financial control requirements, compliance, data integrity. **Strategy:** Query if statement relates to ICFR; treat as primary within domain. **Query:** Use RBC terms, reference ICFR processes/workflows.",
-    },
-    "internal_compliance": {
-        "name": "RBC Compliance Policy - Auditor Independence",
-        "description": "RBC policy (FIN-ACC-214-EN) on employing individuals in accounting/financial reporting roles to ensure auditor independence (PwC). Covers hiring restrictions, cooling-off periods, disclosures.",
-        "query_type": "semantic search", # Assuming semantic search is appropriate
-        "content_type": "compliance policy / internal controls",
-        "use_when": "Tier 1 (Domain Specific): Auditor independence rules, hiring ex-auditors, family member employment, disclosure requirements. **Strategy:** Query for specific compliance questions related to auditor independence and hiring. **Query:** Use terms like 'auditor independence', 'cooling-off period', 'PwC employment', 'FIN-ACC-214-EN'.",
-    },
     "internal_esg": {
         "name": "Internal ESG Guidance",
         "description": "RBC's policies and frameworks for ESG disclosures, including the ESG Materiality Framework and guidance on evaluating changes to prior period ESG information, aligned with global standards like ISSB and CSRD.",
