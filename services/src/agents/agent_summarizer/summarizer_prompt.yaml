@@ -18,6 +18,9 @@ context:
     - name: "restrictions_statement"
       function: "get_restrictions_statement"
 
+# Tool definitions (Summarizer Agent has no tools - direct response generation)
+tools: []
+
 # Complete system prompt with CO-STAR framework and task definition
 system_prompt: |
   {{CONTEXT_START}}
@@ -312,6 +315,3 @@ system_prompt: |
 
   Further analysis may be needed to reconcile the internal policy with this external perspective for SaaS arrangements.
   </CITATION_INTEGRATION_EXAMPLES>
-
-# Tool definitions (Summarizer Agent has no tools - direct response generation)
-tools: []

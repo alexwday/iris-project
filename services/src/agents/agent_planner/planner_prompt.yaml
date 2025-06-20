@@ -21,6 +21,27 @@ context:
     - name: "restrictions_statement"
       function: "get_restrictions_statement"
 
+# Tool definitions (NOTE: Tools are dynamically generated based on available_databases)
+# This will be replaced by dynamic tool generation in the load_agent_config function
+tools:
+  - type: "function"
+    function:
+      name: "submit_database_selection_plan"
+      description: "Submit a plan of selected databases based on the research statement."
+      parameters:
+        type: "object"
+        properties:
+          databases:
+            type: "array"
+            description: "The list of database names to query using the full research statement."
+            items:
+              type: "string"
+              description: "The name of the database to query."
+              enum: []  # This will be populated dynamically
+            minItems: 1
+            maxItems: 5
+        required: ["databases"]
+
 # Complete system prompt with CO-STAR framework and task definition
 system_prompt: |
   {{CONTEXT_START}}
@@ -138,24 +159,3 @@ system_prompt: |
 
   No additional text or explanation should be included.
   </RESPONSE_FORMAT>
-
-# Tool definitions (NOTE: Tools are dynamically generated based on available_databases)
-# This will be replaced by dynamic tool generation in the load_agent_config function
-tools:
-  - type: "function"
-    function:
-      name: "submit_database_selection_plan"
-      description: "Submit a plan of selected databases based on the research statement."
-      parameters:
-        type: "object"
-        properties:
-          databases:
-            type: "array"
-            description: "The list of database names to query using the full research statement."
-            items:
-              type: "string"
-              description: "The name of the database to query."
-              enum: []  # This will be populated dynamically
-            minItems: 1
-            maxItems: 5
-        required: ["databases"]

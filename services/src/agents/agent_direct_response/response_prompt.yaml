@@ -19,6 +19,9 @@ context:
     - name: "restrictions_statement"
       function: "get_restrictions_statement"
 
+# Tool definitions (Direct Response Agent has no tools - direct streaming response)
+tools: []
+
 # Complete system prompt with CO-STAR framework and task definition
 system_prompt: |
   {{CONTEXT_START}}
@@ -176,6 +179,3 @@ system_prompt: |
   - Defines technical terms when they first appear
   - Acknowledges limitations when information is incomplete
   </RESPONSE_FORMAT>
-
-# Tool definitions (Direct Response Agent has no tools - direct streaming response)
-tools: []

@@ -19,6 +19,23 @@ context:
     - name: "restrictions_statement"
       function: "get_restrictions_statement"
 
+# Tool definitions
+tools:
+  - type: "function"
+    function:
+      name: "route_query"
+      description: "Route the user query to the appropriate function based on conversation analysis"
+      parameters:
+        type: "object"
+        properties:
+          function_name:
+            type: "string"
+            description: "The function to route to based on conversation context analysis"
+            enum:
+              - "response_from_conversation"
+              - "research_from_database"
+        required: ["function_name"]
+
 # Complete system prompt with CO-STAR framework and task definition
 system_prompt: |
   {{CONTEXT_START}}
@@ -242,20 +259,3 @@ system_prompt: |
 
   No additional text or explanation should be included.
   </RESPONSE_FORMAT>
-
-# Tool definitions
-tools:
-  - type: "function"
-    function:
-      name: "route_query"
-      description: "Route the user query to the appropriate function based on conversation analysis"
-      parameters:
-        type: "object"
-        properties:
-          function_name:
-            type: "string"
-            description: "The function to route to based on conversation context analysis"
-            enum:
-              - "response_from_conversation"
-              - "research_from_database"
-        required: ["function_name"]

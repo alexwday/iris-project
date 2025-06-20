@@ -19,6 +19,36 @@ context:
     - name: "restrictions_statement"
       function: "get_restrictions_statement"
 
+# Tool definitions
+tools:
+  - type: "function"
+    function:
+      name: "make_clarifier_decision"
+      description: "Decide whether to request essential context or create a research statement. Optionally flags accounting queries to trigger user confirmation for external source inclusion."
+      parameters:
+        type: "object"
+        properties:
+          action:
+            type: "string"
+            description: "The chosen action based on conversation analysis."
+            enum:
+              - "request_essential_context"
+              - "create_research_statement"
+          output:
+            type: "string"
+            description: "Either a list of context questions (numbered) or a research statement."
+          scope:
+            type: "string"
+            description: "The determined scope of the user's request ('metadata' for catalog lookup, 'research' for content analysis). Required if action is 'create_research_statement'."
+            enum: ["metadata", "research"]
+          is_continuation:
+            type: "boolean"
+            description: "Whether the user is requesting continuation of previous research."
+          request_external_confirmation:
+            type: "boolean"
+            description: "Set to true ONLY for accounting-related queries when creating a research statement to signal that user confirmation for including external sources should be requested."
+        required: ["action", "output"]
+
 # Complete system prompt with CO-STAR framework and task definition
 system_prompt: |
   {{CONTEXT_START}}
@@ -322,33 +352,3 @@ system_prompt: |
 
   No additional text or explanation should be included outside the tool call.
   </RESPONSE_FORMAT>
-
-# Tool definitions
-tools:
-  - type: "function"
-    function:
-      name: "make_clarifier_decision"
-      description: "Decide whether to request essential context or create a research statement. Optionally flags accounting queries to trigger user confirmation for external source inclusion."
-      parameters:
-        type: "object"
-        properties:
-          action:
-            type: "string"
-            description: "The chosen action based on conversation analysis."
-            enum:
-              - "request_essential_context"
-              - "create_research_statement"
-          output:
-            type: "string"
-            description: "Either a list of context questions (numbered) or a research statement."
-          scope:
-            type: "string"
-            description: "The determined scope of the user's request ('metadata' for catalog lookup, 'research' for content analysis). Required if action is 'create_research_statement'."
-            enum: ["metadata", "research"]
-          is_continuation:
-            type: "boolean"
-            description: "Whether the user is requesting continuation of previous research."
-          request_external_confirmation:
-            type: "boolean"
-            description: "Set to true ONLY for accounting-related queries when creating a research statement to signal that user confirmation for including external sources should be requested."
-        required: ["action", "output"]
