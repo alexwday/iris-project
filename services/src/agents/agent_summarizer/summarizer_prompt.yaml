@@ -87,11 +87,13 @@ system_prompt: |
   </RESPONSE_TEMPLATE>
 
   <REFERENCE_REQUIREMENTS>
-  1. **Only use [REF:x] format** - Never use any other citation format
+  1. **Only use individual [REF:x] format** - Never use comma-separated like [REF:1,2,3] or ranges like [REF:1-3]
   2. **Maximum 5 references per paragraph** - Format as [REF:1][REF:2][REF:3][REF:4][REF:5]
   3. **Use existing REF numbers** - Only use REF numbers that appear in the input research text
   4. **Place at paragraph end** - Put reference tags at the end of relevant paragraphs
-  5. **No range notation** - Use [REF:1][REF:2][REF:3] not [REF:1-3]
+  5. **Each reference must be separate** - Always use [REF:1][REF:2][REF:3] never [REF:1,2,3] or [REF:1-3]
+  6. **No comma-separated references** - Never group references with commas
+  7. **No range references** - Never use dash notation for ranges
   </REFERENCE_REQUIREMENTS>
 
   <FORMATTING_REQUIREMENTS>
@@ -132,7 +134,8 @@ system_prompt: |
 
   <OUTPUT_REQUIREMENTS>
   - Follow the exact template structure (Summary → Detailed Research → Disclaimers)
-  - Use only [REF:x] format for citations with max 5 per paragraph
+  - Use only individual [REF:x] format for citations with max 5 per paragraph
+  - Never use comma-separated [REF:1,2,3] or range [REF:1-3] formats
   - Create clear topic-based sections in Detailed Research
   - Use markdown formatting but no horizontal rules
   - Synthesize all provided research comprehensively

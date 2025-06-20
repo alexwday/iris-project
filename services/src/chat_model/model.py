@@ -99,33 +99,39 @@ def _process_final_references(buffer: str, reference_index: Dict[str, Dict[str, 
     
     logger = logging.getLogger(__name__)
     
-    # Process all remaining content
-    # Find all [REF:X] or [REF:X,Y,Z] patterns
+    # Process all remaining content - support both individual and legacy formats
     def replace_refs(match):
         ref_text = match.group(1)
         
-        # Parse both comma-separated and range formats
+        # Parse reference IDs based on format
         ref_ids = []
-        for part in ref_text.split(","):
-            part = part.strip()
-            if "-" in part:
-                # Handle ranges like "1-12"
-                try:
-                    start, end = part.split("-", 1)
-                    start_num = int(start.strip())
-                    end_num = int(end.strip())
-                    ref_ids.extend(str(i) for i in range(start_num, end_num + 1))
-                except ValueError:
-                    # If parsing fails, treat as regular ID
+        if "," in ref_text or "-" in ref_text:
+            # Legacy format: comma-separated or range
+            for part in ref_text.split(","):
+                part = part.strip()
+                if "-" in part:
+                    # Handle ranges like "1-12"
+                    try:
+                        start, end = part.split("-", 1)
+                        start_num = int(start.strip())
+                        end_num = int(end.strip())
+                        ref_ids.extend(str(i) for i in range(start_num, end_num + 1))
+                    except ValueError:
+                        # If parsing fails, treat as regular ID
+                        ref_ids.append(part)
+                else:
                     ref_ids.append(part)
-            else:
-                ref_ids.append(part)
+        else:
+            # Individual format: single reference ID
+            ref_ids = [ref_text]
         
-    
         # Generate href links - group by page to avoid duplicates
         page_links = {}  # Map (doc_name, page) -> href
+        found_refs = []  # Track which refs were actually found
+        
         for ref_id in ref_ids:
             if ref_id in reference_index:
+                found_refs.append(ref_id)
                 ref_data = reference_index[ref_id]
                 file_link = ref_data.get("file_link", "")
                 file_name = ref_data.get("file_name", "")
@@ -150,11 +156,16 @@ def _process_final_references(buffer: str, reference_index: Dict[str, Dict[str, 
         # Return the reference line with links
         if links:
             result = f"\n\n{' '.join(links)}\n\n"
+            logger.info(f"Final processing: Replaced {match.group(0)} with {len(links)} link(s) for refs: {found_refs}")
             return result
         else:
             return match.group(0)  # Keep original if no match
 
-    processed = re.sub(r"\[REF:([\d,\s\-]+)\]", replace_refs, buffer)
+    # Process both individual [REF:x] and legacy formats [REF:x,y,z] or [REF:x-y]
+    # First process individual references
+    processed = re.sub(r"\[REF:(\d+)\]", replace_refs, buffer)
+    # Then process any remaining legacy patterns
+    processed = re.sub(r"\[REF:([\d,\s\-]+)\]", replace_refs, processed)
     yield processed
 
 
@@ -168,13 +179,26 @@ def _process_reference_buffer(buffer: str, reference_index: Dict[str, Dict[str, 
     
     logger = logging.getLogger(__name__)
     
-    # If buffer is shorter than buffer_size and doesn't contain complete references, keep buffering
-    ref_pattern = r"\[REF:([\d,\s\-]+)\]"
+    # Support both individual [REF:x] and legacy comma-separated/range formats for backward compatibility
+    # Primary pattern: individual references [REF:1][REF:2][REF:3]
+    individual_pattern = r"\[REF:(\d+)\]"
+    # Legacy patterns: comma-separated [REF:1,2,3] and ranges [REF:1-12]
+    legacy_pattern = r"\[REF:([\d,\s\-]+)\]"
     
-    # Check if we have complete reference patterns
-    refs_in_buffer = list(re.finditer(ref_pattern, buffer))
+    # Find all individual references first (preferred format)
+    individual_refs = list(re.finditer(individual_pattern, buffer))
+    # Find legacy format references
+    legacy_refs = list(re.finditer(legacy_pattern, buffer))
     
-    if not refs_in_buffer and len(buffer) < buffer_size:
+    # Remove individual refs from legacy refs to avoid double-processing
+    all_refs = individual_refs[:]
+    for legacy_match in legacy_refs:
+        legacy_text = legacy_match.group(1)
+        # Only include if it's actually comma-separated or range format (not just a single number)
+        if "," in legacy_text or "-" in legacy_text:
+            all_refs.append(legacy_match)
+    
+    if not all_refs and len(buffer) < buffer_size:
         # No complete references and buffer not full yet - keep buffering
         return "", buffer
     
@@ -182,34 +206,42 @@ def _process_reference_buffer(buffer: str, reference_index: Dict[str, Dict[str, 
     processed_content = ""
     remaining_buffer = buffer
     
-    if refs_in_buffer:
-        # Process each reference pattern found
+    if all_refs:
+        # Sort by position and process from end to start to maintain string positions
+        all_refs.sort(key=lambda x: x.start(), reverse=True)
         
-        # Process references from end to start to maintain string positions
-        for match in reversed(refs_in_buffer):
+        for match in all_refs:
             ref_text = match.group(1)
             
-            # Parse both comma-separated and range formats
+            # Parse reference IDs based on format
             ref_ids = []
-            for part in ref_text.split(","):
-                part = part.strip()
-                if "-" in part:
-                    # Handle ranges like "1-12"
-                    try:
-                        start, end = part.split("-", 1)
-                        start_num = int(start.strip())
-                        end_num = int(end.strip())
-                        ref_ids.extend(str(i) for i in range(start_num, end_num + 1))
-                    except ValueError:
-                        # If parsing fails, treat as regular ID
+            if "," in ref_text or "-" in ref_text:
+                # Legacy format: comma-separated or range
+                for part in ref_text.split(","):
+                    part = part.strip()
+                    if "-" in part:
+                        # Handle ranges like "1-12"
+                        try:
+                            start, end = part.split("-", 1)
+                            start_num = int(start.strip())
+                            end_num = int(end.strip())
+                            ref_ids.extend(str(i) for i in range(start_num, end_num + 1))
+                        except ValueError:
+                            # If parsing fails, treat as regular ID
+                            ref_ids.append(part)
+                    else:
                         ref_ids.append(part)
-                else:
-                    ref_ids.append(part)
+            else:
+                # Individual format: single reference ID
+                ref_ids = [ref_text]
             
             # Generate href links - group by page to avoid duplicates
             page_links = {}  # Map (doc_name, page) -> href
+            found_refs = []  # Track which refs were actually found
+            
             for ref_id in ref_ids:
                 if ref_id in reference_index:
+                    found_refs.append(ref_id)
                     ref_data = reference_index[ref_id]
                     file_link = ref_data.get("file_link", "")
                     file_name = ref_data.get("file_name", "")
@@ -220,8 +252,8 @@ def _process_reference_buffer(buffer: str, reference_index: Dict[str, Dict[str, 
                     # Create S3 URL using S3_BASE_PATH + file_name
                     s3_url = f"{config.S3_BASE_PATH}/{file_name}"
                     
-                    # Log file_name for debugging
-                    logger.info(f"REF {ref_id}: file_name='{file_name}', s3_url='{s3_url[:50]}...', page={page}")
+                    # Log for debugging
+                    logger.info(f"Processing REF {ref_id}: file_name='{file_name}', page={page}")
                     
                     # Create href link with 3-parameter format: filename, page, highlight_text
                     page_key = (doc_name, page)
@@ -229,13 +261,16 @@ def _process_reference_buffer(buffer: str, reference_index: Dict[str, Dict[str, 
                         link_text = f"📄 {doc_name} Page {page}"
                         href = f'<a href=\'javascript:window.maven.openPdf("{s3_url}", {page}, "{highlight_text}")\'>{link_text}</a>'
                         page_links[page_key] = href
+                else:
+                    logger.warning(f"Reference {ref_id} not found in index")
             
             links = list(page_links.values())
             
-            # Replace the reference with links
+            # Replace the reference with links or keep original if no valid refs found
             if links:
                 replacement = f" {' '.join(links)} "
                 remaining_buffer = remaining_buffer[:match.start()] + replacement + remaining_buffer[match.end():]
+                logger.info(f"Replaced {match.group(0)} with {len(links)} link(s) for refs: {found_refs}")
         
         # Output everything up to and including the processed references
         processed_content = remaining_buffer
