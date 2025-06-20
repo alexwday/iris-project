@@ -40,11 +40,23 @@ from .content_synthesis_prompt import (
     SYNTHESIS_TOOL_SCHEMA,
 )
 
-# Define response types consistent with database_router
+# Define response types consistent with database_router and catalog_search
 MetadataResponse = List[Dict[str, Any]]
 ResearchResponse = Dict[str, str]
 DatabaseResponse = Union[MetadataResponse, ResearchResponse]
-SubagentResult = Tuple[DatabaseResponse, Optional[List[str]]]  # Define a tuple for result + doc_ids
+# Updated to match catalog_search return format with reference_index
+FileLink = Dict[str, str]  # Contains file link info (not applicable for external)
+PageSectionRefs = Dict[int, List[int]]  # Not used for external
+SectionContentMap = Dict[str, str]  # Not used for external
+ReferenceIndex = Dict[str, Dict[str, Any]]  # Maps reference ID to reference details
+SubagentResult = Tuple[
+    DatabaseResponse,
+    Optional[List[str]],
+    Optional[List[FileLink]],
+    Optional[PageSectionRefs],
+    Optional[SectionContentMap],
+    Optional[ReferenceIndex],
+]  # result + doc_ids + file_links + page_sections + section_content + reference_index
 
 # Get module logger
 logger = logging.getLogger(__name__)
@@ -145,7 +157,7 @@ def _perform_vector_search(
 ) -> List[Dict[str, Any]]:
     """
     Performs vector search, optionally filtering by a specific document ID.
-    Returns a list of results as dictionaries.
+    Returns a list of results as dictionaries including reference fields.
     """
     log_doc_filter = f" filtering for document_id='{doc_id}'" if doc_id else ""
     logger.info(f"Performing Initial Vector Search (Retrieving Top {initial_k}){log_doc_filter}")
@@ -156,12 +168,28 @@ def _perform_vector_search(
         return []
 
     try:
-        # Vector-only search SQL
+        # Vector search SQL with reference fields for REF:x generation
         sql = f"""
             SELECT
-                c.*, -- Select all columns from the target table
+                c.id,
+                c.content,
+                c.document_id,
+                c.section_start_page,
+                c.chapter_name,
+                c.section_title,
+                c.section_hierarchy,
+                c.chapter_number,
+                c.section_number,
+                c.part_number,
+                c.sequence_number,
+                c.section_importance_score,
+                c.section_token_count,
+                c.section_standard,
+                c.section_standard_codes,
+                c.chapter_tags,
+                c.chapter_summary,
                 1 - (c.embedding <=> %s::vector) AS vector_score -- Calculate vector score
-            FROM {TARGET_TABLE} c -- Removed quotes, no longer needed
+            FROM {TARGET_TABLE} c
             WHERE 1=1
             {" AND c.document_id = %s" if doc_id else ""}
             ORDER BY vector_score DESC -- Order by vector score
@@ -626,6 +654,125 @@ def _fill_sequence_gaps(
     return final_results_with_gaps, added_chunk_ids
 
 
+def _build_reference_index(results: List[Union[dict, List[dict]]], query: str) -> ReferenceIndex:
+    """
+    Build reference index from processed results for REF:x generation.
+    
+    Args:
+        results: List of processed chunks/groups with reference metadata
+        query: The original query for context
+        
+    Returns:
+        ReferenceIndex: Structured reference data like catalog_search
+    """
+    logger.info(f"Building reference index from {len(results)} processed items")
+    reference_index: ReferenceIndex = {}
+    
+    for item in results:
+        if isinstance(item, dict) and item.get('type') == 'group':
+            # Handle grouped chunks
+            chunks = item.get('chunks', [])
+            if not chunks:
+                continue
+                
+            # Use the first chunk's document info for the group
+            first_chunk = chunks[0]
+            doc_id = first_chunk.get('document_id')
+            if not doc_id:
+                continue
+                
+            if doc_id not in reference_index:
+                reference_index[doc_id] = {}
+            
+            # Process each chunk in the group
+            for chunk in chunks:
+                page_num = chunk.get('section_start_page')
+                if page_num is None:
+                    continue
+                    
+                page_key = f"page_{page_num}"
+                
+                # Build research content from chunk
+                research_content = _build_research_content_from_chunk(chunk, query)
+                
+                reference_index[doc_id][page_key] = {
+                    'research_content': research_content,
+                    'document_source': doc_id,  # This matches file_name for external
+                    'page_number': page_num,
+                    'file_link': '',  # External sources don't have file links
+                    'file_name': doc_id,  # Use document_id as file_name for consistency
+                    'chapter_name': chunk.get('chapter_name', ''),
+                    'section_title': chunk.get('section_title', ''),
+                    'section_hierarchy': chunk.get('section_hierarchy', '')
+                }
+                
+        elif isinstance(item, dict):
+            # Handle single chunks
+            doc_id = item.get('document_id')
+            page_num = item.get('section_start_page')
+            
+            if not doc_id or page_num is None:
+                continue
+                
+            if doc_id not in reference_index:
+                reference_index[doc_id] = {}
+            
+            page_key = f"page_{page_num}"
+            
+            # Build research content from chunk
+            research_content = _build_research_content_from_chunk(item, query)
+            
+            reference_index[doc_id][page_key] = {
+                'research_content': research_content,
+                'document_source': doc_id,  # This matches file_name for external
+                'page_number': page_num,
+                'file_link': '',  # External sources don't have file links
+                'file_name': doc_id,  # Use document_id as file_name for consistency
+                'chapter_name': item.get('chapter_name', ''),
+                'section_title': item.get('section_title', ''),
+                'section_hierarchy': item.get('section_hierarchy', '')
+            }
+    
+    logger.info(f"Built reference index with {len(reference_index)} documents")
+    return reference_index
+
+
+def _build_research_content_from_chunk(chunk: Dict[str, Any], query: str) -> str:
+    """
+    Build research content from a single chunk for reference index.
+    
+    Args:
+        chunk: Single chunk data with content and metadata
+        query: Original query for context
+        
+    Returns:
+        str: Formatted research content for this chunk
+    """
+    content = chunk.get('content', '')
+    chapter_name = chunk.get('chapter_name', '')
+    section_title = chunk.get('section_title', '')
+    section_hierarchy = chunk.get('section_hierarchy', '')
+    
+    # Create a concise research content entry
+    research_parts = []
+    
+    if section_title and section_title != chapter_name:
+        research_parts.append(f"**{section_title}**")
+    elif chapter_name:
+        research_parts.append(f"**{chapter_name}**")
+    
+    if section_hierarchy:
+        research_parts.append(f"*{section_hierarchy}*")
+    
+    # Add a portion of the content (truncated for reference purposes)
+    if content:
+        # Take first 500 characters for reference content
+        truncated_content = content[:500] + "..." if len(content) > 500 else content
+        research_parts.append(truncated_content)
+    
+    return "\n\n".join(research_parts)
+
+
 def _format_chunks_as_cards(results: List[Union[dict, List[dict]]]) -> str:
     """Formats final results (chunks and groups) into cards for the LLM."""
     logger.info("Formatting Final Results as Cards for LLM")
@@ -923,8 +1070,8 @@ def _process_single_document_id(
 
 # --- Logic Function (Handles Core Query Processing) ---
 
-# Define return type for logic function to include usage details and both initial/final chunk IDs
-LogicResult = Tuple[DatabaseResponse, Optional[List[str]], Optional[List[str]], List[LlmUsageDetails]]
+# Define return type for logic function to include usage details and both initial/final chunk IDs plus reference index
+LogicResult = Tuple[DatabaseResponse, Optional[List[str]], Optional[List[str]], List[LlmUsageDetails], Optional[ReferenceIndex]]
 
 def _query_database_logic(
     query: str, scope: str, document_config: Dict[str, Any], token: Optional[str] = None
@@ -932,7 +1079,7 @@ def _query_database_logic(
     """
     Internal logic for external database queries with configurable document settings.
     Returns the database response, list of initial chunk IDs, list of final chunk IDs,
-    and collected LLM usage details.
+    collected LLM usage details, and reference index.
     """
     # Extract documents dict and derive database name for logging
     documents = document_config.get('documents', {})
@@ -963,13 +1110,13 @@ def _query_database_logic(
         if query_embedding is None:
             # Handle embedding failure based on scope
             if scope == "metadata":
-                return [], None, None, all_usage_details # Add None for final_ids
+                return [], None, None, all_usage_details, None # Add None for reference_index
             else: # research scope
                 error_response = {
                     "detailed_research": "Could not generate embedding for the query.",
                     "status_summary": "❌ Embedding Generation Failed"
                 }
-                return error_response, None, None, all_usage_details # Add None for final_ids
+                return error_response, None, None, all_usage_details, None # Add None for reference_index
 
         # --- Metadata Scope Handling ---
         if scope == "metadata":
@@ -990,7 +1137,7 @@ def _query_database_logic(
 
             if not all_initial_results:
                 logger.info(f"No initial vector search results for metadata query across all IASB sources.")
-                return [], None, None, all_usage_details # Return empty list, no IDs, usage
+                return [], None, None, all_usage_details, None # Return empty list, no IDs, usage, no refs
 
             unique_sections = {}
             # No separate metadata_chunk_ids needed, using combined initial_chunk_ids
@@ -1028,7 +1175,7 @@ def _query_database_logic(
 
             logger.info(f"Returning {len(metadata_response)} unique sections for metadata scope from {database_name}.")
             # Return metadata, the combined *initial* chunk IDs (final IDs not applicable), and usage details
-            return metadata_response, initial_chunk_ids, None, all_usage_details
+            return metadata_response, initial_chunk_ids, None, all_usage_details, None # No reference_index for metadata scope
 
         # --- Research Scope Handling ---
         elif scope == "research":
@@ -1066,11 +1213,15 @@ def _query_database_logic(
                 final_research_result["status_summary"] = default_no_info_status
                 final_research_result["detailed_research"] = "No relevant information found across any IASB document sources."
                 # Return early, include the (potentially empty) initial IDs
-                return final_research_result, initial_chunk_ids, None, all_usage_details
+                return final_research_result, initial_chunk_ids, None, all_usage_details, None # No reference_index when no results
             else:
                 # Log combined counts
                 logger.info(f"Collected {len(initial_chunk_ids)} total initial chunk IDs for research scope across all IASB sources.")
                 logger.info(f"Collected {len(final_chunk_ids)} total final chunk IDs for research scope across all IASB sources.")
+
+                # Build reference index from processed results
+                logger.info(f"Building reference index from {len(all_processed_results)} processed items.")
+                reference_index = _build_reference_index(all_processed_results, query)
 
                 # Format combined chunks into cards
                 logger.info(f"Formatting combined {len(all_processed_results)} processed items from all IASB sources.")
@@ -1080,41 +1231,41 @@ def _query_database_logic(
                 final_research_result, synthesis_usage = _generate_response_from_chunks(query, formatted_chunks, token)
                 if synthesis_usage: all_usage_details.append(synthesis_usage)
 
-                # Return the final research result, the combined *initial* IDs, the combined *final* IDs, and usage details
-                return final_research_result, initial_chunk_ids, final_chunk_ids, all_usage_details
+                # Return the final research result, the combined *initial* IDs, the combined *final* IDs, usage details, and reference index
+                return final_research_result, initial_chunk_ids, final_chunk_ids, all_usage_details, reference_index
 
         else:
             # Invalid scope handling
             logger.error(f"Invalid scope '{scope}' provided to {database_name} subagent.")
             if scope == "metadata":
-                return [], None, None, all_usage_details
+                return [], None, None, all_usage_details, None
             else:
                 error_response = {"detailed_research": f"Invalid scope '{scope}' provided.", "status_summary": "❌ Invalid Scope"}
-                return error_response, None, None, all_usage_details
+                return error_response, None, None, all_usage_details, None
 
     except psycopg2.Error as db_err:
         logger.error(f"Database error during {database_name} query (Scope: {scope}): {db_err}", exc_info=True)
         if conn: conn.rollback()
         if scope == "metadata":
-            return [], None, None, all_usage_details
+            return [], None, None, all_usage_details, None
         else:
             error_response = {"detailed_research": f"**Database Error:** {str(db_err)}", "status_summary": "❌ Database Error"}
-            return error_response, None, None, all_usage_details
+            return error_response, None, None, all_usage_details, None
     except ConnectionError as conn_err:
          logger.error(f"Connection error for {database_name} (Scope: {scope}): {conn_err}", exc_info=True)
          if scope == "metadata":
-             return [], None, None, all_usage_details
+             return [], None, None, all_usage_details, None
          else:
              error_response = {"detailed_research": f"**Connection Error:** {str(conn_err)}", "status_summary": "❌ DB Connection Error"}
-             return error_response, None, None, all_usage_details
+             return error_response, None, None, all_usage_details, None
     except Exception as e:
         logger.error(f"Unexpected error querying {database_name} database (Scope: {scope}): {e}", exc_info=True)
         if conn: conn.rollback()
         if scope == "metadata":
-            return [], None, None, all_usage_details
+            return [], None, None, all_usage_details, None
         else:
             error_response = {"detailed_research": f"**Unexpected Error:** {str(e)}", "status_summary": default_error_status}
-            return error_response, None, None, all_usage_details
+            return error_response, None, None, all_usage_details, None
     finally:
         # Ensure connection is closed even if early returns happened
         if cursor:
@@ -1126,10 +1277,10 @@ def _query_database_logic(
     # Fallback return (should not be reached ideally)
     logger.error(f"Reached end of _query_database_logic unexpectedly for scope '{scope}' in {database_name}.")
     if scope == "metadata":
-        return [], None, None, all_usage_details
+        return [], None, None, all_usage_details, None
     else:
         error_response = {"detailed_research": "Reached end of logic function unexpectedly.", "status_summary": "❌ Unexpected Flow"}
-        return error_response, None, None, all_usage_details
+        return error_response, None, None, all_usage_details, None
 
 
 # --- Main Function ---
@@ -1164,6 +1315,7 @@ def query_database_sync(query: str, scope: str, document_config: Dict[str, Any],
     initial_chunk_ids: Optional[List[str]] = None
     final_chunk_ids: Optional[List[str]] = None # Added final_chunk_ids
     all_usage_details: List[LlmUsageDetails] = []
+    reference_index: Optional[ReferenceIndex] = None # Added reference_index
 
     # REMOVED: Stage start is now handled by the caller (_execute_query_worker)
     # if process_monitor:
@@ -1172,8 +1324,8 @@ def query_database_sync(query: str, scope: str, document_config: Dict[str, Any],
     #     process_monitor.add_stage_details(stage_name, scope=scope, query=query)
 
     try:
-        # Call the logic function which now returns result, initial_ids, final_ids, and usage_details
-        result, initial_chunk_ids, final_chunk_ids, all_usage_details = _query_database_logic(query, scope, document_config, token)
+        # Call the logic function which now returns result, initial_ids, final_ids, usage_details, and reference_index
+        result, initial_chunk_ids, final_chunk_ids, all_usage_details, reference_index = _query_database_logic(query, scope, document_config, token)
 
         # Process collected usage details if monitor is enabled
         if process_monitor and all_usage_details:
@@ -1231,5 +1383,12 @@ def query_database_sync(query: str, scope: str, document_config: Dict[str, Any],
         duration = end_time - start_time
         logger.info(f"{database_name} query completed in {duration:.2f} seconds.")
 
-    # Return the result and the collected *initial* chunk IDs (main return value remains initial IDs)
-    return result, initial_chunk_ids
+    # Return the result and all components to match catalog_search format
+    return (
+        result,
+        initial_chunk_ids,
+        None,  # file_links (not applicable for external)
+        None,  # page_section_refs (not used for external)
+        None,  # section_content_map (not used for external)
+        reference_index,  # reference_index for REF:x generation
+    )
