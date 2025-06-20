@@ -32,7 +32,7 @@ from ...global_prompts.restrictions_statement import get_restrictions_statement
 logger = logging.getLogger(__name__)
 
 # Tool name constant
-PLANNER_TOOL_NAME = "submit_database_selection_plan"
+PLANNER_TOOL_NAME = "select_databases"
 
 
 class PlannerError(Exception):
@@ -111,7 +111,7 @@ def get_tool_definitions(available_databases):
         {
             "type": "function",
             "function": {
-                "name": "submit_database_selection_plan",
+                "name": "select_databases",
                 "description": "Submit a plan of selected databases based on the research statement.",
                 "parameters": {
                     "type": "object",
@@ -194,7 +194,7 @@ def load_agent_config(available_databases=None):
                 {
                     "type": "function",
                     "function": {
-                        "name": "submit_database_selection_plan",
+                        "name": "select_databases",
                         "description": "Submit a plan of selected databases based on the research statement.",
                         "parameters": {
                             "type": "object",
