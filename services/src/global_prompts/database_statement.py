@@ -112,20 +112,6 @@ AVAILABLE_DATABASES = {
         "content_type": "external guidance",
         "use_when": "External Supplementary: External firm perspective on IFRS; disclosure checklists. **Strategy:** Consult *only if requested by user* or if internal sources are insufficient. Use to supplement internal knowledge, fill gaps, or get external interpretation. Useful for disclosure examples. **Query:** Use standard numbers (IFRS 15, IAS 38), technical terms, specific paragraphs.",
     },
-    "external_kpmg": {
-        "name": "KPMG IFRS Guidance",
-        "description": "External IFRS accounting guidance and interpretations from KPMG.",
-        "query_type": "semantic search",
-        "content_type": "external guidance",
-        "use_when": "External Supplementary: External firm perspective on IFRS. **Strategy:** Consult *only if requested by user* or if internal sources are insufficient. Use to supplement internal knowledge, fill gaps, or get external interpretation. **Query:** Use standard numbers (IFRS 15, IAS 38), technical terms, specific paragraphs.",
-    },
-    "external_pwc": {
-        "name": "PwC IFRS Guidance",
-        "description": "External IFRS accounting guidance and interpretations from PwC.",
-        "query_type": "semantic search",
-        "content_type": "external guidance",
-        "use_when": "External Supplementary: External firm perspective on IFRS. **Strategy:** Consult *only if requested by user* or if internal sources are insufficient. Use to supplement internal knowledge, fill gaps, or get external interpretation. **Query:** Use standard numbers (IFRS 15, IAS 38), technical terms, specific paragraphs.",
-    },
     "external_iasb": {
         "name": "IASB Standards and Interpretations",
         "description": "Official IFRS standards & interpretations (IFRICs/SICs) from IASB. Includes guidance, examples, basis for conclusions.",

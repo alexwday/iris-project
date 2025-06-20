@@ -77,6 +77,23 @@ INTERNAL_DATABASES = {
     'internal_wiki': 'internal_wiki',
 }
 
+# Define mapping of external databases to their document configurations
+EXTERNAL_DATABASES = {
+    'external_ey': {
+        'query_type': 'single_document',
+        'documents': {'ey_international_gaap_2024': 20}
+    },
+    'external_iasb': {
+        'query_type': 'multi_document',
+        'documents': {
+            'iasb_ias': 20,
+            'iasb_ifrs': 20,
+            'iasb_ifrics': 10,
+            'iasb_sic': 10
+        }
+    }
+}
+
 # Get module logger
 logger = logging.getLogger(__name__)
 
@@ -175,8 +192,23 @@ def route_query_sync(
                 process_monitor=process_monitor,
                 query_stage_name=stage_name
             )
+        elif database in EXTERNAL_DATABASES:
+            # Use the unified external_search subagent for external databases
+            from .external_search.subagent import query_database_sync
+            document_config = EXTERNAL_DATABASES[database]
+            logger.debug(f"Using external_search subagent for {database} with config: {document_config}")
+            
+            # Call the external_search subagent with the appropriate document configuration
+            result_tuple = query_database_sync(
+                query=query,
+                scope=scope,
+                document_config=document_config,
+                token=token,
+                process_monitor=process_monitor,
+                query_stage_name=stage_name
+            )
         else:
-            # For non-internal databases, use the original dynamic import logic
+            # For non-unified databases, use the original dynamic import logic
             module_path = f"services.src.agents.database_subagents.{database}.subagent"
             subagent_module = importlib.import_module(module_path)
             logger.debug(f"Successfully imported module: {module_path}")

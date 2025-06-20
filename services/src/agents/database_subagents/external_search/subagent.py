@@ -1,12 +1,13 @@
-# external_kpmg/subagent.py
+# external_search/subagent.py
 """
-External KPMG Guidance Subagent
+External Search Subagent (Unified External Database Handler)
 
-Handles queries to the KPMG guidance content stored in the database,
-performing vector search, refinement, and response synthesis.
+Handles queries to external guidance content stored in the database,
+supporting both single-document and multi-document search patterns.
+Performs vector search, refinement, and response synthesis.
 
 Functions:
-    query_database_sync: Synchronously query the KPMG guidance database
+    query_database_sync: Synchronously query external databases with configurable document settings
 """
 
 import json
@@ -49,9 +50,7 @@ SubagentResult = Tuple[DatabaseResponse, Optional[List[str]]]  # Define a tuple 
 logger = logging.getLogger(__name__)
 
 # --- Configuration Constants ---
-DATABASE_NAME = "external_kpmg"
 TARGET_TABLE = "iris_textbook_database"
-KPMG_DOCUMENT_ID = "kpmg_insights_into_ifrs_20th_edition"
 
 # Model Capabilities
 EMBEDDING_MODEL_CAPABILITY = "embedding"
@@ -100,7 +99,7 @@ def _generate_query_embedding(
             "model": model_name,
             "input": [query],  # API expects a list
             "dimensions": EMBEDDING_DIMENSIONS,
-            "database_name": DATABASE_NAME,
+            "database_name": "external_database",
             "is_embedding": True,  # Flag for call_llm
         }
 
@@ -258,7 +257,7 @@ Provide your response as a single JSON object mapping each ID to 1 (relevant) or
             "messages": messages,
             "temperature": 0.2,
             "response_format": {"type": "json_object"},
-            "database_name": DATABASE_NAME,
+            "database_name": "external_database",
             "stream": False, # Required for JSON mode
         }
 
@@ -271,7 +270,7 @@ Provide your response as a single JSON object mapping each ID to 1 (relevant) or
         if isinstance(result, tuple) and len(result) == 2:
             response, usage_details = result # Assign usage_details here
             if usage_details:
-                logger.debug(f"Relevance Check Usage details for {DATABASE_NAME}: {usage_details}")
+                logger.debug(f"Relevance Check Usage details for {database_name}: {usage_details}")
         else:
             # For backward compatibility in case it doesn't return a tuple
             response = result
@@ -688,6 +687,7 @@ def _format_chunks_as_cards(results: List[Union[dict, List[dict]]]) -> str:
             continue
 
         # Extract and format required fields
+        doc_id = record_for_metadata.get('document_id', 'Unknown Document') # Get doc ID
         chapter_name = record_for_metadata.get('chapter_name', 'Unknown Chapter')
         section_title = record_for_metadata.get('section_title', 'Unknown Section')
         section_hierarchy = record_for_metadata.get('section_hierarchy', '')
@@ -695,6 +695,7 @@ def _format_chunks_as_cards(results: List[Union[dict, List[dict]]]) -> str:
         standard_codes = record_for_metadata.get('section_standard_codes') # Use section_standard_codes
         tags = record_for_metadata.get('chapter_tags') # Use chapter_tags
 
+        card_parts.append(f"Source Document ID: {doc_id}") # Add Source Document ID
         card_parts.append(f"Chapter: {chapter_name}")
         card_parts.append(f"Section Title: {section_title}")
         if section_hierarchy: card_parts.append(f"Section Hierarchy: {section_hierarchy}")
@@ -748,7 +749,7 @@ def _generate_response_from_chunks(
                 "type": "function",
                 "function": {"name": SYNTHESIS_TOOL_SCHEMA["function"]["name"]},
             },
-            "database_name": DATABASE_NAME,
+            "database_name": database_name,
             "stream": False, # Tool calls require stream=False
         }
 
@@ -785,7 +786,7 @@ def _generate_response_from_chunks(
                     arguments = json.loads(arguments_str)
                     # Check for the CORRECT key name 'detailed_research_report'
                     if "status_summary" in arguments and "detailed_research_report" in arguments:
-                        logger.info(f"Successfully parsed synthesis tool call for {DATABASE_NAME}.")
+                        logger.info(f"Successfully parsed synthesis tool call for {database_name}.")
                         # Validate types
                         status = arguments.get("status_summary", "")
                         # Extract using the CORRECT key name 'detailed_research_report'
@@ -833,24 +834,115 @@ def _generate_response_from_chunks(
         return default_response, usage_details
 
 
+# --- Helper: Process Single Document ID ---
+
+def _process_single_document_id(
+    cursor,
+    query: str,
+    query_embedding: List[float],
+    doc_id: str,
+    initial_k: int,
+    token: Optional[str] = None,
+) -> Tuple[List[Union[dict, List[dict]]], Optional[List[str]], List[LlmUsageDetails]]:
+    """
+    Runs the search and refinement pipeline for a single document ID.
+    Returns the list of processed chunks/groups, the final chunk IDs for this doc,
+    and collected usage details for this document ID.
+    """
+    logger.info(f"--- Processing Document ID: {doc_id} (Initial K: {initial_k}) ---")
+    processed_results = [] # Initialize empty list for this doc ID
+    final_chunk_ids_for_doc: Optional[List[str]] = None # Added
+    usage_details_for_doc: List[LlmUsageDetails] = [] # Collect usage for this doc
+
+    try:
+        # 1. Initial Vector Search for this doc_id
+        initial_results = _perform_vector_search(
+            cursor, query_embedding, initial_k, doc_id=doc_id
+        )
+        if not initial_results:
+            logger.info(f"No initial results found for {doc_id}.")
+            return [], None, usage_details_for_doc # Return empty list if no results
+
+        processed_results = initial_results
+        all_added_chunk_ids = set() # Track added chunks for this doc_id run
+
+        # 2. Summary Relevance Filtering
+        filtered_results, _, relevance_usage = _filter_by_summary_relevance(query, processed_results, token)
+        if relevance_usage: usage_details_for_doc.append(relevance_usage)
+        if not filtered_results:
+            logger.info(f"No relevant results after filtering for {doc_id}.")
+            return [], None, usage_details_for_doc # Return empty list
+        processed_results = filtered_results
+
+        # 3. Importance Reranking
+        reranked_results = _rerank_by_importance(processed_results, IMPORTANCE_FACTOR)
+        processed_results = reranked_results
+
+        # 4. Section Expansion
+        expanded_results, added_by_expansion = _expand_sections_by_token_count(
+            cursor, processed_results, SECTION_EXPANSION_TOP_K_RANK, SECTION_EXPANSION_TOP_K_TOKENS, SECTION_EXPANSION_GENERAL_TOKENS
+        )
+        if not expanded_results:
+             logger.info(f"No results after section expansion for {doc_id}.")
+             return [], None, usage_details_for_doc # Return empty list
+        all_added_chunk_ids.update(added_by_expansion)
+        processed_results = expanded_results
+
+        # 5. Sequence Gap Filling
+        filled_results, added_by_gaps = _fill_sequence_gaps(
+            cursor, processed_results, GAP_FILL_MAX_SEQUENCE_GAP
+        )
+        if not filled_results:
+             logger.info(f"No results after gap filling for {doc_id}.")
+             return [], None, usage_details_for_doc # Return empty list
+        all_added_chunk_ids.update(added_by_gaps)
+        processed_results = filled_results
+
+        # --- Extract Final Chunk IDs for this doc ---
+        final_chunk_ids_for_doc = []
+        for item in processed_results:
+            if isinstance(item, dict) and item.get('type') == 'group':
+                for chunk in item.get('chunks', []):
+                    if chunk.get('id'): final_chunk_ids_for_doc.append(str(chunk.get('id')))
+            elif isinstance(item, dict) and item.get('id'):
+                final_chunk_ids_for_doc.append(str(item.get('id')))
+        logger.info(f"Collected {len(final_chunk_ids_for_doc)} final chunk IDs for doc {doc_id}.")
+
+        # Steps 6 & 7 (Format Cards, Generate Response) are moved to the main logic function
+
+    except Exception as e:
+        # Log error specific to this document ID processing
+        logger.error(f"Error processing document ID {doc_id}: {e}", exc_info=True)
+        # Return empty list on error during processing for this doc ID
+        return [], None, usage_details_for_doc
+
+    logger.info(f"--- Finished Processing Document ID: {doc_id} - Found {len(processed_results)} items ---")
+    # Return processed results, final IDs for this doc, and usage
+    return processed_results, final_chunk_ids_for_doc, usage_details_for_doc
+
+
 # --- Logic Function (Handles Core Query Processing) ---
 
 # Define return type for logic function to include usage details and both initial/final chunk IDs
 LogicResult = Tuple[DatabaseResponse, Optional[List[str]], Optional[List[str]], List[LlmUsageDetails]]
 
 def _query_database_logic(
-    query: str, scope: str, token: Optional[str] = None
+    query: str, scope: str, document_config: Dict[str, Any], token: Optional[str] = None
 ) -> LogicResult:
     """
-    Internal logic for the KPMG subagent query.
+    Internal logic for external database queries with configurable document settings.
     Returns the database response, list of initial chunk IDs, list of final chunk IDs,
     and collected LLM usage details.
     """
-    default_error_status = f"❌ Error processing {DATABASE_NAME} query."
-    default_no_info_status = f"📄 No relevant information found in {DATABASE_NAME}."
-    default_research = f"No detailed research generated for {DATABASE_NAME}."
-    initial_chunk_ids: Optional[List[str]] = None
-    final_chunk_ids: Optional[List[str]] = None # Added for final IDs
+    # Extract documents dict and derive database name for logging
+    documents = document_config.get('documents', {})
+    database_name = list(documents.keys())[0].split('_')[0] if documents else 'external'
+    
+    default_error_status = f"❌ Error processing {database_name} query."
+    default_no_info_status = f"📄 No relevant information found in {database_name}."
+    default_research = f"No detailed research generated for {database_name}."
+    initial_chunk_ids: Optional[List[str]] = None # For combined initial IDs
+    final_chunk_ids: Optional[List[str]] = None # For combined final IDs
     all_usage_details: List[LlmUsageDetails] = []
 
     conn = None
@@ -881,24 +973,28 @@ def _query_database_logic(
 
         # --- Metadata Scope Handling ---
         if scope == "metadata":
-            logger.info(f"Processing '{scope}' scope for {DATABASE_NAME}")
-            # Filter by specific KPMG document ID for metadata search
-            # Filter by specific KPMG document ID for metadata search
-            # Filter by specific KPMG document ID for metadata search
-            initial_results = _perform_vector_search(
-                cursor, query_embedding, INITIAL_K, doc_id=KPMG_DOCUMENT_ID
-            )
-            # --- Capture Initial IDs ---
-            if initial_results:
-                initial_chunk_ids = [str(item.get('id')) for item in initial_results if item.get('id')]
-                logger.info(f"Captured {len(initial_chunk_ids)} initial chunk IDs for metadata scope.")
-            else:
-                 logger.info(f"No initial vector search results for metadata query in {DATABASE_NAME}.")
-                 return [], None, None, all_usage_details # Return empty list, no IDs, usage
+            logger.info(f"Processing '{scope}' scope for {database_name}")
+            all_initial_results = []
+            initial_chunk_ids = [] # Collect combined initial IDs
+            # Perform vector search for each configured IASB document ID
+            for doc_id, k_value in documents.items():
+                logger.debug(f"Performing metadata vector search for {doc_id} (k={k_value})")
+                initial_results_for_doc = _perform_vector_search(
+                    cursor, query_embedding, k_value, doc_id=doc_id
+                )
+                # --- Capture Initial IDs for this doc ---
+                if initial_results_for_doc:
+                    ids_for_doc = [str(item.get('id')) for item in initial_results_for_doc if item.get('id')]
+                    initial_chunk_ids.extend(ids_for_doc)
+                all_initial_results.extend(initial_results_for_doc)
+
+            if not all_initial_results:
+                logger.info(f"No initial vector search results for metadata query across all IASB sources.")
+                return [], None, None, all_usage_details # Return empty list, no IDs, usage
 
             unique_sections = {}
-            # No separate metadata_chunk_ids needed, initial_chunk_ids covers it
-            for record in initial_results:
+            # No separate metadata_chunk_ids needed, using combined initial_chunk_ids
+            for record in all_initial_results:
                 doc_id = record.get('document_id')
                 chapter = record.get('chapter_name')
                 hierarchy = record.get('section_hierarchy')
@@ -918,7 +1014,7 @@ def _query_database_logic(
                         'summary': summary,
                         'doc_id': doc_id # Keep original doc_id for source_document_id
                     }
-                    # metadata_chunk_ids.append(chunk_id) # No longer needed here
+                    # metadata_chunk_ids.append(chunk_id) # No longer needed
 
             metadata_response: MetadataResponse = []
             for section_data in unique_sections.values():
@@ -926,98 +1022,70 @@ def _query_database_logic(
                     'id': section_data['id'],
                     'document_name': section_data['title'], # Use section title as name
                     'document_description': section_data['summary'], # Use section summary as description
-                    'source': DATABASE_NAME,
+                    'source': database_name,
                     'source_document_id': section_data['doc_id'] # Add the original document ID
                 })
 
-            logger.info(f"Returning {len(metadata_response)} unique sections for metadata scope from {DATABASE_NAME}.")
-            # Return metadata, the *initial* chunk IDs (final IDs not applicable here), and usage details
+            logger.info(f"Returning {len(metadata_response)} unique sections for metadata scope from {database_name}.")
+            # Return metadata, the combined *initial* chunk IDs (final IDs not applicable), and usage details
             return metadata_response, initial_chunk_ids, None, all_usage_details
 
         # --- Research Scope Handling ---
         elif scope == "research":
-            logger.info(f"Processing '{scope}' scope for {DATABASE_NAME}")
-            research_result: ResearchResponse = {
+            logger.info(f"Processing '{scope}' scope for {database_name}")
+            final_research_result: ResearchResponse = {
                 "detailed_research": default_research,
                 "status_summary": default_error_status,
             }
-            # Start of the research pipeline
-            # Filter by specific KPMG document ID for research search
-            # Filter by specific KPMG document ID for research search
-            initial_results = _perform_vector_search(
-                cursor, query_embedding, INITIAL_K, doc_id=KPMG_DOCUMENT_ID
-            )
-            # --- Capture Initial IDs ---
-            if initial_results:
-                initial_chunk_ids = [str(item.get('id')) for item in initial_results if item.get('id')]
-                logger.info(f"Captured {len(initial_chunk_ids)} initial chunk IDs for research scope.")
+
+            all_processed_results = [] # Store processed results from all doc IDs
+            initial_chunk_ids = [] # Store combined initial IDs
+            final_chunk_ids = [] # Store combined final IDs
+
+            # Process each Document ID defined in document_config
+            for doc_id, k_value in documents.items():
+                # --- Get Initial IDs for this doc ---
+                initial_results_for_doc = _perform_vector_search(cursor, query_embedding, k_value, doc_id=doc_id)
+                if initial_results_for_doc:
+                    ids_for_doc = [str(item.get('id')) for item in initial_results_for_doc if item.get('id')]
+                    initial_chunk_ids.extend(ids_for_doc)
+                    logger.info(f"Captured {len(ids_for_doc)} initial chunk IDs for doc {doc_id} (research scope).")
+
+                # --- Process this doc (relevance, rerank, expand, gap fill) ---
+                # Now returns processed chunks, final IDs for this doc, AND usage details
+                processed_chunks_for_doc, final_ids_for_doc, usage_for_doc = _process_single_document_id(
+                    cursor, query, query_embedding, doc_id, k_value, token
+                )
+                all_processed_results.extend(processed_chunks_for_doc)
+                if final_ids_for_doc: final_chunk_ids.extend(final_ids_for_doc) # Collect final IDs
+                all_usage_details.extend(usage_for_doc) # Collect usage details
+
+            # Check if any results were found across all documents
+            if not all_processed_results:
+                logger.info(f"No relevant information found across any IASB document sources for query: '{query}'")
+                final_research_result["status_summary"] = default_no_info_status
+                final_research_result["detailed_research"] = "No relevant information found across any IASB document sources."
+                # Return early, include the (potentially empty) initial IDs
+                return final_research_result, initial_chunk_ids, None, all_usage_details
             else:
-                research_result["status_summary"] = default_no_info_status
-                research_result["detailed_research"] = "No results found in the initial vector search."
-                return research_result, None, None, all_usage_details # Return early
+                # Log combined counts
+                logger.info(f"Collected {len(initial_chunk_ids)} total initial chunk IDs for research scope across all IASB sources.")
+                logger.info(f"Collected {len(final_chunk_ids)} total final chunk IDs for research scope across all IASB sources.")
 
-            processed_results = initial_results
-            all_added_chunk_ids = set() # Keep track of added chunks if needed
+                # Format combined chunks into cards
+                logger.info(f"Formatting combined {len(all_processed_results)} processed items from all IASB sources.")
+                formatted_chunks = _format_chunks_as_cards(all_processed_results)
 
-            # 4. Summary Relevance Filtering
-            filtered_results, _, relevance_usage = _filter_by_summary_relevance(query, processed_results, token)
-            if relevance_usage: all_usage_details.append(relevance_usage)
-            if not filtered_results:
-                research_result["status_summary"] = default_no_info_status
-                research_result["detailed_research"] = "No relevant information remained after summary filtering."
-                return research_result, initial_chunk_ids, None, all_usage_details # Return initial IDs even on early exit
-            processed_results = filtered_results
+                # Generate ONE final response from the combined cards
+                final_research_result, synthesis_usage = _generate_response_from_chunks(query, formatted_chunks, token)
+                if synthesis_usage: all_usage_details.append(synthesis_usage)
 
-            # 5. Importance Reranking
-            reranked_results = _rerank_by_importance(processed_results, IMPORTANCE_FACTOR)
-            processed_results = reranked_results
-
-            # 6. Section Expansion
-            expanded_results, added_by_expansion = _expand_sections_by_token_count(
-                cursor, processed_results, SECTION_EXPANSION_TOP_K_RANK, SECTION_EXPANSION_TOP_K_TOKENS, SECTION_EXPANSION_GENERAL_TOKENS
-            )
-            if not expanded_results:
-                research_result["status_summary"] = default_no_info_status
-                research_result["detailed_research"] = "No results remained after section expansion."
-                return research_result, initial_chunk_ids, None, all_usage_details # Return initial IDs
-            all_added_chunk_ids.update(added_by_expansion)
-            processed_results = expanded_results
-
-            # 7. Sequence Gap Filling
-            filled_results, added_by_gaps = _fill_sequence_gaps(
-                cursor, processed_results, GAP_FILL_MAX_SEQUENCE_GAP
-            )
-            if not filled_results:
-                research_result["status_summary"] = default_no_info_status
-                research_result["detailed_research"] = "No results remained after sequence gap filling."
-                return research_result, initial_chunk_ids, None, all_usage_details # Return initial IDs
-            all_added_chunk_ids.update(added_by_gaps)
-            processed_results = filled_results
-
-            # --- Extract Final Chunk IDs ---
-            # Get IDs from the final list of chunks/groups before formatting
-            final_chunk_ids = []
-            for item in processed_results:
-                if isinstance(item, dict) and item.get('type') == 'group':
-                    for chunk in item.get('chunks', []):
-                        if chunk.get('id'): final_chunk_ids.append(str(chunk.get('id')))
-                elif isinstance(item, dict) and item.get('id'):
-                    final_chunk_ids.append(str(item.get('id')))
-            logger.info(f"Collected {len(final_chunk_ids)} final chunk IDs for research scope.")
-
-            # 8. Format Cards
-            formatted_chunks = _format_chunks_as_cards(processed_results)
-
-            # 9. Generate Final Response
-            research_result, synthesis_usage = _generate_response_from_chunks(query, formatted_chunks, token)
-            if synthesis_usage: all_usage_details.append(synthesis_usage)
-
-            # Return the final research result, the *initial* chunk IDs, the *final* chunk IDs, and usage details
-            return research_result, initial_chunk_ids, final_chunk_ids, all_usage_details
+                # Return the final research result, the combined *initial* IDs, the combined *final* IDs, and usage details
+                return final_research_result, initial_chunk_ids, final_chunk_ids, all_usage_details
 
         else:
             # Invalid scope handling
-            logger.error(f"Invalid scope '{scope}' provided to {DATABASE_NAME} subagent.")
+            logger.error(f"Invalid scope '{scope}' provided to {database_name} subagent.")
             if scope == "metadata":
                 return [], None, None, all_usage_details
             else:
@@ -1025,7 +1093,7 @@ def _query_database_logic(
                 return error_response, None, None, all_usage_details
 
     except psycopg2.Error as db_err:
-        logger.error(f"Database error during {DATABASE_NAME} query (Scope: {scope}): {db_err}", exc_info=True)
+        logger.error(f"Database error during {database_name} query (Scope: {scope}): {db_err}", exc_info=True)
         if conn: conn.rollback()
         if scope == "metadata":
             return [], None, None, all_usage_details
@@ -1033,14 +1101,14 @@ def _query_database_logic(
             error_response = {"detailed_research": f"**Database Error:** {str(db_err)}", "status_summary": "❌ Database Error"}
             return error_response, None, None, all_usage_details
     except ConnectionError as conn_err:
-         logger.error(f"Connection error for {DATABASE_NAME} (Scope: {scope}): {conn_err}", exc_info=True)
+         logger.error(f"Connection error for {database_name} (Scope: {scope}): {conn_err}", exc_info=True)
          if scope == "metadata":
              return [], None, None, all_usage_details
          else:
              error_response = {"detailed_research": f"**Connection Error:** {str(conn_err)}", "status_summary": "❌ DB Connection Error"}
              return error_response, None, None, all_usage_details
     except Exception as e:
-        logger.error(f"Unexpected error querying {DATABASE_NAME} database (Scope: {scope}): {e}", exc_info=True)
+        logger.error(f"Unexpected error querying {database_name} database (Scope: {scope}): {e}", exc_info=True)
         if conn: conn.rollback()
         if scope == "metadata":
             return [], None, None, all_usage_details
@@ -1048,6 +1116,7 @@ def _query_database_logic(
             error_response = {"detailed_research": f"**Unexpected Error:** {str(e)}", "status_summary": default_error_status}
             return error_response, None, None, all_usage_details
     finally:
+        # Ensure connection is closed even if early returns happened
         if cursor:
             cursor.close()
         if conn:
@@ -1055,7 +1124,7 @@ def _query_database_logic(
             logger.info("Database connection closed.")
 
     # Fallback return (should not be reached ideally)
-    logger.error(f"Reached end of _query_database_logic unexpectedly for scope '{scope}' in {DATABASE_NAME}.")
+    logger.error(f"Reached end of _query_database_logic unexpectedly for scope '{scope}' in {database_name}.")
     if scope == "metadata":
         return [], None, None, all_usage_details
     else:
@@ -1065,13 +1134,14 @@ def _query_database_logic(
 
 # --- Main Function ---
 
-def query_database_sync(query: str, scope: str, token: Optional[str] = None, process_monitor=None, query_stage_name: Optional[str] = None) -> SubagentResult: # Added query_stage_name
+def query_database_sync(query: str, scope: str, document_config: Dict[str, Any], token: Optional[str] = None, process_monitor=None, query_stage_name: Optional[str] = None) -> SubagentResult: # Added document_config parameter
     """
-    Synchronously query the External KPMG database. Handles 'metadata' and 'research' scopes.
+    Synchronously query external databases with configurable document settings. Handles 'metadata' and 'research' scopes.
 
     Args:
         query (str): The search query to execute.
         scope (str): The scope of the query ('metadata' or 'research').
+        document_config (Dict[str, Any]): Configuration specifying query_type and documents with their k-values.
         token (str, optional): Authentication token for API access.
         process_monitor: Optional process monitor to track token usage.
         query_stage_name (str, optional): The specific stage name for this query instance
@@ -1083,9 +1153,12 @@ def query_database_sync(query: str, scope: str, token: Optional[str] = None, pro
             - Optional[List[str]]: List of chunk IDs used in the search, or None.
     """
     start_time = time.time()
-    logger.info(f"Querying {DATABASE_NAME} database: '{query}' with scope: {scope}")
+    # Extract documents dict from config for logging
+    documents = document_config.get('documents', {})
+    database_name = list(documents.keys())[0].split('_')[0] if documents else 'external'  # Derive name from first document
+    logger.info(f"Querying {database_name} database: '{query}' with scope: {scope}")
     # Use the passed-in stage name if available, otherwise default (though it should always be passed now)
-    stage_name = query_stage_name or f"db_query_{DATABASE_NAME}_unknown"
+    stage_name = query_stage_name or f"db_query_{database_name}_unknown"
     logger.debug(f"Using process monitor stage name: {stage_name}")
     result: DatabaseResponse = {} if scope == "research" else [] # Initialize result
     initial_chunk_ids: Optional[List[str]] = None
@@ -1100,7 +1173,7 @@ def query_database_sync(query: str, scope: str, token: Optional[str] = None, pro
 
     try:
         # Call the logic function which now returns result, initial_ids, final_ids, and usage_details
-        result, initial_chunk_ids, final_chunk_ids, all_usage_details = _query_database_logic(query, scope, token)
+        result, initial_chunk_ids, final_chunk_ids, all_usage_details = _query_database_logic(query, scope, document_config, token)
 
         # Process collected usage details if monitor is enabled
         if process_monitor and all_usage_details:
@@ -1131,7 +1204,7 @@ def query_database_sync(query: str, scope: str, token: Optional[str] = None, pro
                 process_monitor.add_stage_details(stage_name, **details_to_add)
 
     except Exception as e:
-        logger.error(f"Error during {DATABASE_NAME} query execution: {str(e)}", exc_info=True)
+        logger.error(f"Error during {database_name} query execution: {str(e)}", exc_info=True)
         # Ensure result is set to an error state if not already
         if scope == "research" and not (isinstance(result, dict) and result.get("status_summary", "").startswith("❌")):
              result = {"detailed_research": f"**Unhandled Error:** {str(e)}", "status_summary": "❌ Unhandled Error"}
@@ -1156,7 +1229,7 @@ def query_database_sync(query: str, scope: str, token: Optional[str] = None, pro
 
         end_time = time.time()
         duration = end_time - start_time
-        logger.info(f"{DATABASE_NAME} query completed in {duration:.2f} seconds.")
+        logger.info(f"{database_name} query completed in {duration:.2f} seconds.")
 
     # Return the result and the collected *initial* chunk IDs (main return value remains initial IDs)
     return result, initial_chunk_ids

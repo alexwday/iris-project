@@ -1,9 +1,9 @@
-# external_pwc/content_synthesis_prompt.py
+# external_iasb/content_synthesis_prompt.py
 """
-Prompt templates for synthesizing content AND status from retrieved PwC guidance documents.
+Prompt templates for synthesizing content AND status from retrieved IASB documents.
 
 This module contains prompts used to guide the LLM in synthesizing
-content from multiple PwC guidance context cards and providing a status summary.
+content from multiple IASB context cards (IAS, IFRS, IFRIC, SIC) and providing a status summary.
 
 This version implements advanced prompt engineering techniques:
 1. CO-STAR framework (Context, Objective, Style, Tone, Audience, Response Format)
@@ -17,16 +17,16 @@ from ....global_prompts.fiscal_statement import get_fiscal_statement
 from ....global_prompts.restrictions_statement import get_restrictions_statement
 
 # Define the subagent role
-SUBAGENT_ROLE = "an expert research assistant specializing in analyzing external PwC accounting guidance documents"
+SUBAGENT_ROLE = "an expert research assistant specializing in analyzing official IASB accounting standards and interpretations (IAS, IFRS, IFRIC, SIC)"
 
 # CO-STAR Framework Components
 SUBAGENT_OBJECTIVE = """
-To analyze provided PwC guidance context cards against a user query and generate an internal research report optimized for the Summarizer agent.
+To analyze provided IASB context cards (from IAS, IFRS, IFRIC, or SIC documents) against a user query and generate an internal research report optimized for the Summarizer agent.
 Your objective is to:
 1. Determine the relevance of the provided context card content to the user query.
 2. Generate a concise status flag summarizing the findings' relevance.
 3. Synthesize a detailed, structured research report in Markdown format using ONLY information from the provided context cards.
-4. **CRITICAL:** Include accurate citations *inline* within the report body, immediately following the information they support. Use the specific fields from the context cards: `Chapter`, `Section Title`, `Section Hierarchy`, `Standard`, `Standard Codes`. Format citations like: `(Source: PwC Guidance, Chapter: [Chapter Name], Section: [Section Title/Hierarchy], Standard: [Standard], Code: [Standard Codes])`. Use the most specific location identifier available (Section Title or Hierarchy). Include Standard/Code if relevant to the cited point.
+4. **CRITICAL:** Include accurate citations *inline* within the report body, immediately following the information they support. Use the specific fields from the context cards: `Chapter`, `Section Title`, `Section Hierarchy`, `Standard`, `Standard Codes`. Format citations like: `(Source: IASB Official Text, Chapter: [Chapter Name], Section: [Section Title/Hierarchy], Standard: [Standard], Code: [Standard Codes])`. Use the most specific location identifier available (Section Title or Hierarchy). Include Standard/Code if relevant to the cited point. **Crucially, ensure the citation reflects the specific standard or interpretation (e.g., IAS 1, IFRS 16, IFRIC 12, SIC 29) mentioned in the card's 'Standard' or 'Standard Codes' field.**
 5. Ensure the report is optimized for consumption by another AI agent (the Summarizer).
 6. Adhere strictly to all compliance restrictions.
 """
@@ -58,17 +58,17 @@ SYNTHESIS_TOOL_SCHEMA = {
     "type": "function",
     "function": {
         "name": "synthesize_research_findings", # Use generic name expected by calling code
-        "description": "Synthesizes research findings from provided PwC guidance context cards and generates a status summary.",
+        "description": "Synthesizes research findings from provided IASB context cards (IAS, IFRS, IFRIC, SIC) and generates a status summary.",
         "parameters": {
             "type": "object",
             "properties": {
                 "status_summary": {
                     "type": "string",
-                    "description": "Concise status summary flag (✅, ℹ️, 📄, ⚠️, ❓) indicating finding relevance based *only* on the provided PwC guidance context cards.",
+                    "description": "Concise status summary flag (✅, ℹ️, 📄, ⚠️, ❓) indicating finding relevance based *only* on the provided IASB context cards.",
                 },
                 "detailed_research_report": { # Renamed from detailed_research
                     "type": "string",
-                    "description": "Detailed, structured markdown report synthesizing information *only* from PwC guidance context cards, including mandatory inline citations (Chapter, Section Title/Hierarchy, Standard, Standard Codes). Optimized for the Summarizer Agent.",
+                    "description": "Detailed, structured markdown report synthesizing information *only* from IASB context cards, including mandatory inline citations (Chapter, Section Title/Hierarchy, Standard, Standard Codes). Optimized for the Summarizer Agent.",
                 },
             },
             "required": ["status_summary", "detailed_research_report"],
@@ -98,8 +98,8 @@ def get_content_synthesis_prompt(query: str, formatted_cards: str) -> str:
     prompt_parts = [
         f"You are {SUBAGENT_ROLE}.",
         "<CONTEXT>",
-        "You are analyzing context cards derived from external PwC accounting guidance documents.",
-        "Each card represents a relevant piece of text from the source PwC guidance document.",
+        "You are analyzing context cards derived from official IASB accounting standards and interpretations (IAS, IFRS, IFRIC, SIC).",
+        "Each card represents a relevant piece of text from the source IASB document.",
         "Context Card Fields Available:",
         "- Chapter: The name of the chapter the text belongs to.",
         "- Section Title: The title of the specific section.",
@@ -127,19 +127,19 @@ def get_content_synthesis_prompt(query: str, formatted_cards: str) -> str:
         SUBAGENT_AUDIENCE,
         "</AUDIENCE>",
         "<TASK>",
-        "Your goal is to provide BOTH a concise status summary flag AND a detailed, structured internal research report based *only* on the provided PwC guidance context cards, formatted for the Summarizer Agent.",
+        "Your goal is to provide BOTH a concise status summary flag AND a detailed, structured internal research report based *only* on the provided IASB context cards, formatted for the Summarizer Agent.",
         "<INPUT_DOCUMENTS>",
         f"<USER_QUERY>{query}</USER_QUERY>",
         f"<CONTEXT_CARDS>{formatted_cards}</CONTEXT_CARDS>",
         "</INPUT_DOCUMENTS>",
         "<INSTRUCTIONS>",
-        "1. **Analyze Relevance:** Carefully read the user query and the 'Content' field within the provided PwC guidance context cards. Determine how well the content addresses the query.",
+        "1. **Analyze Relevance:** Carefully read the user query and the 'Content' field within the provided IASB context cards. Determine how well the content addresses the query.",
         "2. **Generate Status Summary Flag:** Based on your analysis, provide ONLY the single-line status summary flag indicating relevance and completeness. Choose ONE:",
-        "   * `✅ Found information directly addressing the query in the PwC cards.`",
-        "   * `ℹ️ Found related contextual information in the PwC cards, but not a direct answer.`",
-        "   * `📄 PwC cards found, but they do not contain relevant information for this query.`",
-        "   * `⚠️ Conflicting information found across PwC cards.` (Explain conflicts in the detailed report)",
-        "   * `❓ Query is ambiguous based on PwC card content.` (Explain ambiguity in the detailed report)",
+        "   * `✅ Found information directly addressing the query in the IASB cards.`",
+        "   * `ℹ️ Found related contextual information in the IASB cards, but not a direct answer.`",
+        "   * `📄 IASB cards found, but they do not contain relevant information for this query.`",
+        "   * `⚠️ Conflicting information found across IASB cards.` (Explain conflicts in the detailed report)",
+        "   * `❓ Query is ambiguous based on IASB card content.` (Explain ambiguity in the detailed report)",
         "   **Strict Adherence to Data Sourcing:** Remember to strictly follow the `<CRITICAL_DATA_SOURCING>` rules defined in the global `<RESTRICTIONS_AND_GUIDELINES>`. Your report MUST be derived *exclusively* from the text within the 'Content' field of the `<CONTEXT_CARDS>`. Do NOT introduce any facts, concepts, standard names/numbers, definitions, interpretations, or any external knowledge not explicitly present *within* the provided card content.",
         "3. **Generate Detailed Research Report:** Synthesize a comprehensive internal report using *only* information from the 'Content' field of the provided context cards.",
         "   * Structure the report clearly using Markdown (e.g., `## Key Findings`, `## Detailed Analysis`, `## Supporting Details`, `## Conflicts/Gaps`).",

@@ -484,7 +484,7 @@
             <div class="database-selector">
                 <div class="database-selector-header">
                     <h3>Database Filters</h3>
-                    <div class="selected-count" id="selectedCount">All databases (11)</div>
+                    <div class="selected-count" id="selectedCount">All databases (13)</div>
                     <button class="filter-toggle" id="filterToggle">Show Filters</button>
                 </div>
                 
@@ -539,10 +539,25 @@
                         </div>
                     </div>
                     
+                    <div class="database-group">
+                        <h4>External Guidance</h4>
+                        <div class="checkbox-grid">
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="external_ey" value="external_ey" checked>
+                                <label for="external_ey">EY International GAAP</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="external_iasb" value="external_iasb" checked>
+                                <label for="external_iasb">IASB Standards</label>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <div class="control-buttons">
                         <button id="selectAllBtn">Select All</button>
                         <button id="clearAllBtn" class="secondary">Clear All</button>
                         <button id="selectInternalBtn">Internal Only</button>
+                        <button id="selectExternalBtn">External Only</button>
                     </div>
                 </div>
             </div>
@@ -627,6 +642,14 @@
                     const checkboxes = document.querySelectorAll('input[type="checkbox"]');
                     checkboxes.forEach(cb => {
                         cb.checked = cb.value.startsWith('internal_');
+                    });
+                    this.updateSelectedCount();
+                });
+                
+                document.getElementById('selectExternalBtn').addEventListener('click', () => {
+                    const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+                    checkboxes.forEach(cb => {
+                        cb.checked = cb.value.startsWith('external_');
                     });
                     this.updateSelectedCount();
                 });
