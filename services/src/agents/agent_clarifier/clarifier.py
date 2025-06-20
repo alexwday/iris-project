@@ -110,20 +110,6 @@ def load_agent_config():
                                 "description": "The determined scope of the user's request ('metadata' for catalog lookup, 'research' for content analysis). Required if action is 'create_research_statement'.",
                                 "enum": ["metadata", "research"],
                             },
-                            "is_continuation": {
-                                "type": "boolean",
-                                "description": (
-                                    "Whether the user is requesting continuation of "
-                                    "previous research."
-                                ),
-                            },
-                            "request_external_confirmation": {
-                                "type": "boolean",
-                                "description": (
-                                    "Set to true ONLY for accounting-related queries when creating a research statement "
-                                    "to signal that user confirmation for including external sources should be requested."
-                                ),
-                            },
                         },
                         "required": [
                             "action",
@@ -246,7 +232,6 @@ def clarify_research_needs(conversation, token) -> Tuple[Dict[str, Any], Optiona
         action = arguments.get("action")
         output = arguments.get("output")
         scope = arguments.get("scope")  # Extract the new scope field
-        is_continuation = arguments.get("is_continuation", False)
 
         if not action:
             raise ClarifierError("Missing 'action' in tool arguments")
@@ -275,14 +260,12 @@ def clarify_research_needs(conversation, token) -> Tuple[Dict[str, Any], Optiona
         logger.info(f"Clarifier decision: {action}")
         if action == "create_research_statement":
             logger.info(f"Determined scope: {scope}")
-        logger.info(f"Is continuation: {is_continuation}")
 
         # Construct the decision dictionary
         decision = {
             "action": action,
             "output": output,
             "scope": scope,
-            "is_continuation": is_continuation,
         }
 
         # Return both decision and usage details
