@@ -612,12 +612,22 @@ def _model_generator(
                     return
 
                 logger.info(f"Research scope determined: {scope}")
+                # Filter available databases based on user selection BEFORE planner
+                available_databases = get_available_databases()
+                logger.info(f"Initial available databases: {list(available_databases.keys())}")
+                if db_names is not None:
+                    logger.info(f"db_names filter provided: {db_names}")
+                    available_databases = {k: v for k, v in available_databases.items() if k in db_names}
+                    logger.info(f"Filtered available_databases for planner: {list(available_databases.keys())}")
+                else:
+                    logger.info("No db_names filter provided; planner will see all available databases.")
+
                 process_monitor.start_stage("planner")
                 logger.info("Creating database selection plan...")
                 # TODO: Update create_database_selection_plan to return (plan, usage_details)
                 db_selection_plan, planner_usage_details = (
                     create_database_selection_plan(
-                        research_statement, token, is_continuation
+                        research_statement, token, available_databases, is_continuation
                     )
                 )
                 selected_databases = db_selection_plan.get("databases", [])
@@ -639,16 +649,6 @@ def _model_generator(
                 # --- Legacy Debug Block Removed ---
 
                 # Display plan...
-                available_databases = get_available_databases()
-                logger.info(f"Initial available databases: {list(get_available_databases().keys())}")
-                if db_names is not None:
-                    logger.info(f"db_names filter provided: {db_names}")
-                    available_databases = {k: v for k, v in available_databases.items() if k in db_names}
-                    logger.info(f"Filtered available_databases: {list(available_databases.keys())}")
-                    selected_databases = [db for db in selected_databases if db in db_names]
-                    logger.info(f"Filtered selected_databases: {selected_databases}")
-                else:
-                    logger.info("No db_names filter provided; using all available databases.")
                 logger.info(f"Final selected_databases to be queried: {selected_databases}")
                 if scope == "metadata":
                     yield "# 🔍 File Search Plan\n\n"
@@ -941,6 +941,7 @@ def _model_generator(
                                 aggregated_detailed_research,
                                 scope,
                                 token,
+                                available_databases,
                                 reference_index=master_reference_index,
                             )
 

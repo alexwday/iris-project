@@ -40,8 +40,8 @@ MODEL_CAPABILITY = "small"
 MAX_TOKENS = 4096
 TEMPERATURE = 0.0
 
-# Import database configuration from global prompts
-AVAILABLE_DATABASES = get_available_databases()
+# Note: AVAILABLE_DATABASES now passed as parameter to support filtering
+# Removed static import: AVAILABLE_DATABASES = get_available_databases()
 
 # Define the planner agent role and task
 PLANNER_ROLE = "an expert query planning agent in the IRIS workflow"
@@ -201,34 +201,43 @@ def construct_system_prompt():
 # Generate the complete system prompt
 SYSTEM_PROMPT = construct_system_prompt()
 
-# Tool definition for database selection planning
-TOOL_DEFINITIONS = [
-    {
-        "type": "function",
-        "function": {
-            "name": "submit_database_selection_plan",  # Renamed tool
-            "description": "Submit a plan of selected databases based on the research statement.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "databases": {  # Renamed parameter
-                        "type": "array",
-                        "description": "The list of database names to query using the full research statement.",
-                        "items": {
-                            "type": "string",
-                            "description": "The name of the database to query.",
-                            "enum": list(
-                                AVAILABLE_DATABASES.keys()
-                            ),  # Use enum for validation
-                        },
-                        "minItems": 1,
-                        "maxItems": 5,
-                    }
+def get_tool_definitions(available_databases):
+    """
+    Generate tool definitions with dynamic database enum based on available databases.
+    
+    Args:
+        available_databases (dict): Dictionary of available database configurations
+        
+    Returns:
+        list: Tool definitions for the planner agent
+    """
+    return [
+        {
+            "type": "function",
+            "function": {
+                "name": "submit_database_selection_plan",  # Renamed tool
+                "description": "Submit a plan of selected databases based on the research statement.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "databases": {  # Renamed parameter
+                            "type": "array",
+                            "description": "The list of database names to query using the full research statement.",
+                            "items": {
+                                "type": "string",
+                                "description": "The name of the database to query.",
+                                "enum": list(
+                                    available_databases.keys()
+                                ),  # Use enum for validation with filtered databases
+                            },
+                            "minItems": 1,
+                            "maxItems": 5,
+                        }
+                    },
+                    "required": ["databases"],
                 },
-                "required": ["databases"],
             },
-        },
-    }
-]
+        }
+    ]
 
 logger.debug("Planner agent settings initialized")

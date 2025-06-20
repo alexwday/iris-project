@@ -22,19 +22,18 @@ from typing import Tuple, Dict, Optional, Any # Added Tuple, Dict, Optional, Any
 from ...initial_setup.env_config import config
 from ...llm_connectors.rbc_openai import call_llm
 from .planner_settings import (
-    AVAILABLE_DATABASES,
     MAX_TOKENS,
     MODEL_CAPABILITY,
     SYSTEM_PROMPT,
     TEMPERATURE,
-    TOOL_DEFINITIONS,
+    get_tool_definitions,
 )
 
 # Get module logger (no configuration here - using centralized config)
 logger = logging.getLogger(__name__)
 
-# Extract the new tool name from settings for clarity
-PLANNER_TOOL_NAME = TOOL_DEFINITIONS[0]["function"]["name"]
+# Tool name constant
+PLANNER_TOOL_NAME = "submit_database_selection_plan"
 
 # Get model configuration based on capability
 model_config = config.get_model_config(MODEL_CAPABILITY)
@@ -49,7 +48,7 @@ class PlannerError(Exception):
     pass
 
 
-def create_database_selection_plan(research_statement, token, is_continuation=False) -> Tuple[Dict[str, Any], Optional[Dict[str, Any]]]:
+def create_database_selection_plan(research_statement, token, available_databases, is_continuation=False) -> Tuple[Dict[str, Any], Optional[Dict[str, Any]]]:
     """
     Create a plan of selected databases based on a research statement.
 
@@ -59,6 +58,7 @@ def create_database_selection_plan(research_statement, token, is_continuation=Fa
             - In RBC environment: OAuth token
             - In RBC environment: OAuth token
             - In local environment: API key
+        available_databases (dict): Dictionary of available database configurations (filtered by user selection)
         is_continuation (bool, optional): Whether this is a continuation of previous research.
 
     Returns:
@@ -88,7 +88,11 @@ def create_database_selection_plan(research_statement, token, is_continuation=Fa
 
         logger.info(f"Creating database selection plan using model: {MODEL_NAME}")
         logger.info(f"Is continuation: {is_continuation}")
+        logger.info(f"Available databases: {list(available_databases.keys())}")
         logger.info("Initiating Planner API call for database selection")
+
+        # Generate tool definitions with filtered databases
+        tool_definitions = get_tool_definitions(available_databases)
 
         # Make the API call with tool calling (non-streaming returns tuple)
         response, usage_details = call_llm(
@@ -97,7 +101,7 @@ def create_database_selection_plan(research_statement, token, is_continuation=Fa
             messages=messages,
             max_tokens=MAX_TOKENS,
             temperature=TEMPERATURE,
-            tools=TOOL_DEFINITIONS,
+            tools=tool_definitions,
             tool_choice={
                 "type": "function",
                 "function": {"name": PLANNER_TOOL_NAME},

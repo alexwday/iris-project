@@ -32,8 +32,8 @@ from ...global_prompts.restrictions_statement import get_restrictions_statement
 # Get module logger (no configuration here - using centralized config)
 logger = logging.getLogger(__name__)
 
-# Import database configuration from global prompts
-AVAILABLE_DATABASES = get_available_databases()
+# Note: AVAILABLE_DATABASES now passed as parameter to support filtering
+# Removed static import: AVAILABLE_DATABASES = get_available_databases()
 
 # Model capability - used to get specific model based on environment
 MODEL_CAPABILITY = "large"

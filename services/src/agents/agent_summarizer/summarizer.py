@@ -22,7 +22,6 @@ from ...initial_setup.env_config import config
 
 from ...llm_connectors.rbc_openai import call_llm  # Remove log_usage_statistics
 from .summarizer_settings import (
-    AVAILABLE_DATABASES,
     MAX_TOKENS,
     MODEL_CAPABILITY,
     SYSTEM_PROMPT,
@@ -46,6 +45,7 @@ def generate_streaming_summary(
     ],  # Input is now Dict[db_name, detailed_research_string]
     scope: str,  # Keep scope for potential future variations
     token: Optional[str],
+    available_databases: Dict[str, Any],  # Available database configurations (filtered by user selection)
     original_query_plan: Optional[Dict] = None,
     reference_index: Optional[
         Dict[str, Dict[str, Any]]
@@ -110,7 +110,7 @@ def generate_streaming_summary(
                 )
             else:
                 for db_name, research_text in aggregated_detailed_research.items():
-                    db_display_name = AVAILABLE_DATABASES.get(db_name, {}).get(
+                    db_display_name = available_databases.get(db_name, {}).get(
                         "name", db_name
                     )
                     research_context += f"=== Findings from: {db_display_name} ===\n"
@@ -124,7 +124,7 @@ def generate_streaming_summary(
                 plan_context = "Original Query Plan:\n"
                 for i, q in enumerate(original_query_plan["queries"]):
                     db_identifier = q.get("database")
-                    db_display_name = AVAILABLE_DATABASES.get(db_identifier, {}).get(
+                    db_display_name = available_databases.get(db_identifier, {}).get(
                         "name", db_identifier
                     )
                     plan_context += f"{i+1}. {db_display_name}: {q.get('query')}\n"
