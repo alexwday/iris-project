@@ -62,6 +62,21 @@ T = TypeVar("T")
 # Get available databases from the central configuration
 AVAILABLE_DATABASES = get_available_databases()
 
+# Define mapping of internal databases to their document sources
+INTERNAL_DATABASES = {
+    'internal_par': 'internal_par',
+    'internal_esg': 'internal_esg',
+    'internal_capm': 'internal_capm',
+    'internal_aio': 'internal_aio',
+    'internal_cheatsheets': 'internal_cheatsheets',
+    'internal_ext_reporting_and_disclosure': 'internal_ext_reporting_and_disclosure',
+    'internal_global_finance_standards': 'internal_global_finance_standards',
+    'internal_management_reporting': 'internal_management_reporting',
+    'internal_memos': 'internal_memos',
+    'internal_process_and_controls': 'internal_process_and_controls',
+    'internal_wiki': 'internal_wiki',
+}
+
 # Get module logger
 logger = logging.getLogger(__name__)
 
@@ -144,38 +159,56 @@ def route_query_sync(
         )  # Return tuple with None for file_links, page_refs, section_content, reference_index
 
     try:
-        module_path = f"services.src.agents.database_subagents.{database}.subagent"
-        subagent_module = importlib.import_module(module_path)
-        logger.debug(f"Successfully imported module: {module_path}")
+        # Check if this is an internal database that should use catalog_search
+        if database in INTERNAL_DATABASES:
+            # Use the unified catalog_search subagent for all internal databases
+            from .catalog_search.subagent import query_database_sync
+            document_source = INTERNAL_DATABASES[database]
+            logger.debug(f"Using catalog_search subagent for {database} with document_source: {document_source}")
+            
+            # Call the catalog_search subagent with the appropriate document_source
+            result_tuple = query_database_sync(
+                query=query,
+                scope=scope,
+                document_source=document_source,
+                token=token,
+                process_monitor=process_monitor,
+                query_stage_name=stage_name
+            )
+        else:
+            # For non-internal databases, use the original dynamic import logic
+            module_path = f"services.src.agents.database_subagents.{database}.subagent"
+            subagent_module = importlib.import_module(module_path)
+            logger.debug(f"Successfully imported module: {module_path}")
 
-        if not hasattr(subagent_module, "query_database_sync"):
-            error_msg = f"Subagent module for '{database}' missing 'query_database_sync' function."
-            logger.error(error_msg)  # Log the error
+            if not hasattr(subagent_module, "query_database_sync"):
+                error_msg = f"Subagent module for '{database}' missing 'query_database_sync' function."
+                logger.error(error_msg)  # Log the error
 
-            # End stage with error if process monitor is provided
-            # Use the specific stage_name passed from the worker
-            if process_monitor:
-                process_monitor.add_stage_details(stage_name, error=error_msg)
-                # REMOVED: Stage end (even for errors) is now handled by the caller (_execute_query_worker)
-                # process_monitor.end_stage(stage_name, status="error")
+                # End stage with error if process monitor is provided
+                # Use the specific stage_name passed from the worker
+                if process_monitor:
+                    process_monitor.add_stage_details(stage_name, error=error_msg)
+                    # REMOVED: Stage end (even for errors) is now handled by the caller (_execute_query_worker)
+                    # process_monitor.end_stage(stage_name, status="error")
 
-            # Raise attribute error as it's a code structure issue and sync is expected
-            raise AttributeError(error_msg)
+                # Raise attribute error as it's a code structure issue and sync is expected
+                raise AttributeError(error_msg)
 
-        # Use the synchronous version directly - it now returns a tuple
-        query_func = subagent_module.query_database_sync
-        logger.debug(f"Calling query_database_sync for {database}")
+            # Use the synchronous version directly - it now returns a tuple
+            query_func = subagent_module.query_database_sync
+            logger.debug(f"Calling query_database_sync for {database}")
 
-        # Check if the function can accept process_monitor and query_stage_name parameters
-        sig = inspect.signature(query_func)
-        call_args = {"query": query, "scope": scope, "token": token}
-        if "process_monitor" in sig.parameters:
-            call_args["process_monitor"] = process_monitor
-        if "query_stage_name" in sig.parameters:
-            call_args["query_stage_name"] = stage_name  # Pass the specific stage name
+            # Check if the function can accept process_monitor and query_stage_name parameters
+            sig = inspect.signature(query_func)
+            call_args = {"query": query, "scope": scope, "token": token}
+            if "process_monitor" in sig.parameters:
+                call_args["process_monitor"] = process_monitor
+            if "query_stage_name" in sig.parameters:
+                call_args["query_stage_name"] = stage_name  # Pass the specific stage name
 
-        # Pass the process monitor and stage name if the function supports them
-        result_tuple = query_func(**call_args)
+            # Pass the process monitor and stage name if the function supports them
+            result_tuple = query_func(**call_args)
 
         # DEBUG: Log what we got back from the subagent
         logger.error(f"DEBUG ROUTER: {database} subagent returned type: {type(result_tuple)}")

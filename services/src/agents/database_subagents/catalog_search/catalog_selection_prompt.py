@@ -1,25 +1,25 @@
-# internal_process_and_controls/catalog_selection_prompt.py
+# internal_capm/catalog_selection_prompt.py
 """
-Prompt templates for selecting relevant Process and Controls documents from the catalog.
+Prompt templates for selecting relevant CAPM documents from the catalog.
 
 This module contains prompts used to guide the LLM in selecting
-the most relevant documents from the Process and Controls catalog based on the user query.
+the most relevant documents from the CAPM catalog based on the user query.
 """
 
 
 def get_catalog_selection_prompt(user_query: str, formatted_catalog: str) -> str:
     """
-    Generate a prompt for selecting relevant documents from the Process and Controls catalog.
+    Generate a prompt for selecting relevant documents from the CAPM catalog.
 
     Args:
         user_query (str): The original user query
-        formatted_catalog (str): The formatted catalog of Process and Controls documents
+        formatted_catalog (str): The formatted catalog of CAPM documents
 
     Returns:
         str: The formatted prompt for the LLM
     """
     prompt = f"""# TASK
-You are helping to search through a catalog of internal PAR (Project Approval Request Guidance) documents to find
+You are helping to search through a catalog of internal CAPM (Central Accounting Policy Manual) documents to find
 the most relevant ones for answering a user query.
 
 ## User Query
@@ -44,7 +44,7 @@ Each catalog entry contains:
 You must respond with ONLY the IDs of the most relevant documents. 
 Return a maximum of 5 document IDs.
 Your response must be formatted as a JSON array of document IDs as strings, for example:
-["1", "2", "3"]
+["1", "2", "5"]
 
 If no documents seem relevant, return an empty array: []
 """
