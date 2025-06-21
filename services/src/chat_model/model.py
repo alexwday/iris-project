@@ -762,6 +762,10 @@ def _model_generator(
                 logger.warning("No usage details received from direct_response stream.")
 
             # --- Legacy Debug Block Removed ---
+            
+            # End monitoring after successful direct response completion
+            logger.info("Direct response completed successfully, ending monitoring")
+            process_monitor.end_monitoring()
 
         elif routing_decision["function_name"] == "research_from_database":
             logger.info("Using research path based on routing decision")
@@ -790,6 +794,10 @@ def _model_generator(
                 logger.info("Essential context needed, returning context questions")
                 questions = clarifier_decision["output"].strip()
                 yield "Before proceeding with research, please clarify:\n\n" + questions
+                
+                # End monitoring after successful context request completion
+                logger.info("Context request completed successfully, ending monitoring")
+                process_monitor.end_monitoring()
             else:
                 research_statement = clarifier_decision.get("output", "")
                 scope = clarifier_decision.get("scope")
@@ -797,6 +805,9 @@ def _model_generator(
                 if not scope:
                     logger.error("Scope missing from clarifier decision.")
                     yield "Error: Internal configuration error - missing research scope."
+                    # End monitoring after error
+                    logger.info("Ending monitoring due to scope error")
+                    process_monitor.end_monitoring()
                     return
 
                 logger.info(f"Research scope determined: {scope}")
@@ -1248,11 +1259,19 @@ def _model_generator(
                     )
 
                 # --- Legacy Debug Block Removed ---
+                
+                # End monitoring after successful research completion
+                logger.info("Research completed successfully, ending monitoring")
+                process_monitor.end_monitoring()
+                
         else:
             logger.error(
                 f"Unknown routing function: {routing_decision['function_name']}"
             )
             yield "Error: Unable to process query due to internal routing error."
+            # End monitoring after routing error
+            logger.info("Ending monitoring due to routing error")
+            process_monitor.end_monitoring()
 
     except Exception as e:
         error_msg = f"Critical error processing request: {str(e)}"
