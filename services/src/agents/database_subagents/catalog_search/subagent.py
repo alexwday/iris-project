@@ -45,8 +45,190 @@ from ....initial_setup.env_config import config
 from ....initial_setup.db_config import connect_to_db
 from ....llm_connectors.rbc_openai import call_llm
 
+# Import for embedding functionality (self-contained in this module)
+import psycopg2.extras
+from pgvector.psycopg2 import register_vector
+
 # Get module logger
 logger = logging.getLogger(__name__)
+
+
+def _generate_research_statement_embedding(
+    research_statement: str, token: Optional[str] = None
+) -> Tuple[Optional[List[float]], Optional[Dict[str, Any]]]:
+    """
+    Self-contained function to generate embedding for research statement.
+    
+    Args:
+        research_statement (str): The research statement to embed
+        token (Optional[str]): OAuth token for API authentication
+        
+    Returns:
+        Tuple[Optional[List[float]], Optional[Dict[str, Any]]]: 
+            - Embedding vector
+            - Usage details dictionary
+    """
+    logger.info(f"Generating embedding for research statement: '{research_statement[:100]}...'")
+    usage_details = None
+    
+    try:
+        model_config = config.get_model_config("embedding")
+        model_name = model_config["name"]
+        prompt_cost = model_config["prompt_token_cost"]
+        completion_cost = model_config.get("completion_token_cost", 0.0)
+
+        call_params = {
+            "oauth_token": token or "placeholder_token",
+            "prompt_token_cost": prompt_cost,
+            "completion_token_cost": completion_cost,
+            "model": model_name,
+            "input": [research_statement],
+            "dimensions": 2000,
+            "database_name": "catalog_search_embedding",
+            "is_embedding": True,
+        }
+
+        # Direct synchronous call - returns a tuple (response, usage_details)
+        result = call_llm(**call_params)
+
+        # Handle the tuple format: (api_response, usage_details)
+        response = None
+        if isinstance(result, tuple) and len(result) == 2:
+            response, usage_details = result
+            if usage_details:
+                logger.debug(f"Research statement embedding usage: {usage_details}")
+        else:
+            response = result
+            logger.debug("call_llm did not return usage_details")
+
+        if (
+            response
+            and hasattr(response, "data")
+            and response.data
+            and hasattr(response.data[0], "embedding")
+            and response.data[0].embedding
+        ):
+            logger.info("Research statement embedding generated successfully.")
+            return response.data[0].embedding, usage_details
+        else:
+            logger.error("No embedding data received from API for research statement.")
+            return None, usage_details
+
+    except Exception as e:
+        logger.error(f"Failed to generate research statement embedding: {e}", exc_info=True)
+        return None, usage_details
+
+
+def fetch_catalog_with_similarity_filter(
+    document_source: str, 
+    research_statement: Optional[str] = None,
+    token: Optional[str] = None,
+    top_k: int = 10
+) -> List[Dict[str, Any]]:
+    """
+    Fetch catalog with optional similarity filtering based on research statement.
+    If research_statement is provided, performs similarity search on document_description_embedding.
+    Otherwise, returns all documents for the document_source.
+    
+    Args:
+        document_source: The document source to query
+        research_statement: Optional research statement for similarity filtering
+        token: OAuth token for embedding generation
+        top_k: Number of top similar documents to return (when using similarity)
+        
+    Returns:
+        List of catalog records, either filtered by similarity or all documents
+    """
+    logger.info(f"Fetching catalog for {document_source} with similarity filter: {research_statement is not None}")
+    
+    conn = connect_to_db()
+    catalog_records: List[Dict[str, Any]] = []
+    
+    if not conn:
+        logger.error(f"Failed to connect to database for {document_source} catalog")
+        return catalog_records
+        
+    try:
+        # Register vector type for pgvector operations
+        register_vector(conn)
+        
+        with conn.cursor() as cur:
+            if research_statement:
+                # Generate embedding for research statement
+                query_embedding, usage_details = _generate_research_statement_embedding(
+                    research_statement, token
+                )
+                
+                if query_embedding is None:
+                    logger.warning("Could not generate embedding, falling back to regular catalog fetch")
+                    # Fall back to regular catalog fetch
+                    cur.execute(
+                        """
+                        SELECT id, document_name, document_description, document_usage, 
+                               file_link, file_name
+                        FROM apg_catalog
+                        WHERE document_source = %s
+                        ORDER BY document_name
+                        """,
+                        (document_source,),
+                    )
+                else:
+                    # Perform similarity search
+                    logger.info(f"Performing similarity search for top {top_k} documents")
+                    cur.execute(
+                        """
+                        SELECT id, document_name, document_description, document_usage, 
+                               file_link, file_name,
+                               1 - (document_description_embedding <=> %s::vector) AS similarity_score
+                        FROM apg_catalog
+                        WHERE document_source = %s 
+                        AND document_description_embedding IS NOT NULL
+                        ORDER BY similarity_score DESC
+                        LIMIT %s
+                        """,
+                        (query_embedding, document_source, top_k),
+                    )
+            else:
+                # Regular catalog fetch without similarity filtering
+                cur.execute(
+                    """
+                    SELECT id, document_name, document_description, document_usage, 
+                           file_link, file_name
+                    FROM apg_catalog
+                    WHERE document_source = %s
+                    ORDER BY document_name
+                    """,
+                    (document_source,),
+                )
+            
+            # Process results
+            for row in cur.fetchall():
+                record = {
+                    "id": str(row[0]),
+                    "document_name": row[1],
+                    "document_description": row[2],
+                    "document_usage": row[3] if row[3] else "No detailed usage information available",
+                    "file_link": row[4] if row[4] else None,
+                    "file_name": row[5] if row[5] else None,
+                }
+                
+                # Add similarity score if available (similarity search)
+                if research_statement and query_embedding and len(row) > 6:
+                    record["similarity_score"] = float(row[6])
+                    
+                catalog_records.append(record)
+        
+        logger.info(f"Retrieved {len(catalog_records)} catalog entries for {document_source}")
+        if research_statement and catalog_records and "similarity_score" in catalog_records[0]:
+            logger.info(f"Similarity scores range: {catalog_records[-1]['similarity_score']:.3f} to {catalog_records[0]['similarity_score']:.3f}")
+            
+    except Exception as e:
+        logger.error(f"Error fetching {document_source} catalog: {str(e)}", exc_info=True)
+    finally:
+        if conn:
+            conn.close()
+            
+    return catalog_records
 
 
 def load_catalog_selection_config():
@@ -915,6 +1097,7 @@ def query_database_sync(
     token: Optional[str] = None,
     process_monitor=None,
     query_stage_name: Optional[str] = None,
+    research_statement: Optional[str] = None,  # NEW PARAMETER for similarity search
 ) -> SubagentResult:  # Added query_stage_name
     """
     Synchronously query the specified internal database based on the specified scope.
@@ -927,6 +1110,9 @@ def query_database_sync(
         process_monitor: Optional process monitor to track token usage
         query_stage_name (str, optional): The specific stage name for this query instance
                                           provided by the caller (e.g., worker).
+        research_statement (str, optional): Research statement for similarity-based filtering.
+                                          If provided, will perform embedding-based similarity search
+                                          to pre-filter documents before LLM selection.
 
     Returns:
         Tuple containing the main database response, a list of selected document IDs (or None),
@@ -955,11 +1141,20 @@ def query_database_sync(
     logger.debug(f"Using process monitor stage name: {stage_name}")
 
     try:
-        # Direct synchronous calls
-        catalog = fetch_catalog(
-            document_source
-        )  # Use generic function with document_source
-        logger.info(f"Retrieved {len(catalog)} total {document_source} catalog entries")
+        # Use new similarity filtering function if research_statement provided
+        if research_statement:
+            logger.info(f"Using similarity filtering with research statement for {document_source}")
+            catalog = fetch_catalog_with_similarity_filter(
+                document_source=document_source,
+                research_statement=research_statement,
+                token=token,
+                top_k=10  # Limit to top 10 most similar documents
+            )
+        else:
+            logger.info(f"Using standard catalog fetch for {document_source}")
+            catalog = fetch_catalog(document_source)
+            
+        logger.info(f"Retrieved {len(catalog)} {document_source} catalog entries (filtered: {research_statement is not None})")
         if not catalog:
             response: DatabaseResponse
             if scope == "metadata":

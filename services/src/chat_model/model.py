@@ -639,6 +639,7 @@ def _execute_query_worker(
             token,
             process_monitor=process_monitor,
             query_stage_name=query_stage_name,
+            research_statement=query_text,  # Pass research statement for similarity filtering
         )  # ADDED query_stage_name
 
         # Handle different tuple lengths for backward compatibility

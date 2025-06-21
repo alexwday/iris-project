@@ -1773,6 +1773,7 @@ def query_database_sync(
     token: Optional[str] = None,
     process_monitor=None,
     query_stage_name: Optional[str] = None,
+    research_statement: Optional[str] = None,
 ) -> SubagentResult:  # Added document_config parameter
     """
     Synchronously query external databases with configurable document settings. Handles 'metadata' and 'research' scopes.
@@ -1785,6 +1786,7 @@ def query_database_sync(
         process_monitor: Optional process monitor to track token usage.
         query_stage_name (str, optional): The specific stage name for this query instance
                                           provided by the caller (e.g., worker).
+        research_statement (str, optional): Research statement for similarity search context.
 
     Returns:
         SubagentResult: Tuple containing:

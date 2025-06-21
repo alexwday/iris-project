@@ -90,6 +90,7 @@ def route_query_sync(
     token: Optional[str] = None,
     process_monitor=None,
     query_stage_name: Optional[str] = None,
+    research_statement: Optional[str] = None,  # NEW PARAMETER for similarity search
 ) -> SubagentResult:  # Updated return type hint, added query_stage_name
     """
     Synchronously routes a database query to the appropriate subagent module.
@@ -102,6 +103,9 @@ def route_query_sync(
         process_monitor (optional): Process monitor instance for tracking token usage.
         query_stage_name (str, optional): The specific stage name for this query instance
                                           provided by the caller (e.g., worker).
+        research_statement (str, optional): Research statement for similarity-based filtering.
+                                          If provided, will be passed to subagents for embedding-based
+                                          document pre-filtering before LLM selection.
 
     Returns:
         SubagentResult: A tuple containing:
@@ -159,6 +163,7 @@ def route_query_sync(
                 token=token,
                 process_monitor=process_monitor,
                 query_stage_name=stage_name,
+                research_statement=research_statement,  # Pass research statement for similarity filtering
             )
         elif database in EXTERNAL_DATABASES:
             # Use the unified semantic_search subagent for external databases
@@ -177,6 +182,7 @@ def route_query_sync(
                 token=token,
                 process_monitor=process_monitor,
                 query_stage_name=stage_name,
+                research_statement=research_statement,  # Pass research statement for context
             )
         else:
             # For non-unified databases, use the original dynamic import logic
