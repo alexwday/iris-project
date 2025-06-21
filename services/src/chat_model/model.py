@@ -653,7 +653,7 @@ def _model_generator(
         logger.info("Getting routing decision...")
         # TODO: Update get_routing_decision to return (decision, usage_details)
         routing_decision, router_usage_details = get_routing_decision(
-            processed_conversation, token
+            processed_conversation, token, available_databases
         )
         process_monitor.end_stage("router")
         if router_usage_details:
@@ -673,7 +673,7 @@ def _model_generator(
             process_monitor.start_stage("direct_response")
             # TODO: Update response_from_conversation to yield usage details at the end
             direct_response_usage_details = None
-            stream_iterator = response_from_conversation(processed_conversation, token)
+            stream_iterator = response_from_conversation(processed_conversation, token, available_databases)
             for chunk in stream_iterator:
                 if isinstance(chunk, dict) and "usage_details" in chunk:
                     direct_response_usage_details = chunk["usage_details"]
@@ -695,7 +695,7 @@ def _model_generator(
             logger.info("Clarifying research needs...")
             # TODO: Update clarify_research_needs to return (decision, usage_details)
             clarifier_decision, clarifier_usage_details = clarify_research_needs(
-                processed_conversation, token
+                processed_conversation, token, available_databases
             )
             process_monitor.end_stage("clarifier")
             if clarifier_usage_details:

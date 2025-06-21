@@ -38,9 +38,64 @@ class RouterError(Exception):
     pass
 
 
-def load_agent_config():
+def get_filtered_database_statement(available_databases):
+    """
+    Generate a filtered database statement containing only the specified databases.
+    
+    Args:
+        available_databases (dict): Dictionary of available database configurations
+        
+    Returns:
+        str: Formatted database statement with only filtered databases
+    """
+    statement = """<AVAILABLE_DATABASES>
+The following databases are available for research:
+
+"""
+    
+    # Group databases by type for better organization
+    internal_dbs = {
+        k: v for k, v in available_databases.items() if k.startswith("internal_")
+    }
+    external_dbs = {
+        k: v for k, v in available_databases.items() if k.startswith("external_")
+    }
+    
+    # Add internal databases section if any exist
+    if internal_dbs:
+        statement += "<INTERNAL_DATABASES>\n"
+        for db_name, db_info in internal_dbs.items():
+            statement += f"""<DATABASE id="{db_name}">
+  <NAME>{db_info['name']}</NAME>
+  <DESCRIPTION>{db_info['description']}</DESCRIPTION>
+</DATABASE>
+
+"""
+        statement += "</INTERNAL_DATABASES>\n\n"
+    
+    # Add external databases section if any exist
+    if external_dbs:
+        statement += "<EXTERNAL_DATABASES>\n"
+        for db_name, db_info in external_dbs.items():
+            statement += f"""<DATABASE id="{db_name}">
+  <NAME>{db_info['name']}</NAME>
+  <DESCRIPTION>{db_info['description']}</DESCRIPTION>
+</DATABASE>
+
+"""
+        statement += "</EXTERNAL_DATABASES>\n\n"
+    
+    statement += "</AVAILABLE_DATABASES>"
+    return statement
+
+
+def load_agent_config(available_databases=None):
     """
     Load agent configuration from YAML file and resolve dynamic context.
+    NOTE: Router can optionally use available_databases for filtered database_statement
+    
+    Args:
+        available_databases (dict, optional): Dictionary of available database configurations
     
     Returns:
         dict: Configuration dictionary with resolved system prompt and settings
@@ -49,10 +104,16 @@ def load_agent_config():
         # Build context statements dynamically
         context_parts = [
             get_project_statement(),
-            get_fiscal_statement(), 
-            get_database_statement(),
-            get_restrictions_statement()
+            get_fiscal_statement()
         ]
+        
+        # Handle database statement - use filtered version if available_databases provided
+        if available_databases is not None:
+            context_parts.append(get_filtered_database_statement(available_databases))
+        else:
+            context_parts.append(get_database_statement())
+            
+        context_parts.append(get_restrictions_statement())
         
         # Build the complete context block
         context_block = "\n\n".join(context_parts)
@@ -138,7 +199,7 @@ except Exception as e:
     raise
 
 
-def get_routing_decision(conversation, token) -> Tuple[Dict[str, Any], Optional[Dict[str, Any]]]:
+def get_routing_decision(conversation, token, available_databases=None) -> Tuple[Dict[str, Any], Optional[Dict[str, Any]]]:
     """
     Get routing decision from the model using a tool call.
 
@@ -148,6 +209,7 @@ def get_routing_decision(conversation, token) -> Tuple[Dict[str, Any], Optional[
             - In RBC environment: OAuth token
             - In RBC environment: OAuth token
             - In local environment: API key
+        available_databases (dict, optional): Dictionary of available database configurations (filtered by user selection)
 
     Returns:
         Tuple[Dict[str, Any], Optional[Dict[str, Any]]]:
@@ -159,8 +221,15 @@ def get_routing_decision(conversation, token) -> Tuple[Dict[str, Any], Optional[
     """
     usage_details = None # Initialize usage details
     try:
+        # Generate dynamic configuration with filtered databases if provided
+        if available_databases is not None:
+            agent_config = load_agent_config(available_databases)
+            system_prompt = agent_config['system_prompt']
+        else:
+            system_prompt = SYSTEM_PROMPT
+            
         # Prepare system message with router prompt
-        system_message = {"role": "system", "content": SYSTEM_PROMPT}
+        system_message = {"role": "system", "content": system_prompt}
 
         # Prepare the messages for the API call
         messages = [system_message]
