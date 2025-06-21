@@ -1,4 +1,4 @@
-# python/iris/src/chat_model/model.py
+# services/src/chat_model/model.py
 """
 Model Initialization and Setup Module (Async Core with Sync Wrapper)
 
@@ -25,7 +25,7 @@ import logging
 import time
 import uuid  # Import uuid
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Union, Generator
+from typing import Any, Dict, List, Optional, Union, Generator, Callable
 
 # ... (Keep existing imports) ...
 from ..global_prompts.database_statement import get_available_databases
@@ -90,21 +90,24 @@ def format_usage_summary(
 
 
 # --- Helper functions for reference processing ---
-def _process_final_references(buffer: str, reference_index: Dict[str, Dict[str, Any]]) -> Generator[str, None, None]:
+def _process_final_references(
+    buffer: str, reference_index: Dict[str, Dict[str, Any]]
+) -> Generator[str, None, None]:
     """
     Process all remaining buffer content and replace [REF:X] markers with href links.
     This is a generator function for final processing.
     """
     import re
-    
+
     logger = logging.getLogger(__name__)
-    
+
     # Process all remaining content - support both individual and legacy formats
     def replace_refs(match):
+        """Replace REF:x references with formatted citations."""
         ref_text = match.group(1)
-        
+
         # Parse reference IDs based on format
-        ref_ids = []
+        ref_ids: List[str] = []
         if "," in ref_text or "-" in ref_text:
             # Legacy format: comma-separated or range
             for part in ref_text.split(","):
@@ -124,11 +127,11 @@ def _process_final_references(buffer: str, reference_index: Dict[str, Dict[str, 
         else:
             # Individual format: single reference ID
             ref_ids = [ref_text]
-        
+
         # Generate href links - group by page to avoid duplicates
         page_links = {}  # Map (doc_name, page) -> href
         found_refs = []  # Track which refs were actually found
-        
+
         for ref_id in ref_ids:
             if ref_id in reference_index:
                 found_refs.append(ref_id)
@@ -156,7 +159,9 @@ def _process_final_references(buffer: str, reference_index: Dict[str, Dict[str, 
         # Return the reference line with links
         if links:
             result = f"\n\n{' '.join(links)}\n\n"
-            logger.info(f"Final processing: Replaced {match.group(0)} with {len(links)} link(s) for refs: {found_refs}")
+            logger.info(
+                f"Final processing: Replaced {match.group(0)} with {len(links)} link(s) for refs: {found_refs}"
+            )
             return result
         else:
             return match.group(0)  # Keep original if no match
@@ -169,59 +174,72 @@ def _process_final_references(buffer: str, reference_index: Dict[str, Dict[str, 
     yield processed
 
 
-def _process_reference_buffer(buffer: str, reference_index: Dict[str, Dict[str, Any]], buffer_size: int = 80) -> tuple[str, str]:
+def _process_reference_buffer(
+    buffer: str, reference_index: Dict[str, Dict[str, Any]], buffer_size: int = 80
+) -> tuple[str, str]:
     """
     Smart buffering: accumulate chunks and process complete reference patterns immediately.
     This ensures href links are sent in the stream before the UI displays [REF:X] tags.
     Returns tuple of (processed_content_to_output, remaining_buffer).
     """
     import re
-    
+
     logger = logging.getLogger(__name__)
-    
+
     # Debug logging
-    logger.info(f"Buffer processing: buffer length={len(buffer)}, content preview: '{buffer[-50:]}'")
-    if '[REF:' in buffer:
-        ref_matches = re.findall(r'\[REF:\d+\]', buffer)
+    logger.info(
+        f"Buffer processing: buffer length={len(buffer)}, content preview: '{buffer[-50:]}'"
+    )
+    if "[REF:" in buffer:
+        ref_matches = re.findall(r"\[REF:\d+\]", buffer)
         logger.info(f"Found individual references in buffer: {ref_matches}")
-    
+
     # Look for all reference patterns
     # Individual reference pattern for processing
     individual_pattern = r"\[REF:(\d+)\]"
     # Legacy patterns: comma-separated [REF:1,2,3] and ranges [REF:1-12]
     legacy_pattern = r"\[REF:([\d,\s\-]+)\]"
-    
+
     # Find all individual references
     individual_refs = list(re.finditer(individual_pattern, buffer))
-    logger.info(f"Found {len(individual_refs)} individual references: {[m.group(0) for m in individual_refs]}")
-    
+    logger.info(
+        f"Found {len(individual_refs)} individual references: {[m.group(0) for m in individual_refs]}"
+    )
+
     # Find legacy format references that aren't single numbers
     legacy_refs = []
     for legacy_match in re.finditer(legacy_pattern, buffer):
         legacy_text = legacy_match.group(1)
         # Only include if it's actually comma-separated or range format (not just a single number)
-        if ("," in legacy_text or "-" in legacy_text):
+        if "," in legacy_text or "-" in legacy_text:
             # Check if this legacy ref overlaps with any individual reference
             overlaps = False
             for ind_ref in individual_refs:
-                if (legacy_match.start() < ind_ref.end() and legacy_match.end() > ind_ref.start()):
+                if (
+                    legacy_match.start() < ind_ref.end()
+                    and legacy_match.end() > ind_ref.start()
+                ):
                     overlaps = True
                     break
             if not overlaps:
                 legacy_refs.append(legacy_match)
-    
-    logger.info(f"Found {len(legacy_refs)} legacy references: {[m.group(0) for m in legacy_refs]}")
-    
+
+    logger.info(
+        f"Found {len(legacy_refs)} legacy references: {[m.group(0) for m in legacy_refs]}"
+    )
+
     all_matches = individual_refs + legacy_refs
-    
+
     # Check if we have complete patterns or need to keep buffering
     if not all_matches:
         logger.info(f"No complete references found in buffer")
         if len(buffer) < buffer_size:
             # Check for incomplete references at the end of buffer
-            if buffer.endswith('[') or re.search(r'\[REF:?\d*$', buffer):
+            if buffer.endswith("[") or re.search(r"\[REF:?\d*$", buffer):
                 # Incomplete reference at end, keep buffering
-                logger.info(f"Incomplete reference at end, keeping buffer: '{buffer[-20:]}'")
+                logger.info(
+                    f"Incomplete reference at end, keeping buffer: '{buffer[-20:]}'"
+                )
                 return "", buffer
             # No incomplete references and buffer not full - output what we have
             logger.info(f"No references and buffer not full, outputting buffer content")
@@ -231,7 +249,9 @@ def _process_reference_buffer(buffer: str, reference_index: Dict[str, Dict[str, 
             potential_ref_start = buffer.rfind("[")
             if potential_ref_start != -1 and potential_ref_start > len(buffer) - 15:
                 # Keep potential reference start in buffer
-                logger.info(f"Buffer full, keeping potential ref at end: '{buffer[potential_ref_start:]}'")
+                logger.info(
+                    f"Buffer full, keeping potential ref at end: '{buffer[potential_ref_start:]}'"
+                )
                 processed_content = buffer[:potential_ref_start]
                 remaining_buffer = buffer[potential_ref_start:]
                 return processed_content, remaining_buffer
@@ -242,29 +262,33 @@ def _process_reference_buffer(buffer: str, reference_index: Dict[str, Dict[str, 
                 remaining_buffer = buffer[-keep_chars:] if keep_chars > 0 else ""
                 logger.info(f"Buffer full, no refs, keeping {keep_chars} chars")
                 return processed_content, remaining_buffer
-    
+
     # Before processing, check if there's content after the last complete reference that needs to be preserved
     # Find the rightmost complete reference position in the original buffer
     rightmost_ref_end = 0
     for match in all_matches:
         rightmost_ref_end = max(rightmost_ref_end, match.end())
-    
+
     # Check what comes after the last complete reference
-    trailing_content = buffer[rightmost_ref_end:] if rightmost_ref_end < len(buffer) else ""
-    
-    logger.info(f"Processing {len(all_matches)} references in buffer, trailing content: '{trailing_content}'")
-    
+    trailing_content = (
+        buffer[rightmost_ref_end:] if rightmost_ref_end < len(buffer) else ""
+    )
+
+    logger.info(
+        f"Processing {len(all_matches)} references in buffer, trailing content: '{trailing_content}'"
+    )
+
     # Process matches from end to start to maintain string positions
     all_matches.sort(key=lambda x: x.start(), reverse=True)
     processed_content = buffer
-    
+
     for match in all_matches:
         match_text = match.group(0)
-        
+
         if match in individual_refs:
             # This is an individual reference: [REF:1]
             ref_id = match.group(1)
-            
+
             # Generate href link
             if ref_id in reference_index:
                 ref_data = reference_index[ref_id]
@@ -273,25 +297,31 @@ def _process_reference_buffer(buffer: str, reference_index: Dict[str, Dict[str, 
                 page = ref_data.get("page", 1)
                 highlight_text = ref_data.get("highlight_text", "")
                 doc_name = ref_data.get("doc_name", "Unknown Document")
-                
+
                 # Create S3 URL using S3_BASE_PATH + file_name
                 s3_url = f"{config.S3_BASE_PATH}/{file_name}"
-                
+
                 # Create href link with 3-parameter format: filename, page, highlight_text
                 link_text = f"📄 {doc_name} Page {page}"
                 href = f'<a href=\'javascript:window.maven.openPdf("{s3_url}", {page}, "{highlight_text}")\'>{link_text}</a>'
-                
+
                 replacement = f" {href} "
-                processed_content = processed_content[:match.start()] + replacement + processed_content[match.end():]
-                logger.info(f"Replaced individual {match_text} with link for ref: {ref_id}")
+                processed_content = (
+                    processed_content[: match.start()]
+                    + replacement
+                    + processed_content[match.end() :]
+                )
+                logger.info(
+                    f"Replaced individual {match_text} with link for ref: {ref_id}"
+                )
             else:
                 logger.warning(f"Reference {ref_id} not found in index")
-        
+
         else:
             # This is a legacy format reference: [REF:1,2,3] or [REF:1-12]
             ref_text = match.group(1)
-            ref_ids = []
-            
+            ref_ids: List[str] = []
+
             for part in ref_text.split(","):
                 part = part.strip()
                 if "-" in part:
@@ -306,11 +336,11 @@ def _process_reference_buffer(buffer: str, reference_index: Dict[str, Dict[str, 
                         ref_ids.append(part)
                 else:
                     ref_ids.append(part)
-            
+
             # Generate href links
             page_links = {}
             found_refs = []
-            
+
             for ref_id in ref_ids:
                 if ref_id in reference_index:
                     found_refs.append(ref_id)
@@ -320,10 +350,10 @@ def _process_reference_buffer(buffer: str, reference_index: Dict[str, Dict[str, 
                     page = ref_data.get("page", 1)
                     highlight_text = ref_data.get("highlight_text", "")
                     doc_name = ref_data.get("doc_name", "Unknown Document")
-                    
+
                     # Create S3 URL using S3_BASE_PATH + file_name
                     s3_url = f"{config.S3_BASE_PATH}/{file_name}"
-                    
+
                     # Create href link with 3-parameter format: filename, page, highlight_text
                     page_key = (doc_name, page)
                     if page_key not in page_links:
@@ -332,41 +362,53 @@ def _process_reference_buffer(buffer: str, reference_index: Dict[str, Dict[str, 
                         page_links[page_key] = href
                 else:
                     logger.warning(f"Reference {ref_id} not found in index")
-            
+
             links = list(page_links.values())
-            
+
             if links:
                 replacement = f" {' '.join(links)} "
-                processed_content = processed_content[:match.start()] + replacement + processed_content[match.end():]
-                logger.info(f"Replaced legacy {match.group(0)} with {len(links)} link(s) for refs: {found_refs}")
-    
+                processed_content = (
+                    processed_content[: match.start()]
+                    + replacement
+                    + processed_content[match.end() :]
+                )
+                logger.info(
+                    f"Replaced legacy {match.group(0)} with {len(links)} link(s) for refs: {found_refs}"
+                )
+
     # Check if trailing content looks like the start of an incomplete reference
-    if trailing_content and (trailing_content.startswith('[') or re.search(r'\[REF:?\d*$', trailing_content)):
+    if trailing_content and (
+        trailing_content.startswith("[") or re.search(r"\[REF:?\d*$", trailing_content)
+    ):
         # There's an incomplete reference after our processed references
         # Find where this trailing content starts in the processed buffer and preserve it
         # Since we processed from right to left, the trailing incomplete reference should still be at the end
         logger.info(f"Preserving incomplete reference in buffer: '{trailing_content}'")
-        
+
         # Find where the trailing content starts in the processed content
         # Look for the pattern at the end of the processed content
         if processed_content.endswith(trailing_content):
             # The trailing content is still there unchanged at the end
-            final_processed = processed_content[:-len(trailing_content)]
+            final_processed = processed_content[: -len(trailing_content)]
             remaining_buffer = trailing_content
         else:
             # The trailing content might have been affected by replacements
             # Use a more conservative approach - look for incomplete patterns at the end
-            incomplete_match = re.search(r'\[REF:?\d*$', processed_content)
+            incomplete_match = re.search(r"\[REF:?\d*$", processed_content)
             if incomplete_match:
-                final_processed = processed_content[:incomplete_match.start()]
-                remaining_buffer = processed_content[incomplete_match.start():]
+                final_processed = processed_content[: incomplete_match.start()]
+                remaining_buffer = processed_content[incomplete_match.start() :]
             else:
                 # Fallback - if we can't find the pattern, just preserve what we detected originally
-                final_processed = processed_content[:-len(trailing_content)] if len(trailing_content) <= len(processed_content) else processed_content
+                final_processed = (
+                    processed_content[: -len(trailing_content)]
+                    if len(trailing_content) <= len(processed_content)
+                    else processed_content
+                )
                 remaining_buffer = trailing_content
-        
+
         return final_processed, remaining_buffer
-    
+
     # No incomplete references after processing, return all processed content
     logger.info(f"Returning processed content, length: {len(processed_content)}")
     return processed_content, ""
@@ -381,10 +423,21 @@ def _execute_query_worker(
     db_display_name: str,
     query_index: int,
     total_queries: int,
-    # debug_mode: bool = False, # Removed
 ) -> Dict[str, Any]:
     """
-    Worker function executed by each thread to run a single database query. Always monitors.
+    Worker function executed by each thread to run a single database query.
+
+    Args:
+        db_name (str): Internal name of the database
+        query_text (str): The search query to execute
+        scope (str): Query scope ('metadata' or 'research')
+        token (str): OAuth token for API authentication
+        db_display_name (str): Human-readable database name for display
+        query_index (int): Index of this query in the batch
+        total_queries (int): Total number of queries being executed
+
+    Returns:
+        Dict[str, Any]: Query execution results and metadata
     """
     logger = logging.getLogger(__name__)
     result = None
@@ -422,7 +475,6 @@ def _execute_query_worker(
             query_stage_name=query_stage_name,
         )  # ADDED query_stage_name
 
-
         # Handle different tuple lengths for backward compatibility
         if len(result_tuple) == 6:
             (
@@ -456,7 +508,9 @@ def _execute_query_worker(
             reference_index = None
         else:
             # Unexpected tuple length - handle gracefully
-            logger.error(f"Unexpected tuple length {len(result_tuple)} from route_query_sync for {db_name}")
+            logger.error(
+                f"Unexpected tuple length {len(result_tuple)} from route_query_sync for {db_name}"
+            )
             if len(result_tuple) > 0:
                 result = result_tuple[0]
             else:
@@ -532,7 +586,7 @@ def _execute_query_worker(
 # --- Main Synchronous Core Function ---
 def _model_generator(
     conversation: Optional[Dict[str, Any]] = None,
-    html_callback: Optional[callable] = None,
+    html_callback: Optional[Callable] = None,
     debug_mode: bool = False,  # Keep debug_mode for legacy debug dict
     db_names: Optional[List[str]] = None,  # List of database names to query
 ) -> Generator[str, None, None]:
@@ -651,14 +705,21 @@ def _model_generator(
 
         # Filter available databases based on user selection BEFORE any agent calls
         from ..global_prompts.database_statement import get_available_databases
+
         available_databases = get_available_databases()
         logger.info(f"Initial available databases: {list(available_databases.keys())}")
         if db_names is not None:
             logger.info(f"db_names filter provided: {db_names}")
-            available_databases = {k: v for k, v in available_databases.items() if k in db_names}
-            logger.info(f"Filtered available_databases: {list(available_databases.keys())}")
+            available_databases = {
+                k: v for k, v in available_databases.items() if k in db_names
+            }
+            logger.info(
+                f"Filtered available_databases: {list(available_databases.keys())}"
+            )
         else:
-            logger.info("No db_names filter provided; agents will see all available databases.")
+            logger.info(
+                "No db_names filter provided; agents will see all available databases."
+            )
 
         process_monitor.start_stage("router")
         logger.info("Getting routing decision...")
@@ -684,7 +745,9 @@ def _model_generator(
             process_monitor.start_stage("direct_response")
             # TODO: Update response_from_conversation to yield usage details at the end
             direct_response_usage_details = None
-            stream_iterator = response_from_conversation(processed_conversation, token, available_databases)
+            stream_iterator = response_from_conversation(
+                processed_conversation, token, available_databases
+            )
             for chunk in stream_iterator:
                 if isinstance(chunk, dict) and "usage_details" in chunk:
                     direct_response_usage_details = chunk["usage_details"]
@@ -766,7 +829,9 @@ def _model_generator(
                 # --- Legacy Debug Block Removed ---
 
                 # Display plan...
-                logger.info(f"Final selected_databases to be queried: {selected_databases}")
+                logger.info(
+                    f"Final selected_databases to be queried: {selected_databases}"
+                )
                 if scope == "metadata":
                     yield "# 🔍 File Search Plan\n\n"
                     yield f"## Search Criteria\n{research_statement}\n\n"
@@ -951,8 +1016,10 @@ def _model_generator(
                         # First, process new structured research format and assign REF numbers
                         for db_name, ref_index in all_reference_indices.items():
                             if isinstance(ref_index, dict) and any(
-                                isinstance(doc_data, dict) and any(
-                                    isinstance(page_data, dict) and "research_content" in page_data
+                                isinstance(doc_data, dict)
+                                and any(
+                                    isinstance(page_data, dict)
+                                    and "research_content" in page_data
                                     for page_data in doc_data.values()
                                     if isinstance(page_data, dict)
                                 )
@@ -960,42 +1027,57 @@ def _model_generator(
                                 if isinstance(doc_data, dict)
                             ):
                                 # New structured format: {doc_name: {page_x: {research_content, file_link, page_number}}}
-                                db_research_with_refs = {}
-                                
+                                db_research_with_refs: Dict[str, str] = {}
+
                                 # Sort by document name, then by page number for consistent REF ordering
                                 for doc_name in sorted(ref_index.keys()):
                                     doc_data = ref_index[doc_name]
                                     db_research_with_refs[doc_name] = {}
-                                    
+
                                     # Sort pages by page number
                                     sorted_pages = sorted(
                                         doc_data.items(),
-                                        key=lambda x: x[1].get("page_number", 0) if isinstance(x[1], dict) else 0
+                                        key=lambda x: (
+                                            x[1].get("page_number", 0)
+                                            if isinstance(x[1], dict)
+                                            else 0
+                                        ),
                                     )
-                                    
+
                                     for page_key, page_data in sorted_pages:
-                                        if isinstance(page_data, dict) and "research_content" in page_data:
-                                            page_number = page_data.get("page_number", 0)
-                                            research_content = page_data.get("research_content", "")
+                                        if (
+                                            isinstance(page_data, dict)
+                                            and "research_content" in page_data
+                                        ):
+                                            page_number = page_data.get(
+                                                "page_number", 0
+                                            )
+                                            research_content = page_data.get(
+                                                "research_content", ""
+                                            )
                                             file_link = page_data.get("file_link", "")
                                             file_name = page_data.get("file_name", "")
-                                            
+
                                             # Assign REF number
                                             ref_id = str(ref_counter)
                                             ref_tag = f"REF:{ref_id}"
-                                            
+
                                             # Add REF tag to research content
-                                            research_with_ref = f"{research_content} [{ref_tag}]"
-                                            
+                                            research_with_ref = (
+                                                f"{research_content} [{ref_tag}]"
+                                            )
+
                                             # Store in structured format
-                                            db_research_with_refs[doc_name][page_key] = {
+                                            db_research_with_refs[doc_name][
+                                                page_key
+                                            ] = {
                                                 "research_content": research_with_ref,
                                                 "file_link": file_link,
                                                 "file_name": file_name,
                                                 "page_number": page_number,
-                                                "ref_id": ref_id
+                                                "ref_id": ref_id,
                                             }
-                                            
+
                                             # Build master reference index for href generation
                                             master_reference_index[ref_id] = {
                                                 "doc_name": doc_name,
@@ -1005,12 +1087,14 @@ def _model_generator(
                                                 "highlight_text": "",  # Empty as requested
                                                 "source_db": db_name,
                                             }
-                                            
+
                                             ref_counter += 1
-                                
+
                                 # Store the completed db_research_with_refs for this database
-                                structured_research_with_refs[db_name] = db_research_with_refs
-                                
+                                structured_research_with_refs[db_name] = (
+                                    db_research_with_refs
+                                )
+
                             else:
                                 # Old format: simple reference index with ID mappings
                                 for old_ref_id, ref_data in ref_index.items():
@@ -1023,31 +1107,45 @@ def _model_generator(
                                     if db_name in aggregated_detailed_research:
                                         aggregated_detailed_research[
                                             db_name
-                                        ] = aggregated_detailed_research[db_name].replace(
+                                        ] = aggregated_detailed_research[
+                                            db_name
+                                        ].replace(
                                             f"[REF:{old_ref_id}]", f"[REF:{new_ref_id}]"
                                         )
                                     ref_counter += 1
 
                         # Convert structured research to combined research text for summarizer
-                        if structured_research_with_refs:  # Only process if we have structured research
-                            for db_name, db_research in structured_research_with_refs.items():
-                                combined_research = f"# {db_name.upper()} Research Results\n\n"
-                                
+                        if (
+                            structured_research_with_refs
+                        ):  # Only process if we have structured research
+                            for (
+                                db_name,
+                                db_research,
+                            ) in structured_research_with_refs.items():
+                                combined_research = (
+                                    f"# {db_name.upper()} Research Results\n\n"
+                                )
+
                                 for doc_name, doc_data in db_research.items():
                                     combined_research += f"## {doc_name}\n\n"
-                                    
+
                                     for page_key, page_data in doc_data.items():
                                         page_number = page_data.get("page_number", 0)
-                                        research_content = page_data.get("research_content", "")
-                                        
-                                        combined_research += f"### Page {page_number}\n\n"
-                                        combined_research += f"{research_content}\n\n"
-                                    
-                                    combined_research += "---\n\n"
-                                
-                                # Update aggregated research with the combined version
-                                aggregated_detailed_research[db_name] = combined_research.strip()
+                                        research_content = page_data.get(
+                                            "research_content", ""
+                                        )
 
+                                        combined_research += (
+                                            f"### Page {page_number}\n\n"
+                                        )
+                                        combined_research += f"{research_content}\n\n"
+
+                                    combined_research += "---\n\n"
+
+                                # Update aggregated research with the combined version
+                                aggregated_detailed_research[db_name] = (
+                                    combined_research.strip()
+                                )
 
                         # --- Legacy Debug Block Removed ---
                         try:
@@ -1106,7 +1204,7 @@ def _model_generator(
                         logger.info(f"Completed process for scope '{scope}'")
                 elif scope == "metadata":
                     # Metadata display logic...
-                    seen_documents = {}
+                    seen_documents: Dict[str, Dict[str, Any]] = {}
                     unique_item_count = 0
                     for db_name, items_list in metadata_results_by_db.items():
                         seen_documents.setdefault(db_name, set())
@@ -1115,11 +1213,11 @@ def _model_generator(
                                 unique_item_count += 1
                             else:
                                 doc_name = item.get("document_name", "Unknown")
-                            if doc_name not in seen_documents[db_name]:
-                                seen_documents[db_name].add(doc_name)
-                                unique_item_count += 1
+                                if doc_name not in seen_documents[db_name]:
+                                    seen_documents[db_name].add(doc_name)
+                                    unique_item_count += 1
                     yield f"\n\nCompleted metadata search across {len(selected_databases)} databases. Found {unique_item_count} unique relevant items:\n"
-                    seen_documents = {}
+                    seen_documents: Dict[str, Dict[str, Any]] = {}
                     for db_name, items_list in metadata_results_by_db.items():
                         db_display_name = available_databases.get(db_name, {}).get(
                             "name", db_name
@@ -1271,13 +1369,11 @@ def _model_generator(
             yield f"\n\nDEBUG_DATA:{json.dumps(debug_data)}"
         # --- End Legacy Debug ---
 
-        # reset_token_usage() # Removed
-
 
 # --- Synchronous Wrapper Function ---
 def model(
     conversation: Optional[Dict[str, Any]] = None,
-    html_callback: Optional[callable] = None,
+    html_callback: Optional[Callable] = None,
     debug_mode: bool = False,  # Keep debug_mode for legacy dict
     db_names: Optional[List[str]] = None,
 ) -> Generator[str, None, None]:
@@ -1285,12 +1381,12 @@ def model(
     Synchronous wrapper for the model generator.
     """
     logger = logging.getLogger(__name__)
-    logger.debug("Entering synchronous model wrapper.")
+    logger.info("Entering synchronous model wrapper.")
     try:
         sync_gen = _model_generator(conversation, html_callback, debug_mode, db_names)
         for chunk in sync_gen:
             yield chunk
-        logger.debug("Synchronous generator completed.")
+        logger.info("Synchronous generator completed.")
     except Exception as e:
         error_msg = f"Error during synchronous model execution: {str(e)}"
         logger.error(error_msg, exc_info=True)
@@ -1299,7 +1395,9 @@ def model(
 
 # --- Async Wrapper for FastAPI ---
 async def process_request_async(
-    conversation: List[Dict[str, str]], stream: bool = False, db_names: Optional[List[str]] = None
+    conversation: List[Dict[str, str]],
+    stream: bool = False,
+    db_names: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """
     Async wrapper for FastAPI that processes a conversation request.

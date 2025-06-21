@@ -1,4 +1,4 @@
-# global_prompts/project_statement.py
+# services/src/global_prompts/project_statement.py
 """
 Project Statement Utility
 
@@ -8,8 +8,6 @@ Provides essential context about the project's purpose and scope.
 
 import logging
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -49,6 +47,6 @@ policy-compliant guidance. The specific sources available depend on your access 
 
         return statement
     except Exception as e:
-        logger.error(f"Error generating project statement: {str(e)}")
+        logger.debug(f"Error generating project statement: {str(e)}")
         # Fallback basic statement in case of errors
         return """<PROJECT_CONTEXT>This project serves RBC Finance by implementing an intelligent research and response system for finance policy inquiries using RAG (Retrieval-Augmented Generation).</PROJECT_CONTEXT>"""

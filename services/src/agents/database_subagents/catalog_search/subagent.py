@@ -1,4 +1,4 @@
-# catalog_search/subagent.py
+# services/src/agents/database_subagents/catalog_search/subagent.py
 """
 Catalog Search Subagent (Unified Internal Database Handler)
 
@@ -52,25 +52,27 @@ logger = logging.getLogger(__name__)
 def load_catalog_selection_config():
     """
     Load catalog selection configuration from YAML file.
-    
+
     Returns:
         dict: Configuration with resolved system prompt and settings
     """
     try:
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        yaml_path = os.path.join(current_dir, 'catalog_selection_prompt.yaml')
-        
-        with open(yaml_path, 'r', encoding='utf-8') as f:
+        yaml_path = os.path.join(current_dir, "catalog_selection_prompt.yaml")
+
+        with open(yaml_path, "r", encoding="utf-8") as f:
             yaml_config = yaml.safe_load(f)
-        
+
         # Extract system prompt from YAML
-        system_prompt = yaml_config.get('system_prompt', '')
+        system_prompt = yaml_config.get("system_prompt", "")
         if not system_prompt:
-            raise Exception("No system_prompt found in catalog selection YAML configuration")
-        
+            raise Exception(
+                "No system_prompt found in catalog selection YAML configuration"
+            )
+
         # No context replacement needed for catalog selection (minimal context)
         return yaml_config
-        
+
     except Exception as e:
         logger.error(f"Failed to load catalog selection YAML config: {str(e)}")
         raise
@@ -79,25 +81,27 @@ def load_catalog_selection_config():
 def load_content_synthesis_config():
     """
     Load content synthesis configuration from YAML file.
-    
+
     Returns:
         dict: Configuration with system prompt and settings
     """
     try:
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        yaml_path = os.path.join(current_dir, 'content_synthesis_prompt.yaml')
-        
-        with open(yaml_path, 'r', encoding='utf-8') as f:
+        yaml_path = os.path.join(current_dir, "content_synthesis_prompt.yaml")
+
+        with open(yaml_path, "r", encoding="utf-8") as f:
             yaml_config = yaml.safe_load(f)
-        
+
         # Extract system prompt from YAML
-        system_prompt = yaml_config.get('system_prompt', '')
+        system_prompt = yaml_config.get("system_prompt", "")
         if not system_prompt:
-            raise Exception("No system_prompt found in content synthesis YAML configuration")
-        
+            raise Exception(
+                "No system_prompt found in content synthesis YAML configuration"
+            )
+
         # No context replacement needed for content synthesis (focused extraction task)
         return yaml_config
-        
+
     except Exception as e:
         logger.error(f"Failed to load content synthesis YAML config: {str(e)}")
         raise
@@ -106,58 +110,60 @@ def load_content_synthesis_config():
 def get_catalog_selection_prompt(query: str, formatted_catalog: str) -> str:
     """
     Generate a prompt for selecting relevant documents from an internal catalog using YAML config.
-    
+
     Args:
         query (str): The research statement (query)
         formatted_catalog (str): The formatted catalog of internal documents
-    
+
     Returns:
         str: The formatted prompt for the LLM
     """
     config = load_catalog_selection_config()
-    system_prompt = config.get('system_prompt', '')
-    
+    system_prompt = config.get("system_prompt", "")
+
     # Replace template variables
-    system_prompt = system_prompt.replace('{{query}}', query)
-    system_prompt = system_prompt.replace('{{formatted_catalog}}', formatted_catalog)
-    
+    system_prompt = system_prompt.replace("{{query}}", query)
+    system_prompt = system_prompt.replace("{{formatted_catalog}}", formatted_catalog)
+
     return system_prompt
 
 
 def get_content_synthesis_prompt(user_query: str, formatted_documents: str) -> str:
     """
     Generate a prompt for synthesizing content from retrieved internal documents using YAML config.
-    
+
     Args:
         user_query (str): The original user query from the research statement
         formatted_documents (str): The formatted content of retrieved internal document sections
-    
+
     Returns:
         str: The formatted prompt for the LLM
     """
     config = load_content_synthesis_config()
-    system_prompt = config.get('system_prompt', '')
-    
+    system_prompt = config.get("system_prompt", "")
+
     # Replace template variables
-    system_prompt = system_prompt.replace('{{user_query}}', user_query)
-    system_prompt = system_prompt.replace('{{formatted_documents}}', formatted_documents)
-    
+    system_prompt = system_prompt.replace("{{user_query}}", user_query)
+    system_prompt = system_prompt.replace(
+        "{{formatted_documents}}", formatted_documents
+    )
+
     return system_prompt
 
 
 def get_synthesis_tool_schema() -> Dict[str, Any]:
     """
     Get the synthesis tool schema from YAML configuration.
-    
+
     Returns:
         dict: Tool schema for content synthesis
     """
     config = load_content_synthesis_config()
-    tools = config.get('tools', [])
-    
+    tools = config.get("tools", [])
+
     if not tools:
         raise Exception("No tools found in content synthesis YAML configuration")
-    
+
     # Return the first tool (should be extract_page_based_research)
     return tools[0]
 
@@ -220,14 +226,16 @@ def format_documents_for_llm(documents: List[Dict[str, Any]]) -> str:
 def fetch_catalog(document_source: str) -> List[Dict[str, Any]]:
     """
     Fetch the full catalog from the database for the specified document source.
-    
+
     Args:
         document_source: The document source to query (e.g., 'internal_capm', 'internal_par', etc.)
-    
+
     Returns:
         List of catalog records
     """
-    logger.info(f"Fetching catalog for {document_source} (environment: {config.ENVIRONMENT})")
+    logger.info(
+        f"Fetching catalog for {document_source} (environment: {config.ENVIRONMENT})"
+    )
     conn = connect_to_db()
     catalog_records: List[Dict[str, Any]] = []
     if not conn:
@@ -242,7 +250,7 @@ def fetch_catalog(document_source: str) -> List[Dict[str, Any]]:
                 WHERE document_source = %s
                 ORDER BY document_name
             """,
-                (document_source,)
+                (document_source,),
             )
             for row in cur.fetchall():
                 catalog_records.append(
@@ -260,24 +268,30 @@ def fetch_catalog(document_source: str) -> List[Dict[str, Any]]:
         # Debug file_name data
         if catalog_records:
             first_record = catalog_records[0]
-            logger.debug(f"DEBUG file_name: First record has file_name='{first_record.get('file_name', 'MISSING')}', file_link='{first_record.get('file_link', 'MISSING')[:50]}...'")
+            logger.debug(
+                f"DEBUG file_name: First record has file_name='{first_record.get('file_name', 'MISSING')}', file_link='{first_record.get('file_link', 'MISSING')[:50]}...'"
+            )
     except Exception as e:
-        logger.error(f"Error fetching {document_source} catalog from database: {str(e)}")
+        logger.error(
+            f"Error fetching {document_source} catalog from database: {str(e)}"
+        )
     finally:
         if conn:
             conn.close()
     return catalog_records
 
 
-def fetch_document_content(doc_ids: List[str], document_source: str) -> List[Dict[str, Any]]:
+def fetch_document_content(
+    doc_ids: List[str], document_source: str
+) -> List[Dict[str, Any]]:
     """
     Fetch the content of specified documents from the database synchronously.
     Now retrieves all page/section records with page_number, section_id, section_summary fields.
-    
+
     Args:
         doc_ids: List of document IDs to fetch
         document_source: The document source to query
-    
+
     Returns:
         List of documents with their page sections
     """
@@ -305,7 +319,9 @@ def fetch_document_content(doc_ids: List[str], document_source: str) -> List[Dic
             )
             for row in cur.fetchall():
                 doc_names[row[0]] = row[1]
-            logger.info(f"Found {len(doc_names)} {document_source} documents for IDs: {doc_ids}")
+            logger.info(
+                f"Found {len(doc_names)} {document_source} documents for IDs: {doc_ids}"
+            )
 
         for doc_id, doc_name in doc_names.items():
             with conn.cursor() as cur:
@@ -338,9 +354,13 @@ def fetch_document_content(doc_ids: List[str], document_source: str) -> List[Dic
                     result.append(
                         {"document_name": doc_name, "page_sections": page_sections}
                     )
-        logger.info(f"Retrieved content for {len(result)} {document_source} documents from database")
+        logger.info(
+            f"Retrieved content for {len(result)} {document_source} documents from database"
+        )
     except Exception as e:
-        logger.error(f"Error fetching {document_source} document content from database: {str(e)}")
+        logger.error(
+            f"Error fetching {document_source} document content from database: {str(e)}"
+        )
     finally:
         if conn:
             conn.close()
@@ -378,19 +398,25 @@ def get_completion(
         return f"Error: Configuration error for model capability '{capability}'", None
 
     # All calls should use the YAML-generated prompt as the system message
-    # since get_catalog_selection_prompt() and get_content_synthesis_prompt() 
+    # since get_catalog_selection_prompt() and get_content_synthesis_prompt()
     # both return complete YAML system prompts
-    if kwargs.get('tools'):
+    if kwargs.get("tools"):
         # Tool calls need a simple user message to trigger the tool
         messages = [
             {"role": "system", "content": prompt},
-            {"role": "user", "content": "Please complete the requested task using the appropriate tool."},
+            {
+                "role": "user",
+                "content": "Please complete the requested task using the appropriate tool.",
+            },
         ]
     else:
         # Non-tool calls (like document selection) can use prompt as system message with simple user request
         messages = [
             {"role": "system", "content": prompt},
-            {"role": "user", "content": "Please provide your response based on the instructions and context provided."},
+            {
+                "role": "user",
+                "content": "Please provide your response based on the instructions and context provided.",
+            },
         ]
 
     call_params = {
@@ -408,7 +434,7 @@ def get_completion(
     is_tool_call = "tools" in kwargs and kwargs["tools"]
     if is_tool_call:
         call_params["stream"] = False
-        logger.info("Forcing non-streaming mode for tool call.")
+        logger.debug("Forcing non-streaming mode for tool call.")
     else:
         call_params.setdefault("stream", False)
 
@@ -420,7 +446,7 @@ def get_completion(
         if isinstance(result, tuple) and len(result) == 2:
             response, usage_details = result
             if usage_details:
-                logger.debug(f"Usage details for {database_name}: {usage_details}")
+                logger.info(f"Usage details for {database_name}: {usage_details}")
         else:
             # For backward compatibility in case it doesn't return a tuple
             response = result
@@ -475,7 +501,18 @@ def select_relevant_documents(
     stage_name: Optional[str] = None,  # Added stage_name
 ) -> List[str]:
     """
-    Use an LLM to select the most relevant documents from the catalog based on the query (synchronous).
+    Use an LLM to select the most relevant documents from the catalog based on the query.
+
+    Args:
+        query (str): The search query
+        catalog (List[Dict[str, Any]]): List of available documents with metadata
+        token (Optional[str]): OAuth token for API authentication
+        database_name (str): Name of the database for logging context
+        process_monitor: Optional process monitor for tracking
+        stage_name (Optional[str]): Stage name for process monitoring
+
+    Returns:
+        List[str]: List of selected document IDs
     """
     logger.info(f"Selecting relevant documents from {database_name} catalog")
     formatted_catalog = format_catalog_for_llm(catalog)
@@ -498,7 +535,7 @@ def select_relevant_documents(
 
         # Track token usage from LLM calls
         if selection_usage:
-            logger.debug(f"Document selection usage: {selection_usage}")
+            logger.info(f"Document selection usage: {selection_usage}")
             # Update process monitor if available
             if process_monitor and stage_name:  # Check if monitor and stage_name exist
                 process_monitor.add_llm_call_details_to_stage(
@@ -523,7 +560,9 @@ def select_relevant_documents(
             if isinstance(selected_ids, list) and all(
                 isinstance(i, str) for i in selected_ids
             ):
-                logger.info(f"LLM selected {database_name} document IDs: {selected_ids}")
+                logger.info(
+                    f"LLM selected {database_name} document IDs: {selected_ids}"
+                )
                 return selected_ids
             else:
                 logger.error(
@@ -558,8 +597,6 @@ def select_relevant_documents(
         return []
 
 
-
-
 # Function to process a single document (for parallel processing)
 def process_single_document(
     query: str,
@@ -574,8 +611,8 @@ def process_single_document(
     This function is called in parallel for each document.
     """
     doc_name = document.get("document_name", "Unknown Document")
-    logger.info(f"Processing single document from {database_name}: {doc_name}")
-    
+    logger.debug(f"Processing single document from {database_name}: {doc_name}")
+
     # Get file link and file name from document metadata
     file_link = ""
     file_name = ""
@@ -585,13 +622,15 @@ def process_single_document(
     # Check if document has file_name directly
     if "file_name" in document:
         file_name = document.get("file_name", "")
-    
+
     # Format single document for LLM
     formatted_doc = format_documents_for_llm([document])
     synthesis_prompt = get_content_synthesis_prompt(query, formatted_doc)
-    
+
     try:
-        logger.info(f"Initiating Single Document Synthesis API call for {doc_name} from {database_name}")
+        logger.info(
+            f"Initiating Single Document Synthesis API call for {doc_name} from {database_name}"
+        )
         synthesis_tool_schema = get_synthesis_tool_schema()
         synthesis_response_obj, synthesis_usage = get_completion(
             capability="large",
@@ -609,13 +648,21 @@ def process_single_document(
 
         # Track token usage from synthesis
         if synthesis_usage:
-            logger.debug(f"Single document synthesis usage for {doc_name}: {synthesis_usage}")
+            logger.info(
+                f"Single document synthesis usage for {doc_name}: {synthesis_usage}"
+            )
             if process_monitor and stage_name:
-                process_monitor.add_llm_call_details_to_stage(stage_name, synthesis_usage)
+                process_monitor.add_llm_call_details_to_stage(
+                    stage_name, synthesis_usage
+                )
 
         # Check if get_completion returned an error string
-        if isinstance(synthesis_response_obj, str) and synthesis_response_obj.startswith("Error:"):
-            logger.error(f"get_completion failed for {doc_name}: {synthesis_response_obj}")
+        if isinstance(
+            synthesis_response_obj, str
+        ) and synthesis_response_obj.startswith("Error:"):
+            logger.error(
+                f"get_completion failed for {doc_name}: {synthesis_response_obj}"
+            )
             return {
                 "document_name": doc_name,
                 "file_link": file_link,
@@ -633,15 +680,19 @@ def process_single_document(
             and synthesis_response_obj.choices[0].message.tool_calls
         ):
             tool_call = synthesis_response_obj.choices[0].message.tool_calls[0]
-            logger.info(f"Tool call function name: {tool_call.function.name}")
+            logger.debug(f"Tool call function name: {tool_call.function.name}")
             synthesis_tool_schema = get_synthesis_tool_schema()
             if tool_call.function.name == synthesis_tool_schema["function"]["name"]:
                 arguments_str = tool_call.function.arguments
-                logger.info(f"Arguments string type: {type(arguments_str)}, length: {len(arguments_str)}")
+                logger.debug(
+                    f"Arguments string type: {type(arguments_str)}, length: {len(arguments_str)}"
+                )
                 try:
                     # Show JSON sample for debugging (first 200 chars)
-                    logger.info(f"JSON sample for {doc_name}: {arguments_str[:200]}...")
-                    
+                    logger.debug(
+                        f"JSON sample for {doc_name}: {arguments_str[:200]}..."
+                    )
+
                     # Parse JSON directly like internal_par does (no aggressive cleaning)
                     arguments = json.loads(arguments_str)
                     required_keys = ["status_summary", "page_research"]
@@ -653,7 +704,9 @@ def process_single_document(
                             "page_research": arguments.get("page_research", []),
                         }
                     else:
-                        logger.error(f"Missing required keys in tool arguments for {doc_name}")
+                        logger.error(
+                            f"Missing required keys in tool arguments for {doc_name}"
+                        )
                         logger.error(f"Available keys: {list(arguments.keys())}")
                         return {
                             "document_name": doc_name,
@@ -662,14 +715,26 @@ def process_single_document(
                             "page_research": [],
                         }
                 except json.JSONDecodeError as json_err:
-                    logger.error(f"Failed to parse tool arguments JSON for {doc_name}: {json_err}")
-                    logger.error(f"Raw JSON first 100 chars: {repr(arguments_str[:100])}")
-                    logger.error(f"Raw JSON last 100 chars: {repr(arguments_str[-100:])}")
+                    logger.error(
+                        f"Failed to parse tool arguments JSON for {doc_name}: {json_err}"
+                    )
+                    logger.error(
+                        f"Raw JSON first 100 chars: {repr(arguments_str[:100])}"
+                    )
+                    logger.error(
+                        f"Raw JSON last 100 chars: {repr(arguments_str[-100:])}"
+                    )
                     # Show character at error position
-                    error_pos = getattr(json_err, 'pos', 0)
+                    error_pos = getattr(json_err, "pos", 0)
                     if error_pos < len(arguments_str):
-                        char_at_error = arguments_str[error_pos] if error_pos < len(arguments_str) else 'EOF'
-                        logger.error(f"Character at error position {error_pos}: {repr(char_at_error)}")
+                        char_at_error = (
+                            arguments_str[error_pos]
+                            if error_pos < len(arguments_str)
+                            else "EOF"
+                        )
+                        logger.error(
+                            f"Character at error position {error_pos}: {repr(char_at_error)}"
+                        )
                         # Show context around error
                         start = max(0, error_pos - 20)
                         end = min(len(arguments_str), error_pos + 20)
@@ -682,7 +747,9 @@ def process_single_document(
                         "page_research": [],
                     }
             else:
-                logger.error(f"Unexpected tool called for {doc_name}: {tool_call.function.name}")
+                logger.error(
+                    f"Unexpected tool called for {doc_name}: {tool_call.function.name}"
+                )
                 return {
                     "document_name": doc_name,
                     "file_link": file_link,
@@ -693,8 +760,12 @@ def process_single_document(
             # Debug what we actually got
             if synthesis_response_obj.choices:
                 message = synthesis_response_obj.choices[0].message
-                logger.error(f"No tool call for {doc_name}. Message content: {getattr(message, 'content', 'No content')[:100]}")
-                logger.error(f"Tool calls present: {hasattr(message, 'tool_calls')} - {getattr(message, 'tool_calls', None)}")
+                logger.error(
+                    f"No tool call for {doc_name}. Message content: {getattr(message, 'content', 'No content')[:100]}"
+                )
+                logger.error(
+                    f"Tool calls present: {hasattr(message, 'tool_calls')} - {getattr(message, 'tool_calls', None)}"
+                )
             else:
                 logger.error(f"No choices in response for {doc_name}")
             logger.error(f"No tool call received for {doc_name} synthesis")
@@ -706,7 +777,9 @@ def process_single_document(
             }
 
     except Exception as e:
-        logger.error(f"Exception during synthesis for {doc_name}: {str(e)}", exc_info=True)
+        logger.error(
+            f"Exception during synthesis for {doc_name}: {str(e)}", exc_info=True
+        )
         return {
             "document_name": doc_name,
             "file_link": file_link,
@@ -729,8 +802,10 @@ def synthesize_response_and_status(
     Process each document in parallel, then return structured page-based research.
     Returns a dictionary with document names as keys, containing page-based research.
     """
-    logger.info(f"Synthesizing response for {len(documents)} documents from {database_name} using parallel processing")
-    
+    logger.info(
+        f"Synthesizing response for {len(documents)} documents from {database_name} using parallel processing"
+    )
+
     if not documents:
         logger.warning(f"No documents provided for {database_name} synthesis.")
         return {}
@@ -769,54 +844,60 @@ def synthesize_response_and_status(
             ): doc
             for doc in documents
         }
-        
+
         # Collect results as they complete
         for future in as_completed(future_to_doc):
             doc = future_to_doc[future]
             try:
                 result = future.result()
                 document_results.append(result)
-                logger.info(f"Completed processing for document: {result.get('document_name')}")
+                logger.info(
+                    f"Completed processing for document: {result.get('document_name')}"
+                )
             except Exception as e:
                 doc_name = doc.get("document_name", "Unknown")
                 logger.error(f"Exception processing document {doc_name}: {str(e)}")
-                document_results.append({
-                    "document_name": doc_name,
-                    "file_link": file_link_map.get(doc_name, ""),
-                    "status_summary": f"❌ Exception processing {doc_name}.",
-                    "page_research": [],
-                })
+                document_results.append(
+                    {
+                        "document_name": doc_name,
+                        "file_link": file_link_map.get(doc_name, ""),
+                        "status_summary": f"❌ Exception processing {doc_name}.",
+                        "page_research": [],
+                    }
+                )
 
     # Build structured output: document -> page -> research
     structured_output = {}
-    
+
     for result in document_results:
         doc_name = result.get("document_name", "Unknown Document")
         file_link = result.get("file_link", "")
         page_research = result.get("page_research", [])
-        
+
         # Only include documents with actual research findings
         if page_research and not result["status_summary"].startswith("❌"):
             doc_output = {}
-            
+
             for page_item in page_research:
                 page_number = page_item.get("page_number", 0)
                 research_content = page_item.get("research_content", "")
-                
+
                 # Create page key (e.g., "page_3")
                 page_key = f"page_{page_number}"
-                
+
                 doc_output[page_key] = {
                     "research_content": research_content,
                     "file_link": file_link,
                     "file_name": file_name_map.get(doc_name, ""),
-                    "page_number": page_number
+                    "page_number": page_number,
                 }
-            
+
             if doc_output:  # Only add document if it has page research
                 structured_output[doc_name] = doc_output
 
-    logger.info(f"Structured output contains research from {len(structured_output)} documents")
+    logger.info(
+        f"Structured output contains research from {len(structured_output)} documents"
+    )
     return structured_output
 
 
@@ -845,8 +926,12 @@ def query_database_sync(
         a list of file links (or None), page/section references (or None), section content map (or None),
         and reference index (or None).
     """
-    logger.debug(f"DEBUG START: Function called with query='{query}', scope='{scope}', document_source='{document_source}', token={'[SET]' if token else '[NONE]'}")
-    logger.info(f"Querying {document_source} database (sync): '{query}' with scope: {scope}")
+    logger.debug(
+        f"DEBUG START: Function called with query='{query}', scope='{scope}', document_source='{document_source}', token={'[SET]' if token else '[NONE]'}"
+    )
+    logger.info(
+        f"Querying {document_source} database (sync): '{query}' with scope: {scope}"
+    )
     database_name = document_source  # Use the passed document_source
     default_error_status = "❌ Error during query processing."
     selected_doc_ids: Optional[List[str]] = None  # Initialize
@@ -864,7 +949,9 @@ def query_database_sync(
 
     try:
         # Direct synchronous calls
-        catalog = fetch_catalog(document_source)  # Use generic function with document_source
+        catalog = fetch_catalog(
+            document_source
+        )  # Use generic function with document_source
         logger.info(f"Retrieved {len(catalog)} total {document_source} catalog entries")
         if not catalog:
             response: DatabaseResponse
@@ -921,7 +1008,9 @@ def query_database_sync(
             selected_items = [
                 item for item in catalog if item.get("id") in selected_doc_ids
             ]
-            logger.info(f"Returning {len(selected_items)} selected {document_source} metadata items.")
+            logger.info(
+                f"Returning {len(selected_items)} selected {document_source} metadata items."
+            )
 
             # Collect file links from selected items (including blank ones)
             file_links = []
@@ -980,19 +1069,29 @@ def query_database_sync(
             # Get research synthesis using new page-based parallel processing
             # This now returns structured output: {doc_name: {page_x: {research_content, file_link}}}
             research_result = synthesize_response_and_status(
-                query, documents, file_links, token, database_name, process_monitor, stage_name
+                query,
+                documents,
+                file_links,
+                token,
+                database_name,
+                process_monitor,
+                stage_name,
             )
 
             # For backward compatibility, we need to create a response in the expected format
             # The new structure will be passed through reference_index for downstream processing
-            
+
             # Create status summary based on results
             if research_result:
                 doc_count = len(research_result)
-                total_pages = sum(len(doc_data) for doc_data in research_result.values())
+                total_pages = sum(
+                    len(doc_data) for doc_data in research_result.values()
+                )
                 status_summary = f"✅ Found relevant information in {doc_count} document(s) across {total_pages} page(s)."
             else:
-                status_summary = f"📄 No relevant information found in {document_source} documents."
+                status_summary = (
+                    f"📄 No relevant information found in {document_source} documents."
+                )
 
             # Create a simplified detailed_research for backward compatibility
             detailed_research = f"# {document_source.replace('_', ' ').title()} Research Results\n\n*Query: {query}*\n\n"
@@ -1000,9 +1099,13 @@ def query_database_sync(
                 detailed_research += f"Found relevant information in {len(research_result)} document(s).\n\n"
                 for doc_name, doc_data in research_result.items():
                     page_count = len(doc_data)
-                    detailed_research += f"- **{doc_name}**: {page_count} relevant page(s)\n"
+                    detailed_research += (
+                        f"- **{doc_name}**: {page_count} relevant page(s)\n"
+                    )
             else:
-                detailed_research += "No relevant information found in the selected documents.\n"
+                detailed_research += (
+                    "No relevant information found in the selected documents.\n"
+                )
 
             # Build the response in the expected format
             response = {
@@ -1023,7 +1126,9 @@ def query_database_sync(
                     status_summary=status_summary,
                 )
 
-            logger.info(f"Returning research results with {len(research_result)} documents")
+            logger.info(
+                f"Returning research results with {len(research_result)} documents"
+            )
 
             # Return with new structure in reference_index position
             return (
@@ -1036,11 +1141,15 @@ def query_database_sync(
             )
 
         else:
-            logger.error(f"Invalid scope provided to {document_source} subagent: {scope}")
+            logger.error(
+                f"Invalid scope provided to {document_source} subagent: {scope}"
+            )
             raise ValueError(f"Invalid scope: {scope}")  # Let the error propagate
 
     except Exception as e:
-        error_msg = f"Error querying {document_source} database (scope: {scope}): {str(e)}"
+        error_msg = (
+            f"Error querying {document_source} database (scope: {scope}): {str(e)}"
+        )
         logger.error(error_msg, exc_info=True)
         if scope == "metadata":
             response = []

@@ -1,4 +1,4 @@
-# python/iris/src/initial_setup/ssl.py
+# services/src/initial_setup/ssl_setup.py
 """
 SSL Certificate Setup Module
 
@@ -68,7 +68,7 @@ def check_certificate_expiry(cert_path: str) -> bool:
         return True
 
     try:
-        logger.info(f"Checking certificate expiry for: {cert_path}")
+        logger.debug(f"Checking certificate expiry for: {cert_path}")
 
         # Read certificate data
         with open(cert_path, "rb") as cert_file:
@@ -97,7 +97,7 @@ def check_certificate_expiry(cert_path: str) -> bool:
             )
             return True
 
-        logger.info(f"Certificate valid until {expiry_date.strftime('%Y-%m-%d')}")
+        logger.debug(f"Certificate valid until {expiry_date.strftime('%Y-%m-%d')}")
         return True
 
     except Exception as e:
@@ -123,10 +123,10 @@ def setup_ssl() -> str:
     """
     # Proceed with SSL certificate setup
     # Log settings being used
-    logger.info(f"SSL setup starting with settings from: {__file__}")
-    logger.info(f"Using certificate directory: {SSL_CERT_DIR}")
-    logger.info(f"Using certificate filename: {SSL_CERT_FILENAME}")
-    logger.info(f"Full certificate path: {SSL_CERT_PATH}")
+    logger.debug(f"SSL setup starting with settings from: {__file__}")
+    logger.debug(f"Using certificate directory: {SSL_CERT_DIR}")
+    logger.debug(f"Using certificate filename: {SSL_CERT_FILENAME}")
+    logger.debug(f"Full certificate path: {SSL_CERT_PATH}")
 
     # Verify the certificate exists
     if not os.path.exists(SSL_CERT_PATH):
@@ -134,7 +134,7 @@ def setup_ssl() -> str:
         logger.error(error_msg)
         raise FileNotFoundError(error_msg)
 
-    logger.info(f"Certificate file exists at {SSL_CERT_PATH}")
+    logger.debug(f"Certificate file exists at {SSL_CERT_PATH}")
 
     # Check certificate expiry if enabled
     if CHECK_CERT_EXPIRY:
@@ -143,13 +143,13 @@ def setup_ssl() -> str:
         except Exception as e:
             logger.warning(f"Certificate expiry check failed: {str(e)}")
     else:
-        logger.info("Certificate expiry check disabled")
+        logger.debug("Certificate expiry check disabled")
 
     # Configure SSL environment variables
     os.environ["SSL_CERT_FILE"] = SSL_CERT_PATH
     os.environ["REQUESTS_CA_BUNDLE"] = SSL_CERT_PATH
 
-    logger.info(
+    logger.debug(
         f"SSL environment configured successfully. Certificate path: {SSL_CERT_PATH}"
     )
     return SSL_CERT_PATH

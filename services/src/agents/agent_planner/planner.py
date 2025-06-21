@@ -1,4 +1,4 @@
-# python/iris/src/agents/agent_planner/planner.py
+# services/src/agents/agent_planner/planner.py
 """
 Planner Agent Module
 
@@ -37,16 +37,17 @@ PLANNER_TOOL_NAME = "select_databases"
 
 class PlannerError(Exception):
     """Base exception class for planner-related errors."""
+
     pass
 
 
 def get_filtered_database_statement(available_databases):
     """
     Generate a filtered database statement containing only the specified databases.
-    
+
     Args:
         available_databases (dict): Dictionary of available database configurations
-        
+
     Returns:
         str: Formatted database statement with only filtered databases
     """
@@ -54,7 +55,7 @@ def get_filtered_database_statement(available_databases):
 The following databases are available for research:
 
 """
-    
+
     # Group databases by type for better organization
     internal_dbs = {
         k: v for k, v in available_databases.items() if k.startswith("internal_")
@@ -62,7 +63,7 @@ The following databases are available for research:
     external_dbs = {
         k: v for k, v in available_databases.items() if k.startswith("external_")
     }
-    
+
     # Add internal databases section if any exist
     if internal_dbs:
         statement += "<INTERNAL_DATABASES>\n"
@@ -77,7 +78,7 @@ The following databases are available for research:
 
 """
         statement += "</INTERNAL_DATABASES>\n\n"
-    
+
     # Add external databases section if any exist
     if external_dbs:
         statement += "<EXTERNAL_DATABASES>\n"
@@ -92,7 +93,7 @@ The following databases are available for research:
 
 """
         statement += "</EXTERNAL_DATABASES>\n\n"
-    
+
     statement += "</AVAILABLE_DATABASES>"
     return statement
 
@@ -100,10 +101,10 @@ The following databases are available for research:
 def get_tool_definitions(available_databases):
     """
     Generate tool definitions with dynamic database enum based on available databases.
-    
+
     Args:
         available_databases (dict): Dictionary of available database configurations
-        
+
     Returns:
         list: Tool definitions for the planner agent
     """
@@ -122,7 +123,9 @@ def get_tool_definitions(available_databases):
                             "items": {
                                 "type": "string",
                                 "description": "The name of the database to query.",
-                                "enum": list(available_databases.keys()),  # Dynamic enum
+                                "enum": list(
+                                    available_databases.keys()
+                                ),  # Dynamic enum
                             },
                             "minItems": 1,
                             "maxItems": 5,
@@ -139,52 +142,51 @@ def load_agent_config(available_databases=None):
     """
     Load agent configuration from YAML file and resolve dynamic context.
     NOTE: Planner requires available_databases for filtered database_statement and dynamic tools
-    
+
     Args:
         available_databases (dict): Dictionary of available database configurations
-    
+
     Returns:
         dict: Configuration dictionary with resolved system prompt and settings
     """
     try:
         # Build context statements dynamically
-        context_parts = [
-            get_project_statement(),
-            get_fiscal_statement()
-        ]
-        
+        context_parts = [get_project_statement(), get_fiscal_statement()]
+
         # Handle database statement - use filtered version if available_databases provided
         if available_databases is not None:
             context_parts.append(get_filtered_database_statement(available_databases))
         else:
             context_parts.append(get_database_statement())
-            
+
         context_parts.append(get_restrictions_statement())
-        
+
         # Build the complete context block
         context_block = "\n\n".join(context_parts)
-        
+
         # Read and parse the YAML file
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        yaml_path = os.path.join(current_dir, 'planner_prompt.yaml')
-        
-        with open(yaml_path, 'r', encoding='utf-8') as f:
+        yaml_path = os.path.join(current_dir, "planner_prompt.yaml")
+
+        with open(yaml_path, "r", encoding="utf-8") as f:
             yaml_config = yaml.safe_load(f)
-        
+
         # Extract model configuration from YAML
-        model_config = yaml_config.get('model', {})
-        capability = model_config.get('capability', 'large')  # Default fallback
-        max_tokens = model_config.get('max_tokens', 4096)
-        temperature = model_config.get('temperature', 0.0)
-        
+        model_config = yaml_config.get("model", {})
+        capability = model_config.get("capability", "large")  # Default fallback
+        max_tokens = model_config.get("max_tokens", 4096)
+        temperature = model_config.get("temperature", 0.0)
+
         # Extract system prompt from YAML
-        system_prompt = yaml_config.get('system_prompt', '')
+        system_prompt = yaml_config.get("system_prompt", "")
         if not system_prompt:
             raise Exception("No system_prompt found in YAML configuration")
-        
+
         # Replace the context placeholder
-        system_prompt = system_prompt.replace('{{CONTEXT_START}}', f"<CONTEXT>\n{context_block}\n</CONTEXT>")
-        
+        system_prompt = system_prompt.replace(
+            "{{CONTEXT_START}}", f"<CONTEXT>\n{context_block}\n</CONTEXT>"
+        )
+
         # Generate dynamic tools if available_databases provided
         if available_databases is not None:
             tools = get_tool_definitions(available_databases)
@@ -215,22 +217,22 @@ def load_agent_config(available_databases=None):
                     },
                 }
             ]
-        
+
         return {
-            'model_capability': capability,
-            'max_tokens': max_tokens,
-            'temperature': temperature,
-            'system_prompt': system_prompt,
-            'tool_definitions': tools
+            "model_capability": capability,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "system_prompt": system_prompt,
+            "tool_definitions": tools,
         }
-        
+
     except Exception as e:
         logger.error(f"Error loading agent configuration: {str(e)}", exc_info=True)
         raise PlannerError(f"Failed to load agent configuration: {str(e)}") from e
 
 
 # Module-level configuration variables (will be set by the functions that call the planner)
-MODEL_CAPABILITY = 'small'
+MODEL_CAPABILITY = "small"
 MAX_TOKENS = 4096
 TEMPERATURE = 0.0
 
@@ -240,17 +242,16 @@ MODEL_NAME = model_config["name"]
 PROMPT_TOKEN_COST = model_config["prompt_token_cost"]
 COMPLETION_TOKEN_COST = model_config["completion_token_cost"]
 
-logger.debug("Planner agent configuration loaded successfully")
 
-
-def create_database_selection_plan(research_statement, token, available_databases, is_continuation=False) -> Tuple[Dict[str, Any], Optional[Dict[str, Any]]]:
+def create_database_selection_plan(
+    research_statement, token, available_databases, is_continuation=False
+) -> Tuple[Dict[str, Any], Optional[Dict[str, Any]]]:
     """
     Create a plan of selected databases based on a research statement.
 
     Args:
         research_statement (str): The research statement from the clarifier
         token (str): Authentication token for API access
-            - In RBC environment: OAuth token
             - In RBC environment: OAuth token
             - In local environment: API key
         available_databases (dict): Dictionary of available database configurations (filtered by user selection)
@@ -264,12 +265,12 @@ def create_database_selection_plan(research_statement, token, available_database
     Raises:
         PlannerError: If there is an error in creating the database selection plan.
     """
-    usage_details = None # Initialize usage details
+    usage_details = None  # Initialize usage details
     try:
         # Generate dynamic configuration with filtered databases
         agent_config = load_agent_config(available_databases)
-        system_prompt = agent_config['system_prompt']
-        tool_definitions = agent_config['tool_definitions']
+        system_prompt = agent_config["system_prompt"]
+        tool_definitions = agent_config["tool_definitions"]
         system_message = {"role": "system", "content": system_prompt}
 
         # Prepare the research statement as user message
@@ -284,10 +285,9 @@ def create_database_selection_plan(research_statement, token, available_database
 
         # Database information is included in the SYSTEM_PROMPT
 
-        logger.info(f"Creating database selection plan using model: {MODEL_NAME}")
-        logger.info(f"Is continuation: {is_continuation}")
-        logger.info(f"Available databases: {list(available_databases.keys())}")
-        logger.info("Initiating Planner API call for database selection")
+        logger.debug(f"Creating database selection plan using model: {MODEL_NAME}")
+        logger.debug(f"Is continuation: {is_continuation}")
+        logger.debug(f"Available databases: {list(available_databases.keys())}")
 
         # Tool definitions already loaded from agent_config above
 
@@ -309,15 +309,21 @@ def create_database_selection_plan(research_statement, token, available_database
         )
 
         # Check if response object itself is valid before accessing attributes
-        if not response or not hasattr(response, 'choices') or not response.choices:
-             raise PlannerError("Invalid or empty response received from LLM")
+        if not response or not hasattr(response, "choices") or not response.choices:
+            raise PlannerError("Invalid or empty response received from LLM")
 
         # Extract the tool call from the response
         message = response.choices[0].message
         if not message or not message.tool_calls:
-            content_returned = message.content if message and message.content else "No content"
-            logger.warning(f"Expected tool call but received content: {content_returned[:100]}...")
-            raise PlannerError("No tool call received in response, content returned instead.")
+            content_returned = (
+                message.content if message and message.content else "No content"
+            )
+            logger.warning(
+                f"Expected tool call but received content: {content_returned[:100]}..."
+            )
+            raise PlannerError(
+                "No tool call received in response, content returned instead."
+            )
 
         tool_call = message.tool_calls[0]
 
@@ -348,8 +354,7 @@ def create_database_selection_plan(research_statement, token, available_database
                 raise PlannerError(f"Selected database {i+1} is unknown: {db_name}")
             validated_databases.append(db_name)
 
-        # Log the database selection plan
-        logger.info(
+        logger.debug(
             f"Database selection plan created with {len(validated_databases)} databases: {validated_databases}"
         )
 
@@ -357,6 +362,8 @@ def create_database_selection_plan(research_statement, token, available_database
         return {"databases": validated_databases}, usage_details
 
     except Exception as e:
-        logger.error(f"Error creating database selection plan: {str(e)}", exc_info=True) # Add exc_info
+        logger.error(
+            f"Error creating database selection plan: {str(e)}", exc_info=True
+        )  # Add exc_info
         # Re-raise to signal failure upstream
         raise PlannerError(f"Failed to create database selection plan: {str(e)}") from e

@@ -1,4 +1,4 @@
-# python/iris/src/agents/database_subagents/database_router.py
+# services/src/agents/database_subagents/database_router.py
 """
 Database Router Module
 
@@ -20,25 +20,10 @@ import asyncio
 import importlib
 import inspect
 import logging
-from typing import Any, Dict, Generator, List, Optional, TypeVar, Union, cast
+from typing import Any, Dict, Generator, List, Optional, TypeVar, Union, cast, Tuple
 
 from ...initial_setup.env_config import config
 from ...global_prompts.database_statement import get_available_databases
-
-# Removed old token usage imports
-# from ...llm_connectors.rbc_openai import get_token_usage, reset_token_usage
-
-from typing import (
-    Any,
-    Dict,
-    Generator,
-    List,
-    Optional,
-    TypeVar,
-    Union,
-    cast,
-    Tuple,
-)  # Added Tuple
 
 # Define response types for database queries
 MetadataResponse = List[Dict[str, Any]]
@@ -64,46 +49,38 @@ AVAILABLE_DATABASES = get_available_databases()
 
 # Define mapping of internal databases to their document sources
 INTERNAL_DATABASES = {
-    'internal_par': 'internal_par',
-    'internal_esg': 'internal_esg',
-    'internal_capm': 'internal_capm',
-    'internal_aio': 'internal_aio',
-    'internal_cheatsheets': 'internal_cheatsheets',
-    'internal_ext_reporting_and_disclosure': 'internal_ext_reporting_and_disclosure',
-    'internal_global_finance_standards': 'internal_global_finance_standards',
-    'internal_management_reporting': 'internal_management_reporting',
-    'internal_memos': 'internal_memos',
-    'internal_process_and_controls': 'internal_process_and_controls',
-    'internal_wiki': 'internal_wiki',
+    "internal_par": "internal_par",
+    "internal_esg": "internal_esg",
+    "internal_capm": "internal_capm",
+    "internal_aio": "internal_aio",
+    "internal_cheatsheets": "internal_cheatsheets",
+    "internal_ext_reporting_and_disclosure": "internal_ext_reporting_and_disclosure",
+    "internal_global_finance_standards": "internal_global_finance_standards",
+    "internal_management_reporting": "internal_management_reporting",
+    "internal_memos": "internal_memos",
+    "internal_process_and_controls": "internal_process_and_controls",
+    "internal_wiki": "internal_wiki",
 }
 
 # Define mapping of external databases to their document configurations
 EXTERNAL_DATABASES = {
-    'external_ey': {
-        'query_type': 'single_document',
-        'documents': {'ey_international_gaap_2024': 20}
+    "external_ey": {
+        "query_type": "single_document",
+        "documents": {"ey_international_gaap_2024": 20},
     },
-    'external_iasb': {
-        'query_type': 'multi_document',
-        'documents': {
-            'iasb_ias': 20,
-            'iasb_ifrs': 20,
-            'iasb_ifrics': 10,
-            'iasb_sic': 10
-        }
-    }
+    "external_iasb": {
+        "query_type": "multi_document",
+        "documents": {
+            "iasb_ias": 20,
+            "iasb_ifrs": 20,
+            "iasb_ifrics": 10,
+            "iasb_sic": 10,
+        },
+    },
 }
 
 # Get module logger
 logger = logging.getLogger(__name__)
-
-# Global variable for database-specific token usage tracking (REMOVED - handled centrally)
-# _database_token_usage: Dict[str, Dict[str, Any]] = {}
-
-# Removed old token tracking functions
-# def get_database_token_usage() -> Dict[str, Dict[str, Any]]: ...
-# def reset_database_token_usage(database=None): ...
-# def update_database_token_usage(database: str, token_diff: Dict[str, Any]): ...
 
 
 def route_query_sync(
@@ -137,34 +114,22 @@ def route_query_sync(
         AttributeError: If the subagent module lacks 'query_database_sync'.
     """
     logger.info(f"Routing query (sync) to database: {database} with scope: {scope}")
-    # Use the passed-in stage name if available, otherwise default (though it should always be passed now)
     stage_name = query_stage_name or f"db_query_{database}_unknown"
-    logger.debug(f"Using process monitor stage name: {stage_name}")
-
-    # REMOVED: Stage start is now handled by the caller (_execute_query_worker)
-    # if process_monitor:
-    #     process_monitor.start_stage(stage_name)
-    #     process_monitor.add_stage_details(stage_name, scope=scope, query=query)
 
     if database not in AVAILABLE_DATABASES:
         error_msg = f"Unknown database: {database}"
         logger.error(error_msg)
         # Return appropriate error type based on expected scope return type
-        error_response: DatabaseResponse
         if scope == "metadata":
-            error_response = []
+            error_response: DatabaseResponse = []
         else:  # research scope
-            error_response = {
+            error_response: DatabaseResponse = {
                 "detailed_research": f"Error: {error_msg}",
                 "status_summary": f"❌ Error: Unknown database '{database}'.",
             }
 
-        # End the stage with error status if process monitor is provided
-        # Use the specific stage_name passed from the worker
         if process_monitor:
             process_monitor.add_stage_details(stage_name, error=error_msg)
-            # REMOVED: Stage end (even for errors) is now handled by the caller (_execute_query_worker)
-            # process_monitor.end_stage(stage_name, status="error")
 
         return (
             error_response,
@@ -180,9 +145,12 @@ def route_query_sync(
         if database in INTERNAL_DATABASES:
             # Use the unified catalog_search subagent for all internal databases
             from .catalog_search.subagent import query_database_sync
+
             document_source = INTERNAL_DATABASES[database]
-            logger.debug(f"Using catalog_search subagent for {database} with document_source: {document_source}")
-            
+            logger.info(
+                f"Using catalog_search subagent for {database} with document_source: {document_source}"
+            )
+
             # Call the catalog_search subagent with the appropriate document_source
             result_tuple = query_database_sync(
                 query=query,
@@ -190,14 +158,17 @@ def route_query_sync(
                 document_source=document_source,
                 token=token,
                 process_monitor=process_monitor,
-                query_stage_name=stage_name
+                query_stage_name=stage_name,
             )
         elif database in EXTERNAL_DATABASES:
             # Use the unified semantic_search subagent for external databases
             from .semantic_search.subagent import query_database_sync
+
             document_config = EXTERNAL_DATABASES[database]
-            logger.debug(f"Using semantic_search subagent for {database} with config: {document_config}")
-            
+            logger.info(
+                f"Using semantic_search subagent for {database} with config: {document_config}"
+            )
+
             # Call the semantic_search subagent with the appropriate document configuration
             result_tuple = query_database_sync(
                 query=query,
@@ -205,7 +176,7 @@ def route_query_sync(
                 document_config=document_config,
                 token=token,
                 process_monitor=process_monitor,
-                query_stage_name=stage_name
+                query_stage_name=stage_name,
             )
         else:
             # For non-unified databases, use the original dynamic import logic
@@ -217,19 +188,15 @@ def route_query_sync(
                 error_msg = f"Subagent module for '{database}' missing 'query_database_sync' function."
                 logger.error(error_msg)  # Log the error
 
-                # End stage with error if process monitor is provided
-                # Use the specific stage_name passed from the worker
                 if process_monitor:
                     process_monitor.add_stage_details(stage_name, error=error_msg)
-                    # REMOVED: Stage end (even for errors) is now handled by the caller (_execute_query_worker)
-                    # process_monitor.end_stage(stage_name, status="error")
 
                 # Raise attribute error as it's a code structure issue and sync is expected
                 raise AttributeError(error_msg)
 
             # Use the synchronous version directly - it now returns a tuple
             query_func = subagent_module.query_database_sync
-            logger.debug(f"Calling query_database_sync for {database}")
+            logger.info(f"Calling query_database_sync for {database}")
 
             # Check if the function can accept process_monitor and query_stage_name parameters
             sig = inspect.signature(query_func)
@@ -237,15 +204,16 @@ def route_query_sync(
             if "process_monitor" in sig.parameters:
                 call_args["process_monitor"] = process_monitor
             if "query_stage_name" in sig.parameters:
-                call_args["query_stage_name"] = stage_name  # Pass the specific stage name
+                call_args["query_stage_name"] = (
+                    stage_name  # Pass the specific stage name
+                )
 
             # Pass the process monitor and stage name if the function supports them
             result_tuple = query_func(**call_args)
 
-        # DEBUG: Log what we got back from the subagent
-        logger.error(f"DEBUG ROUTER: {database} subagent returned type: {type(result_tuple)}")
-        logger.error(f"DEBUG ROUTER: {database} subagent returned length: {len(result_tuple) if hasattr(result_tuple, '__len__') else 'No length'}")
-        logger.error(f"DEBUG ROUTER: {database} subagent returned content: {result_tuple}")
+        logger.info(
+            f"Subagent {database} returned tuple with {len(result_tuple) if hasattr(result_tuple, '__len__') else 'unknown'} elements"
+        )
 
         # Handle different tuple lengths for backward compatibility
         if len(result_tuple) == 2:
@@ -287,15 +255,17 @@ def route_query_sync(
             pass
         else:
             # Unexpected tuple length - log error and create safe 6-element tuple
-            error_msg = f"Unexpected tuple length {len(result_tuple)} from subagent {database}"
+            error_msg = (
+                f"Unexpected tuple length {len(result_tuple)} from subagent {database}"
+            )
             logger.error(error_msg)
             if process_monitor:
                 process_monitor.add_stage_details(stage_name, error=error_msg)
             # Create error response tuple
             if scope == "metadata":
-                error_response = []
+                error_response: DatabaseResponse = []
             else:
-                error_response = {
+                error_response: DatabaseResponse = {
                     "detailed_research": f"Error: Unexpected response format from {database}",
                     "status_summary": f"❌ Error: Invalid response format from '{database}'.",
                 }
@@ -303,7 +273,6 @@ def route_query_sync(
 
         # Now result_tuple is guaranteed to have 6 elements
         # The following line was incorrectly indented after removing the else block
-        # result_tuple: SubagentResult = query_func(query, scope, token) # REMOVED - Handled by **call_args
 
         # End the stage successfully if process monitor is provided
         if process_monitor:
@@ -347,9 +316,6 @@ def route_query_sync(
                         stage_name, status_summary=status_summary
                     )
 
-            # REMOVED: Stage end is now handled by the caller (_execute_query_worker)
-            # process_monitor.end_stage(stage_name, status="completed")
-
         # Return the complete tuple (result, doc_ids, file_links, page_section_refs, section_content_map, reference_index)
         return result_tuple
 
@@ -357,21 +323,16 @@ def route_query_sync(
         # Handle errors related to module loading or function signature
         error_msg = f"Error loading/calling subagent for {database}: {str(e)}"
         logger.error(error_msg, exc_info=True)
-        error_response: DatabaseResponse
         if scope == "metadata":
-            error_response = []
+            error_response: DatabaseResponse = []
         else:  # research scope
-            error_response = {
+            error_response: DatabaseResponse = {
                 "detailed_research": f"Error: {error_msg}",
                 "status_summary": f"❌ Error: Could not execute query for '{database}' due to internal configuration.",
             }
 
-        # End the stage with error status if process monitor is provided
-        # Use the specific stage_name passed from the worker
         if process_monitor:
             process_monitor.add_stage_details(stage_name, error=error_msg)
-            # REMOVED: Stage end (even for errors) is now handled by the caller (_execute_query_worker)
-            # process_monitor.end_stage(stage_name, status="error")
 
         return (
             error_response,
@@ -388,21 +349,16 @@ def route_query_sync(
             f"Error during query execution for {database} (scope: {scope}): {str(e)}"
         )
         logger.error(error_msg, exc_info=True)
-        error_response: DatabaseResponse
         if scope == "metadata":
-            error_response = []
+            error_response: DatabaseResponse = []
         else:  # research scope
-            error_response = {
+            error_response: DatabaseResponse = {
                 "detailed_research": f"Error: {error_msg}",
                 "status_summary": f"❌ Error: Failed during query execution for '{database}'.",
             }
 
-        # End the stage with error status if process monitor is provided
-        # Use the specific stage_name passed from the worker
         if process_monitor:
             process_monitor.add_stage_details(stage_name, error=error_msg)
-            # REMOVED: Stage end (even for errors) is now handled by the caller (_execute_query_worker)
-            # process_monitor.end_stage(stage_name, status="error")
 
         return (
             error_response,

@@ -1,4 +1,4 @@
-# global_prompts/fiscal_statement.py
+# services/src/global_prompts/fiscal_statement.py
 """
 Fiscal Calendar Utility
 
@@ -10,8 +10,6 @@ import logging
 from datetime import datetime, timedelta
 from typing import Dict, Tuple
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -139,6 +137,6 @@ def get_fiscal_statement() -> str:
 
         return statement
     except Exception as e:
-        logger.error(f"Error generating fiscal statement: {str(e)}")
+        logger.debug(f"Error generating fiscal statement: {str(e)}")
         # Fallback statement in case of errors
         return "<FISCAL_CONTEXT>We operate on a fiscal year that runs from November 1st through October 31st.</FISCAL_CONTEXT>"

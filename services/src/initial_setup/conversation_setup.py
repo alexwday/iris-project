@@ -1,4 +1,4 @@
-# python/iris/src/initial_setup/conversation.py
+# services/src/initial_setup/conversation_setup.py
 """
 Conversation Processing Module
 
@@ -76,7 +76,7 @@ def process_conversation(conversation: Any) -> Dict[str, List[Dict[str, str]]]:
 
         msg_count = len(messages)
         recent_count = len(recent_messages)
-        logger.info(
+        logger.debug(
             f"Processed conversation: {msg_count} messages filtered to "
             f"{recent_count} messages"
         )

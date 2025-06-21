@@ -1,4 +1,4 @@
-# global_prompts/restrictions_statement.py
+# services/src/global_prompts/restrictions_statement.py
 """
 Restrictions Statement Utility
 
@@ -8,8 +8,6 @@ be applied across all agent responses for compliance and quality control.
 
 import logging
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -53,7 +51,7 @@ This applies to ALL agents, including Direct Response.
 
         return statement
     except Exception as e:
-        logger.error(f"Error generating compliance restrictions: {str(e)}")
+        logger.debug(f"Error generating compliance restrictions: {str(e)}")
         # Fallback statement in case of errors
         return "Responses must include a disclaimer and should not provide definitive legal, tax, or regulatory advice."
 
@@ -85,7 +83,7 @@ def get_quality_guidelines() -> str:
 
         return statement
     except Exception as e:
-        logger.error(f"Error generating quality guidelines: {str(e)}")
+        logger.debug(f"Error generating quality guidelines: {str(e)}")
         # Fallback statement in case of errors
         return "Responses should be well-structured, include references, and use clear language."
 
@@ -128,7 +126,7 @@ Example: "The available sources do not address this specific scenario. This woul
 
         return statement
     except Exception as e:
-        logger.error(f"Error generating confidence signaling guidelines: {str(e)}")
+        logger.debug(f"Error generating confidence signaling guidelines: {str(e)}")
         # Fallback statement in case of errors
         return "<CONFIDENCE_SIGNALING>Indicate your level of confidence in responses based on the sources and context.</CONFIDENCE_SIGNALING>"
 
@@ -155,7 +153,7 @@ def get_restrictions_statement() -> str:
 </RESTRICTIONS_AND_GUIDELINES>"""
         return combined_statement
     except Exception as e:
-        logger.error(f"Error generating combined restrictions statement: {str(e)}")
+        logger.debug(f"Error generating combined restrictions statement: {str(e)}")
         # Fallback combined statement
         return """<RESTRICTIONS_AND_GUIDELINES>
 Responses must include appropriate disclaimers and should not provide definitive legal advice. 

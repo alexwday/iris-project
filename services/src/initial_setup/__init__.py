@@ -1,3 +1,4 @@
+# services/src/initial_setup/__init__.py
 """
 Initial setup module for IRIS project.
 Contains configuration for database, logging, OAuth and SSL.

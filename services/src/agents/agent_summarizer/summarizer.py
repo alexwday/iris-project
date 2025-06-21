@@ -1,4 +1,4 @@
-# python/iris/src/agents/agent_summarizer/summarizer.py
+# services/src/agents/agent_summarizer/summarizer.py
 """
 Summarizer Agent Module (Async Version)
 
@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 
 class SummarizerError(Exception):
     """Base exception class for summarizer-related errors."""
+
     pass
 
 
@@ -39,7 +40,7 @@ def load_agent_config():
     """
     Load agent configuration from YAML file and resolve dynamic context.
     NOTE: Summarizer excludes database_statement (unlike other agents)
-    
+
     Returns:
         dict: Configuration dictionary with resolved system prompt and settings
     """
@@ -47,41 +48,43 @@ def load_agent_config():
         # Build context statements dynamically (excluding database_statement)
         context_parts = [
             get_project_statement(),
-            get_fiscal_statement(), 
-            get_restrictions_statement()  # Note: NO database_statement for summarizer
+            get_fiscal_statement(),
+            get_restrictions_statement(),  # Note: NO database_statement for summarizer
         ]
-        
+
         # Build the complete context block
         context_block = "\n\n".join(context_parts)
-        
+
         # Read and parse the YAML file
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        yaml_path = os.path.join(current_dir, 'summarizer_prompt.yaml')
-        
-        with open(yaml_path, 'r', encoding='utf-8') as f:
+        yaml_path = os.path.join(current_dir, "summarizer_prompt.yaml")
+
+        with open(yaml_path, "r", encoding="utf-8") as f:
             yaml_config = yaml.safe_load(f)
-        
+
         # Extract model configuration from YAML
-        model_config = yaml_config.get('model', {})
-        capability = model_config.get('capability', 'large')  # Default fallback
-        max_tokens = model_config.get('max_tokens', 4096)
-        temperature = model_config.get('temperature', 0.1)
-        
+        model_config = yaml_config.get("model", {})
+        capability = model_config.get("capability", "large")  # Default fallback
+        max_tokens = model_config.get("max_tokens", 4096)
+        temperature = model_config.get("temperature", 0.1)
+
         # Extract system prompt from YAML
-        system_prompt = yaml_config.get('system_prompt', '')
+        system_prompt = yaml_config.get("system_prompt", "")
         if not system_prompt:
             raise Exception("No system_prompt found in YAML configuration")
-        
+
         # Replace the context placeholder
-        system_prompt = system_prompt.replace('{{CONTEXT_START}}', f"<CONTEXT>\n{context_block}\n</CONTEXT>")
-        
+        system_prompt = system_prompt.replace(
+            "{{CONTEXT_START}}", f"<CONTEXT>\n{context_block}\n</CONTEXT>"
+        )
+
         return {
-            'model_capability': capability,
-            'max_tokens': max_tokens,
-            'temperature': temperature,
-            'system_prompt': system_prompt
+            "model_capability": capability,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "system_prompt": system_prompt,
         }
-        
+
     except Exception as e:
         logger.error(f"Error loading agent configuration: {str(e)}", exc_info=True)
         raise SummarizerError(f"Failed to load agent configuration: {str(e)}") from e
@@ -90,15 +93,16 @@ def load_agent_config():
 # Load configuration once at module level
 try:
     _config = load_agent_config()
-    MODEL_CAPABILITY = _config['model_capability']
-    MAX_TOKENS = _config['max_tokens']
-    TEMPERATURE = _config['temperature']
-    SYSTEM_PROMPT = _config['system_prompt']
-    
-    logger.debug("Summarizer agent configuration loaded from YAML successfully")
-    
+    MODEL_CAPABILITY = _config["model_capability"]
+    MAX_TOKENS = _config["max_tokens"]
+    TEMPERATURE = _config["temperature"]
+    SYSTEM_PROMPT = _config["system_prompt"]
+
+
 except Exception as e:
-    logger.error(f"Failed to initialize summarizer agent from YAML: {str(e)}", exc_info=True)
+    logger.error(
+        f"Failed to initialize summarizer agent from YAML: {str(e)}", exc_info=True
+    )
     raise
 
 
@@ -109,7 +113,9 @@ def generate_streaming_summary(
     ],  # Input is now Dict[db_name, detailed_research_string]
     scope: str,  # Keep scope for potential future variations
     token: Optional[str],
-    available_databases: Dict[str, Any],  # Available database configurations (filtered by user selection)
+    available_databases: Dict[
+        str, Any
+    ],  # Available database configurations (filtered by user selection)
     original_query_plan: Optional[Dict] = None,
     reference_index: Optional[
         Dict[str, Dict[str, Any]]
@@ -141,7 +147,7 @@ def generate_streaming_summary(
     Raises:
         SummarizerError: If there is an error generating the response.
     """
-    logger.info(f"Generating final summary for scope: {scope}")
+    logger.debug(f"Generating final summary for scope: {scope}")
     final_usage_details = None  # Initialize
 
     # --- Research Scope ---
@@ -197,12 +203,12 @@ def generate_streaming_summary(
             # Add reference index information if available
             if reference_index:
                 ref_context = "Available References:\n"
-                
+
                 for ref_id, ref_data in reference_index.items():
                     doc_name = ref_data.get("doc_name", "Unknown")
                     page = ref_data.get("page", 1)
                     ref_context += f"[REF:{ref_id}] = {doc_name} - Page {page}\n"
-                
+
                 messages.append({"role": "system", "content": ref_context.strip()})
 
             # User message requesting summary
@@ -212,13 +218,12 @@ def generate_streaming_summary(
             }
             messages.append(user_message)
 
-            logger.info(
+            logger.debug(
                 f"Generating streaming research summary using model: {model_name}"
             )
-            logger.info(
+            logger.debug(
                 f"Summarizing detailed research from {len(aggregated_detailed_research)} databases."
             )
-            logger.info("Initiating Summarizer stream API call")  # Added contextual log
 
             # --- Synchronous LLM Call ---
             # Directly call the synchronous call_llm function
@@ -248,7 +253,7 @@ def generate_streaming_summary(
                     yield item.choices[0].delta.content
                 # else: logger.debug("Received non-content chunk in summary stream.")
 
-            logger.info("Summary stream finished.")
+            logger.debug("Summary stream finished.")
             # Yield final usage details
             if final_usage_details:
                 yield final_usage_details

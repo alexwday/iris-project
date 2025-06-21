@@ -1,8 +1,8 @@
-# python/iris/src/initial_setup/oauth.py
+# services/src/initial_setup/oauth_setup.py
 """
 Authentication Module for API Integration
 
-This module handles OAuth authentication for RBC API access. It includes 
+This module handles OAuth authentication for RBC API access. It includes
 robust error handling, retry logic, and detailed logging for operational monitoring.
 
 Functions:
@@ -40,7 +40,7 @@ def setup_oauth() -> str:
     """
     Obtain OAuth authentication token for RBC API access.
 
-    Uses OAuth client credentials flow to obtain a token with retry logic 
+    Uses OAuth client credentials flow to obtain a token with retry logic
     and detailed logging for operational monitoring.
 
     Returns:
@@ -50,7 +50,7 @@ def setup_oauth() -> str:
         requests.exceptions.RequestException: If API request fails after retries
         ValueError: If token is not found or settings are invalid
     """
-    logger.info(f"OAuth setup starting with settings from: {__file__}")
+    logger.debug(f"OAuth setup starting with settings from: {__file__}")
 
     # Validate settings
     if not all([OAUTH_URL, CLIENT_ID, CLIENT_SECRET]):
@@ -58,8 +58,8 @@ def setup_oauth() -> str:
         logger.error(error_msg)
         raise ValueError(error_msg)
 
-    logger.info(f"OAuth URL endpoint: {OAUTH_URL}")
-    logger.info(
+    logger.debug(f"OAuth URL endpoint: {OAUTH_URL}")
+    logger.debug(
         f"Using client ID: {CLIENT_ID[:4]}****"
     )  # Show only first 4 chars for security
 
@@ -74,14 +74,16 @@ def setup_oauth() -> str:
     total_time = 0
     start_time = time.time()
 
-    logger.info(f"Beginning OAuth token request with max {MAX_RETRY_ATTEMPTS} attempts")
+    logger.debug(
+        f"Beginning OAuth token request with max {MAX_RETRY_ATTEMPTS} attempts"
+    )
 
     while attempts < MAX_RETRY_ATTEMPTS:
         attempt_start = time.time()
         attempts += 1
 
         try:
-            logger.info(
+            logger.debug(
                 f"Attempt {attempts}/{MAX_RETRY_ATTEMPTS}: Requesting OAuth token"
             )
 
@@ -89,7 +91,7 @@ def setup_oauth() -> str:
             response.raise_for_status()
 
             attempt_time = time.time() - attempt_start
-            logger.info(f"Received response in {attempt_time:.2f} seconds")
+            logger.debug(f"Received response in {attempt_time:.2f} seconds")
 
             token_data = response.json()
             token = token_data.get("access_token")
@@ -106,10 +108,10 @@ def setup_oauth() -> str:
                 if len(token_str) > TOKEN_PREVIEW_LENGTH
                 else token_str
             )
-            logger.info(f"Successfully obtained OAuth token: {token_preview}")
+            logger.debug(f"Successfully obtained OAuth token: {token_preview}")
 
             total_time_seconds = time.time() - start_time
-            logger.info(
+            logger.debug(
                 f"Total OAuth process completed in {total_time_seconds:.2f} seconds after {attempts} attempt(s)"
             )
 
@@ -123,7 +125,7 @@ def setup_oauth() -> str:
             )
 
             if attempts < MAX_RETRY_ATTEMPTS:
-                logger.info(f"Retrying in {RETRY_DELAY_SECONDS} seconds...")
+                logger.debug(f"Retrying in {RETRY_DELAY_SECONDS} seconds...")
                 time.sleep(RETRY_DELAY_SECONDS)
 
     # If we've exhausted all retries, raise the last exception

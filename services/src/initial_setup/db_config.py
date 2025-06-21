@@ -1,3 +1,4 @@
+# services/src/initial_setup/db_config.py
 """
 Database configuration for RBC environment.
 All database parameters are loaded from environment variables.
@@ -29,33 +30,46 @@ def get_db_params() -> Dict[str, Any]:
 
 def build_postgres_uri(app_config):
     """
-    Build a PostgreSQL connection URI from config properties (no port/dbname).
+    Build a PostgreSQL connection URI from config properties.
+
+    Args:
+        app_config (dict): Configuration dictionary with database parameters
+
+    Returns:
+        str: PostgreSQL connection URI
     """
-    user = app_config.get('user')
-    password = app_config.get('password')
-    host = app_config.get('host')
-    
-    # TEMPORARY LOCAL DEV FIX - DELETE BEFORE SHARING WITH IT
-    port = app_config.get('port')
-    dbname = app_config.get('dbname')
-    if port and port != '5432':  # Only add port if it's non-standard
+    user = app_config.get("user")
+    password = app_config.get("password")
+    host = app_config.get("host")
+    port = app_config.get("port")
+    dbname = app_config.get("dbname")
+
+    if port and port != "5432":  # Only add port if it's non-standard
         return f"postgresql://{user}:{password}@{host}:{port}/{dbname}"
-    # END TEMPORARY FIX
-    
+
     return f"postgresql://{user}:{password}@{host}"
 
 
 def connect_to_db(env: str = "rbc") -> Optional[psycopg2.extensions.connection]:
     """
-    Connect to the PostgreSQL database using a URI without port/dbname.
+    Connect to the PostgreSQL database using configuration parameters.
+
+    Args:
+        env (str): Environment identifier (default: "rbc")
+
+    Returns:
+        Optional[psycopg2.extensions.connection]: Database connection or None if failed
+
+    Raises:
+        Exception: If database connection fails
     """
     params = get_db_params()
     uri = build_postgres_uri(params)
     try:
-        logger.info(f"Connecting to database with URI:")
+        logger.debug("Attempting database connection")
         conn = psycopg2.connect(dsn=uri)
         conn.autocommit = False
-        logger.info("Database connection successful")
+        logger.debug("Database connection successful")
         return conn
     except Exception as e:
         logger.error(f"Error connecting to database: {e}", exc_info=True)

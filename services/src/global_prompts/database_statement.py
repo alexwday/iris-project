@@ -1,4 +1,4 @@
-# global_prompts/database_statement.py
+# services/src/global_prompts/database_statement.py
 """
 Database Statement Utility
 
@@ -8,8 +8,6 @@ This module serves as the single source of truth for database information across
 
 import logging
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Complete database configuration for all available databases
@@ -21,10 +19,10 @@ AVAILABLE_DATABASES = {
         "content_type": "policies and procedures",
         "use_when": "Accounting Primary Source: Official RBC policy statements. **Strategy:** The primary source for RBC accounting policy. Always consult first for accounting questions. Check US GAAP flags. **Query:** Use RBC terms, policy areas; check US GAAP flags.",
     },
-    "internal_cheatsheets": { # Renamed from internal_cheatsheet
+    "internal_cheatsheets": {  # Renamed from internal_cheatsheet
         "name": "APG Cheatsheets",
         "description": "Concise, 1-2 page summaries and infographics on specific accounting topics, offering quick, visual guidance for key concepts and policies.",
-        "query_type": "semantic search", # Aligned with internal_par process
+        "query_type": "semantic search",  # Aligned with internal_par process
         "content_type": "summarized guidance / infographics",
         "use_when": "Accounting Core Context: Quick visual summaries. **Strategy:** Always included alongside CAPM for accounting queries to provide definitions/overviews. **Query:** Use concise, topic-focused queries suitable for semantic search.",
     },
@@ -59,35 +57,35 @@ AVAILABLE_DATABASES = {
     "internal_esg": {
         "name": "Internal ESG Guidance",
         "description": "RBC's policies and frameworks for ESG disclosures, including the ESG Materiality Framework and guidance on evaluating changes to prior period ESG information, aligned with global standards like ISSB and CSRD.",
-        "query_type": "semantic search", # Assuming semantic search
+        "query_type": "semantic search",  # Assuming semantic search
         "content_type": "ESG policy / disclosure guidance",
         "use_when": "Tier 1 (Domain Specific): ESG reporting, materiality assessment, prior period ESG changes, alignment with ISSB/CSRD. **Strategy:** Query for specific ESG disclosure questions, materiality framework, or handling prior period adjustments. **Query:** Use terms like 'ESG materiality', 'prior period ESG', 'ISSB alignment', 'CSRD', 'ESG metrics'.",
     },
     "internal_ext_reporting_and_disclosure": {
         "name": "External Reporting and Disclosure Policies",
         "description": "RBC's guidelines on material information disclosure, subsidiary reporting, trading revenue classification, and auditor independence, ensuring compliance with regulatory frameworks like OSFI, FRTB, and SEC standards.",
-        "query_type": "semantic search", # Assuming semantic search
+        "query_type": "semantic search",  # Assuming semantic search
         "content_type": "policies and procedures / disclosure guidance / compliance",
         "use_when": "Tier 1 (Domain Specific): Questions about material information disclosure, subsidiary reporting rules, trading revenue classification, engaging external auditors, auditor independence (business/financial relationships). **Strategy:** Query for specific policy numbers (LAW-8, FIN-ACC-217, FIN-ACC-212, FIN-ACC-213), disclosure requirements, trading activity reporting, or auditor engagement/independence rules. **Query:** Use terms like 'material information', 'disclosure policy', 'subsidiary reporting', 'trading revenue', 'FRTB', 'auditor engagement', 'auditor independence', 'FIN-ACC-217', 'FIN-ACC-212', 'FIN-ACC-213'.",
     },
     "internal_global_finance_standards": {
         "name": "Global Financial Standards",
         "description": "RBC's policies on currency reporting, resident/non-resident splits, foreign exchange (FX) position accounts, the Global Chart of Accounts structure, and the Global Rates policy, ensuring consistency and compliance in financial reporting across the organization.",
-        "query_type": "semantic search", # Assuming semantic search
+        "query_type": "semantic search",  # Assuming semantic search
         "content_type": "financial standards / reporting requirements / policies",
         "use_when": "Tier 1 (Domain Specific): Questions about currency reporting, resident/non-resident splits, FX position accounts, Global Chart of Accounts structure, or required FX rates for reporting. **Strategy:** Query for specific standard topics or policy numbers (FIN-ACC-14, FIN-ACC-10). **Query:** Use terms like 'currency reporting', 'resident reporting', 'FX position account', 'chart of accounts', 'global FX rates', 'FIN-ACC-14', 'FIN-ACC-10'.",
     },
     "internal_management_reporting": {
         "name": "Management Reporting Policies & Guidance",
         "description": "RBC's policies and guidelines on management reporting frameworks, including performance metrics (ROE, RORC), intra-group transactions, funds transfer pricing, tax allocation, and average balance reporting in compliance with SEC Regulation S-K.",
-        "query_type": "semantic search", # Assuming semantic search
+        "query_type": "semantic search",  # Assuming semantic search
         "content_type": "management reporting policies / performance metrics / internal controls",
         "use_when": "Tier 1 (Domain Specific): Questions about management reporting framework, performance metrics (ROE/RORC), intra-group transactions, funds transfer pricing, tax allocation, or average balance reporting requirements. **Strategy:** Query for specific management reporting topics or average balance rules. **Query:** Use terms like 'management reporting', 'performance metrics', 'ROE', 'RORC', 'intra-group', 'funds transfer pricing', 'tax allocation', 'average balance reporting', 'SEC Regulation S-K'.",
     },
     "internal_process_and_controls": {
         "name": "Internal Process and Controls Policies",
         "description": "RBC's policies on general ledger naming conventions, intra-group account procedures, internal controls over financial reporting (ICFR), and the Enterprise Internal Control Management Policy (ICMP) aligned with frameworks like COSO, SOX, and NI 52-109.",
-        "query_type": "semantic search", # Assuming semantic search
+        "query_type": "semantic search",  # Assuming semantic search
         "content_type": "policies and procedures / internal controls / compliance",
         "use_when": "Tier 1 (Domain Specific): Questions about GL naming, intra-group account reconciliation, ICFR requirements (SOX/NI 52-109), or the overall ICMP framework (COSO). **Strategy:** Query for specific policy numbers (FIN-ACC-22, FIN-ACC-201), control frameworks, or process details. **Query:** Use terms like 'GL naming convention', 'intra-group accounts', 'ICFR', 'SOX', 'NI 52-109', 'ICMP', 'COSO framework', 'FIN-ACC-22', 'FIN-ACC-201'.",
     },

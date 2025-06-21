@@ -1,4 +1,4 @@
-# python/iris/src/llm_connectors/rbc_openai.py
+# services/src/llm_connectors/rbc_openai.py
 """
 OpenAI Connector Module
 
@@ -35,9 +35,6 @@ TOKEN_PREVIEW_LENGTH = config.TOKEN_PREVIEW_LENGTH
 # Get module logger
 logger = logging.getLogger(__name__)
 
-# Remove global token usage tracking
-# _token_usage = { ... }
-
 
 class OpenAIConnectorError(Exception):
     """Base exception class for OpenAI connector errors."""
@@ -68,17 +65,15 @@ def calculate_cost(
     return prompt_cost + completion_cost
 
 
-# Remove log_usage_statistics as usage details will be returned by call_llm
-# def log_usage_statistics(...)
-
-
 def call_llm(
     oauth_token: str,
     prompt_token_cost: float = 0,
     completion_token_cost: float = 0,
     database_name: Optional[str] = None,  # Keep this for subagent compatibility
     **params,
-) -> Any:  # Returns completion object OR stream iterator (which yields usage dict at end)
+) -> (
+    Any
+):  # Returns completion object OR stream iterator (which yields usage dict at end)
     """
     Makes a call to the OpenAI API with the given parameters. Returns the API
     response directly for non-streaming calls. For streaming calls, returns an
@@ -117,7 +112,7 @@ def call_llm(
     """
     attempts = 0
     last_exception = None
-    call_start_time = time.time() # Start timing the call including retries
+    call_start_time = time.time()  # Start timing the call including retries
 
     # Set base URL for the API client
     api_base_url = BASE_URL
@@ -131,15 +126,14 @@ def call_llm(
         if len(oauth_token) > TOKEN_PREVIEW_LENGTH
         else oauth_token
     )
-    logger.debug(f"Using OAuth token: {token_preview}")
-    logger.debug(f"Using API base URL: {api_base_url}")
+    logger.info(f"Connecting to OpenAI API at {api_base_url}")
 
     # Set timeout if not provided
     if "timeout" not in params:
         params["timeout"] = REQUEST_TIMEOUT
 
     # Check if this is an embedding request
-    is_embedding = params.pop("is_embedding", False) # Remove flag from params
+    is_embedding = params.pop("is_embedding", False)  # Remove flag from params
 
     # Handle streaming option (only for chat completions)
     is_streaming = params.get("stream", False) if not is_embedding else False
@@ -150,29 +144,13 @@ def call_llm(
     # Capture model name for usage tracking
     model_name = params.get("model", "unknown")
     has_tools = "tools" in params
-    logger.debug(
-        f"Making {'streaming' if is_streaming else 'non-streaming'} call to model: {model_name}"
-        f"{' with tools' if has_tools else ''} in RBC environment"
-    )
+    logger.info(f"Making API call to {model_name} (streaming={is_streaming})")
 
     while attempts < MAX_RETRY_ATTEMPTS:
-        attempt_start_time = time.time() # Time this specific attempt
+        attempt_start_time = time.time()  # Time this specific attempt
         attempts += 1
 
         try:
-            logger.debug(
-                f"Attempt {attempts}/{MAX_RETRY_ATTEMPTS}: Sending request to OpenAI API"
-            )
-
-            # Log only non-sensitive API call parameters
-            safe_params = {
-                k: v
-                for k, v in params.items()
-                if k not in ["messages", "tools", "tool_choice"]
-            }
-            logger.debug(
-                f"API call parameters (excluding message/input content): {safe_params}"
-            )
 
             # --- Make the API call based on type ---
             if is_embedding:
@@ -185,21 +163,16 @@ def call_llm(
                     # Add other relevant params if needed, e.g., encoding_format
                 }
                 # Filter out None values
-                embedding_params = {k: v for k, v in embedding_params.items() if v is not None}
-                logger.debug(f"Calling embeddings endpoint with model: {embedding_params.get('model', 'unknown')}")
+                embedding_params = {
+                    k: v for k, v in embedding_params.items() if v is not None
+                }
                 api_response = client.embeddings.create(**embedding_params)
-                # Embedding responses don't stream and have different structure
-                # Cost calculation might need specific handling based on input tokens if required
-                # For now, just return the response object. Cost logging is skipped here.
-                logger.debug("Received embedding response.")
-                return api_response # Return embedding response directly
+                return api_response
 
-            else: # It's a chat completion call
+            else:  # It's a chat completion call
                 api_response = client.chat.completions.create(**params)
-                attempt_response_time_ms = int((time.time() - attempt_start_time) * 1000)
-                logger.debug(
-                    f"Received {'initial stream chunk' if is_streaming else 'response'} "
-                    f"for attempt {attempts} in {attempt_response_time_ms} ms"
+                attempt_response_time_ms = int(
+                    (time.time() - attempt_start_time) * 1000
                 )
 
             # --- Return based on type ---
@@ -211,25 +184,31 @@ def call_llm(
                     prompt_token_cost=prompt_token_cost,
                     completion_token_cost=completion_token_cost,
                     # Pass the overall call start time to calculate total duration later
-                    call_start_time=call_start_time
+                    call_start_time=call_start_time,
                 )
-            else: # Non-streaming chat completion or embedding
+            else:  # Non-streaming chat completion or embedding
                 # Calculate usage details for non-streaming chat completion
                 usage_details = None
-                if not is_embedding and hasattr(api_response, "usage") and api_response.usage:
+                if (
+                    not is_embedding
+                    and hasattr(api_response, "usage")
+                    and api_response.usage
+                ):
                     prompt_tokens = api_response.usage.prompt_tokens or 0
                     completion_tokens = api_response.usage.completion_tokens or 0
                     cost = calculate_cost(
-                        prompt_tokens, completion_tokens, prompt_token_cost, completion_token_cost
+                        prompt_tokens,
+                        completion_tokens,
+                        prompt_token_cost,
+                        completion_token_cost,
                     )
                     usage_details = {
-                        'model': model_name,
-                        'prompt_tokens': prompt_tokens,
-                        'completion_tokens': completion_tokens,
-                        'cost': cost,
-                        'response_time_ms': attempt_response_time_ms # Time for this successful attempt
+                        "model": model_name,
+                        "prompt_tokens": prompt_tokens,
+                        "completion_tokens": completion_tokens,
+                        "cost": cost,
+                        "response_time_ms": attempt_response_time_ms,  # Time for this successful attempt
                     }
-                    logger.debug(f"Non-streaming usage: {usage_details}")
 
                 # Return the response object AND usage details (if applicable)
                 # Caller needs to handle this tuple format
@@ -243,7 +222,6 @@ def call_llm(
             )
 
             if attempts < MAX_RETRY_ATTEMPTS:
-                logger.debug(f"Retrying in {RETRY_DELAY_SECONDS} seconds...")
                 time.sleep(RETRY_DELAY_SECONDS)
 
     # If we've exhausted all retries, raise the last exception
@@ -259,14 +237,23 @@ def _stream_wrapper(
     model_name: str,
     prompt_token_cost: float,
     completion_token_cost: float,
-    call_start_time: float # Overall start time of the call_llm function
+    call_start_time: float,  # Overall start time of the call_llm function
 ) -> Iterator:
     """
-    Wraps the OpenAI stream iterator. Yields content chunks and finally yields
-    a dictionary containing usage statistics for the entire stream.
+    Wraps the OpenAI stream iterator to handle usage statistics and error handling.
+
+    Args:
+        stream_iterator (Iterator): The streaming response from OpenAI API
+        model_name (str): Name of the model being used
+        prompt_token_cost (float): Cost per prompt token
+        completion_token_cost (float): Cost per completion token
+        call_start_time (float): Start time of the API call
+
+    Returns:
+        Iterator: Wrapped streaming response with usage statistics
     """
     final_usage_data = None
-    stream_start_time = time.time() # Time the streaming part itself
+    stream_start_time = time.time()  # Time the streaming part itself
 
     try:
         for chunk in stream_iterator:
@@ -284,33 +271,32 @@ def _stream_wrapper(
             prompt_tokens = final_usage_data.prompt_tokens or 0
             completion_tokens = final_usage_data.completion_tokens or 0
             cost = calculate_cost(
-                prompt_tokens, completion_tokens, prompt_token_cost, completion_token_cost
+                prompt_tokens,
+                completion_tokens,
+                prompt_token_cost,
+                completion_token_cost,
             )
             usage_details = {
-                'model': model_name,
-                'prompt_tokens': prompt_tokens,
-                'completion_tokens': completion_tokens,
-                'cost': cost,
-                'response_time_ms': total_response_time_ms # Total time for the call
+                "model": model_name,
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "cost": cost,
+                "response_time_ms": total_response_time_ms,  # Total time for the call
             }
-            logger.debug(f"Stream finished. Final usage: {usage_details}")
             # Yield the usage details as the very last item
-            yield {'usage_details': usage_details}
+            yield {"usage_details": usage_details}
         else:
             logger.warning(
                 "Stream finished, but no usage data found in the final chunk. Cannot report usage."
             )
             # Yield an empty usage dict or None to signal completion without usage
-            yield {'usage_details': {
-                'model': model_name,
-                'prompt_tokens': 0,
-                'completion_tokens': 0,
-                'cost': 0.0,
-                'response_time_ms': total_response_time_ms,
-                'error': 'Usage data missing from stream'
-            }}
-
-
-# Remove get_token_usage and reset_token_usage
-# def get_token_usage() -> Dict[str, Any]: ...
-# def reset_token_usage() -> None: ...
+            yield {
+                "usage_details": {
+                    "model": model_name,
+                    "prompt_tokens": 0,
+                    "completion_tokens": 0,
+                    "cost": 0.0,
+                    "response_time_ms": total_response_time_ms,
+                    "error": "Usage data missing from stream",
+                }
+            }
