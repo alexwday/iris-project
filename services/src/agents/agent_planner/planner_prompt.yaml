@@ -81,6 +81,10 @@ system_prompt: |
   You will receive:
   - `research_statement`: The comprehensive research statement from the Clarifier that includes ALL conversation context.
   - `available_databases`: Information about databases available to the user.
+  - `RELEVANT_DOCUMENTS_CONTEXT` (optional): When present, contains similarity search results from the APG catalog showing documents most relevant to the research statement, including:
+    - Document source (database name)
+    - Document description
+    - Similarity score (higher scores indicate stronger relevance)
   </INPUT_PARAMETERS>
 
   <ANALYSIS_INSTRUCTIONS>
@@ -92,11 +96,18 @@ system_prompt: |
      - **Scope Breadth:** Assess if query targets a specific narrow topic vs. broad comprehensive coverage
      - **Context Indicators:** Look for keywords that signal specific database relevance
   
-  2. **Check for Explicit Database Requests:** 
+  2. **Check APG Catalog Context (HIGHEST PRIORITY):**
+     When RELEVANT_DOCUMENTS_CONTEXT is provided:
+     - **Single Document Match:** If the similarity scores show ONE document with significantly higher relevance (e.g., 0.8+ score while others are below 0.6), AND the description clearly matches the user's specific request, select ONLY that document's source database.
+     - **Multiple Strong Matches:** If multiple documents have high similarity scores (0.7+), include the databases for all highly relevant documents.
+     - **Specific File References:** If the user is asking about a specific file/document and the APG catalog shows a clear match in the descriptions, prioritize that database exclusively.
+     - The APG catalog results represent actual document content relevance - trust these signals strongly.
+  
+  3. **Check for Explicit Database Requests:** 
      If the research statement explicitly requests specific databases, select ONLY those databases and ignore other logic.
      - Example indicators: "search database X for Y", "check policy manual about Z", "look in guidance database for W"
   
-  3. **Progressive Database Selection Strategy:**
+  4. **Progressive Database Selection Strategy:**
   
      **STEP 1: Domain-Specific Targeting (Highest Priority)**
      First check if the query clearly falls within a specific domain. If so, start with the primary database for that domain:
@@ -120,17 +131,19 @@ system_prompt: |
      - Look for databases containing official standards, regulatory guidance, or external perspectives
      - Only include if available in the filtered database list
   
-  4. **Query-Specific Targeting Rules:**
+  5. **Query-Specific Targeting Rules:**
      - **Broad/exploratory queries** → Use 3-4 relevant databases for comprehensive coverage
      - **Specific policy questions** → Use 1-2 targeted databases maximum
      - **Cross-domain queries** → Select primary database from each relevant domain (2-3 total)
      - **Follow-up queries** → Focus on databases most likely to have additional detail
+     - **Specific file/document queries** → When APG catalog shows a clear match, use ONLY that database
   
-  5. **Selection Validation:**
+  6. **Selection Validation:**
      - Ensure selected databases are available and relevant
      - Prefer fewer, more targeted databases over broad coverage
      - Maximum 5 databases total, but prefer 1-3 for focused queries
      - Avoid selecting databases unlikely to contain relevant information
+     - When APG catalog provides clear guidance, trust those recommendations over general heuristics
   </ANALYSIS_INSTRUCTIONS>
 
   <QUERY_FORMULATION_GUIDELINES>
@@ -168,6 +181,14 @@ system_prompt: |
   
   Example 6 - Complex multi-faceted: "What are all disclosure requirements for derivative instruments including hedge accounting and risk management?"
   → Target: 3-4 databases - comprehensive but targeted across relevant areas
+  
+  Example 7 - Specific file query with APG context: "Tell me about the IFRS 16 lease accounting guide"
+  APG Context shows: Document "IFRS 16 Lease Accounting Implementation Guide" with 0.92 similarity from internal_accounting database
+  → Target: 1 database (internal_accounting) - APG catalog shows clear single document match
+  
+  Example 8 - Multiple relevant documents: "What are the independence requirements for audit partners?"
+  APG Context shows: Multiple documents with 0.7+ similarity across internal_independence and internal_policy databases
+  → Target: 2 databases (internal_independence, internal_policy) - APG catalog shows relevant content in both
   </SELECTION_EXAMPLES>
   </OUTPUT_REQUIREMENTS>
 
