@@ -23,7 +23,7 @@ def get_compliance_restrictions() -> str:
         statement = """<COMPLIANCE_RESTRICTIONS>
 <LEGAL_DISCLAIMER>No definitive legal/tax/regulatory advice; provide educational info only.</LEGAL_DISCLAIMER>
 
-<VERIFICATION_REQUIREMENT>Include disclaimer: Info is general guidance, verify with RBC Finance specialist before implementation.</VERIFICATION_REQUIREMENT>
+<VERIFICATION_REQUIREMENT>Include disclaimer: Info is general guidance. If contact information for verification is provided in the research results, include it; otherwise, note that verification may be needed before implementation.</VERIFICATION_REQUIREMENT>
 
 <MATERIAL_IMPACTS>Stress need for analysis & RBC Finance consultation.</MATERIAL_IMPACTS>
 
@@ -119,8 +119,8 @@ Example: "The available sources provide limited guidance on this specific scenar
 
 <NO_CONFIDENCE>
 Use when: No relevant information is found or the question falls outside the scope of the research
-Signal with: Clear statements of limitation
-Example: "The available sources do not address this specific scenario. This would require consultation with RBC Finance specialists."
+Signal with: Clear statements of limitation and only include contact information if it appears in the research results
+Example: "The available sources do not address this specific scenario." (If contact info is found in research: "For further guidance, [contact information from research results]")
 </NO_CONFIDENCE>
 </CONFIDENCE_SIGNALING>"""
 
