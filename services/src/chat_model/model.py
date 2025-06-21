@@ -649,6 +649,17 @@ def _model_generator(
             message_count=len(processed_conversation["messages"]),
         )
 
+        # Filter available databases based on user selection BEFORE any agent calls
+        from ..global_prompts.database_statement import get_available_databases
+        available_databases = get_available_databases()
+        logger.info(f"Initial available databases: {list(available_databases.keys())}")
+        if db_names is not None:
+            logger.info(f"db_names filter provided: {db_names}")
+            available_databases = {k: v for k, v in available_databases.items() if k in db_names}
+            logger.info(f"Filtered available_databases: {list(available_databases.keys())}")
+        else:
+            logger.info("No db_names filter provided; agents will see all available databases.")
+
         process_monitor.start_stage("router")
         logger.info("Getting routing decision...")
         # TODO: Update get_routing_decision to return (decision, usage_details)
@@ -726,15 +737,7 @@ def _model_generator(
                     return
 
                 logger.info(f"Research scope determined: {scope}")
-                # Filter available databases based on user selection BEFORE planner
-                available_databases = get_available_databases()
-                logger.info(f"Initial available databases: {list(available_databases.keys())}")
-                if db_names is not None:
-                    logger.info(f"db_names filter provided: {db_names}")
-                    available_databases = {k: v for k, v in available_databases.items() if k in db_names}
-                    logger.info(f"Filtered available_databases for planner: {list(available_databases.keys())}")
-                else:
-                    logger.info("No db_names filter provided; planner will see all available databases.")
+                # available_databases already filtered earlier in the flow
 
                 process_monitor.start_stage("planner")
                 logger.info("Creating database selection plan...")
