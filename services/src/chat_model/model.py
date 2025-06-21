@@ -25,7 +25,7 @@ import logging
 import time
 import uuid  # Import uuid
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Union, Generator, Callable
+from typing import Any, Dict, List, Optional, Union, Generator, Callable, Tuple
 
 # ... (Keep existing imports) ...
 from ..global_prompts.database_statement import get_available_databases
@@ -137,6 +137,9 @@ def search_apg_catalog_by_embedding(
     logger.info(f"Searching apg_catalog for research statement: '{research_statement[:100]}...'")
     usage_details = None
     
+    conn = None
+    cursor = None
+    
     try:
         # Generate embedding for the research statement
         query_embedding, usage_details = _generate_query_embedding(research_statement, token)
@@ -186,15 +189,23 @@ def search_apg_catalog_by_embedding(
             for i, doc in enumerate(results[:5], 1):
                 logger.info(f"  {i}. {doc.get('document_name', 'N/A')} (score: {doc.get('similarity_score', 0.0):.3f})")
         
-        # Close database connection
-        cursor.close()
-        conn.close()
-        
         return results, usage_details
         
     except Exception as e:
         logger.error(f"Error searching apg_catalog: {e}", exc_info=True)
         return [], usage_details
+    finally:
+        # Ensure database connections are properly closed
+        if cursor:
+            try:
+                cursor.close()
+            except Exception as e:
+                logger.warning(f"Error closing cursor: {e}")
+        if conn:
+            try:
+                conn.close()
+            except Exception as e:
+                logger.warning(f"Error closing connection: {e}")
 
 
 # --- Formatting Function (Remains Synchronous) ---
