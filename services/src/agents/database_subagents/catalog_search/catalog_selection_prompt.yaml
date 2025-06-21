@@ -58,7 +58,7 @@ system_prompt: |
   Each catalog entry contains:
   - Document ID: A unique identifier for the document
   - Document Name: The title of the document  
-  - Document Description: A summary of what the document contains
+  - Document Description: A summary of what the document contains when used for display in metadata results; for research purposes, this field contains the detailed description from Document Usage instead of the summary
   </CATALOG_FORMAT>
 
   <ANALYSIS_INSTRUCTIONS>

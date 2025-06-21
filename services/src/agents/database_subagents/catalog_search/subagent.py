@@ -169,15 +169,20 @@ def get_synthesis_tool_schema() -> Dict[str, Any]:
 
 
 # Formatting functions remain synchronous as they are CPU-bound
-def format_catalog_for_llm(catalog_records: List[Dict[str, Any]]) -> str:
+def format_catalog_for_llm(catalog_records: List[Dict[str, Any]], scope: str = "research") -> str:
     """
     Format the catalog records into a string that is optimized for LLM comprehension.
+    Uses document_usage for research scope and document_description for metadata scope.
+    
+    Args:
+        catalog_records: List of catalog records
+        scope: The scope of the query ("metadata" or "research")
     """
     formatted_catalog = ""
     for record in catalog_records:
         doc_id = record.get("id", "unknown")
         doc_name = record.get("document_name", "Untitled")
-        doc_desc = record.get("document_description", "No description available")
+        doc_desc = record.get("document_usage" if scope == "research" else "document_description", "No description available")
         formatted_catalog += f"Document ID: {doc_id}\n"
         formatted_catalog += f"Document Name: {doc_name}\n"
         formatted_catalog += f"Document Description: {doc_desc}\n\n"
@@ -245,7 +250,7 @@ def fetch_catalog(document_source: str) -> List[Dict[str, Any]]:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT id, document_name, document_description, file_link, file_name
+                SELECT id, document_name, document_description, document_usage, file_link, file_name
                 FROM apg_catalog
                 WHERE document_source = %s
                 ORDER BY document_name
@@ -258,8 +263,9 @@ def fetch_catalog(document_source: str) -> List[Dict[str, Any]]:
                         "id": str(row[0]),
                         "document_name": row[1],
                         "document_description": row[2],
-                        "file_link": row[3] if row[3] else None,
-                        "file_name": row[4] if row[4] else None,
+                        "document_usage": row[3] if row[3] else "No detailed usage information available",
+                        "file_link": row[4] if row[4] else None,
+                        "file_name": row[5] if row[5] else None,
                     }
                 )
         logger.info(
@@ -499,6 +505,7 @@ def select_relevant_documents(
     database_name: str = "catalog_search",  # Default generic name
     process_monitor=None,  # Added process_monitor
     stage_name: Optional[str] = None,  # Added stage_name
+    scope: str = "research"  # Added scope parameter
 ) -> List[str]:
     """
     Use an LLM to select the most relevant documents from the catalog based on the query.
@@ -515,7 +522,7 @@ def select_relevant_documents(
         List[str]: List of selected document IDs
     """
     logger.info(f"Selecting relevant documents from {database_name} catalog")
-    formatted_catalog = format_catalog_for_llm(catalog)
+    formatted_catalog = format_catalog_for_llm(catalog, scope=scope)
     selection_prompt = get_catalog_selection_prompt(
         query, formatted_catalog
     )  # Assumes this prompt asks for JSON list
@@ -973,7 +980,7 @@ def query_database_sync(
 
         # Select documents using the updated helper function
         selected_doc_ids = select_relevant_documents(
-            query, catalog, token, database_name, process_monitor, stage_name
+            query, catalog, token, database_name, process_monitor, stage_name, scope
         )
 
         logger.info(
