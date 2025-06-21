@@ -353,12 +353,12 @@ def _process_reference_buffer(
     logger = logging.getLogger(__name__)
 
     # Debug logging
-    logger.info(
+    logger.debug(
         f"Buffer processing: buffer length={len(buffer)}, content preview: '{buffer[-50:]}'"
     )
     if "[REF:" in buffer:
         ref_matches = re.findall(r"\[REF:\d+\]", buffer)
-        logger.info(f"Found individual references in buffer: {ref_matches}")
+        logger.debug(f"Found individual references in buffer: {ref_matches}")
 
     # Look for all reference patterns
     # Individual reference pattern for processing
@@ -368,7 +368,7 @@ def _process_reference_buffer(
 
     # Find all individual references
     individual_refs = list(re.finditer(individual_pattern, buffer))
-    logger.info(
+    logger.debug(
         f"Found {len(individual_refs)} individual references: {[m.group(0) for m in individual_refs]}"
     )
 
@@ -390,7 +390,7 @@ def _process_reference_buffer(
             if not overlaps:
                 legacy_refs.append(legacy_match)
 
-    logger.info(
+    logger.debug(
         f"Found {len(legacy_refs)} legacy references: {[m.group(0) for m in legacy_refs]}"
     )
 
@@ -398,24 +398,24 @@ def _process_reference_buffer(
 
     # Check if we have complete patterns or need to keep buffering
     if not all_matches:
-        logger.info(f"No complete references found in buffer")
+        logger.debug(f"No complete references found in buffer")
         if len(buffer) < buffer_size:
             # Check for incomplete references at the end of buffer
             if buffer.endswith("[") or re.search(r"\[REF:?\d*$", buffer):
                 # Incomplete reference at end, keep buffering
-                logger.info(
+                logger.debug(
                     f"Incomplete reference at end, keeping buffer: '{buffer[-20:]}'"
                 )
                 return "", buffer
             # No incomplete references and buffer not full - output what we have
-            logger.info(f"No references and buffer not full, outputting buffer content")
+            logger.debug(f"No references and buffer not full, outputting buffer content")
             return buffer, ""
         else:
             # Buffer is full but no references - handle potential partial references
             potential_ref_start = buffer.rfind("[")
             if potential_ref_start != -1 and potential_ref_start > len(buffer) - 15:
                 # Keep potential reference start in buffer
-                logger.info(
+                logger.debug(
                     f"Buffer full, keeping potential ref at end: '{buffer[potential_ref_start:]}'"
                 )
                 processed_content = buffer[:potential_ref_start]
@@ -426,7 +426,7 @@ def _process_reference_buffer(
                 keep_chars = min(10, len(buffer) // 3)
                 processed_content = buffer[:-keep_chars] if keep_chars > 0 else buffer
                 remaining_buffer = buffer[-keep_chars:] if keep_chars > 0 else ""
-                logger.info(f"Buffer full, no refs, keeping {keep_chars} chars")
+                logger.debug(f"Buffer full, no refs, keeping {keep_chars} chars")
                 return processed_content, remaining_buffer
 
     # Before processing, check if there's content after the last complete reference that needs to be preserved
@@ -440,7 +440,7 @@ def _process_reference_buffer(
         buffer[rightmost_ref_end:] if rightmost_ref_end < len(buffer) else ""
     )
 
-    logger.info(
+    logger.debug(
         f"Processing {len(all_matches)} references in buffer, trailing content: '{trailing_content}'"
     )
 
@@ -477,7 +477,7 @@ def _process_reference_buffer(
                     + replacement
                     + processed_content[match.end() :]
                 )
-                logger.info(
+                logger.debug(
                     f"Replaced individual {match_text} with link for ref: {ref_id}"
                 )
             else:
@@ -538,7 +538,7 @@ def _process_reference_buffer(
                     + replacement
                     + processed_content[match.end() :]
                 )
-                logger.info(
+                logger.debug(
                     f"Replaced legacy {match.group(0)} with {len(links)} link(s) for refs: {found_refs}"
                 )
 
@@ -549,7 +549,7 @@ def _process_reference_buffer(
         # There's an incomplete reference after our processed references
         # Find where this trailing content starts in the processed buffer and preserve it
         # Since we processed from right to left, the trailing incomplete reference should still be at the end
-        logger.info(f"Preserving incomplete reference in buffer: '{trailing_content}'")
+        logger.debug(f"Preserving incomplete reference in buffer: '{trailing_content}'")
 
         # Find where the trailing content starts in the processed content
         # Look for the pattern at the end of the processed content
@@ -576,7 +576,7 @@ def _process_reference_buffer(
         return final_processed, remaining_buffer
 
     # No incomplete references after processing, return all processed content
-    logger.info(f"Returning processed content, length: {len(processed_content)}")
+    logger.debug(f"Returning processed content, length: {len(processed_content)}")
     return processed_content, ""
 
 
