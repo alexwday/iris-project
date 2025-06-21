@@ -1168,6 +1168,7 @@ def _model_generator(
                                 scope,
                                 token,
                                 available_databases,
+                                research_statement=research_statement,
                                 reference_index=master_reference_index,
                             )
 

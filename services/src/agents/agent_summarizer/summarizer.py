@@ -116,6 +116,7 @@ def generate_streaming_summary(
     available_databases: Dict[
         str, Any
     ],  # Available database configurations (filtered by user selection)
+    research_statement: Optional[str] = None,  # Added research statement for query focus
     original_query_plan: Optional[Dict] = None,
     reference_index: Optional[
         Dict[str, Dict[str, Any]]
@@ -211,10 +212,15 @@ def generate_streaming_summary(
 
                 messages.append({"role": "system", "content": ref_context.strip()})
 
-            # User message requesting summary
+            # User message requesting summary with research statement context
+            user_content = "Please generate the comprehensive research summary based on the provided context and requirements. Synthesize the findings from all sources into a single, coherent response following the specified template and citation format."
+            
+            if research_statement:
+                user_content = f"Research Statement: {research_statement}\n\n{user_content}\n\nIMPORTANT: Focus your response on directly addressing the research statement above. Prioritize information that answers the specific question asked and avoid including tangential research that doesn't support the core query."
+            
             user_message = {
                 "role": "user",
-                "content": "Please generate the comprehensive research summary based on the provided context and requirements. Synthesize the findings from all sources into a single, coherent response following the specified template and citation format.",
+                "content": user_content,
             }
             messages.append(user_message)
 

@@ -58,6 +58,7 @@ system_prompt: |
 
   <INPUT_FORMAT>
   You receive:
+  - `research_statement`: The original refined research statement that guided the database queries
   - `aggregated_detailed_research`: Dict mapping database names to research text
   - `reference_index`: Master index mapping REF numbers to source details
   - Research text already contains embedded [REF:x] markers where x is a sequential number
@@ -106,23 +107,38 @@ system_prompt: |
   </FORMATTING_REQUIREMENTS>
 
   <SYNTHESIS_GUIDELINES>
-  1. **Analyze all input research** from each database in `aggregated_detailed_research`
-  2. **Identify key themes** and organize into logical topic sections
-  3. **Note consensus and conflicts** between different sources
-  4. **Preserve important details** while maintaining readability
-  5. **Signal confidence appropriately** based on source agreement
-  6. **Highlight gaps** when important information is missing
-  7. **CRITICAL: Summary Section** - The Summary section must:
-     - Directly state the key research findings and conclusions in 2-3 sentences
-     - Focus on WHAT was found, not THAT a summary is being provided
+  1. **Focus on the Research Statement**: Always refer back to the original research statement to ensure your response directly addresses what was asked
+  2. **Apply Query-Focused Filtering**: From all available research, prioritize information that directly answers the research statement:
+     - **Relevant findings first**: Lead with research that directly addresses the query
+     - **Supporting context second**: Include supporting information only when it enhances understanding
+     - **Eliminate tangential content**: Don't include research that doesn't support answering the query
+     - **Scale appropriately**: Simple queries deserve focused responses; complex queries may require comprehensive coverage
+  3. **Organize by Query Relevance**: Structure your response based on what matters most to the research statement:
+     - **Primary findings**: Direct answers to the question asked
+     - **Implementation guidance**: Practical application if relevant to the query
+     - **Related considerations**: Secondary topics only when they support the main query
+  4. **Quality Control for Relevance**:
+     - **Answer validation**: Ensure each section clearly relates to answering the research statement
+     - **Scope management**: Don't expand beyond what was asked unless it's essential context
+     - **User value focus**: Include only information that helps address the specific question asked
+  5. **Research Statement Alignment**: Before writing each section, ask:
+     - "Does this directly help answer the research statement?"
+     - "Would the user find this essential for their specific question?"
+     - "Am I staying focused on what was actually asked?"
+  6. **Note consensus and conflicts** between different sources
+  7. **Signal confidence appropriately** based on source agreement
+  8. **Highlight gaps** when important information is missing
+  9. **CRITICAL: Summary Section** - The Summary section must:
+     - Directly answer the research statement in 2-3 sentences
+     - Focus on WHAT was found that addresses the specific query
      - Avoid meta-language like "This summary provides..." or "The research indicates that..."
-     - Start with the actual findings (e.g., "Revenue recognition requires..." not "This analysis shows that revenue recognition requires...")
-     - Capture the most important conclusions that answer the user's query
-  8. **CRITICAL: Reference Management** - When multiple databases provide many references on the same topic:
+     - Start with the actual findings that answer the question asked
+     - Capture the most important conclusions that directly address the research statement
+  10. **CRITICAL: Reference Management** - When multiple databases provide many references on the same topic:
      - Select only the 3-5 most authoritative documents per paragraph (maximum)
      - Group pages from the same document into ranges (e.g., "Pages 1-4") with single REF to first page
      - Format as "***Document Name, Pages X-Y*** [REF:Z]" where REF:Z is the first page and document name/pages are bold italic
-     - Prioritize primary standards (IFRS, US GAAP) over secondary sources
+     - Prioritize sources most relevant to answering the research statement
      - Choose the most recent or specific guidance when multiple options exist
      - Create separate paragraphs for related but distinct subtopics rather than over-citing
      - NEVER list multiple [REF:x] tags - always use bold italic page range format
