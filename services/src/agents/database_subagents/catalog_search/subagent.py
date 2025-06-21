@@ -377,10 +377,21 @@ def get_completion(
         # Return error string and None for usage details
         return f"Error: Configuration error for model capability '{capability}'", None
 
-    messages = [
-        {"role": "system", "content": "You are a helpful assistant."},
-        {"role": "user", "content": prompt},
-    ]
+    # All calls should use the YAML-generated prompt as the system message
+    # since get_catalog_selection_prompt() and get_content_synthesis_prompt() 
+    # both return complete YAML system prompts
+    if kwargs.get('tools'):
+        # Tool calls need a simple user message to trigger the tool
+        messages = [
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": "Please complete the requested task using the appropriate tool."},
+        ]
+    else:
+        # Non-tool calls (like document selection) can use prompt as system message with simple user request
+        messages = [
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": "Please provide your response based on the instructions and context provided."},
+        ]
 
     call_params = {
         "oauth_token": token or "placeholder_token",

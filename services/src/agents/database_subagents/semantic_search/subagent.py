@@ -936,7 +936,8 @@ def _generate_response_from_chunks(
     """
     logger.info(f"Generating Final Response from Processed Chunks using {RESPONSE_MODEL_CAPABILITY}")
     usage_details: LlmUsageDetails = None
-    synthesis_prompt = get_content_synthesis_prompt(query, formatted_chunks)
+    # Get the system prompt from YAML and substitute variables
+    synthesis_system_prompt = get_content_synthesis_prompt(query, formatted_chunks)
     default_response = {
         "detailed_research": "Error: Failed to generate synthesized response.",
         "status_summary": "❌ Synthesis Error",
@@ -950,8 +951,8 @@ def _generate_response_from_chunks(
             "completion_token_cost": model_config["completion_token_cost"],
             "model": model_config["name"],
             "messages": [
-                {"role": "system", "content": "You are a helpful assistant."}, # System prompt defined in get_content_synthesis_prompt
-                {"role": "user", "content": synthesis_prompt},
+                {"role": "system", "content": synthesis_system_prompt},
+                {"role": "user", "content": "Please analyze the provided IASB context cards and generate the research synthesis using the synthesize_research_findings tool."},
             ],
             "max_tokens": MAX_RESPONSE_TOKENS,
             "temperature": RESPONSE_TEMPERATURE,
