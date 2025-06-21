@@ -103,7 +103,8 @@ system_prompt: |
   - **Prioritize relevance over quantity**: Select 1-3 highly relevant documents rather than 4-5 marginally relevant ones
   - Only include documents that meet HIGH or MEDIUM relevance thresholds
   - Format as a JSON array of document IDs as strings
-  - Examples: ["1", "2", "5"] (3 relevant docs), ["7"] (1 highly relevant doc), ["3", "12"] (2 relevant docs)
+  - **Order by relevance**: List the most relevant document first, followed by supporting documents in decreasing order of relevance
+  - Examples: ["1", "2", "5"] (3 relevant docs, with "1" being the most relevant), ["7"] (1 highly relevant doc), ["3", "12"] (2 relevant docs, with "3" being more relevant)
   - If no documents meet relevance thresholds, return an empty array: []
   - No additional text, explanations, or commentary
   </OUTPUT_REQUIREMENTS>
