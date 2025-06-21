@@ -244,7 +244,7 @@ COMPLETION_TOKEN_COST = model_config["completion_token_cost"]
 
 
 def create_database_selection_plan(
-    research_statement, token, available_databases, is_continuation=False
+    research_statement, token, available_databases, is_continuation=False, apg_catalog_context=None
 ) -> Tuple[Dict[str, Any], Optional[Dict[str, Any]]]:
     """
     Create a plan of selected databases based on a research statement.
@@ -256,6 +256,7 @@ def create_database_selection_plan(
             - In local environment: API key
         available_databases (dict): Dictionary of available database configurations (filtered by user selection)
         is_continuation (bool, optional): Whether this is a continuation of previous research.
+        apg_catalog_context (list, optional): List of relevant documents from apg_catalog search
 
     Returns:
         Tuple[Dict[str, Any], Optional[Dict[str, Any]]]:
@@ -275,9 +276,21 @@ def create_database_selection_plan(
 
         # Prepare the research statement as user message
         continuation_prefix = "[CONTINUATION REQUEST] " if is_continuation else ""
+        user_content = f"{continuation_prefix}Research Statement: {research_statement}"
+        
+        # Add apg_catalog context if available
+        if apg_catalog_context and len(apg_catalog_context) > 0:
+            user_content += "\n\n<RELEVANT_DOCUMENTS_CONTEXT>\n"
+            user_content += "The following documents were found to be relevant to this research statement:\n\n"
+            for i, doc in enumerate(apg_catalog_context[:5], 1):
+                user_content += f"{i}. **{doc.get('document_source', 'Unknown Source')}**\n"
+                user_content += f"   Description: {doc.get('document_description', 'No description available')}\n"
+                user_content += f"   Similarity: {doc.get('similarity_score', 0.0):.3f}\n\n"
+            user_content += "</RELEVANT_DOCUMENTS_CONTEXT>\n"
+        
         research_message = {
             "role": "user",
-            "content": f"{continuation_prefix}Research Statement: {research_statement}",
+            "content": user_content,
         }
 
         # Prepare messages for the API call

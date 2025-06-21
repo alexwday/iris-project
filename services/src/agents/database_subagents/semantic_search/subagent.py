@@ -302,6 +302,79 @@ def _perform_vector_search(
         return []
 
 
+def search_apg_catalog_by_embedding(
+    research_statement: str, token: Optional[str] = None, top_k: int = 5
+) -> Tuple[List[Dict[str, Any]], Optional[Dict[str, Any]]]:
+    """
+    Search the apg_catalog table using embeddings to find relevant documents.
+    
+    Args:
+        research_statement (str): The research statement to search for
+        token (Optional[str]): OAuth token for API authentication
+        top_k (int): Number of top results to retrieve (default 5)
+        
+    Returns:
+        Tuple[List[Dict[str, Any]], Optional[Dict[str, Any]]]: 
+            - List of matching documents with document_source and document_description
+            - Usage details dictionary for the embedding call, or None if error
+    """
+    logger.info(f"Searching apg_catalog for research statement: '{research_statement[:100]}...'")
+    usage_details = None
+    
+    try:
+        # Generate embedding for the research statement
+        query_embedding, usage_details = _generate_query_embedding(research_statement, token)
+        
+        if query_embedding is None:
+            logger.error("Could not generate embedding for research statement")
+            return [], usage_details
+        
+        # Connect to database
+        conn = connect_to_db()
+        if conn is None:
+            logger.error("Failed to connect to database for apg_catalog search")
+            return [], usage_details
+            
+        register_vector(conn)
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        
+        # Perform vector search against apg_catalog table
+        sql = """
+            SELECT
+                document_source,
+                document_description,
+                document_type,
+                document_name,
+                1 - (document_usage_embedding <=> %s::vector) AS similarity_score
+            FROM apg_catalog
+            WHERE document_usage_embedding IS NOT NULL
+            ORDER BY similarity_score DESC
+            LIMIT %s;
+        """
+        
+        cursor.execute(sql, [query_embedding, top_k])
+        results_raw = cursor.fetchall()
+        
+        # Convert to list of dictionaries
+        results = []
+        for i, row in enumerate(results_raw):
+            record = dict(row)
+            record["rank"] = i + 1
+            results.append(record)
+        
+        logger.info(f"Found {len(results)} matching documents in apg_catalog")
+        
+        # Close database connection
+        cursor.close()
+        conn.close()
+        
+        return results, usage_details
+        
+    except Exception as e:
+        logger.error(f"Error searching apg_catalog: {e}", exc_info=True)
+        return [], usage_details
+
+
 def _filter_by_summary_relevance(
     query: str, results: list[dict], token: Optional[str] = None
 ) -> Tuple[List[dict], dict, LlmUsageDetails]:

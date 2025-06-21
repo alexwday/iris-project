@@ -41,6 +41,161 @@ from ..agents.database_subagents.database_router import route_query_sync
 # Import config for global access
 from ..initial_setup.env_config import config
 
+# Import database connection utilities for APG catalog search
+from ..initial_setup.db_config import connect_to_db
+import psycopg2.extras
+from pgvector.psycopg2 import register_vector
+
+
+def _generate_query_embedding(
+    query: str, token: Optional[str] = None
+) -> Tuple[Optional[List[float]], Optional[Dict[str, Any]]]:
+    """
+    Generates embedding for the query string using call_llm.
+
+    Args:
+        query (str): The input query string to embed
+        token (Optional[str]): OAuth token for API authentication
+
+    Returns:
+        Tuple[Optional[List[float]], Optional[Dict[str, Any]]]: 
+            - Embedding vector
+            - Usage details dictionary
+    """
+    logger = logging.getLogger(__name__)
+    logger.info(f"Generating embedding for query: '{query[:100]}...'")
+    usage_details = None
+    
+    try:
+        model_config = config.get_model_config("embedding")
+        model_name = model_config["name"]
+        prompt_cost = model_config["prompt_token_cost"]
+        completion_cost = model_config.get("completion_token_cost", 0.0)
+
+        call_params = {
+            "oauth_token": token or "placeholder_token",
+            "prompt_token_cost": prompt_cost,
+            "completion_token_cost": completion_cost,
+            "model": model_name,
+            "input": [query],  # API expects a list
+            "dimensions": 2000,  # OpenAI embedding dimensions
+            "database_name": "apg_catalog",
+            "is_embedding": True,
+        }
+
+        # Direct synchronous call - returns a tuple (response, usage_details)
+        result = call_llm(**call_params)
+
+        # Handle the tuple format: (api_response, usage_details)
+        response = None
+        if isinstance(result, tuple) and len(result) == 2:
+            response, usage_details = result
+            if usage_details:
+                logger.debug(f"Embedding Usage details: {usage_details}")
+        else:
+            response = result
+            logger.debug("call_llm did not return usage_details")
+
+        if (
+            response
+            and hasattr(response, "data")
+            and response.data
+            and hasattr(response.data[0], "embedding")
+            and response.data[0].embedding
+        ):
+            logger.info("Embedding generated successfully.")
+            return response.data[0].embedding, usage_details
+        else:
+            logger.error(
+                "No embedding data received from API.",
+                extra={"api_response": response},
+            )
+            return None, usage_details
+
+    except Exception as e:
+        logger.error(f"Failed to generate embedding: {e}", exc_info=True)
+        return None, usage_details
+
+
+def search_apg_catalog_by_embedding(
+    research_statement: str, token: Optional[str] = None, top_k: int = 5
+) -> Tuple[List[Dict[str, Any]], Optional[Dict[str, Any]]]:
+    """
+    Search the apg_catalog table using embeddings to find relevant documents.
+    
+    Args:
+        research_statement (str): The research statement to search for
+        token (Optional[str]): OAuth token for API authentication
+        top_k (int): Number of top results to retrieve (default 5)
+        
+    Returns:
+        Tuple[List[Dict[str, Any]], Optional[Dict[str, Any]]]: 
+            - List of matching documents with document_source and document_description
+            - Usage details dictionary for the embedding call, or None if error
+    """
+    logger = logging.getLogger(__name__)
+    logger.info(f"Searching apg_catalog for research statement: '{research_statement[:100]}...'")
+    usage_details = None
+    
+    try:
+        # Generate embedding for the research statement
+        query_embedding, usage_details = _generate_query_embedding(research_statement, token)
+        
+        if query_embedding is None:
+            logger.error("Could not generate embedding for research statement")
+            return [], usage_details
+        
+        # Connect to database
+        conn = connect_to_db()
+        if conn is None:
+            logger.error("Failed to connect to database for apg_catalog search")
+            return [], usage_details
+            
+        register_vector(conn)
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        
+        # Perform vector search against apg_catalog table
+        sql = """
+            SELECT
+                document_source,
+                document_description,
+                document_type,
+                document_name,
+                1 - (document_usage_embedding <=> %s::vector) AS similarity_score
+            FROM apg_catalog
+            WHERE document_usage_embedding IS NOT NULL
+            ORDER BY similarity_score DESC
+            LIMIT %s;
+        """
+        
+        cursor.execute(sql, [query_embedding, top_k])
+        results_raw = cursor.fetchall()
+        
+        # Convert to list of dictionaries
+        results = []
+        for i, row in enumerate(results_raw):
+            record = dict(row)
+            record["rank"] = i + 1
+            results.append(record)
+        
+        logger.info(f"Found {len(results)} matching documents in apg_catalog")
+        
+        # Log the top 5 document names for debugging
+        if results:
+            logger.info("Top 5 APG Catalog document names:")
+            for i, doc in enumerate(results[:5], 1):
+                logger.info(f"  {i}. {doc.get('document_name', 'N/A')} (score: {doc.get('similarity_score', 0.0):.3f})")
+        
+        # Close database connection
+        cursor.close()
+        conn.close()
+        
+        return results, usage_details
+        
+    except Exception as e:
+        logger.error(f"Error searching apg_catalog: {e}", exc_info=True)
+        return [], usage_details
+
 
 # --- Formatting Function (Remains Synchronous) ---
 # This function might need adjustment later if debug_data structure changes significantly
@@ -813,12 +968,28 @@ def _model_generator(
                 logger.info(f"Research scope determined: {scope}")
                 # available_databases already filtered earlier in the flow
 
+                # Search apg_catalog for relevant documents based on research statement
+                logger.info("Searching apg_catalog for document usage context...")
+                apg_catalog_results, apg_catalog_usage = search_apg_catalog_by_embedding(
+                    research_statement, token, top_k=5
+                )
+                if apg_catalog_usage:
+                    process_monitor.add_llm_call_details_to_stage("clarifier", apg_catalog_usage)
+                
+                if apg_catalog_results:
+                    logger.info(f"Found {len(apg_catalog_results)} relevant documents in apg_catalog")
+                    # Log the top documents for debugging
+                    for i, doc in enumerate(apg_catalog_results[:3]):
+                        logger.debug(f"APG Doc {i+1}: {doc.get('document_source', 'N/A')} - {doc.get('document_description', 'N/A')[:100]}...")
+                else:
+                    logger.info("No relevant documents found in apg_catalog")
+
                 process_monitor.start_stage("planner")
                 logger.info("Creating database selection plan...")
                 # TODO: Update create_database_selection_plan to return (plan, usage_details)
                 db_selection_plan, planner_usage_details = (
                     create_database_selection_plan(
-                        research_statement, token, available_databases, is_continuation
+                        research_statement, token, available_databases, is_continuation, apg_catalog_results
                     )
                 )
                 selected_databases = db_selection_plan.get("databases", [])
