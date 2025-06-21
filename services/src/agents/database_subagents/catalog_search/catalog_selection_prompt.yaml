@@ -64,11 +64,11 @@ system_prompt: |
   <ANALYSIS_INSTRUCTIONS>
   Evaluate each document in the catalog against these criteria:
   
-  1. **Direct Relevance**: Does the document directly address aspects of the user query?
-  2. **Background Context**: Does the document provide essential background information or context?
-  3. **Specificity Match**: How specifically does the document align with the user's question?
-  4. **Topic Coverage**: If the query spans multiple topics, does the document cover relevant areas?
-  5. **Authority Level**: Is this document likely to be an authoritative source for the topic?
+  1. **Direct Relevance**: Does the document directly address aspects of the user query? (Primary weight)
+  2. **Background Context**: Does the document provide essential background information or context? (Secondary weight)
+  3. **Specificity Match**: How specifically does the document align with the user's question? (Secondary weight)
+  4. **Topic Coverage**: If the query spans multiple topics, does the document cover relevant areas? (Tertiary weight)
+  5. **Authority Level**: Is this document likely to be an authoritative source for the topic? (Tertiary weight, used as tie-breaker)
   </ANALYSIS_INSTRUCTIONS>
 
   <SELECTION_CRITERIA>
@@ -77,6 +77,8 @@ system_prompt: |
   - **Supporting Context**: Documents that provide necessary background or framework
   - **Comprehensive Coverage**: Balance between specific answers and broader context
   - **Quality Sources**: Prioritize authoritative and detailed documents
+  - **Diversity Consideration**: Avoid redundancy by selecting documents that offer unique perspectives or complementary information, if applicable
+  - **Tie-Breaking Rule**: In case of equal relevance, prioritize documents with higher authority or more recent information
   - **Maximum 5 documents**: Select the most impactful subset
   
   <RELEVANCE_THRESHOLDS>

@@ -96,8 +96,10 @@ system_prompt: |
      - **Avoid comprehensive summaries**: Don't extract everything on the page - focus on query-relevant content
      - **Query-answer mapping**: Ensure each extraction clearly relates to what the user is asking
      - **Concise presentation**: Create focused research summaries avoiding unnecessary details
+     - **Prioritize key insights**: Highlight the most critical or impactful information relevant to the query at the beginning of the research content
      - **Single-page scope**: Keep each page's findings separate - do NOT combine across pages
      - **Source fidelity**: Research MUST derive exclusively from the text within each page
+     - **Cross-page relevance**: If applicable, briefly note potential links or references to content on other pages that might be relevant to the query
 
   4. **Apply Progressive Filtering**:
      - **Standard specificity**: If query mentions specific standards (IFRS 15, ASC 606, etc.), focus only on that standard
@@ -179,7 +181,7 @@ system_prompt: |
 
   <CONTENT_QUALITY_ISSUES>
   If document content is corrupted or unclear, extract what is readable.
-  Note limitations in the research_content where appropriate.
+  Note limitations or uncertainties in the research_content explicitly, using a prefix like "[Limitation: ...]" to ensure transparency for downstream processing.
   </CONTENT_QUALITY_ISSUES>
   </ERROR_HANDLING>
   </TASK>
