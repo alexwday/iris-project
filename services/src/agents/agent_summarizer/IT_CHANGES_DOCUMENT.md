@@ -22,7 +22,7 @@ This document contains all the changes needed to reduce the size and visual prom
   ```
 - **Change to:**
   ```python
-  status_summary = status_summary.replace('✅', '-').replace('📄', '-').replace('❌', '-').replace('ℹ️', '-').replace('⚠️', '-').replace('❓', '-')
+  status_summary = status_summary.replace('✅', '•').replace('📄', '•').replace('❌', '•').replace('ℹ️', '•').replace('⚠️', '•').replace('❓', '•')
   status_block = f"{db_display_name}: {status_summary}\n\n---\n"
   ```
   Note: The extra newline before `---` prevents the database name from being interpreted as a header.
@@ -51,7 +51,7 @@ These changes will:
 1. Remove the "Research Statement" heading to reduce redundancy
 2. Remove the "Searching the following databases:" text
 3. Remove all bold formatting from database names, status messages, and document names
-4. Replace emoji icons (✅, 📄, ❌, etc.) with simple dashes (-)
+4. Replace emoji icons (✅, 📄, ❌, etc.) with bullet points (•)
 5. Fix the markdown header interpretation issue by adding extra newlines
 6. Eliminate redundant document name/page citations that appear before [REF:X] tags
 7. Maintain the ability to reference documents naturally within paragraph text
