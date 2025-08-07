@@ -859,6 +859,31 @@
                     // Update the stored message
                     this.messages[this.messages.length - 1].content = fullResponse;
                     
+                    // Add email button after streaming is complete
+                    if (fullResponse) {
+                        const messageDiv = assistantContentDiv.closest('.message');
+                        const wrapperDiv = assistantContentDiv.closest('.message-wrapper');
+                        
+                        // Check if email button doesn't already exist
+                        if (!wrapperDiv.querySelector('.message-actions')) {
+                            const actionsDiv = document.createElement('div');
+                            actionsDiv.className = 'message-actions';
+                            
+                            const emailButton = document.createElement('button');
+                            emailButton.className = 'email-button';
+                            emailButton.innerHTML = `
+                                <svg viewBox="0 0 24 24">
+                                    <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
+                                </svg>
+                                Email This Response
+                            `;
+                            emailButton.onclick = () => this.sendEmail(fullResponse);
+                            
+                            actionsDiv.appendChild(emailButton);
+                            wrapperDiv.appendChild(actionsDiv);
+                        }
+                    }
+                    
                 } catch (error) {
                     typingDiv.remove();
                     throw error;
