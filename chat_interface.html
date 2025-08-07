@@ -97,8 +97,14 @@
             color: white;
         }
         
-        .message-content {
+        .message-wrapper {
             max-width: 80%;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .message-content {
             padding: 12px 16px;
             border-radius: 18px;
             line-height: 1.4;
@@ -116,6 +122,36 @@
             color: #1a1a1a;
             border: 1px solid #e5e5e5;
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .message-actions {
+            display: flex;
+            gap: 8px;
+            padding: 0 4px;
+        }
+        
+        .email-button {
+            background: #0078d4;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: background-color 0.2s;
+        }
+        
+        .email-button:hover {
+            background: #106ebe;
+        }
+        
+        .email-button svg {
+            width: 14px;
+            height: 14px;
+            fill: white;
         }
         
         .message-content h1, .message-content h2, .message-content h3 {
@@ -455,7 +491,7 @@
                 padding: 16px;
             }
             
-            .message-content {
+            .message-wrapper {
                 max-width: 90%;
             }
         }
@@ -474,8 +510,10 @@
         <div class="messages" id="messages">
             <div class="message assistant">
                 <div class="avatar assistant">AI</div>
-                <div class="message-content">
-                    <p>Hello! I'm IRIS, your RBC Financial Assistant. I can help you with financial research, policies, procedures, and regulatory information. What would you like to know?</p>
+                <div class="message-wrapper">
+                    <div class="message-content">
+                        <p>Hello! I'm IRIS, your RBC Financial Assistant. I can help you with financial research, policies, procedures, and regulatory information. What would you like to know?</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -720,6 +758,9 @@
                 avatar.className = `avatar ${role}`;
                 avatar.textContent = role === 'user' ? 'U' : 'AI';
                 
+                const wrapperDiv = document.createElement('div');
+                wrapperDiv.className = 'message-wrapper';
+                
                 const contentDiv = document.createElement('div');
                 contentDiv.className = 'message-content';
                 
@@ -729,12 +770,33 @@
                     contentDiv.textContent = content;
                 }
                 
+                wrapperDiv.appendChild(contentDiv);
+                
+                // Add email button for assistant messages
+                if (role === 'assistant' && content) {
+                    const actionsDiv = document.createElement('div');
+                    actionsDiv.className = 'message-actions';
+                    
+                    const emailButton = document.createElement('button');
+                    emailButton.className = 'email-button';
+                    emailButton.innerHTML = `
+                        <svg viewBox="0 0 24 24">
+                            <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
+                        </svg>
+                        Email This Response
+                    `;
+                    emailButton.onclick = () => this.sendEmail(content);
+                    
+                    actionsDiv.appendChild(emailButton);
+                    wrapperDiv.appendChild(actionsDiv);
+                }
+                
                 if (role === 'user') {
-                    messageDiv.appendChild(contentDiv);
+                    messageDiv.appendChild(wrapperDiv);
                     messageDiv.appendChild(avatar);
                 } else {
                     messageDiv.appendChild(avatar);
-                    messageDiv.appendChild(contentDiv);
+                    messageDiv.appendChild(wrapperDiv);
                 }
                 
                 this.messagesContainer.appendChild(messageDiv);
@@ -873,6 +935,87 @@
                 } else {
                     countElement.textContent = `${selected} of ${total} databases`;
                 }
+            }
+            
+            sendEmail(content) {
+                // Convert markdown to plain text for email
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = marked.parse(content);
+                
+                // Extract text content and format it nicely
+                let plainText = this.htmlToPlainText(tempDiv);
+                
+                // Truncate if too long for URL (Outlook has limits)
+                const maxLength = 2000;
+                if (plainText.length > maxLength) {
+                    plainText = plainText.substring(0, maxLength) + '\n\n[Response truncated for email. Please refer to the chat for the complete response.]';
+                }
+                
+                // Create mailto link with Outlook-compatible formatting
+                const subject = encodeURIComponent('IRIS Financial Assistant Response');
+                const body = encodeURIComponent(
+                    'Dear Team,\n\n' +
+                    'Please find below the response from IRIS Financial Assistant:\n\n' +
+                    '---\n\n' +
+                    plainText +
+                    '\n\n---\n\n' +
+                    'Best regards,\n' +
+                    'IRIS Assistant'
+                );
+                
+                // Use mailto link which will open in default email client (typically Outlook in corporate environments)
+                const mailtoLink = `mailto:?subject=${subject}&body=${body}`;
+                window.location.href = mailtoLink;
+            }
+            
+            htmlToPlainText(element) {
+                let text = '';
+                const walk = (node) => {
+                    if (node.nodeType === Node.TEXT_NODE) {
+                        text += node.textContent;
+                    } else if (node.nodeType === Node.ELEMENT_NODE) {
+                        const tagName = node.tagName.toLowerCase();
+                        
+                        // Add appropriate formatting based on element type
+                        if (tagName === 'br') {
+                            text += '\n';
+                        } else if (tagName === 'p' || tagName === 'div') {
+                            if (text && !text.endsWith('\n')) text += '\n';
+                        } else if (tagName === 'h1' || tagName === 'h2' || tagName === 'h3') {
+                            if (text && !text.endsWith('\n')) text += '\n\n';
+                            text += '### ';
+                        } else if (tagName === 'li') {
+                            text += '\n• ';
+                        } else if (tagName === 'code') {
+                            text += '`';
+                        } else if (tagName === 'pre') {
+                            text += '\n```\n';
+                        }
+                        
+                        // Process children
+                        for (const child of node.childNodes) {
+                            walk(child);
+                        }
+                        
+                        // Add closing formatting
+                        if (tagName === 'code') {
+                            text += '`';
+                        } else if (tagName === 'pre') {
+                            text += '\n```\n';
+                        } else if ((tagName === 'p' || tagName === 'div') && !text.endsWith('\n')) {
+                            text += '\n';
+                        } else if ((tagName === 'h1' || tagName === 'h2' || tagName === 'h3') && !text.endsWith('\n')) {
+                            text += '\n\n';
+                        }
+                    }
+                };
+                
+                walk(element);
+                
+                // Clean up excessive newlines
+                text = text.replace(/\n{3,}/g, '\n\n');
+                
+                return text.trim();
             }
         }
         
