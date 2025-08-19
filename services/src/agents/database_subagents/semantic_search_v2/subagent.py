@@ -90,8 +90,8 @@ def load_content_synthesis_config():
 
 def get_content_synthesis_prompt(query: str, formatted_context: str) -> str:
     """Generate prompt for content synthesis."""
-    config = load_content_synthesis_config()
-    system_prompt = config.get("system_prompt", "")
+    yaml_config = load_content_synthesis_config()
+    system_prompt = yaml_config.get("system_prompt", "")
     
     system_prompt = system_prompt.replace("{{query}}", query)
     system_prompt = system_prompt.replace("{{formatted_context}}", formatted_context)
@@ -101,8 +101,8 @@ def get_content_synthesis_prompt(query: str, formatted_context: str) -> str:
 
 def get_synthesis_tool_schema() -> Dict[str, Any]:
     """Get the synthesis tool schema from YAML configuration."""
-    config = load_content_synthesis_config()
-    tools = config.get("tools", [])
+    yaml_config = load_content_synthesis_config()
+    tools = yaml_config.get("tools", [])
     
     if not tools:
         raise Exception("No tools found in YAML configuration")
@@ -286,16 +286,17 @@ def _filter_by_relevance(
 Review the numbered summaries and identify which ones are COMPLETELY IRRELEVANT to the query.
 A summary is relevant if it contains ANY information that could help answer the query, even partially.
 Be inclusive - only mark as irrelevant if there is NO possible connection to the query.
-Respond with a JSON array of numbers to REMOVE (the irrelevant ones only)."""
+Respond with a JSON ARRAY (not object) of numbers to REMOVE (the irrelevant ones only)."""
     
     user_message = f"""Query: "{query}"
 
 Summaries to evaluate:
 {prompt_summaries}
 
-Return a JSON array of numbers to remove (irrelevant summaries only).
-Example: [3, 7, 15] means remove summaries 3, 7, and 15 as irrelevant.
-If all summaries are relevant, return an empty array: []"""
+Return a JSON ARRAY (list) of numbers to remove (irrelevant summaries only).
+Example response: [3, 7, 15] means remove summaries 3, 7, and 15 as irrelevant.
+If all summaries are relevant, return an empty array: []
+IMPORTANT: Return an ARRAY like [1, 2, 3], NOT an object like {{"1": 0, "2": 1}}"""
     
     messages = [
         {"role": "system", "content": system_message},
@@ -311,7 +312,7 @@ If all summaries are relevant, return an empty array: []"""
             "model": model_config["name"],
             "messages": messages,
             "temperature": 0.3,  # Slightly higher for more inclusive relevance scoring
-            "response_format": {"type": "json_object"},
+            # Removed response_format to allow array responses
             "database_name": "semantic_search_v2",
             "stream": False,
         }
@@ -332,9 +333,24 @@ If all summaries are relevant, return an empty array: []"""
             numbers_to_remove = json.loads(content)
             logger.debug(f"Numbers to remove (irrelevant): {numbers_to_remove}")
             
-            # Validate it's an array
-            if not isinstance(numbers_to_remove, list):
+            # Handle both array and dict formats for backward compatibility
+            if isinstance(numbers_to_remove, dict):
+                logger.warning("LLM returned dict format instead of array - attempting to extract irrelevant items")
+                # Try to extract keys where value is 0 (irrelevant)
+                remove_list = []
+                for key, value in numbers_to_remove.items():
+                    if value == 0:  # 0 means irrelevant in the old format
+                        try:
+                            # Convert key to int if it's a number
+                            num = int(key)
+                            remove_list.append(num)
+                        except (ValueError, TypeError):
+                            logger.warning(f"Could not parse key '{key}' as number")
+                numbers_to_remove = remove_list
+                logger.info(f"Extracted {len(remove_list)} items to remove from dict format")
+            elif not isinstance(numbers_to_remove, list):
                 logger.error(f"Expected array but got: {type(numbers_to_remove)}")
+                logger.warning("Returning all chunks without filtering")
                 return chunks, usage_details
             
             # Convert to set for efficient lookup
