@@ -178,6 +178,10 @@ def _perform_vector_search(
         logger.error("Cannot perform vector search without embedding.")
         return []
     
+    # Debug: Check query embedding validity
+    logger.debug(f"Query embedding length: {len(query_embedding) if query_embedding else 0}")
+    logger.debug(f"Query embedding first 5 values: {query_embedding[:5] if query_embedding else 'None'}")
+    
     try:
         sql = f"""
             SELECT
@@ -235,12 +239,16 @@ def _perform_vector_search(
             # Debug: Log vector scores to understand similarity quality
             if i < 5:  # Log top 5 scores
                 vector_score = record.get("vector_score")
-                # Handle None values explicitly
-                if vector_score is None:
-                    vector_score = 0
-                    logger.warning(f"  Rank {i+1}: vector_score is None for record!")
                 doc_id = record.get("document_id", "")
                 chunk_num = record.get("chunk_number", "")
+                
+                # Handle None values explicitly - this indicates a serious problem
+                if vector_score is None:
+                    logger.error(f"  Rank {i+1}: vector_score is NULL! This means embedding similarity failed.")
+                    logger.error(f"    Possible causes: embedding is NULL in DB, dimension mismatch, or invalid vector")
+                    logger.error(f"    Doc: {doc_id}, Chunk: {chunk_num}")
+                    vector_score = 0  # Default for display
+                
                 logger.info(f"  Rank {i+1}: score={vector_score:.4f}, doc={doc_id}, chunk={chunk_num}")
         
         # Warn if top scores are low
