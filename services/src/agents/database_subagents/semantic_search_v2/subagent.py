@@ -123,6 +123,8 @@ def _generate_query_embedding(
         prompt_cost = model_config["prompt_token_cost"]
         completion_cost = model_config.get("completion_token_cost", 0.0)
         
+        logger.info(f"Using embedding model: {model_name} with {EMBEDDING_DIMENSIONS} dimensions")
+        
         call_params = {
             "oauth_token": token or "placeholder_token",
             "prompt_token_cost": prompt_cost,
@@ -223,6 +225,18 @@ def _perform_vector_search(
             record = dict(row)
             record["rank"] = i + 1
             results.append(record)
+            
+            # Debug: Log vector scores to understand similarity quality
+            if i < 5:  # Log top 5 scores
+                vector_score = record.get("vector_score", 0)
+                doc_id = record.get("document_id", "")
+                chunk_num = record.get("chunk_number", "")
+                logger.info(f"  Rank {i+1}: score={vector_score:.4f}, doc={doc_id}, chunk={chunk_num}")
+        
+        # Warn if top scores are low
+        if results and results[0].get("vector_score", 0) < 0.5:
+            logger.warning(f"Low similarity scores detected! Top score is only {results[0].get('vector_score', 0):.4f}")
+            logger.warning("This may indicate embedding mismatch between query and stored vectors")
         
         return results
     
