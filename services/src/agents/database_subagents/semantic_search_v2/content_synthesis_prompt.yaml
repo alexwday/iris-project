@@ -22,13 +22,13 @@ system_prompt: |
   6. Format citations as: ***Document Name, Pages X-Y*** [REF:Z]
 
   CONTEXT STRUCTURE:
-  The provided context is organized hierarchically:
-  - DOCUMENT blocks: Top-level document identifiers
-  - CHAPTER blocks: Include chapter number, name, and summary
-  - SECTION blocks: Can be either:
-    - Full sections (when ≤6 pages): Complete section content
-    - Individual chunks: Partial section content
-  - Each block includes page ranges and reference information
+  The provided context uses XML-like structured format:
+  - <DOCUMENT>: Top-level container with document ID
+  - <CHAPTER>: Contains metadata (filename, source_filename, chapter_name, etc.) and sections
+  - <SECTION>: Can be type="full" (complete section) or type="partial" (individual chunks)
+  - <section_metadata>: Contains filename, pages, and references for the section
+  - <content_blocks>: Contains the actual text content
+  - Each metadata block includes all fields needed for citation
 
   USER QUERY:
   {{query}}
@@ -45,16 +45,19 @@ system_prompt: |
   6. When referencing page numbers, use the PageReference values for display
 
   IMPORTANT NOTES FOR EXTRACTION:
-  - The context has multiple levels: CHAPTER blocks provide chapter context, SECTION blocks provide structure
-  - The actual content to extract from is in the "Content:" sections which contain the chunk_content
-  - Within the content, HTML tags mark exact page boundaries: <!-- PageHeader PageNumber="X" PageReference="Y-Z" -->
-  - When extracting research for a specific page:
-    * Use the PageNumber from HTML tags for the page_number field (actual PDF page)
-    * Use the PageReference from HTML tags for the page_reference field (original document reference)
-    * The "Pages:" and "References:" lines in section headers show the range, but use HTML tags for specific pages
-  - If content spans multiple pages (multiple HTML page tags), create separate entries for each page's content
-  - Each section/chunk has start and end references - use these for accurate citations
-  - Full sections will have section-level references, individual chunks will have chunk-level references
+  - Metadata locations in the XML structure:
+    * <CHAPTER><metadata><filename>: The chapter PDF filename (e.g., "03_Lease_Accounting.pdf")
+    * <CHAPTER><metadata><source_filename>: The original document name for display
+    * <SECTION><section_metadata>: Contains section-level page ranges and references
+    * <chunk><chunk_metadata>: Contains chunk-specific page ranges and references (for partial sections)
+  - Within <content> blocks, HTML comments mark page boundaries: <!-- PageHeader PageNumber="X" PageReference="Y-Z" -->
+  - When extracting research:
+    * Always use the <filename> from metadata for the filename field (for S3 links)
+    * Use PageNumber from HTML tags for the page_number field (actual PDF page)
+    * Use PageReference from HTML tags for the page_reference field (display reference)
+    * Use <source_filename> for document grouping and display
+  - If content spans multiple pages, create separate entries for each page's research
+  - Type="full" sections have combined content, type="partial" sections have individual chunks
 
 tools:
   - type: function

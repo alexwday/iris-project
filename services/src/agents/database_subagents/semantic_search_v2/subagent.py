@@ -656,10 +656,10 @@ def _fill_section_gaps(
 def _format_context_with_blocks(
     chunks: List[Dict[str, Any]]
 ) -> str:
-    """Format chunks into hierarchical chapter/section/chunk blocks."""
-    logger.info(f"Formatting {len(chunks)} chunks into context blocks")
+    """Format chunks into a clear, structured format for LLM parsing."""
+    logger.info(f"Formatting {len(chunks)} chunks into structured context")
     
-    # Group by document, then chapter
+    # Group by document, then chapter, then section
     doc_structure = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
     
     for chunk in chunks:
@@ -670,24 +670,36 @@ def _format_context_with_blocks(
         if doc_id and chapter_num is not None and section_num is not None:
             doc_structure[doc_id][chapter_num][section_num].append(chunk)
     
-    # Build formatted context
+    # Build structured context with clear XML-like tags for easy parsing
     context_parts = []
     
     for doc_id in sorted(doc_structure.keys()):
-        # Note: doc_id is still used internally for grouping, but not shown to LLM
-        context_parts.append(f"\n{'='*80}")
+        # Document block
+        context_parts.append(f"\n<DOCUMENT id=\"{doc_id}\">")
         
         for chapter_num in sorted(doc_structure[doc_id].keys()):
-            # Get chapter info from first chunk
+            # Get chapter metadata from first chunk
             first_chunk = next(iter(next(iter(doc_structure[doc_id][chapter_num].values()))))
             chapter_name = first_chunk.get("chapter_name", f"Chapter {chapter_num}")
             chapter_summary = first_chunk.get("chapter_summary", "")
+            filename = first_chunk.get("filename", "")
+            source_filename = first_chunk.get("source_filename", "")
+            filepath = first_chunk.get("filepath", "")
             
-            context_parts.append(f"\n{'-'*60}")
-            context_parts.append(f"CHAPTER {chapter_num}: {chapter_name}")
+            # Chapter block with metadata
+            context_parts.append(f"\n<CHAPTER number=\"{chapter_num}\">")
+            context_parts.append(f"  <metadata>")
+            context_parts.append(f"    <chapter_name>{chapter_name}</chapter_name>")
+            context_parts.append(f"    <filename>{filename}</filename>")
+            context_parts.append(f"    <source_filename>{source_filename}</source_filename>")
+            if filepath:
+                context_parts.append(f"    <filepath>{filepath}</filepath>")
             if chapter_summary:
-                context_parts.append(f"Summary: {chapter_summary}")
-            context_parts.append(f"{'-'*60}\n")
+                context_parts.append(f"    <chapter_summary>{chapter_summary}</chapter_summary>")
+            context_parts.append(f"  </metadata>")
+            
+            # Process sections
+            context_parts.append(f"  <sections>")
             
             for section_num in sorted(doc_structure[doc_id][chapter_num].keys()):
                 section_chunks = sorted(
@@ -695,37 +707,74 @@ def _format_context_with_blocks(
                     key=lambda x: x.get("chunk_number", 0)
                 )
                 
-                # Determine if this is a full section or single chunks
                 first_chunk = section_chunks[0]
                 section_page_count = first_chunk.get("section_page_count", 0)
+                is_full_section = section_page_count <= SECTION_EXPANSION_MAX_PAGES and len(section_chunks) > 1
                 
-                if section_page_count <= SECTION_EXPANSION_MAX_PAGES and len(section_chunks) > 1:
-                    # Full section block
-                    context_parts.append(f"\n### SECTION {section_num} (Full Section)")
-                    context_parts.append(f"Filename: {first_chunk.get('filename', 'N/A')}")
-                    context_parts.append(f"Pages: {first_chunk.get('section_start_page', 'N/A')} - {first_chunk.get('section_end_page', 'N/A')}")
-                    context_parts.append(f"References: {first_chunk.get('section_start_reference', 'N/A')} - {first_chunk.get('section_end_reference', 'N/A')}")
-                    
-                    if first_chunk.get("section_summary"):
-                        context_parts.append(f"Summary: {first_chunk.get('section_summary')}")
-                    
-                    context_parts.append("\nContent:")
+                # Section block
+                context_parts.append(f"\n    <SECTION number=\"{section_num}\" type=\"{'full' if is_full_section else 'partial'}\">")
+                context_parts.append(f"      <section_metadata>")
+                context_parts.append(f"        <filename>{first_chunk.get('filename', '')}</filename>")
+                context_parts.append(f"        <source_filename>{first_chunk.get('source_filename', '')}</source_filename>")
+                context_parts.append(f"        <start_page>{first_chunk.get('section_start_page', '')}</start_page>")
+                context_parts.append(f"        <end_page>{first_chunk.get('section_end_page', '')}</end_page>")
+                context_parts.append(f"        <start_reference>{first_chunk.get('section_start_reference', '')}</start_reference>")
+                context_parts.append(f"        <end_reference>{first_chunk.get('section_end_reference', '')}</end_reference>")
+                if first_chunk.get("section_summary"):
+                    context_parts.append(f"        <section_summary>{first_chunk.get('section_summary')}</section_summary>")
+                context_parts.append(f"      </section_metadata>")
+                
+                # Content blocks
+                context_parts.append(f"      <content_blocks>")
+                
+                if is_full_section:
+                    # Combine all chunks for full section
+                    combined_content = []
                     for chunk in section_chunks:
                         content = chunk.get("chunk_content", "")
                         if content:
-                            context_parts.append(content)
+                            # Include chunk metadata as comments for reference
+                            chunk_meta = (
+                                f"<!-- Chunk {chunk.get('chunk_number')}: "
+                                f"Pages {chunk.get('chunk_start_page')}-{chunk.get('chunk_end_page')}, "
+                                f"Refs {chunk.get('chunk_start_reference')}-{chunk.get('chunk_end_reference')} -->"
+                            )
+                            combined_content.append(chunk_meta)
+                            combined_content.append(content)
+                    
+                    if combined_content:
+                        context_parts.append(f"        <content>")
+                        context_parts.extend([f"          {line}" for line in combined_content])
+                        context_parts.append(f"        </content>")
                 else:
-                    # Individual chunk blocks
+                    # Individual chunks
                     for chunk in section_chunks:
-                        context_parts.append(f"\n### SECTION {section_num}, CHUNK {chunk.get('chunk_number', 'N/A')}")
-                        context_parts.append(f"Filename: {chunk.get('filename', 'N/A')}")
-                        context_parts.append(f"Pages: {chunk.get('chunk_start_page', 'N/A')} - {chunk.get('chunk_end_page', 'N/A')}")
-                        context_parts.append(f"References: {chunk.get('chunk_start_reference', 'N/A')} - {chunk.get('chunk_end_reference', 'N/A')}")
+                        context_parts.append(f"        <chunk number=\"{chunk.get('chunk_number')}\">")
+                        context_parts.append(f"          <chunk_metadata>")
+                        context_parts.append(f"            <filename>{chunk.get('filename', '')}</filename>")
+                        context_parts.append(f"            <source_filename>{chunk.get('source_filename', '')}</source_filename>")
+                        context_parts.append(f"            <start_page>{chunk.get('chunk_start_page', '')}</start_page>")
+                        context_parts.append(f"            <end_page>{chunk.get('chunk_end_page', '')}</end_page>")
+                        context_parts.append(f"            <start_reference>{chunk.get('chunk_start_reference', '')}</start_reference>")
+                        context_parts.append(f"            <end_reference>{chunk.get('chunk_end_reference', '')}</end_reference>")
+                        context_parts.append(f"          </chunk_metadata>")
                         
                         content = chunk.get("chunk_content", "")
                         if content:
-                            context_parts.append("\nContent:")
-                            context_parts.append(content)
+                            context_parts.append(f"          <content>")
+                            # Properly indent content
+                            for line in content.split('\n'):
+                                context_parts.append(f"            {line}")
+                            context_parts.append(f"          </content>")
+                        context_parts.append(f"        </chunk>")
+                
+                context_parts.append(f"      </content_blocks>")
+                context_parts.append(f"    </SECTION>")
+            
+            context_parts.append(f"  </sections>")
+            context_parts.append(f"</CHAPTER>")
+        
+        context_parts.append(f"</DOCUMENT>")
     
     formatted_context = "\n".join(context_parts)
     logger.info(f"Formatted context length: {len(formatted_context)} characters")
