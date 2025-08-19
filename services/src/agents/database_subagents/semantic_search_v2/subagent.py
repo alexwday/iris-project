@@ -224,6 +224,12 @@ def _perform_vector_search(
         for i, row in enumerate(results_raw):
             record = dict(row)
             record["rank"] = i + 1
+            
+            # Debug: Log the keys for the first record to see what columns we got
+            if i == 0:
+                logger.info(f"First record keys from SQL: {list(record.keys())}")
+                logger.info(f"vector_score in first record: {record.get('vector_score')}")
+            
             results.append(record)
             
             # Debug: Log vector scores to understand similarity quality
