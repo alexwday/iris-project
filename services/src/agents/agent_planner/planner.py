@@ -358,27 +358,14 @@ def create_database_selection_plan(
         if not selected_databases:
             raise PlannerError("Missing or empty 'databases' in tool arguments")
 
-        # Create name-to-ID mapping for handling LLM returning display names
-        name_to_id = {v.get('name'): k for k, v in available_databases.items() if 'name' in v}
-        
         # Validate selected databases
         validated_databases = []
         for i, db_name in enumerate(selected_databases):
             if not isinstance(db_name, str):
                 raise PlannerError(f"Database entry {i+1} is not a string: {db_name}")
-            
-            # Handle both database IDs and display names
-            if db_name in available_databases:
-                # Direct ID match
-                validated_databases.append(db_name)
-            elif db_name in name_to_id:
-                # Display name provided, convert to ID
-                db_id = name_to_id[db_name]
-                logger.debug(f"Converted display name '{db_name}' to database ID '{db_id}'")
-                validated_databases.append(db_id)
-            else:
+            if db_name not in available_databases:
                 raise PlannerError(f"Selected database {i+1} is unknown: {db_name}")
-            
+            validated_databases.append(db_name)
 
         logger.debug(
             f"Database selection plan created with {len(validated_databases)} databases: {validated_databases}"
