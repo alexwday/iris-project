@@ -166,15 +166,15 @@ def route_query_sync(
                 research_statement=research_statement,  # Pass research statement for similarity filtering
             )
         elif database in EXTERNAL_DATABASES:
-            # Use the unified semantic_search subagent for external databases
-            from .semantic_search.subagent import query_database_sync
+            # Use the new semantic_search_v2 subagent for external databases
+            from .semantic_search_v2.subagent import query_database_sync
 
             document_config = EXTERNAL_DATABASES[database]
             logger.info(
-                f"Using semantic_search subagent for {database} with config: {document_config}"
+                f"Using semantic_search_v2 subagent for {database} with config: {document_config}"
             )
 
-            # Call the semantic_search subagent with the appropriate document configuration
+            # Call the semantic_search_v2 subagent with the appropriate document configuration
             result_tuple = query_database_sync(
                 query=query,
                 scope=scope,
