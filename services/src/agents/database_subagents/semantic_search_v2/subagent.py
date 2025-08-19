@@ -228,15 +228,21 @@ def _perform_vector_search(
             
             # Debug: Log vector scores to understand similarity quality
             if i < 5:  # Log top 5 scores
-                vector_score = record.get("vector_score", 0)
+                vector_score = record.get("vector_score")
+                # Handle None values explicitly
+                if vector_score is None:
+                    vector_score = 0
+                    logger.warning(f"  Rank {i+1}: vector_score is None for record!")
                 doc_id = record.get("document_id", "")
                 chunk_num = record.get("chunk_number", "")
                 logger.info(f"  Rank {i+1}: score={vector_score:.4f}, doc={doc_id}, chunk={chunk_num}")
         
         # Warn if top scores are low
-        if results and results[0].get("vector_score", 0) < 0.5:
-            logger.warning(f"Low similarity scores detected! Top score is only {results[0].get('vector_score', 0):.4f}")
-            logger.warning("This may indicate embedding mismatch between query and stored vectors")
+        if results:
+            top_score = results[0].get("vector_score")
+            if top_score is not None and top_score < 0.5:
+                logger.warning(f"Low similarity scores detected! Top score is only {top_score:.4f}")
+                logger.warning("This may indicate embedding mismatch between query and stored vectors")
         
         return results
     
@@ -254,6 +260,12 @@ def _filter_by_relevance(
     logger.info(f"Filtering {len(chunks)} chunks by relevance")
     usage_details: LlmUsageDetails = None
     
+    # TEMPORARY: Option to bypass filter for debugging
+    BYPASS_FILTER = os.getenv("BYPASS_RELEVANCE_FILTER", "false").lower() == "true"
+    if BYPASS_FILTER:
+        logger.warning("BYPASSING relevance filter - returning all chunks!")
+        return chunks, usage_details
+    
     if not chunks:
         return [], usage_details
     
@@ -268,8 +280,9 @@ def _filter_by_relevance(
     summaries_list = []
     chunk_by_number = {}  # Map number to actual chunk
     empty_summary_count = 0
+    current_number = 1  # Track actual numbering for non-empty chunks
     
-    for i, chunk in enumerate(chunks, 1):  # Start from 1 for clearer numbering
+    for chunk in chunks:
         chunk_id = chunk.get("id")
         chapter_summary = chunk.get("chapter_summary", "")
         section_summary = chunk.get("section_summary", "")
@@ -277,11 +290,18 @@ def _filter_by_relevance(
         # Debug: Check for empty summaries
         if not chapter_summary and not section_summary:
             empty_summary_count += 1
-            logger.debug(f"Chunk {chunk_id} has empty summaries")
+            logger.debug(f"Chunk {chunk_id} has empty summaries - skipping")
             continue  # Skip chunks with no summaries
         
-        chunk_by_number[i] = chunk
-        summaries_list.append(f"{i}. Chapter: {chapter_summary}\n   Section: {section_summary}")
+        # Store chunk with sequential numbering (no gaps)
+        chunk_by_number[current_number] = chunk
+        summaries_list.append(f"{current_number}. Chapter: {chapter_summary}\n   Section: {section_summary}")
+        
+        # Debug: Check if vector_score exists
+        if chunk.get("vector_score") is None:
+            logger.warning(f"Chunk {chunk_id} missing vector_score!")
+        
+        current_number += 1  # Only increment for chunks we keep
     
     logger.info(f"Prepared {len(summaries_list)} summaries for evaluation, {empty_summary_count} chunks had empty summaries")
     
@@ -391,19 +411,37 @@ IMPORTANT: Be conservative - only remove if you're absolutely certain it's irrel
             # Keep chunks that are NOT in the remove list
             filtered_chunks = []
             removed_summaries = []
+            kept_summaries = []
+            
             for number, chunk in chunk_by_number.items():
+                vector_score = chunk.get("vector_score")
+                # Handle None or missing vector_score
+                score_str = f"{vector_score:.3f}" if vector_score is not None else "N/A"
+                chapter_summary = chunk.get("chapter_summary", "")[:100]
+                section_summary = chunk.get("section_summary", "")[:100]
+                
                 if number not in remove_set:
                     filtered_chunks.append(chunk)
+                    kept_summary = f"  KEPT #{number} (score={score_str}): Ch: {chapter_summary}... | Sec: {section_summary}..."
+                    kept_summaries.append(kept_summary)
                     logger.debug(f"Keeping chunk {number} (ID: {chunk.get('id')}) as relevant")
                 else:
+                    removed_summary = f"  REMOVED #{number} (score={score_str}): Ch: {chapter_summary}... | Sec: {section_summary}..."
+                    removed_summaries.append(removed_summary)
                     logger.debug(f"Removing chunk {number} (ID: {chunk.get('id')}) as irrelevant")
-                    # Log what's being removed at INFO level if aggressive filtering
-                    if len(remove_set) > len(chunk_by_number) * 0.7:  # If removing >70%
-                        chapter_summary = chunk.get("chapter_summary", "")[:100]
-                        section_summary = chunk.get("section_summary", "")[:100]
-                        removed_summaries.append(f"  #{number}: Ch: {chapter_summary}... | Sec: {section_summary}...")
             
             logger.info(f"Kept {len(filtered_chunks)} relevant chunks out of {len(chunk_by_number)}")
+            
+            # Always log what was kept and removed at INFO level for debugging
+            if kept_summaries:
+                logger.info(f"KEPT chunks (top scores):")
+                for summary in kept_summaries[:5]:  # Show top 5 kept
+                    logger.info(summary)
+            
+            if removed_summaries:
+                logger.info(f"REMOVED chunks (filtered out):")
+                for summary in removed_summaries[:5]:  # Show top 5 removed
+                    logger.info(summary)
             
             # If aggressive filtering, show what was removed
             if len(removed_summaries) > 0 and len(removed_summaries) > len(chunk_by_number) * 0.5:
@@ -413,14 +451,14 @@ IMPORTANT: Be conservative - only remove if you're absolutely certain it's irrel
                 if len(removed_summaries) > 3:
                     logger.warning(f"  ... and {len(removed_summaries) - 3} more")
             
-            # If all chunks were filtered out, log a warning
-            if len(filtered_chunks) == 0 and len(chunk_by_number) > 0:
-                logger.warning(f"All {len(chunk_by_number)} chunks were filtered out as irrelevant!")
+            # If too many chunks were filtered out, use fallback
+            if len(filtered_chunks) <= 2 and len(chunk_by_number) > 0:
+                logger.warning(f"Only {len(filtered_chunks)} chunks kept out of {len(chunk_by_number)}!")
                 logger.warning(f"Query was: {query}")
-                logger.warning("This may indicate overly strict filtering or a mismatch with the content")
-                # Consider returning top chunks as fallback
-                # filtered_chunks = list(chunk_by_number.values())[:5]
-                # logger.warning(f"Returning top 5 chunks as fallback")
+                logger.warning("Overly aggressive filtering detected - using top 5 chunks as fallback")
+                # Return top 5 chunks by vector score as fallback
+                filtered_chunks = list(chunk_by_number.values())[:5]
+                logger.warning(f"Returning top 5 chunks by vector similarity as fallback")
             
             return filtered_chunks, usage_details
         
