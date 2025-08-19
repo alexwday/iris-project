@@ -278,25 +278,42 @@ def _filter_by_relevance(
     # Create the prompt with numbered summaries
     prompt_summaries = "\n\n".join(summaries_list)
     
-    # Debug: Log a sample of what we're sending
-    logger.debug(f"Query for relevance check: {query}")
+    # Log what we're sending for debugging
+    logger.info(f"Query for relevance check: '{query}'")
     logger.debug(f"First 3 summaries being evaluated:\n{prompt_summaries[:1000]}")
     
-    system_message = """You are evaluating text summaries for relevance to a query.
-Review the numbered summaries and identify which ones are COMPLETELY IRRELEVANT to the query.
-A summary is relevant if it contains ANY information that could help answer the query, even partially.
-Be inclusive - only mark as irrelevant if there is NO possible connection to the query.
-Respond with a JSON ARRAY (not object) of numbers to REMOVE (the irrelevant ones only)."""
+    # Log full prompt at INFO level for debugging aggressive filtering
+    if len(summaries_list) <= 20:
+        logger.info(f"All {len(summaries_list)} summaries being sent for evaluation:")
+        for summary in summaries_list[:5]:  # Show first 5 at INFO level
+            logger.info(f"  {summary[:200]}...")  # First 200 chars of each
+        if len(summaries_list) > 5:
+            logger.info(f"  ... and {len(summaries_list) - 5} more summaries")
+    
+    system_message = """You are evaluating text summaries for relevance to a user query.
+Your goal is to KEEP as many summaries as possible that might help answer the query.
+Only remove summaries that are COMPLETELY OFF-TOPIC with ZERO relevance.
+
+Guidelines:
+- KEEP summaries that mention ANY concept, term, or topic from the query
+- KEEP summaries that provide context or background information
+- KEEP summaries that might be tangentially related
+- ONLY REMOVE summaries about completely unrelated topics
+
+Be VERY conservative - when in doubt, KEEP the summary.
+Respond with a JSON ARRAY of numbers to REMOVE (only the completely irrelevant ones)."""
     
     user_message = f"""Query: "{query}"
 
 Summaries to evaluate:
 {prompt_summaries}
 
-Return a JSON ARRAY (list) of numbers to remove (irrelevant summaries only).
-Example response: [3, 7, 15] means remove summaries 3, 7, and 15 as irrelevant.
-If all summaries are relevant, return an empty array: []
-IMPORTANT: Return an ARRAY like [1, 2, 3], NOT an object like {{"1": 0, "2": 1}}"""
+Return a JSON ARRAY of summary numbers that are COMPLETELY IRRELEVANT and should be removed.
+- If a summary has ANY possible relevance, do NOT include it in the removal list
+- Return an empty array [] if all summaries might be relevant
+- Example: [3, 15] means ONLY summaries 3 and 15 are completely off-topic
+
+IMPORTANT: Be conservative - only remove if you're absolutely certain it's irrelevant."""
     
     messages = [
         {"role": "system", "content": system_message},
@@ -355,18 +372,32 @@ IMPORTANT: Return an ARRAY like [1, 2, 3], NOT an object like {{"1": 0, "2": 1}}
             
             # Convert to set for efficient lookup
             remove_set = set(numbers_to_remove)
-            logger.info(f"LLM marked {len(remove_set)} summaries as completely irrelevant for removal")
+            logger.info(f"LLM marked {len(remove_set)} summaries as completely irrelevant for removal: {sorted(remove_set)[:10]}{'...' if len(remove_set) > 10 else ''}")
             
             # Keep chunks that are NOT in the remove list
             filtered_chunks = []
+            removed_summaries = []
             for number, chunk in chunk_by_number.items():
                 if number not in remove_set:
                     filtered_chunks.append(chunk)
                     logger.debug(f"Keeping chunk {number} (ID: {chunk.get('id')}) as relevant")
                 else:
                     logger.debug(f"Removing chunk {number} (ID: {chunk.get('id')}) as irrelevant")
+                    # Log what's being removed at INFO level if aggressive filtering
+                    if len(remove_set) > len(chunk_by_number) * 0.7:  # If removing >70%
+                        chapter_summary = chunk.get("chapter_summary", "")[:100]
+                        section_summary = chunk.get("section_summary", "")[:100]
+                        removed_summaries.append(f"  #{number}: Ch: {chapter_summary}... | Sec: {section_summary}...")
             
             logger.info(f"Kept {len(filtered_chunks)} relevant chunks out of {len(chunk_by_number)}")
+            
+            # If aggressive filtering, show what was removed
+            if len(removed_summaries) > 0 and len(removed_summaries) > len(chunk_by_number) * 0.5:
+                logger.warning(f"Aggressive filtering detected! Removed {len(removed_summaries)} chunks:")
+                for summary in removed_summaries[:3]:  # Show first 3 removed
+                    logger.warning(summary)
+                if len(removed_summaries) > 3:
+                    logger.warning(f"  ... and {len(removed_summaries) - 3} more")
             
             # If all chunks were filtered out, log a warning
             if len(filtered_chunks) == 0 and len(chunk_by_number) > 0:
