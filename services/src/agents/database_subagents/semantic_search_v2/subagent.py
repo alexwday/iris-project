@@ -721,9 +721,9 @@ def _generate_synthesis_response(
                 if filepath:
                     file_link = filepath  # Use full filepath from database
                 else:
-                    # Fallback to constructing from config (should get S3 base from config)
-                    s3_base = config.get("s3_base_url", "https://s3.amazonaws.com/your-bucket/")
-                    file_link = f"{s3_base}{filename}"
+                    # Fallback to constructing from config S3_BASE_PATH
+                    s3_base = getattr(config, "S3_BASE_PATH", "") or "https://s3.amazonaws.com/your-bucket/"
+                    file_link = f"{s3_base}{filename}" if s3_base else filename
                 
                 # Store in EXACT format that catalog search uses
                 structured_output[doc_name][page_key] = {
