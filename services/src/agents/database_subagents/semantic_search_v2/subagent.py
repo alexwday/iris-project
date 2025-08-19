@@ -255,11 +255,20 @@ def _perform_vector_search(
                 chunk_end_page,
                 chunk_start_reference,
                 chunk_end_reference,
-                1 - (embedding::vector <=> %s::vector) AS vector_score
+                CASE 
+                    WHEN embedding IS NULL THEN NULL
+                    WHEN embedding::text ~ 'NaN|Infinity|-Infinity|Inf|-Inf' THEN NULL
+                    ELSE 1 - (embedding::vector <=> %s::vector)
+                END AS vector_score
             FROM {TARGET_TABLE}
-            WHERE 1=1
-            {" AND document_id = %s" if doc_id else ""}
-            ORDER BY vector_score DESC
+            WHERE 
+                embedding IS NOT NULL
+                -- Filter out vectors with NaN or Infinity values
+                AND NOT embedding::text ~ 'NaN|Infinity|-Infinity|Inf|-Inf'
+                -- Ensure the vector has the correct dimensions
+                AND array_length(embedding::real[], 1) = {EMBEDDING_DIMENSIONS}
+                {" AND document_id = %s" if doc_id else ""}
+            ORDER BY vector_score DESC NULLS LAST
             LIMIT %s;
         """
         
