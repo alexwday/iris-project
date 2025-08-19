@@ -243,41 +243,59 @@ def _filter_by_relevance(
     if not chunks:
         return [], usage_details
     
-    # Prepare summaries for LLM evaluation
-    summaries_data = []
-    for chunk in chunks:
+    # Debug: Log sample chunk data
+    if chunks:
+        sample_chunk = chunks[0]
+        logger.debug(f"Sample chunk keys: {list(sample_chunk.keys())}")
+        logger.debug(f"Sample chapter_summary: {sample_chunk.get('chapter_summary', 'MISSING')[:200] if sample_chunk.get('chapter_summary') else 'EMPTY'}")
+        logger.debug(f"Sample section_summary: {sample_chunk.get('section_summary', 'MISSING')[:200] if sample_chunk.get('section_summary') else 'EMPTY'}")
+    
+    # Prepare summaries for LLM evaluation with simple 1-based numbering
+    summaries_list = []
+    chunk_by_number = {}  # Map number to actual chunk
+    empty_summary_count = 0
+    
+    for i, chunk in enumerate(chunks, 1):  # Start from 1 for clearer numbering
         chunk_id = chunk.get("id")
         chapter_summary = chunk.get("chapter_summary", "")
         section_summary = chunk.get("section_summary", "")
         
-        combined_summary = f"Chapter: {chapter_summary}\nSection: {section_summary}"
+        # Debug: Check for empty summaries
+        if not chapter_summary and not section_summary:
+            empty_summary_count += 1
+            logger.debug(f"Chunk {chunk_id} has empty summaries")
+            continue  # Skip chunks with no summaries
         
-        if chunk_id and combined_summary:
-            summaries_data.append({
-                "id": chunk_id,
-                "summary": combined_summary
-            })
+        chunk_by_number[i] = chunk
+        summaries_list.append(f"{i}. Chapter: {chapter_summary}\n   Section: {section_summary}")
     
-    if not summaries_data:
+    logger.info(f"Prepared {len(summaries_list)} summaries for evaluation, {empty_summary_count} chunks had empty summaries")
+    
+    if not summaries_list:
         logger.warning("No valid summaries found for relevance check.")
         return chunks, usage_details
     
-    prompt_summaries = "\n".join([
-        f"ID: {item['id']}\nSummary: {item['summary']}\n---"
-        for item in summaries_data
-    ])
+    # Create the prompt with numbered summaries
+    prompt_summaries = "\n\n".join(summaries_list)
+    
+    # Debug: Log a sample of what we're sending
+    logger.debug(f"Query for relevance check: {query}")
+    logger.debug(f"First 3 summaries being evaluated:\n{prompt_summaries[:1000]}")
     
     system_message = """You are evaluating text summaries for relevance to a query.
-For each summary, determine if it is relevant (1) or irrelevant (0) to the query.
-Respond ONLY with a JSON object mapping IDs to 1 or 0."""
+Review the numbered summaries and identify which ones are COMPLETELY IRRELEVANT to the query.
+A summary is relevant if it contains ANY information that could help answer the query, even partially.
+Be inclusive - only mark as irrelevant if there is NO possible connection to the query.
+Respond with a JSON array of numbers to REMOVE (the irrelevant ones only)."""
     
     user_message = f"""Query: "{query}"
 
-Evaluate these summaries:
----
+Summaries to evaluate:
 {prompt_summaries}
----
-Response format: {{"id1": 1, "id2": 0, ...}}"""
+
+Return a JSON array of numbers to remove (irrelevant summaries only).
+Example: [3, 7, 15] means remove summaries 3, 7, and 15 as irrelevant.
+If all summaries are relevant, return an empty array: []"""
     
     messages = [
         {"role": "system", "content": system_message},
@@ -292,7 +310,7 @@ Response format: {{"id1": 1, "id2": 0, ...}}"""
             "completion_token_cost": model_config["completion_token_cost"],
             "model": model_config["name"],
             "messages": messages,
-            "temperature": 0.2,
+            "temperature": 0.3,  # Slightly higher for more inclusive relevance scoring
             "response_format": {"type": "json_object"},
             "database_name": "semantic_search_v2",
             "stream": False,
@@ -308,15 +326,41 @@ Response format: {{"id1": 1, "id2": 0, ...}}"""
         
         if response and hasattr(response, "choices") and response.choices:
             content = response.choices[0].message.content
-            relevance_map = json.loads(content)
+            logger.debug(f"LLM relevance response: {content[:500] if content else 'EMPTY'}")
             
-            # Filter chunks based on relevance
-            filtered_chunks = [
-                chunk for chunk in chunks
-                if str(chunk.get("id")) in relevance_map and relevance_map[str(chunk.get("id"))] == 1
-            ]
+            # Parse the array of numbers to remove
+            numbers_to_remove = json.loads(content)
+            logger.debug(f"Numbers to remove (irrelevant): {numbers_to_remove}")
             
-            logger.info(f"Filtered to {len(filtered_chunks)} relevant chunks")
+            # Validate it's an array
+            if not isinstance(numbers_to_remove, list):
+                logger.error(f"Expected array but got: {type(numbers_to_remove)}")
+                return chunks, usage_details
+            
+            # Convert to set for efficient lookup
+            remove_set = set(numbers_to_remove)
+            logger.info(f"LLM marked {len(remove_set)} summaries as completely irrelevant for removal")
+            
+            # Keep chunks that are NOT in the remove list
+            filtered_chunks = []
+            for number, chunk in chunk_by_number.items():
+                if number not in remove_set:
+                    filtered_chunks.append(chunk)
+                    logger.debug(f"Keeping chunk {number} (ID: {chunk.get('id')}) as relevant")
+                else:
+                    logger.debug(f"Removing chunk {number} (ID: {chunk.get('id')}) as irrelevant")
+            
+            logger.info(f"Kept {len(filtered_chunks)} relevant chunks out of {len(chunk_by_number)}")
+            
+            # If all chunks were filtered out, log a warning
+            if len(filtered_chunks) == 0 and len(chunk_by_number) > 0:
+                logger.warning(f"All {len(chunk_by_number)} chunks were filtered out as irrelevant!")
+                logger.warning(f"Query was: {query}")
+                logger.warning("This may indicate overly strict filtering or a mismatch with the content")
+                # Consider returning top chunks as fallback
+                # filtered_chunks = list(chunk_by_number.values())[:5]
+                # logger.warning(f"Returning top 5 chunks as fallback")
+            
             return filtered_chunks, usage_details
         
     except Exception as e:
