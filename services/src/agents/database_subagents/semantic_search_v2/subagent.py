@@ -183,6 +183,54 @@ def _perform_vector_search(
     logger.debug(f"Query embedding first 5 values: {query_embedding[:5] if query_embedding else 'None'}")
     
     try:
+        # First, let's check the database embeddings directly
+        # Simple check first
+        simple_check = """
+            SELECT COUNT(*) as total_rows,
+                   COUNT(embedding) as non_null_embeddings,
+                   COUNT(CASE WHEN embedding IS NULL THEN 1 END) as null_embeddings
+            FROM iris_semantic_search;
+        """
+        cursor.execute(simple_check)
+        check_result = dict(cursor.fetchone())
+        logger.info(f"Table check - Total rows: {check_result.get('total_rows')}, "
+                   f"Non-null embeddings: {check_result.get('non_null_embeddings')}, "
+                   f"Null embeddings: {check_result.get('null_embeddings')}")
+        
+        # Detailed diagnostic
+        diagnostic_sql = """
+            SELECT 
+                id,
+                document_id,
+                chunk_number,
+                embedding IS NULL as embedding_is_null,
+                pg_typeof(embedding) as embedding_type,
+                CASE 
+                    WHEN embedding IS NOT NULL THEN array_length(embedding::real[], 1)
+                    ELSE NULL
+                END as embedding_dimension,
+                embedding <=> %s::vector as distance,
+                1 - (embedding <=> %s::vector) as similarity_score
+            FROM iris_semantic_search
+            WHERE embedding IS NOT NULL
+            LIMIT 5;
+        """
+        logger.info("Running diagnostic check on database embeddings...")
+        cursor.execute(diagnostic_sql, [query_embedding, query_embedding])
+        diagnostic_results = cursor.fetchall()
+        
+        for row in diagnostic_results:
+            diag = dict(row)
+            logger.info(f"Diagnostic - ID: {diag.get('id')}, "
+                       f"embedding_is_null: {diag.get('embedding_is_null')}, "
+                       f"type: {diag.get('embedding_type')}, "
+                       f"dimension: {diag.get('embedding_dimension')}, "
+                       f"distance: {diag.get('distance')}, "
+                       f"similarity: {diag.get('similarity_score')}")
+    except Exception as e:
+        logger.error(f"Diagnostic query failed: {e}")
+    
+    try:
         sql = f"""
             SELECT
                 id,
@@ -207,7 +255,7 @@ def _perform_vector_search(
                 chunk_end_page,
                 chunk_start_reference,
                 chunk_end_reference,
-                1 - (embedding <=> %s::vector) AS vector_score
+                1 - (embedding::vector <=> %s::vector) AS vector_score
             FROM {TARGET_TABLE}
             WHERE 1=1
             {" AND document_id = %s" if doc_id else ""}
