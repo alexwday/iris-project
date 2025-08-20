@@ -60,7 +60,7 @@ logger = logging.getLogger(__name__)
 TARGET_TABLE = "iris_semantic_search"
 EMBEDDING_MODEL_CAPABILITY = "embedding"
 RELEVANCE_MODEL_CAPABILITY = "small"
-RESPONSE_MODEL_CAPABILITY = "small"  # Use small model for synthesis to save costs
+RESPONSE_MODEL_CAPABILITY = "small"  # Using small model - consider "large" if extraction is incomplete
 EMBEDDING_DIMENSIONS = 2000
 INITIAL_K = 20
 SECTION_EXPANSION_MAX_PAGES = 6
@@ -1126,7 +1126,12 @@ def _generate_synthesis_response(
                 {"role": "system", "content": synthesis_prompt},
                 {
                     "role": "user",
-                    "content": "Please extract page-based research findings using the tool.",
+                    "content": (
+                        "Extract research findings from ALL relevant pages in the context. "
+                        "Create MULTIPLE page_research array items - one for EACH page that contains relevant information. "
+                        "Do NOT stop after one page. The page_research array should contain MANY items, not just one. "
+                        "Each distinct page with relevant content should have its own entry in the array."
+                    ),
                 },
             ],
             "max_tokens": MAX_RESPONSE_TOKENS,

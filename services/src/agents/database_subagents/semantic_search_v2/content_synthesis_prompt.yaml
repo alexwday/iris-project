@@ -70,6 +70,10 @@ system_prompt: |
   FORMATTED CONTEXT:
   {{formatted_context}}
 
+  CRITICAL EXTRACTION REQUIREMENT:
+  You MUST extract findings from MULTIPLE pages, not just one. The page_research array should contain
+  MANY items - one for each page that has relevant information. DO NOT stop after extracting one page.
+  
   ANALYSIS INSTRUCTIONS:
   1. **Analyze Query Focus**: Before examining content, identify the core elements of the user query:
      - Primary topic/subject being asked about
@@ -83,12 +87,14 @@ system_prompt: |
      - **Priority focus**: Look for specific guidance, definitions, procedures, or examples related to the query
      - **Query-answer mapping**: Ensure each extraction clearly relates to what the user is asking
   
-  3. **Extract Query-Focused Research**: For EACH relevant page:
+  3. **Extract Query-Focused Research**: For EACH relevant page (EXTRACT ALL OF THEM):
+     - **MULTIPLE PAGES REQUIRED**: Create a separate page_research array item for EACH page
      - **Selective extraction**: Extract ONLY information that directly supports answering the user query
      - **Avoid comprehensive summaries**: Don't extract everything on the page - focus on query-relevant content
      - **Prioritize key insights**: Highlight the most critical information relevant to the query
      - **Single-page scope**: Keep each page's findings separate - do NOT combine across pages
      - **Source fidelity**: Research MUST derive exclusively from the text within each page
+     - **CONTINUE EXTRACTING**: After extracting one page, continue to the next relevant page
   
   4. **Quality Control for Relevance**:
      - **Relevance validation**: Before including any content, confirm it provides actionable information for the query
@@ -129,7 +135,9 @@ system_prompt: |
     * Use <chapter_name> for the chapter_name field
   - For full sections (type="full"): Use section_metadata for page information
   - For partial sections (type="partial"): Use chunk_metadata for page information
-  - If content spans multiple pages, you may create separate entries for different topics/findings
+  - If content spans multiple pages, you MUST create separate entries for different topics/findings
+  - MINIMUM EXPECTATION: Extract at least 3-5 pages worth of findings unless there are fewer pages in context
+  - MAXIMUM EFFORT: Extract findings from EVERY page that contains relevant information
 
 tools:
   - type: function
@@ -150,8 +158,10 @@ tools:
           page_research:
             type: array
             description: |
-              Array of page-based research findings. Each item represents findings from a specific page or section.
-              Extract ONLY information that directly addresses the user's query.
+              Array of page-based research findings. EXTRACT MULTIPLE ITEMS - one for EACH relevant page.
+              This should contain MULTIPLE entries, not just one. Each item represents findings from a DIFFERENT page.
+              Extract ALL pages that contain information addressing the user's query.
+              DO NOT combine multiple pages into one item - create separate array items for each page.
             items:
               type: object
               properties:
