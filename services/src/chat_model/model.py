@@ -118,7 +118,10 @@ def _generate_query_embedding(
 
 
 def search_apg_catalog_by_embedding(
-    research_statement: str, token: Optional[str] = None, top_k: int = 5
+    research_statement: str,
+    token: Optional[str] = None,
+    top_k: int = 5,
+    available_databases: Optional[Dict[str, Any]] = None,
 ) -> Tuple[List[Dict[str, Any]], Optional[Dict[str, Any]]]:
     """
     Search the apg_catalog table using embeddings to find relevant documents.
@@ -162,20 +165,41 @@ def search_apg_catalog_by_embedding(
         cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
         # Perform vector search against apg_catalog table
-        sql = """
-            SELECT
-                document_source,
-                document_description,
-                document_type,
-                document_name,
-                1 - (document_usage_embedding <=> %s::vector) AS similarity_score
-            FROM apg_catalog
-            WHERE document_usage_embedding IS NOT NULL
-            ORDER BY similarity_score DESC
-            LIMIT %s;
-        """
+        if available_databases:
+            # Build the IN clause for filtering by document_source
+            db_sources = list(available_databases.keys())
+            placeholders = ", ".join(["%s"] * len(db_sources))
+            sql = f"""
+                SELECT
+                    document_source,
+                    document_description,
+                    document_type,
+                    document_name,
+                    1 - (document_usage_embedding <=> %s::vector) AS similarity_score
+                FROM apg_catalog
+                WHERE document_usage_embedding IS NOT NULL
+                    AND document_source IN ({placeholders})
+                ORDER BY similarity_score DESC
+                LIMIT %s;
+            """
+            params = [query_embedding] + db_sources + [top_k]
+        else:
+            # No filtering - original query
+            sql = """
+                SELECT
+                    document_source,
+                    document_description,
+                    document_type,
+                    document_name,
+                    1 - (document_usage_embedding <=> %s::vector) AS similarity_score
+                FROM apg_catalog
+                WHERE document_usage_embedding IS NOT NULL
+                ORDER BY similarity_score DESC
+                LIMIT %s;
+            """
+            params = [query_embedding, top_k]
 
-        cursor.execute(sql, [query_embedding, top_k])
+        cursor.execute(sql, params)
         results_raw = cursor.fetchall()
 
         # Convert to list of dictionaries
@@ -1035,7 +1059,12 @@ def _model_generator(
                 # Search apg_catalog for relevant documents based on research statement
                 logger.info("Searching apg_catalog for document usage context...")
                 apg_catalog_results, apg_catalog_usage = (
-                    search_apg_catalog_by_embedding(research_statement, token, top_k=5)
+                    search_apg_catalog_by_embedding(
+                        research_statement,
+                        token,
+                        top_k=5,
+                        available_databases=available_databases,
+                    )
                 )
                 if apg_catalog_usage:
                     process_monitor.add_llm_call_details_to_stage(

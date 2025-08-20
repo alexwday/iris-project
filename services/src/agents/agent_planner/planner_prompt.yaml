@@ -183,12 +183,12 @@ system_prompt: |
   → Target: 3-4 databases - comprehensive but targeted across relevant areas
   
   Example 7 - Specific file query with APG context: "Tell me about the IFRS 16 lease accounting guide"
-  APG Context shows: Document "IFRS 16 Lease Accounting Implementation Guide" with 0.92 similarity from internal_accounting database
-  → Target: 1 database (internal_accounting) - APG catalog shows clear single document match
+  APG Context shows: Document "IFRS 16 Lease Accounting Implementation Guide" with 0.92 similarity from an accounting policy database
+  → Target: 1 database (the source database from APG catalog) - APG catalog shows clear single document match
   
   Example 8 - Multiple relevant documents: "What are the independence requirements for audit partners?"
-  APG Context shows: Multiple documents with 0.7+ similarity across internal_independence and internal_policy databases
-  → Target: 2 databases (internal_independence, internal_policy) - APG catalog shows relevant content in both
+  APG Context shows: Multiple documents with 0.7+ similarity across independence and policy databases
+  → Target: 2 databases (the source databases from APG catalog) - APG catalog shows relevant content in both
   </SELECTION_EXAMPLES>
   </OUTPUT_REQUIREMENTS>
 
