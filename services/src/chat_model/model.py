@@ -58,14 +58,14 @@ def _generate_query_embedding(
         token (Optional[str]): OAuth token for API authentication
 
     Returns:
-        Tuple[Optional[List[float]], Optional[Dict[str, Any]]]: 
+        Tuple[Optional[List[float]], Optional[Dict[str, Any]]]:
             - Embedding vector
             - Usage details dictionary
     """
     logger = logging.getLogger(__name__)
     logger.info(f"Generating embedding for query: '{query[:100]}...'")
     usage_details = None
-    
+
     try:
         model_config = config.get_model_config("embedding")
         model_name = model_config["name"]
@@ -122,41 +122,45 @@ def search_apg_catalog_by_embedding(
 ) -> Tuple[List[Dict[str, Any]], Optional[Dict[str, Any]]]:
     """
     Search the apg_catalog table using embeddings to find relevant documents.
-    
+
     Args:
         research_statement (str): The research statement to search for
         token (Optional[str]): OAuth token for API authentication
         top_k (int): Number of top results to retrieve (default 5)
-        
+
     Returns:
-        Tuple[List[Dict[str, Any]], Optional[Dict[str, Any]]]: 
+        Tuple[List[Dict[str, Any]], Optional[Dict[str, Any]]]:
             - List of matching documents with document_source and document_description
             - Usage details dictionary for the embedding call, or None if error
     """
     logger = logging.getLogger(__name__)
-    logger.info(f"Searching apg_catalog for research statement: '{research_statement[:100]}...'")
+    logger.info(
+        f"Searching apg_catalog for research statement: '{research_statement[:100]}...'"
+    )
     usage_details = None
-    
+
     conn = None
     cursor = None
-    
+
     try:
         # Generate embedding for the research statement
-        query_embedding, usage_details = _generate_query_embedding(research_statement, token)
-        
+        query_embedding, usage_details = _generate_query_embedding(
+            research_statement, token
+        )
+
         if query_embedding is None:
             logger.error("Could not generate embedding for research statement")
             return [], usage_details
-        
+
         # Connect to database
         conn = connect_to_db()
         if conn is None:
             logger.error("Failed to connect to database for apg_catalog search")
             return [], usage_details
-            
+
         register_vector(conn)
         cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-        
+
         # Perform vector search against apg_catalog table
         sql = """
             SELECT
@@ -170,27 +174,29 @@ def search_apg_catalog_by_embedding(
             ORDER BY similarity_score DESC
             LIMIT %s;
         """
-        
+
         cursor.execute(sql, [query_embedding, top_k])
         results_raw = cursor.fetchall()
-        
+
         # Convert to list of dictionaries
         results = []
         for i, row in enumerate(results_raw):
             record = dict(row)
             record["rank"] = i + 1
             results.append(record)
-        
+
         logger.info(f"Found {len(results)} matching documents in apg_catalog")
-        
+
         # Log the top 5 document names for debugging
         if results:
             logger.info("Top 5 APG Catalog document names:")
             for i, doc in enumerate(results[:5], 1):
-                logger.info(f"  {i}. {doc.get('document_name', 'N/A')} (score: {doc.get('similarity_score', 0.0):.3f})")
-        
+                logger.info(
+                    f"  {i}. {doc.get('document_name', 'N/A')} (score: {doc.get('similarity_score', 0.0):.3f})"
+                )
+
         return results, usage_details
-        
+
     except Exception as e:
         logger.error(f"Error searching apg_catalog: {e}", exc_info=True)
         return [], usage_details
@@ -308,13 +314,27 @@ def _process_final_references(
                 highlight_text = ref_data.get("highlight_text", "")
                 doc_name = ref_data.get("doc_name", "Unknown Document")
 
+                # Extract additional fields for semantic search
+                page_reference = ref_data.get(
+                    "page_reference", str(page)
+                )  # Display reference
+                chapter_number = ref_data.get("chapter_number", "")  # Chapter number
+                source_filename = ref_data.get(
+                    "source_filename", doc_name
+                )  # Original document name
+
                 # Create S3 URL using S3_BASE_PATH + file_name
                 s3_url = f"{config.S3_BASE_PATH}/{file_name}"
 
                 # Create href link with 3-parameter format: filename, page, highlight_text
                 page_key = (doc_name, page)
                 if page_key not in page_links:
-                    link_text = f"📄 {doc_name} Page {page}"
+                    # Build link text with new format: source_filename, Ch. chapter_number, Pg. page_reference
+                    if chapter_number:
+                        link_text = f"📄 {source_filename}, Ch. {chapter_number}, Pg. {page_reference}"
+                    else:
+                        # Fallback for catalog search or when chapter not available
+                        link_text = f"📄 {source_filename}, Pg. {page_reference}"
                     href = f'<a href=\'javascript:window.maven.openPdf("{s3_url}", {page}, "{highlight_text}")\'>{link_text}</a>'
                     page_links[page_key] = href
             else:
@@ -408,7 +428,9 @@ def _process_reference_buffer(
                 )
                 return "", buffer
             # No incomplete references and buffer not full - output what we have
-            logger.debug(f"No references and buffer not full, outputting buffer content")
+            logger.debug(
+                f"No references and buffer not full, outputting buffer content"
+            )
             return buffer, ""
         else:
             # Buffer is full but no references - handle potential partial references
@@ -464,11 +486,25 @@ def _process_reference_buffer(
                 highlight_text = ref_data.get("highlight_text", "")
                 doc_name = ref_data.get("doc_name", "Unknown Document")
 
+                # Extract additional fields for semantic search
+                page_reference = ref_data.get(
+                    "page_reference", str(page)
+                )  # Display reference
+                chapter_number = ref_data.get("chapter_number", "")  # Chapter number
+                source_filename = ref_data.get(
+                    "source_filename", doc_name
+                )  # Original document name
+
                 # Create S3 URL using S3_BASE_PATH + file_name
                 s3_url = f"{config.S3_BASE_PATH}/{file_name}"
 
                 # Create href link with 3-parameter format: filename, page, highlight_text
-                link_text = f"📄 {doc_name} Page {page}"
+                # Build link text with new format: source_filename, Ch. chapter_number, Pg. page_reference
+                if chapter_number:
+                    link_text = f"📄 {source_filename}, Ch. {chapter_number}, Pg. {page_reference}"
+                else:
+                    # Fallback for catalog search or when chapter not available
+                    link_text = f"📄 {source_filename}, Pg. {page_reference}"
                 href = f'<a href=\'javascript:window.maven.openPdf("{s3_url}", {page}, "{highlight_text}")\'>{link_text}</a>'
 
                 replacement = f" {href} "
@@ -517,13 +553,29 @@ def _process_reference_buffer(
                     highlight_text = ref_data.get("highlight_text", "")
                     doc_name = ref_data.get("doc_name", "Unknown Document")
 
+                    # Extract additional fields for semantic search
+                    page_reference = ref_data.get(
+                        "page_reference", str(page)
+                    )  # Display reference
+                    chapter_number = ref_data.get(
+                        "chapter_number", ""
+                    )  # Chapter number
+                    source_filename = ref_data.get(
+                        "source_filename", doc_name
+                    )  # Original document name
+
                     # Create S3 URL using S3_BASE_PATH + file_name
                     s3_url = f"{config.S3_BASE_PATH}/{file_name}"
 
                     # Create href link with 3-parameter format: filename, page, highlight_text
                     page_key = (doc_name, page)
                     if page_key not in page_links:
-                        link_text = f"📄 {doc_name} Page {page}"
+                        # Build link text with new format: source_filename, Ch. chapter_number, Pg. page_reference
+                        if chapter_number:
+                            link_text = f"📄 {source_filename}, Ch. {chapter_number}, Pg. {page_reference}"
+                        else:
+                            # Fallback for catalog search or when chapter not available
+                            link_text = f"📄 {source_filename}, Pg. {page_reference}"
                         href = f'<a href=\'javascript:window.maven.openPdf("{s3_url}", {page}, "{highlight_text}")\'>{link_text}</a>'
                         page_links[page_key] = href
                 else:
@@ -929,7 +981,7 @@ def _model_generator(
                 logger.warning("No usage details received from direct_response stream.")
 
             # --- Legacy Debug Block Removed ---
-            
+
             # End monitoring after successful direct response completion
             logger.info("Direct response completed successfully, ending monitoring")
             process_monitor.end_monitoring()
@@ -961,7 +1013,7 @@ def _model_generator(
                 logger.info("Essential context needed, returning context questions")
                 questions = clarifier_decision["output"].strip()
                 yield "Before proceeding with research, please clarify:\n\n" + questions
-                
+
                 # End monitoring after successful context request completion
                 logger.info("Context request completed successfully, ending monitoring")
                 process_monitor.end_monitoring()
@@ -982,17 +1034,23 @@ def _model_generator(
 
                 # Search apg_catalog for relevant documents based on research statement
                 logger.info("Searching apg_catalog for document usage context...")
-                apg_catalog_results, apg_catalog_usage = search_apg_catalog_by_embedding(
-                    research_statement, token, top_k=5
+                apg_catalog_results, apg_catalog_usage = (
+                    search_apg_catalog_by_embedding(research_statement, token, top_k=5)
                 )
                 if apg_catalog_usage:
-                    process_monitor.add_llm_call_details_to_stage("clarifier", apg_catalog_usage)
-                
+                    process_monitor.add_llm_call_details_to_stage(
+                        "clarifier", apg_catalog_usage
+                    )
+
                 if apg_catalog_results:
-                    logger.info(f"Found {len(apg_catalog_results)} relevant documents in apg_catalog")
+                    logger.info(
+                        f"Found {len(apg_catalog_results)} relevant documents in apg_catalog"
+                    )
                     # Log the top documents for debugging
                     for i, doc in enumerate(apg_catalog_results[:3]):
-                        logger.debug(f"APG Doc {i+1}: {doc.get('document_source', 'N/A')} - {doc.get('document_description', 'N/A')[:100]}...")
+                        logger.debug(
+                            f"APG Doc {i+1}: {doc.get('document_source', 'N/A')} - {doc.get('document_description', 'N/A')[:100]}..."
+                        )
                 else:
                     logger.info("No relevant documents found in apg_catalog")
 
@@ -1001,7 +1059,11 @@ def _model_generator(
                 # TODO: Update create_database_selection_plan to return (plan, usage_details)
                 db_selection_plan, planner_usage_details = (
                     create_database_selection_plan(
-                        research_statement, token, available_databases, is_continuation, apg_catalog_results
+                        research_statement,
+                        token,
+                        available_databases,
+                        is_continuation,
+                        apg_catalog_results,
                     )
                 )
                 selected_databases = db_selection_plan.get("databases", [])
@@ -1443,11 +1505,11 @@ def _model_generator(
                     )
 
                 # --- Legacy Debug Block Removed ---
-                
+
                 # End monitoring after successful research completion
                 logger.info("Research completed successfully, ending monitoring")
                 process_monitor.end_monitoring()
-                
+
         else:
             logger.error(
                 f"Unknown routing function: {routing_decision['function_name']}"
