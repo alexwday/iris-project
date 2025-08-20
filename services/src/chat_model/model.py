@@ -354,11 +354,28 @@ def _process_final_references(
                 page_key = (doc_name, page)
                 if page_key not in page_links:
                     # Build link text with new format: source_filename, Ch. chapter_number, Pg. page_reference
+                    # Handle missing page_reference gracefully
                     if chapter_number:
-                        link_text = f"📄 {source_filename}, Ch. {chapter_number}, Pg. {page_reference}"
+                        if (
+                            page_reference
+                            and page_reference != str(page)
+                            and page_reference != "0"
+                        ):
+                            link_text = f"📄 {source_filename}, Ch. {chapter_number}, Pg. {page_reference}"
+                        else:
+                            # No valid page_reference, just show source and chapter
+                            link_text = f"📄 {source_filename}, Ch. {chapter_number}"
                     else:
                         # Fallback for catalog search or when chapter not available
-                        link_text = f"📄 {source_filename}, Pg. {page_reference}"
+                        if (
+                            page_reference
+                            and page_reference != str(page)
+                            and page_reference != "0"
+                        ):
+                            link_text = f"📄 {source_filename}, Pg. {page_reference}"
+                        else:
+                            # No valid page_reference, just show source
+                            link_text = f"📄 {source_filename}"
                     href = f'<a href=\'javascript:window.maven.openPdf("{s3_url}", {page}, "{highlight_text}")\'>{link_text}</a>'
                     page_links[page_key] = href
             else:
@@ -524,11 +541,28 @@ def _process_reference_buffer(
 
                 # Create href link with 3-parameter format: filename, page, highlight_text
                 # Build link text with new format: source_filename, Ch. chapter_number, Pg. page_reference
+                # Handle missing page_reference gracefully
                 if chapter_number:
-                    link_text = f"📄 {source_filename}, Ch. {chapter_number}, Pg. {page_reference}"
+                    if (
+                        page_reference
+                        and page_reference != str(page)
+                        and page_reference != "0"
+                    ):
+                        link_text = f"📄 {source_filename}, Ch. {chapter_number}, Pg. {page_reference}"
+                    else:
+                        # No valid page_reference, just show source and chapter
+                        link_text = f"📄 {source_filename}, Ch. {chapter_number}"
                 else:
                     # Fallback for catalog search or when chapter not available
-                    link_text = f"📄 {source_filename}, Pg. {page_reference}"
+                    if (
+                        page_reference
+                        and page_reference != str(page)
+                        and page_reference != "0"
+                    ):
+                        link_text = f"📄 {source_filename}, Pg. {page_reference}"
+                    else:
+                        # No valid page_reference, just show source
+                        link_text = f"📄 {source_filename}"
                 href = f'<a href=\'javascript:window.maven.openPdf("{s3_url}", {page}, "{highlight_text}")\'>{link_text}</a>'
 
                 replacement = f" {href} "
@@ -595,11 +629,32 @@ def _process_reference_buffer(
                     page_key = (doc_name, page)
                     if page_key not in page_links:
                         # Build link text with new format: source_filename, Ch. chapter_number, Pg. page_reference
+                        # Handle missing page_reference gracefully
                         if chapter_number:
-                            link_text = f"📄 {source_filename}, Ch. {chapter_number}, Pg. {page_reference}"
+                            if (
+                                page_reference
+                                and page_reference != str(page)
+                                and page_reference != "0"
+                            ):
+                                link_text = f"📄 {source_filename}, Ch. {chapter_number}, Pg. {page_reference}"
+                            else:
+                                # No valid page_reference, just show source and chapter
+                                link_text = (
+                                    f"📄 {source_filename}, Ch. {chapter_number}"
+                                )
                         else:
                             # Fallback for catalog search or when chapter not available
-                            link_text = f"📄 {source_filename}, Pg. {page_reference}"
+                            if (
+                                page_reference
+                                and page_reference != str(page)
+                                and page_reference != "0"
+                            ):
+                                link_text = (
+                                    f"📄 {source_filename}, Pg. {page_reference}"
+                                )
+                            else:
+                                # No valid page_reference, just show source
+                                link_text = f"📄 {source_filename}"
                         href = f'<a href=\'javascript:window.maven.openPdf("{s3_url}", {page}, "{highlight_text}")\'>{link_text}</a>'
                         page_links[page_key] = href
                 else:

@@ -22,14 +22,30 @@ system_prompt: |
   Your research extraction directly impacts the quality and accuracy of the final user response.
   </AUDIENCE>
 
-  IMPORTANT HTML TAG HANDLING:
-  The content includes HTML tags that mark page boundaries and references. These tags follow this format:
-  - Page headers: <!-- PageHeader PageNumber="X" PageReference="Y-Z" -->
-  - Page footers: <!-- PageFooter PageNumber="X" PageReference="Y-Z" -->
+  IMPORTANT PAGE REFERENCE HANDLING:
+  Page information appears in MULTIPLE locations to ensure accurate extraction:
   
-  Where:
-  - PageNumber: The actual page number in the chapter PDF (used for S3 navigation)
-  - PageReference: The reference to the original full textbook page (e.g., "1-5" means Chapter 1, Page 5)
+  1. XML Metadata Tags (ALWAYS present):
+     - <section_metadata><start_page> and <end_page>: Section page boundaries
+     - <section_metadata><start_reference> and <end_reference>: Section reference numbers
+     - <chunk_metadata><start_page> and <end_page>: Chunk page boundaries  
+     - <chunk_metadata><start_reference> and <end_reference>: Chunk reference numbers
+  
+  2. HTML Comment Markers (added at content boundaries):
+     - <!-- SECTION START/END: PageNumber="X" PageReference="Y-Z" -->
+     - <!-- CHUNK START/END: PageNumber="X" PageReference="Y-Z" -->
+     - <!-- Chunk N: Pages X-Y, Refs A-B --> (chunk info markers)
+  
+  3. Within Content (at actual page transitions):
+     - <!-- PageHeader PageNumber="X" PageReference="Y-Z" -->
+     - <!-- PageFooter PageNumber="X" PageReference="Y-Z" -->
+  
+  EXTRACTION PRIORITY:
+  - First check XML metadata for page ranges
+  - Then look for HTML markers at content boundaries
+  - Finally check within content for specific page transitions
+  - PageNumber: The actual page in the chapter PDF (for navigation)
+  - PageReference: The original document reference (for display, e.g., "3-15")
 
   REFERENCE CREATION RULES:
   1. When citing content, use the REF tag format: [REF:X] where X is a sequential number
@@ -92,17 +108,28 @@ system_prompt: |
     * <CHAPTER><metadata><source_filename>: The original document name for display (REQUIRED)
     * <CHAPTER><metadata><chapter_name>: The chapter name/title
     * <SECTION><section_metadata>: Contains section-level page ranges and references
+      - <start_page> and <end_page>: Actual PDF page numbers
+      - <start_reference> and <end_reference>: Original document page references (e.g., "3-15")
     * <chunk><chunk_metadata>: Contains chunk-specific page ranges and references (for partial sections)
-  - Within <content> blocks, HTML comments mark page boundaries: <!-- PageHeader PageNumber="X" PageReference="Y-Z" -->
+      - <start_page> and <end_page>: Actual PDF page numbers  
+      - <start_reference> and <end_reference>: Original document page references
   - When extracting research:
     * ALWAYS extract chapter_number from <CHAPTER number="X"> attribute
     * ALWAYS use the <filename> from metadata for the filename field (for S3 links)
     * ALWAYS use <source_filename> from metadata for the source_filename field (REQUIRED)
-    * Use PageNumber from HTML tags for the page_number field (actual PDF page)
-    * Use PageReference from HTML tags for the page_reference field (display reference)
+    * For page_number: Look for in this order:
+      1. XML metadata: <start_page> or <end_page> tags
+      2. HTML markers: PageNumber attribute in comments
+      3. Use the most specific page number for the content location
+    * For page_reference: Look for in this order:
+      1. XML metadata: <start_reference> or <end_reference> tags
+      2. HTML markers: PageReference attribute in comments
+      3. This should be like "3-15" (chapter-page format)
+    * If page_reference is empty, missing, or "0", leave it blank (system handles gracefully)
     * Use <chapter_name> for the chapter_name field
-  - If content spans multiple pages, create separate entries for each page's research
-  - Type="full" sections have combined content, type="partial" sections have individual chunks
+  - For full sections (type="full"): Use section_metadata for page information
+  - For partial sections (type="partial"): Use chunk_metadata for page information
+  - If content spans multiple pages, you may create separate entries for different topics/findings
 
 tools:
   - type: function

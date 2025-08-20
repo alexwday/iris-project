@@ -805,6 +805,18 @@ def _format_context_with_blocks(chunks: List[Dict[str, Any]]) -> str:
                 if is_full_section:
                     # Combine all chunks for full section
                     combined_content = []
+
+                    # Add section-level page markers at the start
+                    section_start_page = first_chunk.get("section_start_page", "")
+                    section_start_ref = first_chunk.get("section_start_reference", "")
+                    section_end_page = first_chunk.get("section_end_page", "")
+                    section_end_ref = first_chunk.get("section_end_reference", "")
+
+                    if section_start_page and section_start_ref:
+                        combined_content.append(
+                            f'<!-- SECTION START: PageNumber="{section_start_page}" PageReference="{section_start_ref}" -->'
+                        )
+
                     for chunk in section_chunks:
                         content = chunk.get("chunk_content", "")
                         if content:
@@ -816,6 +828,12 @@ def _format_context_with_blocks(chunks: List[Dict[str, Any]]) -> str:
                             )
                             combined_content.append(chunk_meta)
                             combined_content.append(content)
+
+                    # Add section-level page markers at the end
+                    if section_end_page and section_end_ref:
+                        combined_content.append(
+                            f'<!-- SECTION END: PageNumber="{section_end_page}" PageReference="{section_end_ref}" -->'
+                        )
 
                     if combined_content:
                         context_parts.append(f"        <content>")
@@ -853,9 +871,37 @@ def _format_context_with_blocks(chunks: List[Dict[str, Any]]) -> str:
                         content = chunk.get("chunk_content", "")
                         if content:
                             context_parts.append(f"          <content>")
-                            # Properly indent content
+
+                            # Add explicit page markers at the start of chunk content
+                            # This ensures LLM always has page info even if HTML tags are missing
+                            chunk_start_page = chunk.get("chunk_start_page", "")
+                            chunk_start_ref = chunk.get("chunk_start_reference", "")
+                            chunk_end_page = chunk.get("chunk_end_page", "")
+                            chunk_end_ref = chunk.get("chunk_end_reference", "")
+
+                            # Add start marker if we have page info
+                            if chunk_start_page and chunk_start_ref:
+                                context_parts.append(
+                                    f'            <!-- CHUNK START: PageNumber="{chunk_start_page}" PageReference="{chunk_start_ref}" -->'
+                                )
+
+                            # Add the actual content (which may also contain HTML page markers)
                             for line in content.split("\n"):
                                 context_parts.append(f"            {line}")
+
+                            # Add end marker if different from start
+                            if (
+                                chunk_end_page
+                                and chunk_end_ref
+                                and (
+                                    chunk_end_page != chunk_start_page
+                                    or chunk_end_ref != chunk_start_ref
+                                )
+                            ):
+                                context_parts.append(
+                                    f'            <!-- CHUNK END: PageNumber="{chunk_end_page}" PageReference="{chunk_end_ref}" -->'
+                                )
+
                             context_parts.append(f"          </content>")
                         context_parts.append(f"        </chunk>")
 
