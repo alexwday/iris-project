@@ -1246,6 +1246,11 @@ def _generate_synthesis_response(
                 chapter_number = page_item.get(
                     "chapter_number"
                 )  # Extract chapter number
+                
+                # Ensure page_number is valid (not 0 or None)
+                if page_number == 0 or page_number is None:
+                    logger.warning(f"DEBUG: Invalid page_number={page_number} for item {idx}, will try to extract from chunk")
+                    page_number = None  # Reset to None to trigger chunk lookup
 
                 logger.info(f"DEBUG: Processing item {idx}: filename={filename}, page={page_number}, chapter={chapter_number}")
                 
@@ -1258,14 +1263,29 @@ def _generate_synthesis_response(
                     continue
 
                 # Find corresponding chunk for additional metadata
-                chunk_key = f"{filename}_{page_number}"
-                logger.info(f"DEBUG: Looking up chunk with key: {chunk_key}")
-                chunk = chunk_map.get(chunk_key, {})
+                chunk_key = f"{filename}_{page_number}" if page_number else None
+                chunk = {}
                 
-                if chunk:
-                    logger.info(f"DEBUG: Found chunk for {chunk_key}")
+                if chunk_key:
+                    logger.info(f"DEBUG: Looking up chunk with key: {chunk_key}")
+                    chunk = chunk_map.get(chunk_key, {})
+                    
+                    if chunk:
+                        logger.info(f"DEBUG: Found chunk for {chunk_key}")
+                    else:
+                        logger.warning(f"DEBUG: No chunk found for {chunk_key} - will use page_item data only")
                 else:
-                    logger.warning(f"DEBUG: No chunk found for {chunk_key} - will use page_item data only")
+                    # Try to find chunk by filename alone if page_number is missing
+                    logger.warning(f"DEBUG: No page_number, searching chunks by filename={filename}")
+                    for key, ch in chunk_map.items():
+                        if key.startswith(f"{filename}_"):
+                            chunk = ch
+                            # Extract page number from chunk
+                            extracted_page = chunk.get("chunk_start_page")
+                            if extracted_page:
+                                page_number = extracted_page
+                                logger.info(f"DEBUG: Extracted page_number={page_number} from chunk")
+                            break
 
                 # Get filepath and source_filename from chunk if available
                 filepath = chunk.get("filepath", "")
@@ -1274,6 +1294,13 @@ def _generate_synthesis_response(
                 # Get chapter_number from chunk if not provided by LLM
                 if not chapter_number:
                     chapter_number = chunk.get("chapter_number")
+                    
+                # Try to get page_number from chunk if still missing or 0
+                if not page_number or page_number == 0:
+                    chunk_page = chunk.get("chunk_start_page")
+                    if chunk_page and chunk_page != 0:
+                        page_number = chunk_page
+                        logger.info(f"DEBUG: Using page_number={page_number} from chunk_start_page")
 
                 # Use consistent source_filename from map if available
                 if filename in source_filename_map:
@@ -1311,6 +1338,11 @@ def _generate_synthesis_response(
                         "_display_name": display_name  # Store display name for reference
                     }
 
+                # Final validation of page_number - default to 1 if still invalid
+                if not page_number or page_number == 0:
+                    logger.warning(f"DEBUG: page_number still invalid ({page_number}), defaulting to 1")
+                    page_number = 1
+                
                 # Create page key
                 page_key = f"page_{page_number}"
 
@@ -1339,7 +1371,10 @@ def _generate_synthesis_response(
                     "doc_name": doc_name,  # Document name for grouping
                 }
                 
-                logger.info(f"DEBUG: SUCCESSFULLY added page to output: {doc_name}/{page_key}")
+                logger.info(
+                    f"DEBUG: SUCCESSFULLY added page to output: {doc_name}/{page_key} - "
+                    f"page={page_number}, page_reference={page_reference}"
+                )
                 processed_count += 1
             
             logger.info("=" * 80)

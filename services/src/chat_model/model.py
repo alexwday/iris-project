@@ -346,6 +346,12 @@ def _process_final_references(
                 source_filename = ref_data.get(
                     "source_filename", doc_name
                 )  # Original document name
+                
+                # Debug logging to verify page numbers
+                logger.debug(
+                    f"REF:{ref_id} - page={page}, page_reference={page_reference}, "
+                    f"chapter={chapter_number}, source={source_filename}"
+                )
 
                 # Create S3 URL using S3_BASE_PATH + file_name
                 s3_url = f"{config.S3_BASE_PATH}/{file_name}"
@@ -354,28 +360,24 @@ def _process_final_references(
                 page_key = (doc_name, page)
                 if page_key not in page_links:
                     # Build link text with new format: source_filename, Ch. chapter_number, Pg. page_reference
-                    # Handle missing page_reference gracefully
+                    # Always show page_reference when available (it's the display text)
                     if chapter_number:
-                        if (
-                            page_reference
-                            and page_reference != str(page)
-                            and page_reference != "0"
-                        ):
+                        if page_reference and page_reference != "0":
+                            # Show full format with page reference
                             link_text = f"📄 {source_filename}, Ch. {chapter_number}, Pg. {page_reference}"
                         else:
-                            # No valid page_reference, just show source and chapter
-                            link_text = f"📄 {source_filename}, Ch. {chapter_number}"
+                            # No page_reference, fallback to page number
+                            link_text = f"📄 {source_filename}, Ch. {chapter_number}, Pg. {page}"
                     else:
                         # Fallback for catalog search or when chapter not available
-                        if (
-                            page_reference
-                            and page_reference != str(page)
-                            and page_reference != "0"
-                        ):
+                        if page_reference and page_reference != "0":
                             link_text = f"📄 {source_filename}, Pg. {page_reference}"
                         else:
-                            # No valid page_reference, just show source
-                            link_text = f"📄 {source_filename}"
+                            # No page_reference, fallback to page number
+                            link_text = f"📄 {source_filename}, Pg. {page}"
+                    
+                    # Use 'page' (which contains page_number) for PDF navigation
+                    # page_reference is only for display text
                     href = f'<a href=\'javascript:window.maven.openPdf("{s3_url}", {page}, "{highlight_text}")\'>{link_text}</a>'
                     page_links[page_key] = href
             else:
