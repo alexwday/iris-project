@@ -421,30 +421,48 @@ def _filter_by_relevance(
         if len(summaries_list) > 5:
             logger.info(f"  ... and {len(summaries_list) - 5} more summaries")
 
-    system_message = """You are evaluating text summaries for relevance to a user query.
-Your goal is to KEEP as many summaries as possible that might help answer the query.
-Only remove summaries that are COMPLETELY OFF-TOPIC with ZERO relevance.
+    system_message = """You are a relevance filter evaluating HIGH-LEVEL SUMMARIES of document sections.
 
-Guidelines:
-- KEEP summaries that mention ANY concept, term, or topic from the query
-- KEEP summaries that provide context or background information
-- KEEP summaries that might be tangentially related
-- ONLY REMOVE summaries about completely unrelated topics
+CRITICAL CONTEXT:
+- You are seeing ONLY 1-2 sentence summaries of chapters/sections that may be 10-100+ pages long
+- These summaries are abstractions that won't contain specific details from the actual content
+- The full content contains detailed information not visible in these summaries
+- Your role is to filter out COMPLETELY UNRELATED topics, not to find exact answers
 
-Be VERY conservative - when in doubt, KEEP the summary.
-Respond with a JSON ARRAY of numbers to REMOVE (only the completely irrelevant ones)."""
+Your task: Identify which document sections are POTENTIALLY RELEVANT to explore further.
+
+KEEP sections if they:
+- Mention ANY concept, term, or domain related to the query
+- Could POSSIBLY contain relevant information based on the topic area
+- Discuss related systems, processes, or subject matter
+- Provide context, background, or foundational concepts
+- Cover adjacent or tangentially related topics
+
+ONLY REMOVE sections that are:
+- About completely different subject domains with ZERO overlap
+- Discussing unrelated technical areas or business functions
+- Clearly about different products, systems, or topics entirely
+
+Remember: A summary saying "Overview of accounting principles" won't mention specific standards,
+but the full 50-page chapter likely contains detailed guidance on many specific accounting topics.
+
+BE EXTREMELY CONSERVATIVE - the actual content is much richer than these brief summaries suggest.
+Respond with a JSON ARRAY of numbers to REMOVE (only completely off-topic sections)."""
 
     user_message = f"""Query: "{query}"
 
-Summaries to evaluate:
+Chapter and Section Summaries (1-2 sentences each, representing 10-100+ pages of content):
 {prompt_summaries}
 
-Return a JSON ARRAY of summary numbers that are COMPLETELY IRRELEVANT and should be removed.
-- If a summary has ANY possible relevance, do NOT include it in the removal list
-- Return an empty array [] if all summaries might be relevant
-- Example: [3, 15] means ONLY summaries 3 and 15 are completely off-topic
+These are HIGH-LEVEL SUMMARIES only. The actual sections contain extensive details not reflected here.
 
-IMPORTANT: Be conservative - only remove if you're absolutely certain it's irrelevant."""
+Return a JSON ARRAY of summary numbers that represent COMPLETELY UNRELATED topics to remove.
+- Consider whether the TOPIC AREA could contain relevant information
+- DO NOT expect summaries to contain specific query terms or details
+- Return empty array [] if all sections might contain relevant information
+- Example: [3, 15] means sections 3 and 15 are about completely different domains
+
+CRITICAL: These summaries are abstractions. Judge by TOPIC RELEVANCE, not whether the summary answers the query."""
 
     messages = [
         {"role": "system", "content": system_message},
