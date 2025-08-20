@@ -16,6 +16,7 @@ Functions:
 import json
 import logging
 import os
+import re
 import time
 import traceback
 import yaml
@@ -924,6 +925,52 @@ def _format_context_with_blocks(chunks: List[Dict[str, Any]]) -> str:
 # This matches the catalog search approach where the LLM determines what to reference
 
 
+def _analyze_extraction_discrepancy(
+    expected_pages: int, 
+    actual_pages: int,
+    formatted_context: str,
+    page_research: List[Dict[str, Any]]
+) -> None:
+    """Debug function to analyze why we're not extracting all expected pages."""
+    logger.info("=" * 80)
+    logger.info("DEBUG: EXTRACTION DISCREPANCY ANALYSIS")
+    logger.info("=" * 80)
+    logger.info(f"DEBUG: Expected at least {expected_pages} pages, but got {actual_pages}")
+    
+    if actual_pages < expected_pages:
+        logger.warning(f"DEBUG: MISSING {expected_pages - actual_pages} pages!")
+        
+        # Check if context might be truncated
+        if "..." in formatted_context[-100:]:
+            logger.warning("DEBUG: Context might be truncated (ends with '...')")
+        
+        # Check for specific patterns that might limit extraction
+        
+        # Check if prompt mentions any limits
+        if "first" in formatted_context[:1000].lower() or "one" in formatted_context[:1000].lower():
+            logger.warning("DEBUG: Context or prompt might contain limiting words like 'first' or 'one'")
+        
+        # Count actual page markers vs extracted
+        page_markers = re.findall(r'PageNumber="(\d+)"', formatted_context)
+        unique_markers = set(page_markers)
+        extracted_pages = set(str(item.get('page_number')) for item in page_research if item.get('page_number'))
+        
+        missing_pages = unique_markers - extracted_pages
+        if missing_pages:
+            logger.warning(f"DEBUG: Pages in context but NOT extracted: {sorted(missing_pages)[:20]}")
+        
+        # Check if all chapters are represented
+        chapter_pattern = r'<CHAPTER number="(\d+)">'
+        chapters_in_context = set(re.findall(chapter_pattern, formatted_context))
+        extracted_chapters = set(str(item.get('chapter_number')) for item in page_research if item.get('chapter_number'))
+        
+        missing_chapters = chapters_in_context - extracted_chapters
+        if missing_chapters:
+            logger.warning(f"DEBUG: Chapters in context but NOT extracted: {sorted(missing_chapters)}")
+    
+    logger.info("=" * 80)
+
+
 def _generate_synthesis_response(
     query: str,
     formatted_context: str,
@@ -939,8 +986,116 @@ def _generate_synthesis_response(
         "Generating synthesis response with page-based extraction (catalog search format)"
     )
     usage_details: LlmUsageDetails = None
+    
+    # DEBUG: Log comprehensive input analysis
+    logger.info("=" * 80)
+    logger.info("DEBUG: PRE-LLM CALL ANALYSIS")
+    logger.info("=" * 80)
+    
+    # 1. Analyze formatted_context
+    logger.info(f"DEBUG: Formatted context length: {len(formatted_context)} characters")
+    logger.info(f"DEBUG: First 2000 chars of formatted_context:\n{formatted_context[:2000]}")
+    
+    # 2. Analyze chunks
+    logger.info(f"DEBUG: Total chunks being processed: {len(chunks)}")
+    
+    # 3. Count distinct pages and documents in chunks
+    distinct_pages = set()
+    distinct_docs = set()
+    distinct_chapters = set()
+    pages_per_doc = {}
+    
+    for i, chunk in enumerate(chunks):
+        filename = chunk.get("filename", "")
+        source_filename = chunk.get("source_filename", "")
+        start_page = chunk.get("chunk_start_page", "")
+        end_page = chunk.get("chunk_end_page", "")
+        chapter_num = chunk.get("chapter_number", "")
+        
+        if filename and start_page:
+            page_key = f"{filename}_page_{start_page}"
+            distinct_pages.add(page_key)
+            
+            if source_filename not in pages_per_doc:
+                pages_per_doc[source_filename] = set()
+            pages_per_doc[source_filename].add(start_page)
+        
+        if source_filename:
+            distinct_docs.add(source_filename)
+        if chapter_num:
+            distinct_chapters.add(f"Chapter_{chapter_num}")
+            
+        # Log sample chunk data (first 3 chunks)
+        if i < 3:
+            logger.info(f"DEBUG: Sample Chunk {i}:")
+            logger.info(f"  - filename: {filename}")
+            logger.info(f"  - source_filename: {source_filename}")
+            logger.info(f"  - chapter_number: {chapter_num}")
+            logger.info(f"  - start_page: {start_page}, end_page: {end_page}")
+            logger.info(f"  - start_ref: {chunk.get('chunk_start_reference', '')}")
+            logger.info(f"  - end_ref: {chunk.get('chunk_end_reference', '')}")
+            content_preview = chunk.get("chunk_content", "")[:200]
+            logger.info(f"  - content preview: {content_preview}...")
+    
+    logger.info(f"DEBUG: Distinct pages found in chunks: {len(distinct_pages)}")
+    logger.info(f"DEBUG: Distinct documents: {list(distinct_docs)}")
+    logger.info(f"DEBUG: Distinct chapters: {list(distinct_chapters)}")
+    logger.info(f"DEBUG: Pages per document:")
+    for doc, pages in pages_per_doc.items():
+        logger.info(f"  - {doc}: {sorted(pages)}")
+    
+    # 4. Analyze formatted_context for page markers
+    
+    # Count CHAPTER tags
+    chapter_pattern = r'<CHAPTER number="(\d+)">'
+    chapters_in_context = re.findall(chapter_pattern, formatted_context)
+    logger.info(f"DEBUG: CHAPTER tags found in context: {chapters_in_context}")
+    
+    # Count page markers in HTML comments
+    page_marker_pattern = r'PageNumber="(\d+)"'
+    page_markers = re.findall(page_marker_pattern, formatted_context)
+    unique_page_markers = set(page_markers)
+    logger.info(f"DEBUG: Total PageNumber markers: {len(page_markers)}, Unique: {len(unique_page_markers)}")
+    logger.info(f"DEBUG: Unique page numbers from markers: {sorted(unique_page_markers)[:20]}...")  # First 20
+    
+    # Count SECTION tags
+    section_pattern = r'<SECTION.*?type="(.*?)"'
+    sections = re.findall(section_pattern, formatted_context)
+    logger.info(f"DEBUG: SECTION tags found: {len(sections)} (full: {sections.count('full')}, partial: {sections.count('partial')})")
+    
+    # Count chunk tags
+    chunk_tag_pattern = r'<chunk>'
+    chunk_tags = re.findall(chunk_tag_pattern, formatted_context)
+    logger.info(f"DEBUG: <chunk> tags found: {len(chunk_tags)}")
+    
+    logger.info("=" * 80)
+    logger.info("DEBUG: EXPECTED EXTRACTION")
+    logger.info("=" * 80)
+    logger.info(f"DEBUG: Based on input analysis, expecting AT LEAST:")
+    logger.info(f"  - {len(distinct_pages)} distinct page findings")
+    logger.info(f"  - From {len(distinct_docs)} documents")
+    logger.info(f"  - Across {len(distinct_chapters)} chapters")
+    logger.info("=" * 80)
 
     synthesis_prompt = get_content_synthesis_prompt(query, formatted_context)
+    
+    # DEBUG: Log the actual prompt being sent
+    logger.info("=" * 80)
+    logger.info("DEBUG: PROMPT ANALYSIS")
+    logger.info("=" * 80)
+    logger.info(f"DEBUG: Synthesis prompt length: {len(synthesis_prompt)} characters")
+    
+    # Check for any limiting keywords in the prompt
+    limiting_keywords = ["first", "one", "single", "only one", "limit"]
+    for keyword in limiting_keywords:
+        if keyword in synthesis_prompt.lower():
+            count = synthesis_prompt.lower().count(keyword)
+            logger.warning(f"DEBUG: Found limiting keyword '{keyword}' {count} times in prompt")
+    
+    # Log the first part of the prompt (before context)
+    prompt_before_context = synthesis_prompt.split("<DOCUMENT>")[0] if "<DOCUMENT>" in synthesis_prompt else synthesis_prompt[:2000]
+    logger.info(f"DEBUG: Prompt instructions (before context):\n{prompt_before_context}")
+    logger.info("=" * 80)
 
     try:
         model_config = config.get_model_config(RESPONSE_MODEL_CAPABILITY)
@@ -978,9 +1133,42 @@ def _generate_synthesis_response(
         if response and hasattr(response, "choices") and response.choices:
             tool_call = response.choices[0].message.tool_calls[0]
             arguments = json.loads(tool_call.function.arguments)
-
+            
+            # DEBUG: Log raw LLM response
+            logger.info("=" * 80)
+            logger.info("DEBUG: LLM RESPONSE ANALYSIS")
+            logger.info("=" * 80)
+            logger.info(f"DEBUG: Raw arguments from LLM: {json.dumps(arguments, indent=2)[:3000]}...")  # First 3000 chars
+            
             status_summary = arguments.get("status_summary", "❌ No status")
             page_research = arguments.get("page_research", [])
+            
+            logger.info(f"DEBUG: Status summary: {status_summary}")
+            logger.info(f"DEBUG: Number of page_research items received: {len(page_research)}")
+            
+            # Log each page_research item
+            for i, page_item in enumerate(page_research[:10]):  # First 10 items
+                logger.info(f"DEBUG: Page research item {i}:")
+                logger.info(f"  - filename: {page_item.get('filename', 'MISSING')}")
+                logger.info(f"  - page_number: {page_item.get('page_number', 'MISSING')}")
+                logger.info(f"  - page_reference: {page_item.get('page_reference', 'MISSING')}")
+                logger.info(f"  - chapter_number: {page_item.get('chapter_number', 'MISSING')}")
+                logger.info(f"  - source_filename: {page_item.get('source_filename', 'MISSING')}")
+                logger.info(f"  - research_content length: {len(page_item.get('research_content', ''))}")
+                logger.info(f"  - research_content preview: {page_item.get('research_content', '')[:200]}...")
+            
+            if len(page_research) > 10:
+                logger.info(f"DEBUG: ... and {len(page_research) - 10} more page research items")
+            
+            logger.info("=" * 80)
+            
+            # Call debug analysis function to compare expected vs actual
+            _analyze_extraction_discrepancy(
+                expected_pages=len(distinct_pages),
+                actual_pages=len(page_research),
+                formatted_context=formatted_context,
+                page_research=page_research
+            )
 
             # Build structured output matching catalog search format EXACTLY
             # Format: {doc_name: {page_x: {research_content, file_link, file_name, page_number}}}
@@ -989,6 +1177,10 @@ def _generate_synthesis_response(
             # Create a map of chunks for metadata lookup using filename + page
             chunk_map = {}
             source_filename_map = {}  # Track source_filename consistency
+            
+            logger.info("=" * 80)
+            logger.info("DEBUG: BUILDING CHUNK MAP")
+            logger.info("=" * 80)
 
             for chunk in chunks:
                 filename = chunk.get("filename")
@@ -998,6 +1190,7 @@ def _generate_synthesis_response(
                 if filename and page_num:
                     key = f"{filename}_{page_num}"
                     chunk_map[key] = chunk
+                    logger.debug(f"DEBUG: Added to chunk_map: {key}")
 
                 # Track source_filename for consistency validation
                 if filename and source_fn:
@@ -1010,9 +1203,18 @@ def _generate_synthesis_response(
                             f"'{source_filename_map[filename]}' vs '{source_fn}'"
                         )
                     source_filename_map[filename] = source_fn
+            
+            logger.info(f"DEBUG: Chunk map has {len(chunk_map)} entries")
+            logger.info(f"DEBUG: Source filename map: {source_filename_map}")
+            logger.info("=" * 80)
+            logger.info("DEBUG: PROCESSING PAGE RESEARCH ITEMS")
+            logger.info("=" * 80)
 
             # Process each page research item from LLM
-            for page_item in page_research:
+            processed_count = 0
+            skipped_count = 0
+            
+            for idx, page_item in enumerate(page_research):
                 filename = page_item.get("filename")  # LLM extracts this from context
                 page_number = page_item.get("page_number")
                 page_reference = page_item.get("page_reference")  # For display
@@ -1022,15 +1224,25 @@ def _generate_synthesis_response(
                     "chapter_number"
                 )  # Extract chapter number
 
+                logger.info(f"DEBUG: Processing item {idx}: filename={filename}, page={page_number}, chapter={chapter_number}")
+                
                 if not all([filename, page_number, research_content]):
                     logger.warning(
-                        f"Skipping incomplete page item: filename={filename}, page={page_number}"
+                        f"DEBUG: SKIPPING incomplete page item {idx}: filename={filename}, page={page_number}, "
+                        f"has_content={bool(research_content)}"
                     )
+                    skipped_count += 1
                     continue
 
                 # Find corresponding chunk for additional metadata
                 chunk_key = f"{filename}_{page_number}"
+                logger.info(f"DEBUG: Looking up chunk with key: {chunk_key}")
                 chunk = chunk_map.get(chunk_key, {})
+                
+                if chunk:
+                    logger.info(f"DEBUG: Found chunk for {chunk_key}")
+                else:
+                    logger.warning(f"DEBUG: No chunk found for {chunk_key} - will use page_item data only")
 
                 # Get filepath and source_filename from chunk if available
                 filepath = chunk.get("filepath", "")
@@ -1103,6 +1315,27 @@ def _generate_synthesis_response(
                     "chapter_name": chapter_name,  # Chapter name for additional context
                     "doc_name": doc_name,  # Document name for grouping
                 }
+                
+                logger.info(f"DEBUG: SUCCESSFULLY added page to output: {doc_name}/{page_key}")
+                processed_count += 1
+            
+            logger.info("=" * 80)
+            logger.info("DEBUG: PROCESSING SUMMARY")
+            logger.info("=" * 80)
+            logger.info(f"DEBUG: Total page_research items from LLM: {len(page_research)}")
+            logger.info(f"DEBUG: Successfully processed: {processed_count}")
+            logger.info(f"DEBUG: Skipped (incomplete): {skipped_count}")
+            logger.info(f"DEBUG: Final structured_output documents: {len(structured_output)}")
+            
+            # Count total pages in final output
+            total_pages = sum(len([k for k in doc.keys() if k.startswith('page_')]) for doc in structured_output.values())
+            logger.info(f"DEBUG: Total pages in final output: {total_pages}")
+            
+            # List all doc_names and their page counts
+            for doc_name, doc_data in structured_output.items():
+                page_count = len([k for k in doc_data.keys() if k.startswith('page_')])
+                logger.info(f"DEBUG:   - {doc_name}: {page_count} pages")
+            logger.info("=" * 80)
 
             logger.info(
                 f"Built structured output from {len(page_research)} page findings for {len(structured_output)} documents"
