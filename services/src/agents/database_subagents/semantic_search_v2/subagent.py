@@ -1009,13 +1009,26 @@ def _generate_synthesis_response(
                         f"Missing source_filename for {filename}, using filename as fallback"
                     )
 
-                # Use source_filename as the document name for display (like catalog search uses document_name)
-                # This gives us the original PDF name for the document grouping
-                doc_name = source_filename
+                # Create unique document name that includes chapter info to prevent overwriting
+                # Use source_filename + chapter for uniqueness, but preserve source_filename for display
+                if chapter_number:
+                    doc_name = f"{source_filename}_Ch{chapter_number}"
+                    # Also store a display-friendly version
+                    display_name = f"{source_filename} - Chapter {chapter_number}"
+                else:
+                    # Fallback if no chapter number - use filename to ensure uniqueness
+                    doc_name = (
+                        f"{source_filename}_{filename}"
+                        if source_filename != filename
+                        else source_filename
+                    )
+                    display_name = source_filename
 
                 # Initialize document entry if needed
                 if doc_name not in structured_output:
-                    structured_output[doc_name] = {}
+                    structured_output[doc_name] = {
+                        "_display_name": display_name  # Store display name for reference
+                    }
 
                 # Create page key
                 page_key = f"page_{page_number}"

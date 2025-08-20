@@ -1412,9 +1412,16 @@ def _model_generator(
                                 )
 
                                 for doc_name, doc_data in db_research.items():
-                                    combined_research += f"## {doc_name}\n\n"
+                                    # Use display name if available, otherwise use doc_name
+                                    display_name = doc_data.get(
+                                        "_display_name", doc_name
+                                    )
+                                    combined_research += f"## {display_name}\n\n"
 
                                     for page_key, page_data in doc_data.items():
+                                        # Skip the _display_name metadata field
+                                        if page_key == "_display_name":
+                                            continue
                                         page_number = page_data.get("page_number", 0)
                                         research_content = page_data.get(
                                             "research_content", ""
