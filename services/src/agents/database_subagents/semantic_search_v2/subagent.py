@@ -349,10 +349,14 @@ def _filter_by_relevance(
     logger.info(f"Filtering {len(chunks)} chunks by relevance")
     usage_details: LlmUsageDetails = None
 
-    # TEMPORARY: Option to bypass filter for debugging
+    # Debug option to bypass filter - should only be used in development
+    # Production deployments should never set this environment variable
     BYPASS_FILTER = os.getenv("BYPASS_RELEVANCE_FILTER", "false").lower() == "true"
     if BYPASS_FILTER:
-        logger.warning("BYPASSING relevance filter - returning all chunks!")
+        logger.error(
+            "WARNING: BYPASS_RELEVANCE_FILTER is enabled - this should NOT be used in production!"
+        )
+        logger.warning("Relevance filter is BYPASSED - returning all chunks unfiltered")
         return chunks, usage_details
 
     if not chunks:
@@ -688,7 +692,9 @@ def _fill_section_gaps(cursor, chunks: List[Dict[str, Any]]) -> List[Dict[str, A
             gap = sorted_sections[i + 1] - sorted_sections[i] - 1
 
             if 0 < gap <= GAP_FILL_MAX_SECTIONS:
-                # Fill the gap
+                # Fill the gap - verify range is correct
+                # range(start, stop) goes from start to stop-1, which is correct here
+                # because we want sections between i and i+1 (exclusive)
                 for missing_section in range(
                     sorted_sections[i] + 1, sorted_sections[i + 1]
                 ):
@@ -938,55 +944,71 @@ def _format_context_with_blocks(chunks: List[Dict[str, Any]]) -> str:
     return formatted_context
 
 
-# Note: _build_reference_index function removed - no longer needed
 # The LLM now extracts page-based research directly in _generate_synthesis_response
 # This matches the catalog search approach where the LLM determines what to reference
 
 
 def _analyze_extraction_discrepancy(
-    expected_pages: int, 
+    expected_pages: int,
     actual_pages: int,
     formatted_context: str,
-    page_research: List[Dict[str, Any]]
+    page_research: List[Dict[str, Any]],
 ) -> None:
     """Debug function to analyze why we're not extracting all expected pages."""
-    logger.info("=" * 80)
-    logger.info("DEBUG: EXTRACTION DISCREPANCY ANALYSIS")
-    logger.info("=" * 80)
-    logger.info(f"DEBUG: Expected at least {expected_pages} pages, but got {actual_pages}")
-    
+    logger.debug("=" * 80)
+    logger.debug("EXTRACTION DISCREPANCY ANALYSIS")
+    logger.debug("=" * 80)
+    logger.debug(f"Expected at least {expected_pages} pages, but got {actual_pages}")
+
     if actual_pages < expected_pages:
-        logger.warning(f"DEBUG: MISSING {expected_pages - actual_pages} pages!")
-        
+        logger.debug(f"MISSING {expected_pages - actual_pages} pages!")
+
         # Check if context might be truncated
         if "..." in formatted_context[-100:]:
-            logger.warning("DEBUG: Context might be truncated (ends with '...')")
-        
+            logger.debug("Context might be truncated (ends with '...')")
+
         # Check for specific patterns that might limit extraction
-        
+
         # Check if prompt mentions any limits
-        if "first" in formatted_context[:1000].lower() or "one" in formatted_context[:1000].lower():
-            logger.warning("DEBUG: Context or prompt might contain limiting words like 'first' or 'one'")
-        
+        if (
+            "first" in formatted_context[:1000].lower()
+            or "one" in formatted_context[:1000].lower()
+        ):
+            logger.debug(
+                "Context or prompt might contain limiting words like 'first' or 'one'"
+            )
+
         # Count actual page markers vs extracted
         page_markers = re.findall(r'PageNumber="(\d+)"', formatted_context)
         unique_markers = set(page_markers)
-        extracted_pages = set(str(item.get('page_number')) for item in page_research if item.get('page_number'))
-        
+        extracted_pages = set(
+            str(item.get("page_number"))
+            for item in page_research
+            if item.get("page_number")
+        )
+
         missing_pages = unique_markers - extracted_pages
         if missing_pages:
-            logger.warning(f"DEBUG: Pages in context but NOT extracted: {sorted(missing_pages)[:20]}")
-        
+            logger.debug(
+                f"Pages in context but NOT extracted: {sorted(missing_pages)[:20]}"
+            )
+
         # Check if all chapters are represented
         chapter_pattern = r'<CHAPTER number="(\d+)">'
         chapters_in_context = set(re.findall(chapter_pattern, formatted_context))
-        extracted_chapters = set(str(item.get('chapter_number')) for item in page_research if item.get('chapter_number'))
-        
+        extracted_chapters = set(
+            str(item.get("chapter_number"))
+            for item in page_research
+            if item.get("chapter_number")
+        )
+
         missing_chapters = chapters_in_context - extracted_chapters
         if missing_chapters:
-            logger.warning(f"DEBUG: Chapters in context but NOT extracted: {sorted(missing_chapters)}")
-    
-    logger.info("=" * 80)
+            logger.debug(
+                f"Chapters in context but NOT extracted: {sorted(missing_chapters)}"
+            )
+
+    logger.debug("=" * 80)
 
 
 def _generate_synthesis_response(
@@ -1004,116 +1026,136 @@ def _generate_synthesis_response(
         "Generating synthesis response with page-based extraction (catalog search format)"
     )
     usage_details: LlmUsageDetails = None
-    
-    # DEBUG: Log comprehensive input analysis
-    logger.info("=" * 80)
-    logger.info("DEBUG: PRE-LLM CALL ANALYSIS")
-    logger.info("=" * 80)
-    
-    # 1. Analyze formatted_context
-    logger.info(f"DEBUG: Formatted context length: {len(formatted_context)} characters")
-    logger.info(f"DEBUG: First 2000 chars of formatted_context:\n{formatted_context[:2000]}")
-    
+
+    # DEBUG: Log comprehensive input analysis (only in debug mode)
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug("=" * 80)
+        logger.debug("DEBUG: PRE-LLM CALL ANALYSIS")
+        logger.debug("=" * 80)
+
+        # 1. Analyze formatted_context
+        logger.debug(
+            f"DEBUG: Formatted context length: {len(formatted_context)} characters"
+        )
+        logger.debug(
+            f"DEBUG: First 2000 chars of formatted_context:\n{formatted_context[:2000]}"
+        )
+
     # 2. Analyze chunks
-    logger.info(f"DEBUG: Total chunks being processed: {len(chunks)}")
-    
+    logger.info(f"Total chunks being processed: {len(chunks)}")
+
     # 3. Count distinct pages and documents in chunks
     distinct_pages = set()
     distinct_docs = set()
     distinct_chapters = set()
     pages_per_doc = {}
-    
+
     for i, chunk in enumerate(chunks):
         filename = chunk.get("filename", "")
         source_filename = chunk.get("source_filename", "")
         start_page = chunk.get("chunk_start_page", "")
         end_page = chunk.get("chunk_end_page", "")
         chapter_num = chunk.get("chapter_number", "")
-        
+
         if filename and start_page:
             page_key = f"{filename}_page_{start_page}"
             distinct_pages.add(page_key)
-            
+
             if source_filename not in pages_per_doc:
                 pages_per_doc[source_filename] = set()
             pages_per_doc[source_filename].add(start_page)
-        
+
         if source_filename:
             distinct_docs.add(source_filename)
         if chapter_num:
             distinct_chapters.add(f"Chapter_{chapter_num}")
-            
-        # Log sample chunk data (first 3 chunks)
-        if i < 3:
-            logger.info(f"DEBUG: Sample Chunk {i}:")
-            logger.info(f"  - filename: {filename}")
-            logger.info(f"  - source_filename: {source_filename}")
-            logger.info(f"  - chapter_number: {chapter_num}")
-            logger.info(f"  - start_page: {start_page}, end_page: {end_page}")
-            logger.info(f"  - start_ref: {chunk.get('chunk_start_reference', '')}")
-            logger.info(f"  - end_ref: {chunk.get('chunk_end_reference', '')}")
+
+        # Log sample chunk data (first 3 chunks) only in debug mode
+        if i < 3 and logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f"Sample Chunk {i}:")
+            logger.debug(f"  - filename: {filename}")
+            logger.debug(f"  - source_filename: {source_filename}")
+            logger.debug(f"  - chapter_number: {chapter_num}")
+            logger.debug(f"  - start_page: {start_page}, end_page: {end_page}")
+            logger.debug(f"  - start_ref: {chunk.get('chunk_start_reference', '')}")
+            logger.debug(f"  - end_ref: {chunk.get('chunk_end_reference', '')}")
             content_preview = chunk.get("chunk_content", "")[:200]
-            logger.info(f"  - content preview: {content_preview}...")
-    
-    logger.info(f"DEBUG: Distinct pages found in chunks: {len(distinct_pages)}")
-    logger.info(f"DEBUG: Distinct documents: {list(distinct_docs)}")
-    logger.info(f"DEBUG: Distinct chapters: {list(distinct_chapters)}")
-    logger.info(f"DEBUG: Pages per document:")
-    for doc, pages in pages_per_doc.items():
-        logger.info(f"  - {doc}: {sorted(pages)}")
-    
-    # 4. Analyze formatted_context for page markers
-    
-    # Count CHAPTER tags
-    chapter_pattern = r'<CHAPTER number="(\d+)">'
-    chapters_in_context = re.findall(chapter_pattern, formatted_context)
-    logger.info(f"DEBUG: CHAPTER tags found in context: {chapters_in_context}")
-    
-    # Count page markers in HTML comments
-    page_marker_pattern = r'PageNumber="(\d+)"'
-    page_markers = re.findall(page_marker_pattern, formatted_context)
-    unique_page_markers = set(page_markers)
-    logger.info(f"DEBUG: Total PageNumber markers: {len(page_markers)}, Unique: {len(unique_page_markers)}")
-    logger.info(f"DEBUG: Unique page numbers from markers: {sorted(unique_page_markers)[:20]}...")  # First 20
-    
-    # Count SECTION tags
-    section_pattern = r'<SECTION.*?type="(.*?)"'
-    sections = re.findall(section_pattern, formatted_context)
-    logger.info(f"DEBUG: SECTION tags found: {len(sections)} (full: {sections.count('full')}, partial: {sections.count('partial')})")
-    
-    # Count chunk tags
-    chunk_tag_pattern = r'<chunk>'
-    chunk_tags = re.findall(chunk_tag_pattern, formatted_context)
-    logger.info(f"DEBUG: <chunk> tags found: {len(chunk_tags)}")
-    
-    logger.info("=" * 80)
-    logger.info("DEBUG: EXPECTED EXTRACTION")
-    logger.info("=" * 80)
-    logger.info(f"DEBUG: Based on input analysis, expecting AT LEAST:")
-    logger.info(f"  - {len(distinct_pages)} distinct page findings")
-    logger.info(f"  - From {len(distinct_docs)} documents")
-    logger.info(f"  - Across {len(distinct_chapters)} chapters")
-    logger.info("=" * 80)
+            logger.debug(f"  - content preview: {content_preview}...")
+
+    logger.info(f"Distinct pages found in chunks: {len(distinct_pages)}")
+    logger.info(f"Distinct documents: {list(distinct_docs)}")
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(f"Distinct chapters: {list(distinct_chapters)}")
+        logger.debug(f"Pages per document:")
+        for doc, pages in pages_per_doc.items():
+            logger.debug(f"  - {doc}: {sorted(pages)}")
+
+    # 4. Analyze formatted_context for page markers (only in debug mode)
+    if logger.isEnabledFor(logging.DEBUG):
+        # Count CHAPTER tags
+        chapter_pattern = r'<CHAPTER number="(\d+)">'
+        chapters_in_context = re.findall(chapter_pattern, formatted_context)
+        logger.debug(f"CHAPTER tags found in context: {chapters_in_context}")
+
+        # Count page markers in HTML comments
+        page_marker_pattern = r'PageNumber="(\d+)"'
+        page_markers = re.findall(page_marker_pattern, formatted_context)
+        unique_page_markers = set(page_markers)
+        logger.debug(
+            f"Total PageNumber markers: {len(page_markers)}, Unique: {len(unique_page_markers)}"
+        )
+        logger.debug(
+            f"Unique page numbers from markers: {sorted(unique_page_markers)[:20]}..."
+        )  # First 20
+
+        # Count SECTION tags
+        section_pattern = r'<SECTION.*?type="(.*?)"'
+        sections = re.findall(section_pattern, formatted_context)
+        logger.debug(
+            f"SECTION tags found: {len(sections)} (full: {sections.count('full')}, partial: {sections.count('partial')})"
+        )
+
+        # Count chunk tags
+        chunk_tag_pattern = r"<chunk>"
+        chunk_tags = re.findall(chunk_tag_pattern, formatted_context)
+        logger.debug(f"<chunk> tags found: {len(chunk_tags)}")
+
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug("=" * 80)
+        logger.debug("EXPECTED EXTRACTION")
+        logger.debug("=" * 80)
+        logger.debug(f"Based on input analysis, expecting AT LEAST:")
+        logger.debug(f"  - {len(distinct_pages)} distinct page findings")
+        logger.debug(f"  - From {len(distinct_docs)} documents")
+        logger.debug(f"  - Across {len(distinct_chapters)} chapters")
+        logger.debug("=" * 80)
 
     synthesis_prompt = get_content_synthesis_prompt(query, formatted_context)
-    
-    # DEBUG: Log the actual prompt being sent
-    logger.info("=" * 80)
-    logger.info("DEBUG: PROMPT ANALYSIS")
-    logger.info("=" * 80)
-    logger.info(f"DEBUG: Synthesis prompt length: {len(synthesis_prompt)} characters")
-    
-    # Check for any limiting keywords in the prompt
-    limiting_keywords = ["first", "one", "single", "only one", "limit"]
-    for keyword in limiting_keywords:
-        if keyword in synthesis_prompt.lower():
-            count = synthesis_prompt.lower().count(keyword)
-            logger.warning(f"DEBUG: Found limiting keyword '{keyword}' {count} times in prompt")
-    
-    # Log the first part of the prompt (before context)
-    prompt_before_context = synthesis_prompt.split("<DOCUMENT>")[0] if "<DOCUMENT>" in synthesis_prompt else synthesis_prompt[:2000]
-    logger.info(f"DEBUG: Prompt instructions (before context):\n{prompt_before_context}")
-    logger.info("=" * 80)
+
+    # Log prompt analysis only in debug mode
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug("=" * 80)
+        logger.debug("PROMPT ANALYSIS")
+        logger.debug("=" * 80)
+        logger.debug(f"Synthesis prompt length: {len(synthesis_prompt)} characters")
+
+        # Check for any limiting keywords in the prompt
+        limiting_keywords = ["first", "one", "single", "only one", "limit"]
+        for keyword in limiting_keywords:
+            if keyword in synthesis_prompt.lower():
+                count = synthesis_prompt.lower().count(keyword)
+                logger.debug(
+                    f"Found limiting keyword '{keyword}' {count} times in prompt"
+                )
+
+        # Log the first part of the prompt (before context)
+        prompt_before_context = (
+            synthesis_prompt.split("<DOCUMENT>")[0]
+            if "<DOCUMENT>" in synthesis_prompt
+            else synthesis_prompt[:2000]
+        )
+        logger.debug(f"Prompt instructions (before context):\n{prompt_before_context}")
+        logger.debug("=" * 80)
 
     try:
         model_config = config.get_model_config(RESPONSE_MODEL_CAPABILITY)
@@ -1156,64 +1198,93 @@ def _generate_synthesis_response(
         if response and hasattr(response, "choices") and response.choices:
             tool_call = response.choices[0].message.tool_calls[0]
             arguments = json.loads(tool_call.function.arguments)
-            
-            # DEBUG: Log raw LLM response
-            logger.info("=" * 80)
-            logger.info("DEBUG: LLM RESPONSE ANALYSIS")
-            logger.info("=" * 80)
-            logger.info(f"DEBUG: Raw arguments from LLM: {json.dumps(arguments, indent=2)[:3000]}...")  # First 3000 chars
-            
+
+            # Log raw LLM response only in debug mode
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug("=" * 80)
+                logger.debug("LLM RESPONSE ANALYSIS")
+                logger.debug("=" * 80)
+                logger.debug(
+                    f"Raw arguments from LLM: {json.dumps(arguments, indent=2)[:3000]}..."
+                )  # First 3000 chars
+
             status_summary = arguments.get("status_summary", "❌ No status")
             page_research = arguments.get("page_research", [])
-            
-            logger.info(f"DEBUG: Status summary: {status_summary}")
-            logger.info(f"DEBUG: Number of page_research items received: {len(page_research)}")
-            
-            # Log each page_research item
-            for i, page_item in enumerate(page_research[:10]):  # First 10 items
-                logger.info(f"DEBUG: Page research item {i}:")
-                logger.info(f"  - filename: {page_item.get('filename', 'MISSING')}")
-                logger.info(f"  - page_number: {page_item.get('page_number', 'MISSING')}")
-                logger.info(f"  - page_reference: {page_item.get('page_reference', 'MISSING')}")
-                logger.info(f"  - chapter_number: {page_item.get('chapter_number', 'MISSING')}")
-                logger.info(f"  - source_filename: {page_item.get('source_filename', 'MISSING')}")
-                logger.info(f"  - research_content length: {len(page_item.get('research_content', ''))}")
-                logger.info(f"  - research_content preview: {page_item.get('research_content', '')[:200]}...")
-            
-            if len(page_research) > 10:
-                logger.info(f"DEBUG: ... and {len(page_research) - 10} more page research items")
-            
-            logger.info("=" * 80)
-            
-            # Call debug analysis function to compare expected vs actual
-            _analyze_extraction_discrepancy(
-                expected_pages=len(distinct_pages),
-                actual_pages=len(page_research),
-                formatted_context=formatted_context,
-                page_research=page_research
-            )
+
+            logger.info(f"Status summary: {status_summary}")
+            logger.info(f"Number of page_research items received: {len(page_research)}")
+
+            # Log each page_research item only in debug mode
+            if logger.isEnabledFor(logging.DEBUG):
+                for i, page_item in enumerate(page_research[:10]):  # First 10 items
+                    logger.debug(f"Page research item {i}:")
+                    logger.debug(
+                        f"  - filename: {page_item.get('filename', 'MISSING')}"
+                    )
+                    logger.debug(
+                        f"  - page_number: {page_item.get('page_number', 'MISSING')}"
+                    )
+                    logger.debug(
+                        f"  - page_reference: {page_item.get('page_reference', 'MISSING')}"
+                    )
+                    logger.debug(
+                        f"  - chapter_number: {page_item.get('chapter_number', 'MISSING')}"
+                    )
+                    logger.debug(
+                        f"  - source_filename: {page_item.get('source_filename', 'MISSING')}"
+                    )
+                    logger.debug(
+                        f"  - research_content length: {len(page_item.get('research_content', ''))}"
+                    )
+                    logger.debug(
+                        f"  - research_content preview: {page_item.get('research_content', '')[:200]}..."
+                    )
+
+                if len(page_research) > 10:
+                    logger.debug(
+                        f"... and {len(page_research) - 10} more page research items"
+                    )
+
+                logger.debug("=" * 80)
+
+            # Call debug analysis function only in debug mode
+            if logger.isEnabledFor(logging.DEBUG):
+                _analyze_extraction_discrepancy(
+                    expected_pages=len(distinct_pages),
+                    actual_pages=len(page_research),
+                    formatted_context=formatted_context,
+                    page_research=page_research,
+                )
 
             # Build structured output matching catalog search format EXACTLY
             # Format: {doc_name: {page_x: {research_content, file_link, file_name, page_number}}}
             structured_output = {}
 
             # Create a map of chunks for metadata lookup using filename + page
-            chunk_map = {}
+            # Fix: Use defaultdict to handle multiple chunks per page
+            from collections import defaultdict
+
+            chunk_map = defaultdict(list)  # Can store multiple chunks per page
             source_filename_map = {}  # Track source_filename consistency
-            
-            logger.info("=" * 80)
-            logger.info("DEBUG: BUILDING CHUNK MAP")
-            logger.info("=" * 80)
+
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug("=" * 80)
+                logger.debug("BUILDING CHUNK MAP")
+                logger.debug("=" * 80)
 
             for chunk in chunks:
                 filename = chunk.get("filename")
                 page_num = chunk.get("chunk_start_page")
                 source_fn = chunk.get("source_filename")
+                chunk_num = chunk.get("chunk_number")
 
                 if filename and page_num:
                     key = f"{filename}_{page_num}"
-                    chunk_map[key] = chunk
-                    logger.debug(f"DEBUG: Added to chunk_map: {key}")
+                    # Store all chunks for this page (fixes collision issue)
+                    chunk_map[key].append(chunk)
+                    logger.debug(
+                        f"DEBUG: Added chunk {chunk_num} to chunk_map key: {key}"
+                    )
 
                 # Track source_filename for consistency validation
                 if filename and source_fn:
@@ -1226,17 +1297,18 @@ def _generate_synthesis_response(
                             f"'{source_filename_map[filename]}' vs '{source_fn}'"
                         )
                     source_filename_map[filename] = source_fn
-            
-            logger.info(f"DEBUG: Chunk map has {len(chunk_map)} entries")
-            logger.info(f"DEBUG: Source filename map: {source_filename_map}")
-            logger.info("=" * 80)
-            logger.info("DEBUG: PROCESSING PAGE RESEARCH ITEMS")
-            logger.info("=" * 80)
+
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug(f"Chunk map has {len(chunk_map)} entries")
+                logger.debug(f"Source filename map: {source_filename_map}")
+                logger.debug("=" * 80)
+                logger.debug("PROCESSING PAGE RESEARCH ITEMS")
+                logger.debug("=" * 80)
 
             # Process each page research item from LLM
             processed_count = 0
             skipped_count = 0
-            
+
             for idx, page_item in enumerate(page_research):
                 filename = page_item.get("filename")  # LLM extracts this from context
                 page_number = page_item.get("page_number")
@@ -1246,10 +1318,14 @@ def _generate_synthesis_response(
                 chapter_number = page_item.get(
                     "chapter_number"
                 )  # Extract chapter number
-                
-                logger.info(f"DEBUG: Processing item {idx}: filename={filename}, page={page_number} (type: {type(page_number)}), chapter={chapter_number}")
-                
-                # Check for required fields - note: page_number can be 0 which is falsy but valid
+
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug(
+                        f"Processing item {idx}: filename={filename}, page={page_number} (type: {type(page_number)}), chapter={chapter_number}"
+                    )
+
+                # Check for required fields - page_number can be 0 which is valid
+                # Fix: Properly handle page_number=0 as valid
                 if not filename or page_number is None or not research_content:
                     logger.warning(
                         f"DEBUG: SKIPPING incomplete page item {idx}: filename={filename}, page={page_number}, "
@@ -1258,23 +1334,59 @@ def _generate_synthesis_response(
                     skipped_count += 1
                     continue
 
+                # Type safety: Ensure page_number is an integer
+                try:
+                    page_number = int(page_number) if page_number is not None else None
+                except (ValueError, TypeError):
+                    logger.warning(
+                        f"Invalid page_number type: {type(page_number)}, value: {page_number}"
+                    )
+                    skipped_count += 1
+                    continue
+
                 # Find corresponding chunk for additional metadata
                 chunk_key = f"{filename}_{page_number}"
-                logger.info(f"DEBUG: Looking up chunk with key: {chunk_key}")
-                chunk = chunk_map.get(chunk_key, {})
-                
-                if chunk:
-                    logger.info(f"DEBUG: Found chunk for {chunk_key}")
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug(f"Looking up chunk with key: {chunk_key}")
+                chunks_for_page = chunk_map.get(chunk_key, [])
+
+                # Handle multiple chunks per page - use first one or find best match
+                chunk = {}
+                if chunks_for_page:
+                    if len(chunks_for_page) == 1:
+                        chunk = chunks_for_page[0]
+                        if logger.isEnabledFor(logging.DEBUG):
+                            logger.debug(f"Found single chunk for {chunk_key}")
+                    else:
+                        # Multiple chunks on same page - try to find best match
+                        # For now, use first chunk, but could enhance with content matching
+                        chunk = chunks_for_page[0]
+                        if logger.isEnabledFor(logging.DEBUG):
+                            logger.debug(
+                                f"Found {len(chunks_for_page)} chunks for {chunk_key}, using first"
+                            )
                 else:
-                    logger.warning(f"DEBUG: No chunk found for {chunk_key} - will use page_item data only")
+                    if logger.isEnabledFor(logging.DEBUG):
+                        logger.debug(
+                            f"No chunk found for {chunk_key} - will use page_item data only"
+                        )
 
                 # Get filepath and source_filename from chunk if available
                 filepath = chunk.get("filepath", "")
                 source_filename = chunk.get("source_filename", "")
 
-                # Get chapter_number from chunk if not provided by LLM
+                # Type safety: Ensure chapter_number is an integer if present
                 if not chapter_number:
                     chapter_number = chunk.get("chapter_number")
+
+                if chapter_number is not None:
+                    try:
+                        chapter_number = int(chapter_number)
+                    except (ValueError, TypeError):
+                        logger.warning(
+                            f"Invalid chapter_number type: {type(chapter_number)}, value: {chapter_number}"
+                        )
+                        chapter_number = None
 
                 # Use consistent source_filename from map if available
                 if filename in source_filename_map:
@@ -1283,13 +1395,17 @@ def _generate_synthesis_response(
                         f"Using consistent source_filename '{source_filename}' for {filename}"
                     )
 
-                # If no source_filename, try to derive from filename
+                # Validate source_filename exists, log error if using fallback
                 if not source_filename:
-                    # Use filename without chapter prefix as fallback
-                    source_filename = filename
-                    logger.warning(
-                        f"Missing source_filename for {filename}, using filename as fallback"
-                    )
+                    # Check if it exists in the original page_item from LLM
+                    source_filename = page_item.get("source_filename", "")
+                    if not source_filename:
+                        # Last resort: use filename as fallback but log as error
+                        source_filename = filename
+                        logger.error(
+                            f"CRITICAL: Missing source_filename for {filename}, using filename as fallback. "
+                            f"This may cause incorrect document names in display!"
+                        )
 
                 # Create unique document name that includes chapter info to prevent overwriting
                 # Use source_filename + chapter for uniqueness, but preserve source_filename for display
@@ -1314,59 +1430,85 @@ def _generate_synthesis_response(
 
                 # Log warning if page_number is 0 (this means LLM extracted it wrong)
                 if page_number == 0:
-                    logger.warning(f"DEBUG: LLM extracted page_number=0 for {filename}, this is likely an error in extraction")
-                
+                    logger.warning(
+                        f"DEBUG: LLM extracted page_number=0 for {filename}, this is likely an error in extraction"
+                    )
+
                 # Create page key
                 page_key = f"page_{page_number}"
 
-                # Build full S3 link from filepath or use filename as fallback
-                if filepath:
-                    file_link = filepath  # Use full filepath from database
-                else:
+                # Build S3 link consistently - use helper function approach
+                def _build_s3_link(filepath: str, filename: str) -> str:
+                    """Build S3 link consistently across all subagents."""
+                    if filepath:
+                        return filepath  # Use full filepath from database
                     # Fallback to constructing from config S3_BASE_PATH
-                    s3_base = (
-                        getattr(config, "S3_BASE_PATH", "")
-                        or "https://s3.amazonaws.com/your-bucket/"
-                    )
-                    file_link = f"{s3_base}{filename}" if s3_base else filename
+                    s3_base = getattr(config, "S3_BASE_PATH", "")
+                    if not s3_base:
+                        logger.warning("S3_BASE_PATH not configured, using default")
+                        s3_base = "https://s3.amazonaws.com/your-bucket/"
+                    return f"{s3_base}{filename}" if filename else ""
+
+                file_link = _build_s3_link(filepath, filename)
+
+                # Type safety: Ensure page_reference is a string
+                if page_reference is not None:
+                    page_reference = str(page_reference)
+                else:
+                    # Use string version of page_number as fallback
+                    page_reference = str(page_number) if page_number is not None else ""
 
                 # Store in format compatible with model.py
                 structured_output[doc_name][page_key] = {
                     "research_content": research_content,
                     "file_link": file_link,  # Full S3 link to chapter PDF
                     "file_name": filename,  # Chapter PDF filename
-                    "page": page_number,  # Changed from page_number to page for model.py compatibility
-                    "page_reference": page_reference
-                    or str(page_number),  # For display text, fallback if missing
-                    "chapter_number": chapter_number,  # For display in hyperlink
+                    "page": page_number,  # For model.py compatibility (expects 'page' not 'page_number')
+                    "page_reference": page_reference,  # String for display text
+                    "chapter_number": chapter_number,  # Integer for display in hyperlink
                     "source_filename": source_filename,  # Original document name for display
                     "chapter_name": chapter_name,  # Chapter name for additional context
                     "doc_name": doc_name,  # Document name for grouping
                 }
-                
-                logger.info(
-                    f"DEBUG: SUCCESSFULLY added page to output: {doc_name}/{page_key} - "
-                    f"page={page_number}, page_reference={page_reference}"
-                )
+
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug(
+                        f"SUCCESSFULLY added page to output: {doc_name}/{page_key} - "
+                        f"page={page_number}, page_reference={page_reference}"
+                    )
                 processed_count += 1
-            
-            logger.info("=" * 80)
-            logger.info("DEBUG: PROCESSING SUMMARY")
-            logger.info("=" * 80)
-            logger.info(f"DEBUG: Total page_research items from LLM: {len(page_research)}")
-            logger.info(f"DEBUG: Successfully processed: {processed_count}")
-            logger.info(f"DEBUG: Skipped (incomplete): {skipped_count}")
-            logger.info(f"DEBUG: Final structured_output documents: {len(structured_output)}")
-            
-            # Count total pages in final output
-            total_pages = sum(len([k for k in doc.keys() if k.startswith('page_')]) for doc in structured_output.values())
-            logger.info(f"DEBUG: Total pages in final output: {total_pages}")
-            
-            # List all doc_names and their page counts
-            for doc_name, doc_data in structured_output.items():
-                page_count = len([k for k in doc_data.keys() if k.startswith('page_')])
-                logger.info(f"DEBUG:   - {doc_name}: {page_count} pages")
-            logger.info("=" * 80)
+
+            logger.info(
+                f"Processing summary: {len(page_research)} items from LLM, {processed_count} processed, {skipped_count} skipped"
+            )
+
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug("=" * 80)
+                logger.debug("PROCESSING SUMMARY")
+                logger.debug("=" * 80)
+                logger.debug(
+                    f"Total page_research items from LLM: {len(page_research)}"
+                )
+                logger.debug(f"Successfully processed: {processed_count}")
+                logger.debug(f"Skipped (incomplete): {skipped_count}")
+                logger.debug(
+                    f"Final structured_output documents: {len(structured_output)}"
+                )
+
+                # Count total pages in final output
+                total_pages = sum(
+                    len([k for k in doc.keys() if k.startswith("page_")])
+                    for doc in structured_output.values()
+                )
+                logger.debug(f"Total pages in final output: {total_pages}")
+
+                # List all doc_names and their page counts
+                for doc_name, doc_data in structured_output.items():
+                    page_count = len(
+                        [k for k in doc_data.keys() if k.startswith("page_")]
+                    )
+                    logger.debug(f"  - {doc_name}: {page_count} pages")
+                logger.debug("=" * 80)
 
             logger.info(
                 f"Built structured output from {len(page_research)} page findings for {len(structured_output)} documents"
@@ -1377,6 +1519,10 @@ def _generate_synthesis_response(
 
     except Exception as e:
         logger.error(f"Synthesis generation failed: {e}", exc_info=True)
+        # Return partial results if we have any structured output
+        if "structured_output" in locals() and structured_output:
+            logger.warning("Returning partial results despite synthesis error")
+            return structured_output, usage_details
         return {}, usage_details
 
 
@@ -1413,12 +1559,32 @@ def query_database_sync(
 
     conn = None
     cursor = None
+    max_retries = 3
+    retry_delay = 1.0
+
+    # Add connection retry logic
+    for attempt in range(max_retries):
+        try:
+            conn = connect_to_db()
+            if conn:
+                break
+            logger.warning(
+                f"Database connection attempt {attempt + 1} failed, retrying..."
+            )
+            time.sleep(retry_delay)
+        except Exception as e:
+            logger.error(f"Database connection attempt {attempt + 1} error: {e}")
+            if attempt < max_retries - 1:
+                time.sleep(retry_delay)
+            else:
+                raise ConnectionError(
+                    f"Failed to connect to database after {max_retries} attempts"
+                )
+
+    if not conn:
+        raise ConnectionError("Failed to connect to database")
 
     try:
-        # Connect to database
-        conn = connect_to_db()
-        if not conn:
-            raise ConnectionError("Failed to connect to database")
 
         register_vector(conn)
         cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
