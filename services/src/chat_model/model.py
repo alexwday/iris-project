@@ -1391,14 +1391,20 @@ def _model_generator(
                                             isinstance(page_data, dict)
                                             and "research_content" in page_data
                                         ):
+                                            # semantic_search_v2 stores it as "page" not "page_number"
                                             page_number = page_data.get(
-                                                "page_number", 0
+                                                "page", page_data.get("page_number", 0)
                                             )
                                             research_content = page_data.get(
                                                 "research_content", ""
                                             )
                                             file_link = page_data.get("file_link", "")
                                             file_name = page_data.get("file_name", "")
+                                            
+                                            # Get additional fields from semantic_search_v2
+                                            page_reference = page_data.get("page_reference", str(page_number))
+                                            chapter_number = page_data.get("chapter_number", "")
+                                            source_filename = page_data.get("source_filename", doc_name)
 
                                             # Assign REF number
                                             ref_id = str(ref_counter)
@@ -1425,7 +1431,10 @@ def _model_generator(
                                                 "doc_name": doc_name,
                                                 "file_link": file_link,
                                                 "file_name": file_name,
-                                                "page": page_number,
+                                                "page": page_number,  # For PDF navigation
+                                                "page_reference": page_reference,  # For display text
+                                                "chapter_number": chapter_number,
+                                                "source_filename": source_filename,
                                                 "highlight_text": "",  # Empty as requested
                                                 "source_db": db_name,
                                             }
