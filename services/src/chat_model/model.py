@@ -564,7 +564,7 @@ def _process_reference_buffer(
                         link_text = f"📄 {source_filename}, Pg. {page_reference}"
                     else:
                         # No valid page_reference, just show source
-                        link_text = f"📄 {source_filename}"
+                        link_text = f"📄 {source_filename}, Pg. {page}"
                 href = f'<a href=\'javascript:window.maven.openPdf("{s3_url}", {page}, "{highlight_text}")\'>{link_text}</a>'
 
                 replacement = f" {href} "
