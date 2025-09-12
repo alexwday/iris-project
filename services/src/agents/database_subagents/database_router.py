@@ -60,6 +60,7 @@ INTERNAL_DATABASES = {
     "internal_memos": "internal_memos",
     "internal_process_and_controls": "internal_process_and_controls",
     "internal_wiki": "internal_wiki",
+    "internal_sab_99": "internal_sab_99",
 }
 
 # Define mapping of external databases to their document configurations
