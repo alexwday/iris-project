@@ -231,16 +231,24 @@ def fetch_catalog_with_similarity_filter(
     return catalog_records
 
 
-def load_catalog_selection_config():
+def load_catalog_selection_config(scope: str = "research"):
     """
     Load catalog selection configuration from YAML file.
+
+    Args:
+        scope: The query scope ('metadata' or 'research')
 
     Returns:
         dict: Configuration with resolved system prompt and settings
     """
     try:
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        yaml_path = os.path.join(current_dir, "catalog_selection_prompt.yaml")
+        # NEW: Use different YAML file for metadata scope
+        if scope == "metadata":
+            yaml_filename = "catalog_selection_prompt_metadata.yaml"
+        else:
+            yaml_filename = "catalog_selection_prompt.yaml"
+        yaml_path = os.path.join(current_dir, yaml_filename)
 
         with open(yaml_path, "r", encoding="utf-8") as f:
             yaml_config = yaml.safe_load(f)
@@ -249,7 +257,7 @@ def load_catalog_selection_config():
         system_prompt = yaml_config.get("system_prompt", "")
         if not system_prompt:
             raise Exception(
-                "No system_prompt found in catalog selection YAML configuration"
+                f"No system_prompt found in catalog selection YAML configuration ({yaml_filename})"
             )
 
         # No context replacement needed for catalog selection (minimal context)
@@ -289,18 +297,20 @@ def load_content_synthesis_config():
         raise
 
 
-def get_catalog_selection_prompt(query: str, formatted_catalog: str) -> str:
+def get_catalog_selection_prompt(query: str, formatted_catalog: str, scope: str = "research") -> str:
     """
     Generate a prompt for selecting relevant documents from an internal catalog using YAML config.
 
     Args:
         query (str): The research statement (query)
         formatted_catalog (str): The formatted catalog of internal documents
+        scope (str): The query scope ('metadata' or 'research')
 
     Returns:
         str: The formatted prompt for the LLM
     """
-    config = load_catalog_selection_config()
+    # NEW: Pass scope to load appropriate configuration
+    config = load_catalog_selection_config(scope)
     system_prompt = config.get("system_prompt", "")
 
     # Replace template variables
@@ -705,9 +715,10 @@ def select_relevant_documents(
     """
     logger.info(f"Selecting relevant documents from {database_name} catalog")
     formatted_catalog = format_catalog_for_llm(catalog, scope=scope)
+    # NEW: Pass scope parameter to get appropriate prompt for metadata vs research
     selection_prompt = get_catalog_selection_prompt(
-        query, formatted_catalog
-    )  # Assumes this prompt asks for JSON list
+        query, formatted_catalog, scope
+    )  # Pass scope to get appropriate prompt
 
     try:
         logger.info(
@@ -1144,11 +1155,13 @@ def query_database_sync(
         # Use new similarity filtering function if research_statement provided
         if research_statement:
             logger.info(f"Using similarity filtering with research statement for {document_source}")
+            # NEW: Use higher limit for metadata scope to give LLM more choices
+            similarity_top_k = 30 if scope == "metadata" else 10
             catalog = fetch_catalog_with_similarity_filter(
                 document_source=document_source,
                 research_statement=research_statement,
                 token=token,
-                top_k=10  # Limit to top 10 most similar documents
+                top_k=similarity_top_k  # More documents for metadata mode
             )
         else:
             logger.info(f"Using standard catalog fetch for {document_source}")

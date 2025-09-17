@@ -1596,7 +1596,17 @@ def _model_generator(
                                     doc_desc = item.get(
                                         "document_description", "No description"
                                     )
-                                    yield f"- **{doc_name}:** {doc_desc}\n"
+                                    # NEW: Generate clickable PDF link if file_name is available
+                                    file_name = item.get("file_name", "")
+                                    if file_name:
+                                        # NEW: Construct S3 URL using config base path
+                                        s3_url = f"{config.S3_BASE_PATH}/{file_name}"
+                                        # NEW: Create clickable href with JavaScript PDF opener (page 1, no highlight)
+                                        href = f'<a href=\'javascript:window.maven.openPdf("{s3_url}", 1, "")\'>{doc_name}</a>'
+                                        yield f"- {href}: {doc_desc}\n"
+                                    else:
+                                        # FALLBACK: Keep original format if no file_name available
+                                        yield f"- **{doc_name}:** {doc_desc}\n"
                                     displayed_items += 1
                             if displayed_items == 0:
                                 yield "- No unique items found.\n"
