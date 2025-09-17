@@ -26,11 +26,10 @@ Enable clickable PDF links in file search results so users can directly open doc
 ### Reason for Change
 Currently, file search (metadata scope) returns plain text results without clickable links, even though all necessary data (file_name, file_link) is available. Users cannot easily access the documents found in their search.
 
-### Original Code (Lines 1580-1604)
+### Original Code (Lines 1578-1605)
 ```python
-                if scope == "metadata":
-                    yield "\n\n## 📂 File Search Results\n"
-                    seen_documents = {}
+                    yield f"\n\nCompleted metadata search across {len(selected_databases)} databases. Found {unique_item_count} unique relevant items:\n"
+                    seen_documents: Dict[str, Dict[str, Any]] = {}
                     for db_name, items_list in metadata_results_by_db.items():
                         db_display_name = available_databases.get(db_name, {}).get(
                             "name", db_name
@@ -60,9 +59,8 @@ Currently, file search (metadata scope) returns plain text results without click
 
 ### New Code (Implemented)
 ```python
-                if scope == "metadata":
-                    yield "\n\n## 📂 File Search Results\n"
-                    seen_documents = {}
+                    yield f"\n\nCompleted metadata search across {len(selected_databases)} databases. Found {unique_item_count} unique relevant items:\n"
+                    seen_documents: Dict[str, Dict[str, Any]] = {}
                     for db_name, items_list in metadata_results_by_db.items():
                         db_display_name = available_databases.get(db_name, {}).get(
                             "name", db_name
@@ -217,7 +215,7 @@ Pass the scope parameter through to load the appropriate YAML configuration.
 ### Reason for Change
 The function needs to know which configuration to load based on whether it's handling a file search or research query.
 
-### Original Code (Lines 300-318)
+### Original Code (Lines 292-310)
 ```python
 def get_catalog_selection_prompt(query: str, formatted_catalog: str) -> str:
     """
@@ -278,7 +276,7 @@ Pass the scope parameter to get_catalog_selection_prompt.
 ### Reason for Change
 The prompt generation function needs the scope to select the appropriate configuration.
 
-### Original Code (Lines 716-720)
+### Original Code (Lines 706-710)
 ```python
     logger.info(f"Selecting relevant documents from {database_name} catalog")
     formatted_catalog = format_catalog_for_llm(catalog, scope=scope)
@@ -310,7 +308,7 @@ Provide more candidate documents for the LLM to select from when performing file
 ### Reason for Change
 With a 25-document limit, the similarity search should return more candidates (30) to give the LLM sufficient choices.
 
-### Original Code (Lines 1156-1163)
+### Original Code (Lines 1145-1152)
 ```python
         if research_statement:
             logger.info(f"Using similarity filtering with research statement for {document_source}")
