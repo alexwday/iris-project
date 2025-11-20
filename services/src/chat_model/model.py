@@ -1330,7 +1330,7 @@ def _model_generator(
 
                             #status_block = f"**Database:** \n {db_display_name}\n{status_summary}\n---\n"
 
-                            status_summary = status_summary.replace('✅', '**').replace('🔄', '**').replace('❌', '**').replace('⚠️', '**').replace('❓', '**')
+                            status_summary = status_summary.replace('✅', '**').replace('📄', '**').replace('❌', '**').replace('ℹ️', '**').replace('⚠️', '**').replace('❓', '**')
                             status_block = f"{db_display_name}: {status_summary}\n\n"
                             yield status_block
                             #yield "<br>\n\n"
