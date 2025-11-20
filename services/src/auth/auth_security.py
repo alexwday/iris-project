@@ -44,7 +44,7 @@ def validate_token_with_service(validation_url: str, headers: dict) -> dict:
         logging.error(f" Auth service request error: {str(pii_error)}")
         return HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=({"error_message":"Auth service failed due to an internal error."})
+            detail={"error_message":"Auth service failed due to an internal error."}
         )
 
 
@@ -88,7 +88,7 @@ def perform_pii_detection(pii_url: str, request_payload: dict, pii_headers: dict
         logging.error(f"PII detection request error: {str(pii_error)}")
         return HTTPException(
             status_code=500,
-            detail=({"error_message": "PII detection failed due to an internal error."})
+            detail={"error_message": "PII detection failed due to an internal error."}
         )
 
 
