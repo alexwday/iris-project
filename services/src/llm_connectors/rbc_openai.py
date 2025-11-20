@@ -34,6 +34,8 @@ TOKEN_PREVIEW_LENGTH = config.TOKEN_PREVIEW_LENGTH
 
 # Get module logger
 logger = logging.getLogger(__name__)
+# Suppress debug logs from OpenAI client
+logging.getLogger("openai").setLevel(logging.INFO)
 
 class OpenAIConnectorError(Exception):
     """Base exception class for OpenAI connector errors."""
@@ -143,7 +145,7 @@ def call_llm(
     # Capture model name for usage tracking
     model_name = params.get("model", "unknown")
     has_tools = "tools" in params
-    logger.info(f"Making API call to {model_name} (streaming={is_streaming})")
+    #logger.info(f"Making API call to {model_name} (streaming={is_streaming})")
 
     while attempts < MAX_RETRY_ATTEMPTS:
         attempt_start_time = time.time()  # Time this specific attempt
