@@ -373,6 +373,16 @@ class DiffTool:
             margin-right: 10px;
             user-select: none;
         }
+        .separator {
+            text-align: center;
+            color: #666;
+            padding: 10px;
+            font-size: 14px;
+            background: #2d2d2d;
+            margin: 5px 0;
+            border-top: 1px dashed #444;
+            border-bottom: 1px dashed #444;
+        }
     </style>
 </head>
 <body>
@@ -420,10 +430,15 @@ class DiffTool:
         for idx, rel_path in enumerate(file_list):
             content1, content2 = self.modified_files[rel_path]
 
+            # Calculate diff blocks with context
+            diff_blocks = self._get_diff_blocks(content1, content2, context_lines=3)
+            total_changes = sum(len(block['left_changes']) + len(block['right_changes']) for block in diff_blocks)
+
             html.append(f"""
     <div id="diffView{idx}" class="view diff-view">
         <div class="diff-nav">
             <div class="diff-filename">FILE {idx + 1} of {len(file_list)}: {rel_path}</div>
+            <div style="color: #FF9800; font-size: 13px; margin: 5px 0;">{total_changes} lines changed in {len(diff_blocks)} block(s)</div>
             <div class="nav-buttons">
                 <button class="btn btn-secondary" onclick="showList()">← Back to List</button>""")
 
@@ -439,34 +454,63 @@ class DiffTool:
             </div>
         </div>
         <div class="split-container">
-            <div class="pane pane-left">
+            <div class="pane pane-left" id="leftPane{idx}">
                 <div class="pane-header">CURRENT CODE (will be replaced)</div>
                 <div class="code-container">""")
 
-            # Left side - current code
-            for line_num, line in enumerate(content1, 1):
-                is_diff = (line_num - 1 >= len(content2) or line != content2[line_num - 1])
-                css_class = " highlight" if is_diff else ""
-                html.append(f'<div class="code-line{css_class}"><span class="line-num">{line_num}</span>{self._html_escape(line.rstrip())}</div>')
+            # Left side - show only diff blocks
+            for block_idx, block in enumerate(diff_blocks):
+                if block_idx > 0:
+                    html.append('<div class="separator">...</div>')
+
+                for line_num, line, is_changed in block['left']:
+                    css_class = " highlight" if is_changed else ""
+                    html.append(f'<div class="code-line{css_class}"><span class="line-num">{line_num}</span>{self._html_escape(line.rstrip())}</div>')
 
             html.append("""
                 </div>
             </div>
-            <div class="pane pane-right">
+            <div class="pane pane-right" id="rightPane{idx}">
                 <div class="pane-header">IT MODIFIED CODE (copy this)</div>
                 <div class="code-container">""")
 
-            # Right side - IT code
-            for line_num, line in enumerate(content2, 1):
-                is_diff = (line_num - 1 >= len(content1) or line != content1[line_num - 1])
-                css_class = " highlight" if is_diff else ""
-                html.append(f'<div class="code-line{css_class}"><span class="line-num">{line_num}</span>{self._html_escape(line.rstrip())}</div>')
+            # Right side - show only diff blocks
+            for block_idx, block in enumerate(diff_blocks):
+                if block_idx > 0:
+                    html.append('<div class="separator">...</div>')
 
-            html.append("""
+                for line_num, line, is_changed in block['right']:
+                    css_class = " highlight" if is_changed else ""
+                    html.append(f'<div class="code-line{css_class}"><span class="line-num">{line_num}</span>{self._html_escape(line.rstrip())}</div>')
+
+            html.append(f"""
                 </div>
             </div>
         </div>
-    </div>""")
+    </div>
+    <script>
+        (function() {{
+            const left = document.getElementById('leftPane{idx}');
+            const right = document.getElementById('rightPane{idx}');
+            let syncing = false;
+
+            left.addEventListener('scroll', function() {{
+                if (!syncing) {{
+                    syncing = true;
+                    right.scrollTop = left.scrollTop;
+                    syncing = false;
+                }}
+            }});
+
+            right.addEventListener('scroll', function() {{
+                if (!syncing) {{
+                    syncing = true;
+                    left.scrollTop = right.scrollTop;
+                    syncing = false;
+                }}
+            }});
+        }})();
+    </script>""")
 
         # JavaScript
         html.append(f"""
@@ -495,6 +539,53 @@ class DiffTool:
 
         with open(output_path, 'w', encoding='utf-8') as f:
             f.write('\n'.join(html))
+
+    def _get_diff_blocks(self, content1: List[str], content2: List[str], context_lines: int = 3):
+        """Get blocks of differences with context lines."""
+        import difflib
+
+        # Use difflib to find matching blocks
+        matcher = difflib.SequenceMatcher(None, content1, content2)
+        blocks = []
+
+        for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+            if tag == 'equal':
+                continue
+
+            # Add context before
+            left_start = max(0, i1 - context_lines)
+            right_start = max(0, j1 - context_lines)
+
+            # Add context after
+            left_end = min(len(content1), i2 + context_lines)
+            right_end = min(len(content2), j2 + context_lines)
+
+            # Build left side (current code)
+            left_lines = []
+            left_changes = []
+            for line_idx in range(left_start, left_end):
+                is_changed = (line_idx >= i1 and line_idx < i2)
+                if is_changed:
+                    left_changes.append(line_idx)
+                left_lines.append((line_idx + 1, content1[line_idx], is_changed))
+
+            # Build right side (IT code)
+            right_lines = []
+            right_changes = []
+            for line_idx in range(right_start, right_end):
+                is_changed = (line_idx >= j1 and line_idx < j2)
+                if is_changed:
+                    right_changes.append(line_idx)
+                right_lines.append((line_idx + 1, content2[line_idx], is_changed))
+
+            blocks.append({
+                'left': left_lines,
+                'right': right_lines,
+                'left_changes': left_changes,
+                'right_changes': right_changes
+            })
+
+        return blocks
 
     def _html_escape(self, text: str) -> str:
         """Escape HTML special characters."""
