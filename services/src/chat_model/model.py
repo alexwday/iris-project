@@ -1126,7 +1126,6 @@ def _model_generator(
                 apg_catalog_results, apg_catalog_usage = search_apg_catalog_by_embedding(
                     research_statement, token, top_k=5, available_databases=available_databases
                 )
-
                 if apg_catalog_usage:
                     process_monitor.add_llm_call_details_to_stage("clarifier", apg_catalog_usage)
 
@@ -1404,7 +1403,6 @@ def _model_generator(
                                         #     )
                                         #     file_link = page_data.get("file_link", "")
                                         #     file_name = page_data.get("file_name", "")
-                                        #
                                         #     # Assign REF number
                                         #     ref_id = str(ref_counter)
                                         if (
@@ -1617,7 +1615,6 @@ def _model_generator(
                                     doc_desc = item.get(
                                         "document_description", "No description"
                                     )
-
                                     #yield f"- **{doc_name}:** {doc_desc}\n"
                                     # NEW: Generate clickable PDF link if file_name is available
                                     file_name = item.get("file_name", "")
@@ -1641,9 +1638,9 @@ def _model_generator(
 
         # --- Legacy Debug Block Removed ---
 
-                # End monitoring after successful research completion
-                logger.info("Research completed successfully, ending monitoring")
-                process_monitor.end_monitoring()
+        # End monitoring after successful research completion
+        logger.info("Research completed successfully, ending monitoring")
+        process_monitor.end_monitoring()
 
         else:
             logger.error(
