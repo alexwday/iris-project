@@ -1128,28 +1128,21 @@ def _model_generator(
 
                 # Search apg_catalog for relevant documents based on research statement
                 logger.info("Searching apg_catalog for document usage context...")
-                apg_catalog_results, apg_catalog_usage = (
-                    search_apg_catalog_by_embedding(
-                        research_statement,
-                        token,
-                        top_k=5,
-                        available_databases=available_databases,
-                    )
+                # apg_catalog_results, apg_catalog_usage = search_apg_catalog_by_embedding(
+                #     research_statement, token, top_k=5
+                # )
+                apg_catalog_results, apg_catalog_usage = search_apg_catalog_by_embedding(
+                    research_statement, token, top_k=5, available_databases=available_databases
                 )
+
                 if apg_catalog_usage:
-                    process_monitor.add_llm_call_details_to_stage(
-                        "clarifier", apg_catalog_usage
-                    )
+                    process_monitor.add_llm_call_details_to_stage("clarifier", apg_catalog_usage)
 
                 if apg_catalog_results:
-                    logger.info(
-                        f"Found {len(apg_catalog_results)} relevant documents in apg_catalog"
-                    )
+                    logger.info(f"Found {len(apg_catalog_results)} relevant documents in apg_catalog")
                     # Log the top documents for debugging
                     for i, doc in enumerate(apg_catalog_results[:3]):
-                        logger.debug(
-                            f"APG Doc {i+1}: {doc.get('document_source', 'N/A')} - {doc.get('document_description', 'N/A')[:100]}..."
-                        )
+                        logger.debug(f"APG Doc {i+1}: {doc.get('document_source', 'N/A')} - {doc.get('document_description', 'N/A')[:100]}...")
                 else:
                     logger.info("No relevant documents found in apg_catalog")
 
@@ -1158,11 +1151,7 @@ def _model_generator(
                 # TODO: Update create_database_selection_plan to return (plan, usage_details)
                 db_selection_plan, planner_usage_details = (
                     create_database_selection_plan(
-                        research_statement,
-                        token,
-                        available_databases,
-                        is_continuation,
-                        apg_catalog_results,
+                        research_statement, token, available_databases, is_continuation, apg_catalog_results
                     )
                 )
                 selected_databases = db_selection_plan.get("databases", [])
@@ -1191,8 +1180,13 @@ def _model_generator(
                     yield "# 🔍 File Search Plan\n\n"
                     yield f"## Search Criteria\n{research_statement}\n\n"
                 else:
-                    yield "# 📋 Research Plan\n\n"
-                    yield f"## Research Statement\n{research_statement}\n\n"
+                    yield "# 📋 Research Plan \n\n"
+                    # yield "---\n"
+                    #yield "<br>\n\n"
+                    #yield f"## Research Statement \n\n{research_statement} \n\n"
+                    yield f"{research_statement}\n\n"
+                    # yield "---\n"
+                    #yield "<br>\n\n"
                 selected_db_display_names = [
                     available_databases.get(db_name, {}).get("name", db_name)
                     for db_name in selected_databases
@@ -1207,7 +1201,8 @@ def _model_generator(
                             ", ".join(selected_db_display_names[:-1])
                             + f", and {selected_db_display_names[-1]}"
                         )
-                    yield f"Searching the following databases: {names_str}.\n\n---\n"
+                    # yield f"## Searching the following databases: {names_str}.\n\n---\n"
+                    yield "\n\n"
                 else:
                     yield "No databases selected for search.\n\n---\n"
                 logger.info("Displayed database selection plan.")
@@ -1342,8 +1337,12 @@ def _model_generator(
                             if reference_index:
                                 all_reference_indices[db_name] = reference_index
 
-                            status_block = f"**Database:** {db_display_name}\n{status_summary}\n---\n"
+                            #status_block = f"**Database:** \n {db_display_name}\n{status_summary}\n---\n"
+
+                            status_summary = status_summary.replace('✅', '**').replace('🔄', '**').replace('❌', '**').replace('⚠️', '**').replace('❓', '**')
+                            status_block = f"{db_display_name}: {status_summary}\n\n"
                             yield status_block
+                            #yield "<br>\n\n"
 
                     logger.info("All concurrent database queries completed processing.")
                     # --- Legacy Debug Block Removed ---
@@ -1355,6 +1354,7 @@ def _model_generator(
                     if aggregated_detailed_research:
                         yield "\n\n---\n"
                         yield "\n\n## 📊 Research Summary\n"
+                        #yield "<br>\n\n"
                         process_monitor.start_stage("summary")
                         process_monitor.add_stage_details(
                             "summary",
@@ -1400,6 +1400,22 @@ def _model_generator(
                                     )
 
                                     for page_key, page_data in sorted_pages:
+                                        # if (
+                                        #     isinstance(page_data, dict)
+                                        #     and "research_content" in page_data
+                                        # ):
+                                        #     page_number = page_data.get(
+                                        #         "page_number", 0
+                                        #     )
+                                        #     research_content = page_data.get(
+                                        #         "research_content", ""
+                                        #     )
+                                        #     file_link = page_data.get("file_link", "")
+                                        #     file_name = page_data.get("file_name", "")
+                                        #
+                                        #
+                                        #     # Assign REF number
+                                        #     ref_id = str(ref_counter)
                                         if (
                                             isinstance(page_data, dict)
                                             and "research_content" in page_data
@@ -1594,7 +1610,8 @@ def _model_generator(
                         db_display_name = available_databases.get(db_name, {}).get(
                             "name", db_name
                         )
-                        yield f"\n**{db_display_name}:**\n"
+                        #yield f"\n**{db_display_name}:**\n"
+                        yield f"\n{db_display_name}:\n"
                         if items_list:
                             seen_documents.setdefault(db_name, set())
                             displayed_items = 0
