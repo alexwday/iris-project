@@ -1749,6 +1749,7 @@ def _query_database_logic(
             conn.close()
             logger.info("Database connection closed.")
 
+
     # Fallback return (should not be reached ideally)
     logger.error(
         f"Reached end of _query_database_logic unexpectedly for scope '{scope}' in {database_name}."
