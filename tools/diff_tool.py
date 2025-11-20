@@ -334,11 +334,29 @@ class DiffTool:
                 <div class="file-meta">{changes} lines changed</div>
             </div>""")
 
+        # Added files (new files)
+        if self.files_only_in_dir2:
+            for file_idx, path in enumerate(sorted(self.files_only_in_dir2)):
+                html.append(f"""
+            <div class="file-item" onclick="showFile({len(file_list) + file_idx})">
+                <div class="file-name">{path}</div>
+                <div class="file-meta">NEW FILE</div>
+            </div>""")
+
+        # Deleted files
+        if self.files_only_in_dir1:
+            for file_idx, path in enumerate(sorted(self.files_only_in_dir1)):
+                html.append(f"""
+            <div class="file-item" onclick="showFile({len(file_list) + len(self.files_only_in_dir2) + file_idx})">
+                <div class="file-name">{path}</div>
+                <div class="file-meta">DELETED FILE</div>
+            </div>""")
+
         html.append("""
         </div>
     </div>""")
 
-        # Diff views
+        # Diff views for modified files
         for idx, rel_path in enumerate(file_list):
             content1, content2 = self.modified_files[rel_path]
 
@@ -384,6 +402,58 @@ class DiffTool:
             html.append("""
         </div>
     </div>""")
+
+        # Diff views for new files
+        new_file_idx = len(file_list)
+        for path in sorted(self.files_only_in_dir2):
+            # Read the new file content
+            full_path = self.dir2 / path
+            content = self._read_file(full_path)
+
+            html.append(f"""
+    <div id="diffView{new_file_idx}" class="view diff-view">
+        <div class="diff-header">
+            <div class="diff-title">{path} (NEW FILE)</div>
+            <div class="diff-buttons">
+                <button onclick="showList()">← Back</button>
+            </div>
+        </div>
+        <div class="diff-content">""")
+
+            # Show entire file content as additions
+            for line_num, line in enumerate(content, 1):
+                html.append(f'<div class="diff-line diff-add"><span class="line-indicator">{line_num}</span>{self._html_escape(line.rstrip())}</div>')
+
+            html.append("""
+        </div>
+    </div>""")
+            new_file_idx += 1
+
+        # Diff views for deleted files
+        deleted_file_idx = new_file_idx
+        for path in sorted(self.files_only_in_dir1):
+            # Read the deleted file content
+            full_path = self.dir1 / path
+            content = self._read_file(full_path)
+
+            html.append(f"""
+    <div id="diffView{deleted_file_idx}" class="view diff-view">
+        <div class="diff-header">
+            <div class="diff-title">{path} (DELETED FILE)</div>
+            <div class="diff-buttons">
+                <button onclick="showList()">← Back</button>
+            </div>
+        </div>
+        <div class="diff-content">""")
+
+            # Show entire file content as removals
+            for line_num, line in enumerate(content, 1):
+                html.append(f'<div class="diff-line diff-remove"><span class="line-indicator">{line_num}</span>{self._html_escape(line.rstrip())}</div>')
+
+            html.append("""
+        </div>
+    </div>""")
+            deleted_file_idx += 1
 
         # JavaScript
         html.append("""
