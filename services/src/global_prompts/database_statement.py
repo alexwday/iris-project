@@ -267,7 +267,7 @@ def get_available_databases(filtered=False):
             "What are examples of external parties?"
         ],
         "internal_esg": [
-            "If something isn't material should it still go into the Sustainability Report?",
+            "If something isn’t material should it still go into the Sustainability Report?",
             "Is there a threshold for materiality?",
             "How to treat measurement uncertainty in the ESG framework?",
             "What are the ESG guidelines for revising materiality from prior reporting periods?"
@@ -276,7 +276,7 @@ def get_available_databases(filtered=False):
             "According to the disclosure policy: Who are authorized spokespersons?",
             "What guidelines should be followed for announcements that are not material?",
             "Can an RBC employee speak at a conference during quiet period?",
-            "Which teams must review forward-looking information before it's disclosed?"
+            "Which teams must review forward-looking information before it’s disclosed?"
         ],
         "internal_global_finance_standards": [
             "What are the minimum standards for Non-Interest Expenses in COA reporting?",
