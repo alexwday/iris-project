@@ -131,7 +131,7 @@ def search_apg_catalog_by_embedding(
         top_k (int): Number of top results to retrieve (default 5)
         
     Returns:
-        Tuple[List[Dict[str, Any]], Optional[Dict[str, Any]]]:
+        Tuple[List[Dict[str, Any]], Optional[Dict[str, Any]]]: 
             - List of matching documents with document_source and document_description
             - Usage details dictionary for the embedding call, or None if error
     """
