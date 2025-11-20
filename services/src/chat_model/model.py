@@ -62,7 +62,6 @@ def _generate_query_embedding(
             - Embedding vector
             - Usage details dictionary
     """
-
     logger = logging.getLogger(__name__)
     logger.setLevel(logging.INFO)
     logger.info(f"Generating embedding for query: '{query[:100]}...'")
@@ -120,8 +119,8 @@ def _generate_query_embedding(
 
 
 def search_apg_catalog_by_embedding(
-        research_statement: str, token: Optional[str] = None, top_k: int = 5,
-        available_databases: Optional[Dict[str, Any]] = None
+    research_statement: str, token: Optional[str] = None, top_k: int = 5,
+    available_databases: Optional[Dict[str, Any]] = None
 ) -> Tuple[List[Dict[str, Any]], Optional[Dict[str, Any]]]:
     """
     Search the apg_catalog table using embeddings to find relevant documents.
