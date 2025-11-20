@@ -474,9 +474,7 @@ def _process_reference_buffer(
                 # )
                 return "", buffer
             # No incomplete references and buffer not full - output what we have
-            logger.debug(
-                f"No references and buffer not full, outputting buffer content"
-            )
+            #logger.debug(f"No references and buffer not full, outputting buffer content")
             return buffer, ""
         else:
             # Buffer is full but no references - handle potential partial references
@@ -508,9 +506,9 @@ def _process_reference_buffer(
         buffer[rightmost_ref_end:] if rightmost_ref_end < len(buffer) else ""
     )
 
-    logger.debug(
-        f"Processing {len(all_matches)} references in buffer, trailing content: '{trailing_content}'"
-    )
+    # logger.debug(
+    #     f"Processing {len(all_matches)} references in buffer, trailing content: '{trailing_content}'"
+    # )
 
     # Process matches from end to start to maintain string positions
     all_matches.sort(key=lambda x: x.start(), reverse=True)
@@ -576,9 +574,9 @@ def _process_reference_buffer(
                     + replacement
                     + processed_content[match.end() :]
                 )
-                logger.debug(
-                    f"Replaced individual {match_text} with link for ref: {ref_id}"
-                )
+                # logger.debug(
+                #     f"Replaced individual {match_text} with link for ref: {ref_id}"
+                # )
             else:
                 logger.warning(f"Reference {ref_id} not found in index")
 
@@ -659,7 +657,7 @@ def _process_reference_buffer(
                                 )
                             else:
                                 # No valid page_reference, just show source
-                                link_text = f"📄 {source_filename}"
+                                link_text = f"📄 {source_filename}, Pg. {page}"
                         href = f'<a href=\'javascript:window.maven.openPdf("{s3_url}", {page}, "{highlight_text}")\'>{link_text}</a>'
                         page_links[page_key] = href
                 else:
@@ -741,7 +739,9 @@ def _execute_query_worker(
     Returns:
         Dict[str, Any]: Query execution results and metadata
     """
+
     logger = logging.getLogger(__name__)
+    logger.setLevel(logging.INFO)
     result = None
     task_exception = None
 
@@ -865,6 +865,15 @@ def _execute_query_worker(
         )  # Ensure this is called on error
         process_monitor.add_stage_details(query_stage_name, error=str(e))
 
+    finally:
+        # Clean up any connections this worker might have opened
+        try:
+            # Force cleanup of any database connections in this thread
+            import gc
+            gc.collect()
+        except Exception as cleanup_exc:
+            logger.warning(f"Error during worker cleanup: {cleanup_exc}")
+
     # Return dictionary without token_usage
     return {
         "db_name": db_name,
@@ -903,6 +912,7 @@ def _model_generator(
 
     # Add more logging around the process monitoring setup
     logger = logging.getLogger(__name__)
+    logger.setLevel(logging.INFO)
     logger.info("Setting up process monitoring")
 
     enable_monitoring(True)
@@ -1064,7 +1074,7 @@ def _model_generator(
             else:
                 logger.warning("No usage details received from direct_response stream.")
 
-            # --- Legacy Debug Block Removed ---
+        # --- Legacy Debug Block Removed ---
 
             # End monitoring after successful direct response completion
             logger.info("Direct response completed successfully, ending monitoring")
