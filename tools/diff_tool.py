@@ -456,6 +456,31 @@ class DiffTool:
                 <span style="background: #ffeb3b; color: #000; font-weight: bold; margin-left: 10px;">·</span> = trailing space
                 <span style="background: #ff9800; color: #000; font-weight: bold; margin-left: 10px;">→</span> = tab character
                 <span style="border: 2px solid #ff9800; padding: 2px 8px; margin-left: 10px;">Orange border</span> = whitespace-only difference (hover for tooltip)
+            </div>""")
+
+            # Add comprehensive byte analysis for ALL differences
+            html.append("""
+            <div style="background: #fff; border: 2px solid #ff5722; padding: 12px; margin-bottom: 15px; font-size: 12px;">
+                <strong style="color: #ff5722; font-size: 14px;">🔍 BYTE-LEVEL ANALYSIS OF ALL DIFFERENCES</strong><br><br>""")
+
+            diff_count = 0
+            for i in range(len(content1)):
+                if i < len(content2):
+                    line1 = content1[i].rstrip('\n')
+                    line2 = content2[i].rstrip('\n')
+                    if line1 != line2:
+                        diff_count += 1
+                        html.append(f"""<div style="margin-bottom: 15px; padding: 8px; background: #f9f9f9; border-left: 3px solid #ff5722;">
+                        <strong>Line {i + 1}:</strong><br>""")
+                        html.append(self._get_byte_analysis(line1, line2))
+                        html.append("</div>")
+
+            if diff_count == 0:
+                html.append("<em>No line differences found</em>")
+            else:
+                html.append(f"<strong>Total differences: {diff_count} lines</strong>")
+
+            html.append("""
             </div>
             <table class="diff-table">
                 <tr class="diff-header-row">
