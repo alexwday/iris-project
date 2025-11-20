@@ -372,6 +372,18 @@ class DiffTool:
             border-top: 2px solid #ccc;
             border-bottom: 1px solid #ddd;
         }
+        .ws-diff {
+            border: 2px solid #ff9800 !important;
+            background: #fff3e0 !important;
+        }
+        .ws-diff.diff-remove {
+            background: #ffeef0 !important;
+            border-color: #ff9800 !important;
+        }
+        .ws-diff.diff-add {
+            background: #e6ffed !important;
+            border-color: #ff9800 !important;
+        }
     </style>
 </head>
 <body>
@@ -439,6 +451,12 @@ class DiffTool:
             </div>
         </div>
         <div class="diff-content">
+            <div style="background: #fff3cd; border: 1px solid #ffc107; padding: 10px; margin-bottom: 15px; font-size: 12px; border-radius: 4px;">
+                <strong>Whitespace Legend:</strong>
+                <span style="background: #ffeb3b; color: #000; font-weight: bold; margin-left: 10px;">·</span> = trailing space
+                <span style="background: #ff9800; color: #000; font-weight: bold; margin-left: 10px;">→</span> = tab character
+                <span style="border: 2px solid #ff9800; padding: 2px 8px; margin-left: 10px;">Orange border</span> = whitespace-only difference (hover for tooltip)
+            </div>
             <table class="diff-table">
                 <tr class="diff-header-row">
                     <td class="side-label" colspan="2">Current (Remote Main)</td>
@@ -531,12 +549,19 @@ class DiffTool:
                         left_class = 'diff-remove' if left_line else 'diff-empty'
                         right_class = 'diff-add' if right_line else 'diff-empty'
 
+                        # Check if lines differ only by whitespace
+                        ws_only_diff = ''
+                        if left_line and right_line and self._lines_differ_only_by_whitespace(left_line, right_line):
+                            ws_only_diff = ' title="⚠ Whitespace-only difference"'
+                            left_class += ' ws-diff'
+                            right_class += ' ws-diff'
+
                         html.append(f"""
                 <tr>
                     <td class="line-num {left_class}">{left_num}</td>
-                    <td class="line-code {left_class}">{self._html_escape(left_line) if left_line else '&nbsp;'}</td>
+                    <td class="line-code {left_class}"{ws_only_diff}>{self._html_escape(left_line) if left_line else '&nbsp;'}</td>
                     <td class="line-num {right_class}">{right_num}</td>
-                    <td class="line-code {right_class}">{self._html_escape(right_line) if right_line else '&nbsp;'}</td>
+                    <td class="line-code {right_class}"{ws_only_diff}>{self._html_escape(right_line) if right_line else '&nbsp;'}</td>
                 </tr>""")
                 elif tag == 'delete':
                     for i in range(i1, i2):
@@ -639,13 +664,30 @@ class DiffTool:
             f.write('\n'.join(html))
 
     def _html_escape(self, text: str) -> str:
-        """Escape HTML special characters."""
-        return (text
+        """Escape HTML special characters and visualize whitespace."""
+        # First escape HTML
+        escaped = (text
                 .replace('&', '&amp;')
                 .replace('<', '&lt;')
                 .replace('>', '&gt;')
                 .replace('"', '&quot;')
                 .replace("'", '&#39;'))
+
+        # Visualize trailing spaces with visible marker
+        if escaped.endswith(' '):
+            # Count trailing spaces
+            stripped = escaped.rstrip(' ')
+            trailing_count = len(escaped) - len(stripped)
+            escaped = stripped + '<span style="background: #ffeb3b; color: #000; font-weight: bold;">·</span>' * trailing_count
+
+        # Visualize tabs
+        escaped = escaped.replace('\t', '<span style="background: #ff9800; color: #000; font-weight: bold;">→</span>')
+
+        return escaped
+
+    def _lines_differ_only_by_whitespace(self, line1: str, line2: str) -> bool:
+        """Check if two lines differ only by whitespace."""
+        return line1.strip() == line2.strip() and line1 != line2
 
     def generate_summary_markdown(self, output_path: Path):
         """Generate markdown summary."""
