@@ -135,16 +135,13 @@ def search_apg_catalog_by_embedding(
             - List of matching documents with document_source and document_description
             - Usage details dictionary for the embedding call, or None if error
     """
-
     logger = logging.getLogger(__name__)
     logger.setLevel(logging.INFO)
     logger.info(f"Searching apg_catalog for research statement: '{research_statement[:100]}...'")
     usage_details = None
 
-
     conn = None
     cursor = None
-
 
     try:
         # Generate embedding for the research statement
@@ -154,17 +151,14 @@ def search_apg_catalog_by_embedding(
             logger.error("Could not generate embedding for research statement")
             return [], usage_details
 
-
         # Connect to database
         conn = connect_to_db()
         if conn is None:
             logger.error("Failed to connect to database for apg_catalog search")
             return [], usage_details
 
-
         register_vector(conn)
         cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-
 
         # Perform vector search against apg_catalog table
         if available_databases:
