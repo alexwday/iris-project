@@ -107,10 +107,10 @@ AVAILABLE_DATABASES = {
     },
     "internal_sab_99": {
         "name": "SAB 99 Materiality Assessment Memos",
-        "description": "Internal documents justifying the materiality assessment of financial statement errors, as guided by SEC guidance.",
-        "query_type": "semantic_search",
+        "description": "Internal documents justifying the materiality assessment of financial statement errors, as guided by SEC Staff Accounting Bulletin No. 99. These memos are completed when financial statement errors exceed $120MM and include root cause analysis, control assessment, qualitative factor analysis, and remediation plans.",
+        "query_type": "semantic search",
         "content_type": "materiality assessment memos / error analysis / remediation documentation",
-        "use_when": "Tier 1 (Domain Specific): Questions about materiality assessments for financial statement errors, SAB 99 considerations, or error evaluation processes.",
+        "use_when": "Tier 1 (Domain Specific): Questions about materiality assessments for financial statement errors, SAB 99 compliance, errors exceeding $120MM threshold, qualitative materiality factors, or error remediation. **Strategy:** Query when statement relates to materiality determinations, quantitative/qualitative assessment factors, error evaluation, control deficiencies related to material errors, or corrective action plans. **Query:** Use terms like 'SAB 99', 'materiality assessment', 'financial statement error', '$120MM threshold', 'quantitative materiality', 'qualitative factors', 'root cause analysis', 'control deficiency', 'remediation plan', 'error correction', 'restatement assessment', 'immaterial misstatement', 'intentional misstatement', 'earnings management'.",
     },
     # Removed internal_infographic as it's covered by internal_cheatsheet
 }
