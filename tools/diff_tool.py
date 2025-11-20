@@ -190,7 +190,7 @@ class DiffTool:
                     f.write(f"  + {path}\n")
 
     def generate_html_diff(self, output_path: Path):
-        """Generate clean HTML diff optimized for phone photography."""
+        """Generate simple, clean diff viewer."""
         print(f"Generating HTML diff: {output_path}")
 
         html = []
@@ -198,394 +198,212 @@ class DiffTool:
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Code Diff Report</title>
+    <title>Diff Report</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: 'Courier New', 'Consolas', 'Monaco', monospace;
-            background: #1a1a1a;
-            color: #e0e0e0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', monospace;
+            background: #f5f5f5;
+            color: #333;
         }
-        .view {
-            display: none;
-        }
-        .view.active {
-            display: block;
-        }
+        .view { display: none; }
+        .view.active { display: block; }
 
-        /* File List */
-        .file-list {
-            max-width: 1400px;
-            margin: 0 auto;
+        /* List View */
+        .list-view {
+            max-width: 1000px;
+            margin: 40px auto;
             padding: 20px;
         }
-        .list-header {
-            background: #2d2d2d;
-            padding: 20px;
-            margin-bottom: 20px;
-            border-left: 5px solid #4CAF50;
-        }
-        .list-header h1 {
-            font-size: 24px;
-            color: #4CAF50;
+        h1 {
+            font-size: 28px;
             margin-bottom: 10px;
         }
         .stats {
+            color: #666;
+            margin-bottom: 30px;
             font-size: 14px;
-            color: #aaa;
         }
         .file-item {
-            background: #2d2d2d;
+            background: white;
             padding: 15px 20px;
-            margin-bottom: 10px;
+            margin-bottom: 8px;
+            border-left: 4px solid #2196F3;
             cursor: pointer;
-            border-left: 4px solid #555;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
             transition: all 0.2s;
         }
         .file-item:hover {
-            background: #3d3d3d;
-            border-left-color: #4CAF50;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            transform: translateX(4px);
         }
-        .file-item.modified { border-left-color: #FF9800; }
-        .file-item.added { border-left-color: #4CAF50; }
-        .file-item.deleted { border-left-color: #f44336; }
         .file-name {
-            font-size: 16px;
-            font-weight: bold;
-            color: #fff;
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 4px;
+        }
+        .file-meta {
+            font-size: 12px;
+            color: #999;
         }
 
         /* Diff View */
         .diff-view {
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
+            background: white;
+            min-height: 100vh;
         }
-        .diff-nav {
-            background: #2d2d2d;
+        .diff-header {
+            background: #2196F3;
+            color: white;
             padding: 15px 20px;
-            border-bottom: 2px solid #444;
-            flex-shrink: 0;
-        }
-        .diff-filename {
-            font-size: 16px;
-            color: #4CAF50;
-            margin-bottom: 10px;
-            font-weight: bold;
-        }
-        .nav-buttons {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-        .btn {
-            padding: 8px 16px;
-            background: #4CAF50;
-            color: #000;
-            border: none;
-            cursor: pointer;
-            font-family: inherit;
-            font-size: 13px;
-            font-weight: bold;
-        }
-        .btn:hover {
-            background: #45a049;
-        }
-        .btn-secondary {
-            background: #555;
-            color: #fff;
-        }
-        .btn-secondary:hover {
-            background: #666;
-        }
-
-        /* Split View */
-        .split-container {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            flex: 1;
-            overflow: hidden;
-        }
-        .pane {
-            overflow-y: auto;
-            padding: 10px;
-        }
-        .pane-left {
-            background: #1a1a1a;
-            border-right: 2px solid #444;
-        }
-        .pane-right {
-            background: #1a1a1a;
-        }
-        .pane-header {
             position: sticky;
             top: 0;
-            padding: 10px;
-            font-weight: bold;
-            font-size: 14px;
-            z-index: 10;
-            margin-bottom: 10px;
+            z-index: 100;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
-        .pane-left .pane-header {
-            background: #8B0000;
-            color: #fff;
+        .diff-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 8px;
         }
-        .pane-right .pane-header {
-            background: #006400;
-            color: #fff;
+        .diff-buttons button {
+            background: white;
+            color: #2196F3;
+            border: none;
+            padding: 6px 12px;
+            margin-right: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            border-radius: 3px;
+        }
+        .diff-buttons button:hover {
+            background: #f0f0f0;
         }
 
-        /* Code Display */
-        .code-container {
-            font-size: 11px;
-            line-height: 1.4;
+        /* Diff Content */
+        .diff-content {
+            padding: 20px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            line-height: 1.5;
         }
-        .code-line {
-            padding: 1px 5px;
+        .diff-line {
+            padding: 2px 8px;
             white-space: pre;
-            font-family: inherit;
         }
-        .pane-left .code-line {
-            color: #e0e0e0;
+        .diff-add {
+            background: #e6ffed;
+            color: #22863a;
         }
-        .pane-right .code-line {
-            color: #e0e0e0;
+        .diff-remove {
+            background: #ffeef0;
+            color: #cb2431;
         }
-        .code-line.highlight {
-            background: rgba(255, 255, 0, 0.15);
-            font-weight: bold;
+        .diff-context {
+            background: #f6f8fa;
+            color: #666;
         }
-        .pane-left .code-line.highlight {
-            background: rgba(255, 0, 0, 0.2);
-        }
-        .pane-right .code-line.highlight {
-            background: rgba(0, 255, 0, 0.2);
-        }
-        .line-num {
+        .line-indicator {
             display: inline-block;
-            width: 45px;
-            color: #666;
-            text-align: right;
-            margin-right: 10px;
-            user-select: none;
-        }
-        .separator {
-            text-align: center;
-            color: #666;
-            padding: 10px;
-            font-size: 14px;
-            background: #2d2d2d;
-            margin: 5px 0;
-            border-top: 1px dashed #444;
-            border-bottom: 1px dashed #444;
+            width: 20px;
+            font-weight: bold;
         }
     </style>
 </head>
 <body>
     <div id="listView" class="view active">
-        <div class="file-list">
-            <div class="list-header">
-                <h1>Code Diff Report</h1>
-                <div class="stats">
-                    Modified: """ + str(len(self.modified_files)) + """ | Added: """ + str(len(self.files_only_in_dir2)) + """ | Deleted: """ + str(len(self.files_only_in_dir1)) + """
-                </div>
-            </div>
-            <h3 style="color: #FF9800; margin: 20px 0 10px 0; font-size: 14px;">MODIFIED FILES - Click to view</h3>""")
+        <div class="list-view">
+            <h1>Diff Report</h1>
+            <div class="stats">
+                """ + str(len(self.modified_files)) + """ files modified | """ + str(len(self.files_only_in_dir2)) + """ added | """ + str(len(self.files_only_in_dir1)) + """ deleted
+            </div>""")
 
-        # Modified files
+        # File list
         file_list = sorted(self.modified_files.keys())
         for idx, rel_path in enumerate(file_list):
+            content1, content2 = self.modified_files[rel_path]
+
+            # Count changed lines
+            diff = list(difflib.unified_diff(content1, content2, lineterm=''))
+            changes = sum(1 for line in diff if line.startswith(('+', '-')) and not line.startswith(('+++', '---')))
+
             html.append(f"""
-            <div class="file-item modified" onclick="showFile({idx})">
+            <div class="file-item" onclick="showFile({idx})">
                 <div class="file-name">{rel_path}</div>
-            </div>""")
-
-        # Added files
-        if self.files_only_in_dir2:
-            html.append('<h3 style="color: #4CAF50; margin: 20px 0 10px 0; font-size: 14px;">NEW FILES</h3>')
-            for path in sorted(self.files_only_in_dir2):
-                html.append(f"""
-            <div class="file-item added">
-                <div class="file-name">{path} (NEW - needs to be created)</div>
-            </div>""")
-
-        # Deleted files
-        if self.files_only_in_dir1:
-            html.append('<h3 style="color: #f44336; margin: 20px 0 10px 0; font-size: 14px;">DELETED FILES</h3>')
-            for path in sorted(self.files_only_in_dir1):
-                html.append(f"""
-            <div class="file-item deleted">
-                <div class="file-name">{path} (DELETE this file)</div>
+                <div class="file-meta">{changes} lines changed</div>
             </div>""")
 
         html.append("""
         </div>
     </div>""")
 
-        # Generate individual file diff views
+        # Diff views
         for idx, rel_path in enumerate(file_list):
             content1, content2 = self.modified_files[rel_path]
 
-            # Calculate diff blocks with context
-            diff_blocks = self._get_diff_blocks(content1, content2, context_lines=3)
-            total_changes = sum(len(block['left_changes']) + len(block['right_changes']) for block in diff_blocks)
+            # Generate unified diff
+            diff_lines = list(difflib.unified_diff(
+                content1,
+                content2,
+                fromfile='Current (Remote Main)',
+                tofile='IT Modified',
+                lineterm=''
+            ))
 
             html.append(f"""
     <div id="diffView{idx}" class="view diff-view">
-        <div class="diff-nav">
-            <div class="diff-filename">FILE {idx + 1} of {len(file_list)}: {rel_path}</div>
-            <div style="color: #FF9800; font-size: 13px; margin: 5px 0;">{total_changes} lines changed in {len(diff_blocks)} block(s)</div>
-            <div class="nav-buttons">
-                <button class="btn btn-secondary" onclick="showList()">← Back to List</button>""")
+        <div class="diff-header">
+            <div class="diff-title">{rel_path}</div>
+            <div class="diff-buttons">
+                <button onclick="showList()">← Back</button>""")
 
             if idx > 0:
-                html.append(f"""
-                <button class="btn" onclick="showFile({idx - 1})">↑ Previous</button>""")
+                html.append(f"""<button onclick="showFile({idx - 1})">← Prev</button>""")
             if idx < len(file_list) - 1:
-                html.append(f"""
-                <button class="btn" onclick="showFile({idx + 1})">↓ Next</button>""")
-
-            html.append(f"""
-                <span class="btn-secondary" style="padding: 8px 16px;">{idx + 1}/{len(file_list)}</span>
-            </div>
-        </div>
-        <div class="split-container">
-            <div class="pane pane-left" id="leftPane{idx}">
-                <div class="pane-header">CURRENT CODE (will be replaced)</div>
-                <div class="code-container">""")
-
-            # Left side - show only diff blocks
-            for block_idx, block in enumerate(diff_blocks):
-                if block_idx > 0:
-                    html.append('<div class="separator">...</div>')
-
-                for line_num, line, is_changed in block['left']:
-                    css_class = " highlight" if is_changed else ""
-                    html.append(f'<div class="code-line{css_class}"><span class="line-num">{line_num}</span>{self._html_escape(line.rstrip())}</div>')
+                html.append(f"""<button onclick="showFile({idx + 1})">Next →</button>""")
 
             html.append("""
-                </div>
-            </div>
-            <div class="pane pane-right" id="rightPane{idx}">
-                <div class="pane-header">IT MODIFIED CODE (copy this)</div>
-                <div class="code-container">""")
-
-            # Right side - show only diff blocks
-            for block_idx, block in enumerate(diff_blocks):
-                if block_idx > 0:
-                    html.append('<div class="separator">...</div>')
-
-                for line_num, line, is_changed in block['right']:
-                    css_class = " highlight" if is_changed else ""
-                    html.append(f'<div class="code-line{css_class}"><span class="line-num">{line_num}</span>{self._html_escape(line.rstrip())}</div>')
-
-            html.append(f"""
-                </div>
             </div>
         </div>
-    </div>
-    <script>
-        (function() {{
-            const left = document.getElementById('leftPane{idx}');
-            const right = document.getElementById('rightPane{idx}');
-            let syncing = false;
+        <div class="diff-content">""")
 
-            left.addEventListener('scroll', function() {{
-                if (!syncing) {{
-                    syncing = true;
-                    right.scrollTop = left.scrollTop;
-                    syncing = false;
-                }}
-            }});
+            # Show unified diff
+            for line in diff_lines:
+                if line.startswith('+++') or line.startswith('---'):
+                    continue
+                elif line.startswith('+'):
+                    html.append(f'<div class="diff-line diff-add"><span class="line-indicator">+</span>{self._html_escape(line[1:])}</div>')
+                elif line.startswith('-'):
+                    html.append(f'<div class="diff-line diff-remove"><span class="line-indicator">-</span>{self._html_escape(line[1:])}</div>')
+                elif line.startswith('@@'):
+                    html.append(f'<div class="diff-line" style="background: #e0e0e0; font-weight: bold; margin-top: 10px;">{self._html_escape(line)}</div>')
+                else:
+                    html.append(f'<div class="diff-line diff-context"><span class="line-indicator"> </span>{self._html_escape(line[1:] if line else "")}</div>')
 
-            right.addEventListener('scroll', function() {{
-                if (!syncing) {{
-                    syncing = true;
-                    left.scrollTop = right.scrollTop;
-                    syncing = false;
-                }}
-            }});
-        }})();
-    </script>""")
+            html.append("""
+        </div>
+    </div>""")
 
         # JavaScript
-        html.append(f"""
+        html.append("""
     <script>
-        function showList() {{
+        function showList() {
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
             document.getElementById('listView').classList.add('active');
-        }}
-        function showFile(idx) {{
+            window.scrollTo(0, 0);
+        }
+        function showFile(idx) {
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
             document.getElementById('diffView' + idx).classList.add('active');
-        }}
-        document.addEventListener('keydown', function(e) {{
-            const active = document.querySelector('.view.active');
-            if (!active || active.id === 'listView') return;
-            const match = active.id.match(/diffView(\\d+)/);
-            if (!match) return;
-            const idx = parseInt(match[1]);
-            if (e.key === 'ArrowUp' && idx > 0) showFile(idx - 1);
-            else if (e.key === 'ArrowDown' && idx < {len(file_list) - 1}) showFile(idx + 1);
-            else if (e.key === 'Escape') showList();
-        }});
+            window.scrollTo(0, 0);
+        }
     </script>
 </body>
 </html>""")
 
         with open(output_path, 'w', encoding='utf-8') as f:
             f.write('\n'.join(html))
-
-    def _get_diff_blocks(self, content1: List[str], content2: List[str], context_lines: int = 3):
-        """Get blocks of differences with context lines."""
-        import difflib
-
-        # Use difflib to find matching blocks
-        matcher = difflib.SequenceMatcher(None, content1, content2)
-        blocks = []
-
-        for tag, i1, i2, j1, j2 in matcher.get_opcodes():
-            if tag == 'equal':
-                continue
-
-            # Add context before
-            left_start = max(0, i1 - context_lines)
-            right_start = max(0, j1 - context_lines)
-
-            # Add context after
-            left_end = min(len(content1), i2 + context_lines)
-            right_end = min(len(content2), j2 + context_lines)
-
-            # Build left side (current code)
-            left_lines = []
-            left_changes = []
-            for line_idx in range(left_start, left_end):
-                is_changed = (line_idx >= i1 and line_idx < i2)
-                if is_changed:
-                    left_changes.append(line_idx)
-                left_lines.append((line_idx + 1, content1[line_idx], is_changed))
-
-            # Build right side (IT code)
-            right_lines = []
-            right_changes = []
-            for line_idx in range(right_start, right_end):
-                is_changed = (line_idx >= j1 and line_idx < j2)
-                if is_changed:
-                    right_changes.append(line_idx)
-                right_lines.append((line_idx + 1, content2[line_idx], is_changed))
-
-            blocks.append({
-                'left': left_lines,
-                'right': right_lines,
-                'left_changes': left_changes,
-                'right_changes': right_changes
-            })
-
-        return blocks
 
     def _html_escape(self, text: str) -> str:
         """Escape HTML special characters."""
