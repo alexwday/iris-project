@@ -569,7 +569,7 @@ def fetch_document_content(
 def get_completion(
     capability: str,
     prompt: str,
-    max_tokens: int = 4096,
+    max_tokens: int = 4000,
     temperature: float = 0.7,
     token: Optional[str] = None,
     database_name: Optional[str] = None,
@@ -835,7 +835,7 @@ def process_single_document(
         synthesis_response_obj, synthesis_usage = get_completion(
             capability="large",
             prompt=synthesis_prompt,
-            max_tokens=4096,  # Allow full response generation
+            max_tokens=4000,  # Allow full response generation
             temperature=0.2,
             token=token,
             database_name=f"{database_name}_{doc_name}",
