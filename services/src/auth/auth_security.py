@@ -99,3 +99,62 @@ async def validate_token(request: Request, token: str = Depends(security)):
     validation_url = app_config.token_validation_url
     headers = {"Authorization": f"Bearer {token.credentials}"}
     pii_headers = {"Content-Type": "application/json"}
+
+    try:
+        # Validate the token
+        token_validation_response = validate_token_with_service(validation_url, headers)
+        if token_validation_response.status_code != 200:
+            response_json = token_validation_response.json()
+            raise HTTPException(
+                status_code=token_validation_response.status_code,
+                detail=response_json.get("detail", "Token validation failed")
+            )
+
+        logging.info("Token validation successful.")
+        request.state.token_data = token_validation_response.json()
+
+        # Call validate_pii if route is eligible
+        if is_route_eligible_for_pii(request):
+            return await validate_pii(request, pii_headers)
+        else:
+            logging.info("PII detection skipped as the request route is not eligible.")
+            return token_validation_response
+
+    except PIIException as e:
+        logging.error(f"HTTPException occurred: {e.detail}")
+        raise e
+    except HTTPException as e:
+        logging.error(f"HTTPException occurred: {e.detail}")
+        raise e
+    except Exception  as general_error:
+        logging.error(f"Unexpected error: {str(general_error)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred during validation."
+        )
+
+async def validate_pii(request: Request, pii_headers: dict):
+    pii_url = app_config.pii_service_url
+    if request.headers.get("Content-Type") == "application/json":
+        request_payload = await request.json()
+        logging.info(f"Payload received in validate_pii: {request_payload}")
+    else:
+        request_payload = dict(request.query_params)
+        logging.info(f"Query parameters received in validate_pii: {request_payload}")
+
+    pii_detection_response = perform_pii_detection(pii_url, request_payload, pii_headers)
+    if not isinstance(pii_detection_response, HTTPException) and pii_detection_response.status_code == 403:
+        pii_response_json = pii_detection_response.json()
+        raise PIIException(
+            status_code=pii_detection_response.status_code,
+            detail=pii_response_json[0].get('error_message')
+        )
+
+    elif not isinstance(pii_detection_response, HTTPException) and pii_detection_response.status_code != 200:
+        pii_response_json = pii_detection_response.json()
+        raise HTTPException(
+            status_code=pii_detection_response.status_code,
+            detail=pii_response_json[0].get('error_message')
+        )
+
+    return pii_detection_response
