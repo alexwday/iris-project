@@ -107,7 +107,7 @@ def connect_to_db(env: str = "rbc") -> Optional[psycopg2.extensions.connection]:
         conn = psycopg2.connect(dsn)
         logger.info(f"Connected to DB host: {conn.info.host} on port: {conn.info.port} (selected for read-write)")
         conn.autocommit = False
-
+        
         logger.debug("Database connection successful")
         return conn
     except Exception as e:

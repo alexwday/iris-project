@@ -1748,7 +1748,7 @@ def _query_database_logic(
         if conn:
             conn.close()
             logger.info("Database connection closed.")
-
+        
 
     # Fallback return (should not be reached ideally)
     logger.error(

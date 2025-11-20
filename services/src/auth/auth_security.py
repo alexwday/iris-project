@@ -36,7 +36,7 @@ def validate_token_with_service(validation_url: str, headers: dict) -> dict:
         logging.info(f"Token validation successful: {response.json()}")
 
         return response
-
+    
     except HTTPException as e:
         logging.error(f"HTTPException occurred: {e.detail}")
         raise e
@@ -80,7 +80,7 @@ def perform_pii_detection(pii_url: str, request_payload: dict, pii_headers: dict
             logging.error(f"PII Found: {analyzer_json}")
 
         return analyzer_response
-
+    
     except HTTPException as e:
         logging.error(f"HTTPException occurred: {e.detail}")
         raise e
@@ -132,7 +132,7 @@ async def validate_token(request: Request, token: str = Depends(security)):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred during validation."
         )
-
+    
 async def validate_pii(request: Request, pii_headers: dict):
     pii_url = app_config.pii_service_url
     if request.headers.get("Content-Type") == "application/json":
