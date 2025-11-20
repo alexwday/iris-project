@@ -54,7 +54,7 @@ class Config:
 
     # Database Configuration
     DB_HOST: str = os.getenv("VECTOR_POSTGRES_DB_HOST", "")
-    DB_PORT: str = os.getenv("VECTOR_POSTGRES_DB_PORT", "5432")
+    DB_PORT: str = os.getenv("VECTOR_POSTGRES_DB_PORT", "34532")
     DB_NAME: str = os.getenv("VECTOR_POSTGRES_DB_NAME", "maven-finance")
     DB_USER: str = os.getenv("VECTOR_POSTGRES_DB_USERNAME", "")
     DB_PASSWORD: str = os.getenv("VECTOR_POSTGRES_DB_PASSWORD", "")
@@ -123,7 +123,7 @@ class Config:
 
     # Static Constants (not from environment)
     ALLOWED_ROLES: list = ["user", "assistant"]  # Roles for conversation processing
-    USE_SSL: bool = True  # Always true for RBC
+    USE_SSL: bool = False  # Always true for RBC
     USE_OAUTH: bool = True  # Always true for RBC
     IS_RBC_ENV: bool = True  # Always true (RBC-only)
 

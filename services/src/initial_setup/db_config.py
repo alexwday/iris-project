@@ -28,26 +28,59 @@ def get_db_params() -> Dict[str, Any]:
     return config.get_db_params()
 
 
-def build_postgres_uri(app_config):
-    """
-    Build a PostgreSQL connection URI from config properties.
+# def build_postgres_uri(app_config):
+#     """
+#     Build a PostgreSQL connection URI from config properties (no port/dbname).
+#     """
 
-    Args:
-        app_config (dict): Configuration dictionary with database parameters
+#     user = app_config.get('user')
+#     password = app_config.get('password')
+#     host = app_config.get('host')
 
-    Returns:
-        str: PostgreSQL connection URI
-    """
-    user = app_config.get("user")
-    password = app_config.get("password")
-    host = app_config.get("host")
-    port = app_config.get("port")
-    dbname = app_config.get("dbname")
+#     logger.info(f"Connecting to DB with user: {user}, host: {host}")
 
-    if port and port != "5432":  # Only add port if it's non-standard
-        return f"postgresql://{user}:{password}@{host}:{port}/{dbname}"
+#     return f"postgresql://{user}:{password}@{host}"
 
-    return f"postgresql://{user}:{password}@{host}"
+def construct_dsn(params: dict, for_sqlalchemy=True):
+    hosts = params.get('host')
+    if not hosts:
+        raise ValueError("Host is not set or is empty.")
+
+    hosts = hosts.split(',')
+    port = params.get('port')
+    database = params.get('dbname')
+    user = params.get('user')
+    password = params.get('password')
+
+    logger.info(f"Using database: {database}")
+    #logger.info(f"Using user: {user}")
+    logger.info(f"Using host(s): {hosts}")
+    logger.info(f"Using port(s): {port}")
+
+    if ',' in port:
+        ports = port.split(',')
+        if len(ports) != len(hosts):
+            raise ValueError("The number of ports must match the number of hosts.")
+    else:
+        ports = [port] * len(hosts)
+
+    host_port_pairs = [f"{host}:{port}" for host, port in zip(hosts, ports)]
+
+    if for_sqlalchemy:
+        primary_host_port = host_port_pairs[0]
+        dsn = (
+            f"postgresql+psycopg2://{user}:{password}@{primary_host_port}/{database}?"
+            f"sslmode=require&target_session_attrs=read-write"
+        )
+    else:
+        dsn = (
+            f"dbname='{database}' user='{user}' password='{password}' "
+            f"host='{','.join(hosts)}' port='{port}' sslmode='require' "
+            f"target_session_attrs='read-write'"
+        )
+
+    #logger.info(f"Constructed DSN: {dsn}")
+    return dsn
 
 
 def connect_to_db(env: str = "rbc") -> Optional[psycopg2.extensions.connection]:
@@ -64,11 +97,17 @@ def connect_to_db(env: str = "rbc") -> Optional[psycopg2.extensions.connection]:
         Exception: If database connection fails
     """
     params = get_db_params()
-    uri = build_postgres_uri(params)
+    dsn = construct_dsn(params, for_sqlalchemy=False)
+    hosts = params.get('host', '').split(',')
+    port = params.get('port', '')
+    logger.info(f"Attempting connection to hosts: {hosts} on port(s): {port}")
+    #uri = build_postgres_uri(params)
     try:
         logger.debug("Attempting database connection")
-        conn = psycopg2.connect(dsn=uri)
+        conn = psycopg2.connect(dsn)
+        logger.info(f"Connected to DB host: {conn.info.host} on port: {conn.info.port} (selected for read-write)")
         conn.autocommit = False
+        
         logger.debug("Database connection successful")
         return conn
     except Exception as e:
@@ -86,14 +125,32 @@ def check_tables_exist(conn: psycopg2.extensions.connection) -> list:
     Returns:
         List of existing table names
     """
-    with conn.cursor() as cur:
+    # with conn.cursor() as cur:
+    #     cur.execute(
+    #         """
+    #         SELECT table_name
+    #         FROM information_schema.tables
+    #         WHERE table_schema = 'public'
+    #         AND table_name IN ('apg_catalog', 'apg_content')
+    #     """
+    #     )
+    #     tables = [row[0] for row in cur.fetchall()]
+    # return tables
+    try:
+        cur = conn.cursor()
         cur.execute(
             """
             SELECT table_name
             FROM information_schema.tables
             WHERE table_schema = 'public'
             AND table_name IN ('apg_catalog', 'apg_content')
-        """
+            """
         )
         tables = [row[0] for row in cur.fetchall()]
+    except Exception as e:
+        logger.error(f"Error checking tables: {e}", exc_info=True)
+    finally:
+        if cur is not None:
+            cur.close()
     return tables
+
