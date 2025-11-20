@@ -1748,7 +1748,6 @@ def _query_database_logic(
         if conn:
             conn.close()
             logger.info("Database connection closed.")
-        
 
     # Fallback return (should not be reached ideally)
     logger.error(
@@ -1891,12 +1890,6 @@ def query_database_sync(
         # if process_monitor and process_monitor.stages.get(stage_name) and process_monitor.stages[stage_name].status == "in_progress":
         #     process_monitor.end_stage(stage_name) # Default status is 'completed'
 
-        try:
-            # Force garbage collection to clean up any unreferenced connections
-            import gc
-            gc.collect()
-        except Exception as gc_exc:
-            logger.warning(f"Error during garbage collection in {database_name}: {gc_exc}")
         end_time = time.time()
         duration = end_time - start_time
         logger.info(f"{database_name} query completed in {duration:.2f} seconds.")

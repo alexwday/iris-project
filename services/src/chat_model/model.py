@@ -58,15 +58,14 @@ def _generate_query_embedding(
         token (Optional[str]): OAuth token for API authentication
 
     Returns:
-        Tuple[Optional[List[float]], Optional[Dict[str, Any]]]: 
+        Tuple[Optional[List[float]], Optional[Dict[str, Any]]]:
             - Embedding vector
             - Usage details dictionary
     """
     logger = logging.getLogger(__name__)
-    logger.setLevel(logging.INFO)
     logger.info(f"Generating embedding for query: '{query[:100]}...'")
     usage_details = None
-    
+
     try:
         model_config = config.get_model_config("embedding")
         model_name = model_config["name"]
@@ -119,52 +118,57 @@ def _generate_query_embedding(
 
 
 def search_apg_catalog_by_embedding(
-    research_statement: str, token: Optional[str] = None, top_k: int = 5,
-    available_databases: Optional[Dict[str, Any]] = None
+    research_statement: str,
+    token: Optional[str] = None,
+    top_k: int = 5,
+    available_databases: Optional[Dict[str, Any]] = None,
 ) -> Tuple[List[Dict[str, Any]], Optional[Dict[str, Any]]]:
     """
     Search the apg_catalog table using embeddings to find relevant documents.
-    
+
     Args:
         research_statement (str): The research statement to search for
         token (Optional[str]): OAuth token for API authentication
         top_k (int): Number of top results to retrieve (default 5)
-        
+
     Returns:
-        Tuple[List[Dict[str, Any]], Optional[Dict[str, Any]]]: 
+        Tuple[List[Dict[str, Any]], Optional[Dict[str, Any]]]:
             - List of matching documents with document_source and document_description
             - Usage details dictionary for the embedding call, or None if error
     """
     logger = logging.getLogger(__name__)
-    logger.setLevel(logging.INFO)
-    logger.info(f"Searching apg_catalog for research statement: '{research_statement[:100]}...'")
+    logger.info(
+        f"Searching apg_catalog for research statement: '{research_statement[:100]}...'"
+    )
     usage_details = None
-    
+
     conn = None
     cursor = None
-    
+
     try:
         # Generate embedding for the research statement
-        query_embedding, usage_details = _generate_query_embedding(research_statement, token)
-        
+        query_embedding, usage_details = _generate_query_embedding(
+            research_statement, token
+        )
+
         if query_embedding is None:
             logger.error("Could not generate embedding for research statement")
             return [], usage_details
-        
+
         # Connect to database
         conn = connect_to_db()
         if conn is None:
             logger.error("Failed to connect to database for apg_catalog search")
             return [], usage_details
-            
+
         register_vector(conn)
         cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-        
+
         # Perform vector search against apg_catalog table
         if available_databases:
             # Build the IN clause for filtering by document_source
             db_sources = list(available_databases.keys())
-            placeholders = ', '.join(['%s'] * len(db_sources))
+            placeholders = ", ".join(["%s"] * len(db_sources))
             sql = f"""
                 SELECT
                     document_source,
@@ -194,27 +198,29 @@ def search_apg_catalog_by_embedding(
                 LIMIT %s;
             """
             params = [query_embedding, top_k]
-        
+
         cursor.execute(sql, params)
         results_raw = cursor.fetchall()
-        
+
         # Convert to list of dictionaries
         results = []
         for i, row in enumerate(results_raw):
             record = dict(row)
             record["rank"] = i + 1
             results.append(record)
-        
+
         logger.info(f"Found {len(results)} matching documents in apg_catalog")
-        
+
         # Log the top 5 document names for debugging
         if results:
             logger.info("Top 5 APG Catalog document names:")
             for i, doc in enumerate(results[:5], 1):
-                logger.info(f"  {i}. {doc.get('document_name', 'N/A')} (score: {doc.get('similarity_score', 0.0):.3f})")
-        
+                logger.info(
+                    f"  {i}. {doc.get('document_name', 'N/A')} (score: {doc.get('similarity_score', 0.0):.3f})"
+                )
+
         return results, usage_details
-        
+
     except Exception as e:
         logger.error(f"Error searching apg_catalog: {e}", exc_info=True)
         return [], usage_details
@@ -290,7 +296,6 @@ def _process_final_references(
     import re
 
     logger = logging.getLogger(__name__)
-    logger.setLevel(logging.INFO)
 
     # Process all remaining content - support both individual and legacy formats
     def replace_refs(match):
@@ -409,15 +414,14 @@ def _process_reference_buffer(
     import re
 
     logger = logging.getLogger(__name__)
-    logger.setLevel(logging.INFO)  
 
     # Debug logging
-    # logger.debug(
-    #     f"Buffer processing: buffer length={len(buffer)}, content preview: '{buffer[-50:]}'"
-    # )
+    logger.debug(
+        f"Buffer processing: buffer length={len(buffer)}, content preview: '{buffer[-50:]}'"
+    )
     if "[REF:" in buffer:
         ref_matches = re.findall(r"\[REF:\d+\]", buffer)
-        #logger.debug(f"Found individual references in buffer: {ref_matches}")
+        logger.debug(f"Found individual references in buffer: {ref_matches}")
 
     # Look for all reference patterns
     # Individual reference pattern for processing
@@ -427,9 +431,9 @@ def _process_reference_buffer(
 
     # Find all individual references
     individual_refs = list(re.finditer(individual_pattern, buffer))
-    # logger.debug(
-    #     f"Found {len(individual_refs)} individual references: {[m.group(0) for m in individual_refs]}"
-    # )
+    logger.debug(
+        f"Found {len(individual_refs)} individual references: {[m.group(0) for m in individual_refs]}"
+    )
 
     # Find legacy format references that aren't single numbers
     legacy_refs = []
@@ -449,25 +453,27 @@ def _process_reference_buffer(
             if not overlaps:
                 legacy_refs.append(legacy_match)
 
-    # logger.debug(
-    #     f"Found {len(legacy_refs)} legacy references: {[m.group(0) for m in legacy_refs]}"
-    # )
+    logger.debug(
+        f"Found {len(legacy_refs)} legacy references: {[m.group(0) for m in legacy_refs]}"
+    )
 
     all_matches = individual_refs + legacy_refs
 
     # Check if we have complete patterns or need to keep buffering
     if not all_matches:
-        #logger.debug(f"No complete references found in buffer")
+        logger.debug(f"No complete references found in buffer")
         if len(buffer) < buffer_size:
             # Check for incomplete references at the end of buffer
             if buffer.endswith("[") or re.search(r"\[REF:?\d*$", buffer):
                 # Incomplete reference at end, keep buffering
-                # logger.debug(
-                #     f"Incomplete reference at end, keeping buffer: '{buffer[-20:]}'"
-                # )
+                logger.debug(
+                    f"Incomplete reference at end, keeping buffer: '{buffer[-20:]}'"
+                )
                 return "", buffer
             # No incomplete references and buffer not full - output what we have
-            #logger.debug(f"No references and buffer not full, outputting buffer content")
+            logger.debug(
+                f"No references and buffer not full, outputting buffer content"
+            )
             return buffer, ""
         else:
             # Buffer is full but no references - handle potential partial references
@@ -499,9 +505,9 @@ def _process_reference_buffer(
         buffer[rightmost_ref_end:] if rightmost_ref_end < len(buffer) else ""
     )
 
-    # logger.debug(
-    #     f"Processing {len(all_matches)} references in buffer, trailing content: '{trailing_content}'"
-    # )
+    logger.debug(
+        f"Processing {len(all_matches)} references in buffer, trailing content: '{trailing_content}'"
+    )
 
     # Process matches from end to start to maintain string positions
     all_matches.sort(key=lambda x: x.start(), reverse=True)
@@ -567,9 +573,9 @@ def _process_reference_buffer(
                     + replacement
                     + processed_content[match.end() :]
                 )
-                # logger.debug(
-                #     f"Replaced individual {match_text} with link for ref: {ref_id}"
-                # )
+                logger.debug(
+                    f"Replaced individual {match_text} with link for ref: {ref_id}"
+                )
             else:
                 logger.warning(f"Reference {ref_id} not found in index")
 
@@ -650,7 +656,7 @@ def _process_reference_buffer(
                                 )
                             else:
                                 # No valid page_reference, just show source
-                                link_text = f"📄 {source_filename}, Pg. {page}"
+                                link_text = f"📄 {source_filename}"
                         href = f'<a href=\'javascript:window.maven.openPdf("{s3_url}", {page}, "{highlight_text}")\'>{link_text}</a>'
                         page_links[page_key] = href
                 else:
@@ -733,7 +739,6 @@ def _execute_query_worker(
         Dict[str, Any]: Query execution results and metadata
     """
     logger = logging.getLogger(__name__)
-    logger.setLevel(logging.INFO)
     result = None
     task_exception = None
 
@@ -857,15 +862,6 @@ def _execute_query_worker(
         )  # Ensure this is called on error
         process_monitor.add_stage_details(query_stage_name, error=str(e))
 
-    finally:
-        # Clean up any connections this worker might have opened
-        try:
-            # Force cleanup of any database connections in this thread
-            import gc
-            gc.collect()
-        except Exception as cleanup_exc:
-            logger.warning(f"Error during worker cleanup: {cleanup_exc}")
-
     # Return dictionary without token_usage
     return {
         "db_name": db_name,
@@ -904,7 +900,6 @@ def _model_generator(
 
     # Add more logging around the process monitoring setup
     logger = logging.getLogger(__name__)
-    logger.setLevel(logging.INFO)
     logger.info("Setting up process monitoring")
 
     enable_monitoring(True)
@@ -1067,7 +1062,7 @@ def _model_generator(
                 logger.warning("No usage details received from direct_response stream.")
 
             # --- Legacy Debug Block Removed ---
-            
+
             # End monitoring after successful direct response completion
             logger.info("Direct response completed successfully, ending monitoring")
             process_monitor.end_monitoring()
@@ -1099,7 +1094,7 @@ def _model_generator(
                 logger.info("Essential context needed, returning context questions")
                 questions = clarifier_decision["output"].strip()
                 yield "Before proceeding with research, please clarify:\n\n" + questions
-                
+
                 # End monitoring after successful context request completion
                 logger.info("Context request completed successfully, ending monitoring")
                 process_monitor.end_monitoring()
@@ -1120,20 +1115,28 @@ def _model_generator(
 
                 # Search apg_catalog for relevant documents based on research statement
                 logger.info("Searching apg_catalog for document usage context...")
-                # apg_catalog_results, apg_catalog_usage = search_apg_catalog_by_embedding(
-                #     research_statement, token, top_k=5
-                # )
-                apg_catalog_results, apg_catalog_usage = search_apg_catalog_by_embedding(
-                    research_statement, token, top_k=5, available_databases=available_databases
+                apg_catalog_results, apg_catalog_usage = (
+                    search_apg_catalog_by_embedding(
+                        research_statement,
+                        token,
+                        top_k=5,
+                        available_databases=available_databases,
+                    )
                 )
                 if apg_catalog_usage:
-                    process_monitor.add_llm_call_details_to_stage("clarifier", apg_catalog_usage)
-                
+                    process_monitor.add_llm_call_details_to_stage(
+                        "clarifier", apg_catalog_usage
+                    )
+
                 if apg_catalog_results:
-                    logger.info(f"Found {len(apg_catalog_results)} relevant documents in apg_catalog")
+                    logger.info(
+                        f"Found {len(apg_catalog_results)} relevant documents in apg_catalog"
+                    )
                     # Log the top documents for debugging
                     for i, doc in enumerate(apg_catalog_results[:3]):
-                        logger.debug(f"APG Doc {i+1}: {doc.get('document_source', 'N/A')} - {doc.get('document_description', 'N/A')[:100]}...")
+                        logger.debug(
+                            f"APG Doc {i+1}: {doc.get('document_source', 'N/A')} - {doc.get('document_description', 'N/A')[:100]}..."
+                        )
                 else:
                     logger.info("No relevant documents found in apg_catalog")
 
@@ -1142,7 +1145,11 @@ def _model_generator(
                 # TODO: Update create_database_selection_plan to return (plan, usage_details)
                 db_selection_plan, planner_usage_details = (
                     create_database_selection_plan(
-                        research_statement, token, available_databases, is_continuation, apg_catalog_results
+                        research_statement,
+                        token,
+                        available_databases,
+                        is_continuation,
+                        apg_catalog_results,
                     )
                 )
                 selected_databases = db_selection_plan.get("databases", [])
@@ -1171,13 +1178,8 @@ def _model_generator(
                     yield "# 🔍 File Search Plan\n\n"
                     yield f"## Search Criteria\n{research_statement}\n\n"
                 else:
-                    yield "# 📋 Research Plan \n\n"
-                    # yield "---\n"
-                    #yield "<br>\n\n"
-                    #yield f"## Research Statement \n\n{research_statement} \n\n"
-                    yield f"{research_statement}\n\n"
-                    # yield "---\n"
-                    #yield "<br>\n\n"
+                    yield "# 📋 Research Plan\n\n"
+                    yield f"## Research Statement\n{research_statement}\n\n"
                 selected_db_display_names = [
                     available_databases.get(db_name, {}).get("name", db_name)
                     for db_name in selected_databases
@@ -1192,8 +1194,7 @@ def _model_generator(
                             ", ".join(selected_db_display_names[:-1])
                             + f", and {selected_db_display_names[-1]}"
                         )
-                    # yield f"## Searching the following databases: {names_str}.\n\n---\n"
-                    yield "\n\n"
+                    yield f"Searching the following databases: {names_str}.\n\n---\n"
                 else:
                     yield "No databases selected for search.\n\n---\n"
                 logger.info("Displayed database selection plan.")
@@ -1328,12 +1329,8 @@ def _model_generator(
                             if reference_index:
                                 all_reference_indices[db_name] = reference_index
 
-                            #status_block = f"**Database:** \n {db_display_name}\n{status_summary}\n---\n"
-
-                            status_summary = status_summary.replace('✅', '•').replace('📄', '•').replace('❌', '•').replace('ℹ️', '•').replace('⚠️', '•').replace('❓', '•')
-                            status_block = f"{db_display_name}: {status_summary}\n\n"
+                            status_block = f"**Database:** {db_display_name}\n{status_summary}\n---\n"
                             yield status_block
-                            #yield "<br>\n\n"
 
                     logger.info("All concurrent database queries completed processing.")
                     # --- Legacy Debug Block Removed ---
@@ -1345,7 +1342,6 @@ def _model_generator(
                     if aggregated_detailed_research:
                         yield "\n\n---\n"
                         yield "\n\n## 📊 Research Summary\n"
-                        #yield "<br>\n\n"
                         process_monitor.start_stage("summary")
                         process_monitor.add_stage_details(
                             "summary",
@@ -1391,21 +1387,6 @@ def _model_generator(
                                     )
 
                                     for page_key, page_data in sorted_pages:
-                                        # if (
-                                        #     isinstance(page_data, dict)
-                                        #     and "research_content" in page_data
-                                        # ):
-                                        #     page_number = page_data.get(
-                                        #         "page_number", 0
-                                        #     )
-                                        #     research_content = page_data.get(
-                                        #         "research_content", ""
-                                        #     )
-                                        #     file_link = page_data.get("file_link", "")
-                                        #     file_name = page_data.get("file_name", "")
-
-                                        #     # Assign REF number
-                                        #     ref_id = str(ref_counter)
                                         if (
                                             isinstance(page_data, dict)
                                             and "research_content" in page_data
@@ -1600,8 +1581,7 @@ def _model_generator(
                         db_display_name = available_databases.get(db_name, {}).get(
                             "name", db_name
                         )
-                        #yield f"\n**{db_display_name}:**\n"
-                        yield f"\n{db_display_name}:\n"
+                        yield f"\n**{db_display_name}:**\n"
                         if items_list:
                             seen_documents.setdefault(db_name, set())
                             displayed_items = 0
@@ -1616,7 +1596,6 @@ def _model_generator(
                                     doc_desc = item.get(
                                         "document_description", "No description"
                                     )
-                                    #yield f"- **{doc_name}:** {doc_desc}\n"
                                     # NEW: Generate clickable PDF link if file_name is available
                                     file_name = item.get("file_name", "")
                                     if file_name:
@@ -1638,11 +1617,11 @@ def _model_generator(
                     )
 
                 # --- Legacy Debug Block Removed ---
-                
+
                 # End monitoring after successful research completion
                 logger.info("Research completed successfully, ending monitoring")
                 process_monitor.end_monitoring()
-                
+
         else:
             logger.error(
                 f"Unknown routing function: {routing_decision['function_name']}"
@@ -1729,18 +1708,6 @@ def _model_generator(
                         db_conn.close()
                     except Exception as close_exc:
                         logger.error(f"Error closing DB connection: {close_exc}")
-                
-                # Close any other database connections that might be open
-                if 'db_cursor' in locals() and db_cursor:
-                    try:
-                        db_cursor.close()
-                        logger.info("Database cursor closed")
-                    except Exception as cursor_exc:
-                        logger.error(f"Error closing DB cursor: {cursor_exc}")
-
-                # Clean up any connections from worker threads
-                import gc
-                gc.collect() 
 
         # --- Legacy Debug: Final Yield ---
         if debug_mode and debug_data is not None and not debug_data.get("error"):
@@ -1791,7 +1758,6 @@ def model(
     Synchronous wrapper for the model generator.
     """
     logger = logging.getLogger(__name__)
-    logger.setLevel(logging.INFO)
     logger.info("Entering synchronous model wrapper.")
     try:
         sync_gen = _model_generator(conversation, html_callback, debug_mode, db_names)
@@ -1829,7 +1795,6 @@ async def process_request_async(
     import time
 
     logger = logging.getLogger(__name__)
-    logger.setLevel(logging.INFO)
     logger.info(f"Processing async request with {len(conversation)} messages")
 
     start_time = time.time()
