@@ -62,7 +62,9 @@ def _generate_query_embedding(
             - Embedding vector
             - Usage details dictionary
     """
+
     logger = logging.getLogger(__name__)
+    logger.setLevel(logging.INFO)
     logger.info(f"Generating embedding for query: '{query[:100]}...'")
     usage_details = None
 
@@ -118,42 +120,43 @@ def _generate_query_embedding(
 
 
 def search_apg_catalog_by_embedding(
-    research_statement: str,
-    token: Optional[str] = None,
-    top_k: int = 5,
-    available_databases: Optional[Dict[str, Any]] = None,
+        research_statement: str, token: Optional[str] = None, top_k: int = 5,
+        available_databases: Optional[Dict[str, Any]] = None
 ) -> Tuple[List[Dict[str, Any]], Optional[Dict[str, Any]]]:
     """
     Search the apg_catalog table using embeddings to find relevant documents.
+
 
     Args:
         research_statement (str): The research statement to search for
         token (Optional[str]): OAuth token for API authentication
         top_k (int): Number of top results to retrieve (default 5)
 
+
     Returns:
         Tuple[List[Dict[str, Any]], Optional[Dict[str, Any]]]:
             - List of matching documents with document_source and document_description
             - Usage details dictionary for the embedding call, or None if error
     """
+
     logger = logging.getLogger(__name__)
-    logger.info(
-        f"Searching apg_catalog for research statement: '{research_statement[:100]}...'"
-    )
+    logger.setLevel(logging.INFO)
+    logger.info(f"Searching apg_catalog for research statement: '{research_statement[:100]}...'")
     usage_details = None
+
 
     conn = None
     cursor = None
 
+
     try:
         # Generate embedding for the research statement
-        query_embedding, usage_details = _generate_query_embedding(
-            research_statement, token
-        )
+        query_embedding, usage_details = _generate_query_embedding(research_statement, token)
 
         if query_embedding is None:
             logger.error("Could not generate embedding for research statement")
             return [], usage_details
+
 
         # Connect to database
         conn = connect_to_db()
@@ -161,14 +164,16 @@ def search_apg_catalog_by_embedding(
             logger.error("Failed to connect to database for apg_catalog search")
             return [], usage_details
 
+
         register_vector(conn)
         cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+
 
         # Perform vector search against apg_catalog table
         if available_databases:
             # Build the IN clause for filtering by document_source
             db_sources = list(available_databases.keys())
-            placeholders = ", ".join(["%s"] * len(db_sources))
+            placeholders = ', '.join(['%s'] * len(db_sources))
             sql = f"""
                 SELECT
                     document_source,
