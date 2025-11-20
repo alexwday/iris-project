@@ -1067,6 +1067,7 @@ def _model_generator(
                 logger.warning("No usage details received from direct_response stream.")
 
         # --- Legacy Debug Block Removed ---
+
         # End monitoring after successful direct response completion
         logger.info("Direct response completed successfully, ending monitoring")
         process_monitor.end_monitoring()
