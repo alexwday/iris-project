@@ -108,7 +108,7 @@ system_prompt: |
   - Include documents that meet HIGH, MEDIUM, or LOW-MEDIUM relevance thresholds
   - Format as a JSON array of document IDs as strings
   - **Order by relevance**: List the most relevant documents first, followed by others in decreasing order of relevance
-    Examples: ["1", "2", "5", "8", "12", "15", "18", "22", "24", "27"] (10 docs), ["3", "4", "7", "9", "11", "13", "14", "16", "19", "20", "21", "23", "25", "26", "28"] (15 docs)
+  - Examples: ["1", "2", "5", "8", "12", "15", "18", "22", "24", "27"] (10 docs), ["3", "4", "7", "9", "11", "13", "14", "16", "19", "20", "21", "23", "25", "26", "28"] (15 docs)
   - If no documents meet relevance thresholds, return an empty array: []
   - No additional text, explanations, or commentary
   </OUTPUT_REQUIREMENTS>
