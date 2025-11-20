@@ -284,14 +284,13 @@ class DiffTool:
         /* Side-by-side Diff */
         .diff-content {
             padding: 20px;
-            overflow-x: auto;
         }
         .diff-table {
             width: 100%;
             border-collapse: collapse;
             font-family: 'Courier New', Consolas, monospace;
             font-size: 12px;
-            line-height: 1.4;
+            line-height: 1.5;
         }
         .diff-table td {
             padding: 2px 8px;
@@ -311,12 +310,22 @@ class DiffTool:
             padding-right: 12px;
         }
         .line-code {
-            white-space: pre;
-            overflow-x: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
             max-width: 45vw;
+            padding-left: 8px;
+        }
+        .line-code-continuation {
+            padding-left: 24px;
+            border-left: 2px solid #ccc;
+            margin-left: 4px;
         }
         .diff-unchanged {
             background: white;
+        }
+        .diff-context {
+            background: #fafafa;
+            color: #666;
         }
         .diff-add {
             background: #e6ffed;
@@ -349,6 +358,19 @@ class DiffTool:
             text-transform: uppercase;
             padding: 8px !important;
             background: #f0f0f0;
+        }
+        .diff-separator {
+            background: #e8e8e8;
+            height: 8px;
+        }
+        .hunk-header {
+            background: #f0f0f0;
+            color: #666;
+            font-weight: bold;
+            font-size: 11px;
+            padding: 6px 8px !important;
+            border-top: 2px solid #ccc;
+            border-bottom: 1px solid #ddd;
         }
     </style>
 </head>
@@ -423,21 +445,81 @@ class DiffTool:
                     <td class="side-label" colspan="2">IT Modified</td>
                 </tr>""")
 
-            # Generate side-by-side diff
+            # Generate side-by-side diff with context (only show changed blocks)
             matcher = difflib.SequenceMatcher(None, content1, content2)
-            for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+            context_lines = 3  # Number of context lines to show before/after changes
+
+            opcodes = list(matcher.get_opcodes())
+            last_shown_line = -1
+
+            for idx, (tag, i1, i2, j1, j2) in enumerate(opcodes):
+                # Skip if this is just context between changes
                 if tag == 'equal':
-                    for i in range(i1, i2):
+                    # Determine if we should show this equal block
+                    show_start = max(i1, last_shown_line + 1)
+                    show_end = i2
+
+                    # Check if there's a change coming after this
+                    has_next_change = idx + 1 < len(opcodes) and opcodes[idx + 1][0] != 'equal'
+                    # Check if there was a change before this
+                    has_prev_change = last_shown_line >= 0
+
+                    if has_prev_change:
+                        # Show context lines after previous change
+                        show_start = i1
+                        show_end = min(i1 + context_lines, i2)
+
+                    if has_next_change:
+                        # Show context lines before next change
+                        show_start = max(i2 - context_lines, show_start)
+                        show_end = i2
+
+                    # If this equal block is between two changes and small, show it all
+                    if has_prev_change and has_next_change and (i2 - i1) <= context_lines * 2:
+                        show_start = i1
+                        show_end = i2
+
+                    # Skip if no context to show
+                    if not has_prev_change and not has_next_change:
+                        continue
+
+                    # Show context collapse indicator if we're skipping lines
+                    if has_prev_change and i1 < show_start:
+                        html.append(f"""
+                <tr class="diff-separator">
+                    <td colspan="4"></td>
+                </tr>
+                <tr>
+                    <td colspan="4" class="hunk-header">... ({show_start - i1} lines hidden) ...</td>
+                </tr>""")
+
+                    # Show context lines
+                    for i in range(show_start, show_end):
                         line1 = content1[i].rstrip('\n')
                         line2 = content2[j1 + (i - i1)].rstrip('\n')
                         html.append(f"""
-                <tr class="diff-unchanged">
+                <tr class="diff-context">
                     <td class="line-num">{i + 1}</td>
                     <td class="line-code">{self._html_escape(line1)}</td>
                     <td class="line-num">{j1 + (i - i1) + 1}</td>
                     <td class="line-code">{self._html_escape(line2)}</td>
                 </tr>""")
-                elif tag == 'replace':
+
+                    last_shown_line = show_end - 1
+                    continue
+
+                # Show hunk header if there was a gap
+                if last_shown_line >= 0 and i1 > last_shown_line + 1:
+                    html.append(f"""
+                <tr class="diff-separator">
+                    <td colspan="4"></td>
+                </tr>
+                <tr>
+                    <td colspan="4" class="hunk-header">@@ -{i1 + 1},{i2 - i1} +{j1 + 1},{j2 - j1} @@</td>
+                </tr>""")
+
+                # Show the actual change
+                if tag == 'replace':
                     # Show removed lines on left, added lines on right
                     max_lines = max(i2 - i1, j2 - j1)
                     for k in range(max_lines):
@@ -476,6 +558,8 @@ class DiffTool:
                     <td class="line-num diff-add">{j + 1}</td>
                     <td class="line-code diff-add">{self._html_escape(line)}</td>
                 </tr>""")
+
+                last_shown_line = i2 - 1
 
             html.append("""
             </table>
