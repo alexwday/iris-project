@@ -150,11 +150,11 @@ async def validate_pii(request: Request, pii_headers: dict):
             detail=pii_response_json[0].get('error_message')
         )
 
+
     elif not isinstance(pii_detection_response, HTTPException) and pii_detection_response.status_code != 200:
         pii_response_json = pii_detection_response.json()
         raise HTTPException(
             status_code=pii_detection_response.status_code,
             detail=pii_response_json[0].get('error_message')
         )
-
     return pii_detection_response
