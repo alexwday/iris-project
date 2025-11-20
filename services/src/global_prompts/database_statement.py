@@ -2,8 +2,8 @@
 """
 Database Statement Utility
 
-Provides centralized descriptions of available databases to be used across agents.
-This module serves as the single source of truth for database information.
+Provides centralized descriptions of available databases to be included in agent prompts.
+This module serves as the single source of truth for database information across the system.
 """
 from config.config import Config
 import logging
@@ -89,7 +89,7 @@ AVAILABLE_DATABASES = {
         "description": "RBC's policies on general ledger naming conventions, intra-group account procedures, internal controls over financial reporting (ICFR), and the Enterprise Internal Control Management Policy (ICMP) aligned with frameworks like COSO, SOX, and NI 52-109.",
         "query_type": "semantic search",  # Assuming semantic search
         "content_type": "policies and procedures / internal controls / compliance",
-        "use_when": "Tier 1 (Domain Specific): Questions about GL naming, intra-group account reconciliation, ICFR requirements, or control effectiveness.",
+        "use_when": "Tier 1 (Domain Specific): Questions about GL naming, intra-group account reconciliation, ICFR requirements (SOX/NI 52-109), or the overall ICMP framework (COSO). **Strategy:** Query for specific policy numbers (FIN-ACC-22, FIN-ACC-201), control frameworks, or process details. **Query:** Use terms like 'GL naming convention', 'intra-group accounts', 'ICFR', 'SOX', 'NI 52-109', 'ICMP', 'COSO framework', 'FIN-ACC-22', 'FIN-ACC-201'.",
     },
     "external_ey": {
         "name": "EY IFRS Guidance",
@@ -103,7 +103,7 @@ AVAILABLE_DATABASES = {
         "description": "The official IFRS standards, interpretations (IFRICs/SICs), guidance, illustrative examples, and the basis for conclusions, serving as an authoritative source for IFRS-related queries.",
         "query_type": "semantic search",
         "content_type": "standards and interpretations",
-        "use_when": "External Authoritative: Official IFRS standard text, interpretations, basis for conclusions. **Strategy:**",
+        "use_when": "External Authoritative: Official IFRS standard text, interpretations, basis for conclusions. **Strategy:** Consult *only if requested by user* or if internal sources are insufficient/unclear. Use for official standard text or interpretations. **Query:** Use standard numbers (IFRS 15, IAS 38), interpretations (IFRIC/SIC), technical terms, specific paragraphs.",
     },
     "internal_sab_99": {
         "name": "SAB 99 Materiality Assessment Memos",
