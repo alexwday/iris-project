@@ -1730,17 +1730,17 @@ def _model_generator(
                     except Exception as close_exc:
                         logger.error(f"Error closing DB connection: {close_exc}")
 
-        # Close any other database connections that might be open
-        if 'db_cursor' in locals() and db_cursor:
-            try:
-                db_cursor.close()
-                logger.info("Database cursor closed")
-            except Exception as cursor_exc:
-                logger.error(f"Error closing DB cursor: {cursor_exc}")
+                # Close any other database connections that might be open
+                if 'db_cursor' in locals() and db_cursor:
+                    try:
+                        db_cursor.close()
+                        logger.info("Database cursor closed")
+                    except Exception as cursor_exc:
+                        logger.error(f"Error closing DB cursor: {cursor_exc}")
 
-        # Clean up any connections from worker threads
-        import gc
-        gc.collect()
+                # Clean up any connections from worker threads
+                import gc
+                gc.collect()
 
         # --- Legacy Debug: Final Yield ---
         if debug_mode and debug_data is not None and not debug_data.get("error"):
