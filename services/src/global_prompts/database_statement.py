@@ -230,3 +230,93 @@ DOCUMENT_SOURCE_MAPPING = {
 }
 
 def get_available_databases(filtered=False):
+    """
+    Returns the dictionary of available databases, each with an 'ad_group' key added.
+    """
+    # Your existing AVAILABLE_DATABASES dict
+    # (Assume it's defined above this function)
+
+    # AD group mapping
+    ad_group_to_db_mapping = app_config.get_ad_group_to_db_mapping()
+
+    questions_mapping = {
+        "external_ey": [],
+        "external_iasb": [
+            "Under IFRS, what are examples of temporary differences that lead to a deferred tax liability?",
+            "Under IFRS, what are the presentation requirements for compound financial instruments? Please specify the relevant standard and sections."
+        ],
+        "internal_cheatsheets": [],
+        "internal_wiki": [],
+        "internal_memos": [],
+        "internal_capm": [
+            "What is the IFRS and U.S. GAAP difference on firm commitment related to hedging?",
+            "Is a call option in a finanical instrument an embedded derivative?",
+            "What threshold is considered to be probable under IFRS?",
+            "What are the main criteria to derecognize a financial asset under IFRS?"
+        ],
+        "internal_par": [
+            "What would the approval level be if i had a Contract PAR greater than $200MM?",
+            "Who is responsible for the fulfillment of all monitoring, reporting, and follow up of the PAR?",
+            "According to RBC PAR when is an addendum required?",
+            "How do I know if my PAR requires a GE or GOCx meeting?"
+        ],
+        "internal_aio": [
+            "What type of business relationships are acceptable with an external auditor?",
+            "What types of financial information are required to be disclosed to external parties?",
+            "What arrangements are prohibited under joint marketing and co-branding with external auditors?",
+            "What are examples of external parties?"
+        ],
+        "internal_esg": [
+            "If something isn't material should it still go into the Sustainability Report?",
+            "Is there a threshold for materiality?",
+            "How to treat measurement uncertainty in the ESG framework?",
+            "What are the ESG guidelines for revising materiality from prior reporting periods?"
+        ],
+        "internal_ext_reporting_and_disclosure": [
+            "According to the disclosure policy: Who are authorized spokespersons?",
+            "What guidelines should be followed for announcements that are not material?",
+            "Can an RBC employee speak at a conference during quiet period?",
+            "Which teams must review forward-looking information before it's disclosed?"
+        ],
+        "internal_global_finance_standards": [
+            "What are the minimum standards for Non-Interest Expenses in COA reporting?",
+            "What is RBC's global FX rate policy?",
+            "What are examples of regulatory reports RBC provides OSFI?",
+            "What are requirements for resident and non-resident transactions?"
+        ],
+        "internal_management_reporting": [
+            "What are the major performance measurements for management reporting at RBC?",
+            "What are the processes for funds transfer pricing?",
+            "How are FTE numbers calculated?",
+            "How does RBC do rounding for management reporting purposes?"
+        ],
+        "internal_process_and_controls": [
+            "What are the requirements of RBC's internal controls policy?",
+            "What is the top down risk based approach in the ICFR policy?",
+            "What are the standardized abbreviations for the Chart of Accounts?",
+            "How does RBC apply it's ICMP policy for Control Activities?"
+        ],
+        "internal_sab_99": [
+            "What is the most common root cause?",
+            "How many errors impacted Deposits?",
+            "How many have EUDA related issues?"
+        ],
+    }
+
+    db_to_ad_group = {}
+    for ad_group, db_list in ad_group_to_db_mapping.items():
+        for db_name in db_list:
+            db_to_ad_group[db_name] = ad_group.strip()
+    logger.info(f"Database to AD group mapping: {db_to_ad_group}")
+
+    enriched_databases = {}
+    for db_name, db_info in AVAILABLE_DATABASES.items():
+        db_info_api = db_info.copy()
+        if filtered:
+            for key in ["query_type", "content_type", "use_when"]:
+                db_info_api.pop(key, None)
+        db_info_api["ad_group"] = db_to_ad_group.get(db_name, None)
+        db_info_api["questions"] = questions_mapping.get(db_name, [])
+        enriched_databases[db_name] = db_info_api
+
+    return enriched_databases
