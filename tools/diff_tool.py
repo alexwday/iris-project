@@ -466,13 +466,24 @@ class DiffTool:
             diff_count = 0
             for i in range(len(content1)):
                 if i < len(content2):
+                    # Check both with and without line endings stripped
+                    line1_raw = content1[i]
+                    line2_raw = content2[i]
                     line1 = content1[i].rstrip('\n')
                     line2 = content2[i].rstrip('\n')
-                    if line1 != line2:
+
+                    # Check if different (including line endings)
+                    if line1_raw != line2_raw:
                         diff_count += 1
                         html.append(f"""<div style="margin-bottom: 15px; padding: 8px; background: #f9f9f9; border-left: 3px solid #ff5722;">
                         <strong>Line {i + 1}:</strong><br>""")
-                        html.append(self._get_byte_analysis(line1, line2))
+
+                        # If stripped versions are the same, it's a line ending difference
+                        if line1 == line2:
+                            html.append(f"<em style='color: #ff5722;'>⚠️ Line ending difference detected!</em><br>")
+                            html.append(self._get_byte_analysis(line1_raw, line2_raw))
+                        else:
+                            html.append(self._get_byte_analysis(line1, line2))
                         html.append("</div>")
 
             if diff_count == 0:
