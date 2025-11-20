@@ -58,7 +58,7 @@ def _generate_query_embedding(
         token (Optional[str]): OAuth token for API authentication
 
     Returns:
-        Tuple[Optional[List[float]], Optional[Dict[str, Any]]]:
+        Tuple[Optional[List[float]], Optional[Dict[str, Any]]]: 
             - Embedding vector
             - Usage details dictionary
     """
@@ -66,7 +66,7 @@ def _generate_query_embedding(
     logger.setLevel(logging.INFO)
     logger.info(f"Generating embedding for query: '{query[:100]}...'")
     usage_details = None
-
+    
     try:
         model_config = config.get_model_config("embedding")
         model_name = model_config["name"]
@@ -124,12 +124,12 @@ def search_apg_catalog_by_embedding(
 ) -> Tuple[List[Dict[str, Any]], Optional[Dict[str, Any]]]:
     """
     Search the apg_catalog table using embeddings to find relevant documents.
-
+    
     Args:
         research_statement (str): The research statement to search for
         token (Optional[str]): OAuth token for API authentication
         top_k (int): Number of top results to retrieve (default 5)
-
+        
     Returns:
         Tuple[List[Dict[str, Any]], Optional[Dict[str, Any]]]:
             - List of matching documents with document_source and document_description
@@ -139,27 +139,27 @@ def search_apg_catalog_by_embedding(
     logger.setLevel(logging.INFO)
     logger.info(f"Searching apg_catalog for research statement: '{research_statement[:100]}...'")
     usage_details = None
-
+    
     conn = None
     cursor = None
-
+    
     try:
         # Generate embedding for the research statement
         query_embedding, usage_details = _generate_query_embedding(research_statement, token)
-
+        
         if query_embedding is None:
             logger.error("Could not generate embedding for research statement")
             return [], usage_details
-
+        
         # Connect to database
         conn = connect_to_db()
         if conn is None:
             logger.error("Failed to connect to database for apg_catalog search")
             return [], usage_details
-
+            
         register_vector(conn)
         cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-
+        
         # Perform vector search against apg_catalog table
         if available_databases:
             # Build the IN clause for filtering by document_source
@@ -194,27 +194,27 @@ def search_apg_catalog_by_embedding(
                 LIMIT %s;
             """
             params = [query_embedding, top_k]
-
+        
         cursor.execute(sql, params)
         results_raw = cursor.fetchall()
-
+        
         # Convert to list of dictionaries
         results = []
         for i, row in enumerate(results_raw):
             record = dict(row)
             record["rank"] = i + 1
             results.append(record)
-
+        
         logger.info(f"Found {len(results)} matching documents in apg_catalog")
-
+        
         # Log the top 5 document names for debugging
         if results:
             logger.info("Top 5 APG Catalog document names:")
             for i, doc in enumerate(results[:5], 1):
                 logger.info(f"  {i}. {doc.get('document_name', 'N/A')} (score: {doc.get('similarity_score', 0.0):.3f})")
-
+        
         return results, usage_details
-
+        
     except Exception as e:
         logger.error(f"Error searching apg_catalog: {e}", exc_info=True)
         return [], usage_details
@@ -409,7 +409,7 @@ def _process_reference_buffer(
     import re
 
     logger = logging.getLogger(__name__)
-    logger.setLevel(logging.INFO)
+    logger.setLevel(logging.INFO)  
 
     # Debug logging
     # logger.debug(
@@ -1067,7 +1067,7 @@ def _model_generator(
                 logger.warning("No usage details received from direct_response stream.")
 
             # --- Legacy Debug Block Removed ---
-
+            
             # End monitoring after successful direct response completion
             logger.info("Direct response completed successfully, ending monitoring")
             process_monitor.end_monitoring()
@@ -1099,7 +1099,7 @@ def _model_generator(
                 logger.info("Essential context needed, returning context questions")
                 questions = clarifier_decision["output"].strip()
                 yield "Before proceeding with research, please clarify:\n\n" + questions
-
+                
                 # End monitoring after successful context request completion
                 logger.info("Context request completed successfully, ending monitoring")
                 process_monitor.end_monitoring()
@@ -1128,7 +1128,7 @@ def _model_generator(
                 )
                 if apg_catalog_usage:
                     process_monitor.add_llm_call_details_to_stage("clarifier", apg_catalog_usage)
-
+                
                 if apg_catalog_results:
                     logger.info(f"Found {len(apg_catalog_results)} relevant documents in apg_catalog")
                     # Log the top documents for debugging
@@ -1638,11 +1638,11 @@ def _model_generator(
                     )
 
                 # --- Legacy Debug Block Removed ---
-
+                
                 # End monitoring after successful research completion
                 logger.info("Research completed successfully, ending monitoring")
                 process_monitor.end_monitoring()
-
+                
         else:
             logger.error(
                 f"Unknown routing function: {routing_decision['function_name']}"
@@ -1729,7 +1729,7 @@ def _model_generator(
                         db_conn.close()
                     except Exception as close_exc:
                         logger.error(f"Error closing DB connection: {close_exc}")
-
+                
                 # Close any other database connections that might be open
                 if 'db_cursor' in locals() and db_cursor:
                     try:
@@ -1740,7 +1740,7 @@ def _model_generator(
 
                 # Clean up any connections from worker threads
                 import gc
-                gc.collect()
+                gc.collect() 
 
         # --- Legacy Debug: Final Yield ---
         if debug_mode and debug_data is not None and not debug_data.get("error"):
