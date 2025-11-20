@@ -1896,7 +1896,6 @@ def query_database_sync(
             gc.collect()
         except Exception as gc_exc:
             logger.warning(f"Error during garbage collection in {database_name}: {gc_exc}")
-
         end_time = time.time()
         duration = end_time - start_time
         logger.info(f"{database_name} query completed in {duration:.2f} seconds.")
