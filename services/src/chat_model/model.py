@@ -1636,11 +1636,11 @@ def _model_generator(
                         f"Completed process for scope '{scope}', returning {total_metadata_items} items internally."
                     )
 
-        # --- Legacy Debug Block Removed ---
+                # --- Legacy Debug Block Removed ---
 
-        # End monitoring after successful research completion
-        logger.info("Research completed successfully, ending monitoring")
-        process_monitor.end_monitoring()
+                # End monitoring after successful research completion
+                logger.info("Research completed successfully, ending monitoring")
+                process_monitor.end_monitoring()
 
         else:
             logger.error(
