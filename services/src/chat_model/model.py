@@ -1066,11 +1066,11 @@ def _model_generator(
             else:
                 logger.warning("No usage details received from direct_response stream.")
 
-        # --- Legacy Debug Block Removed ---
+            # --- Legacy Debug Block Removed ---
 
-        # End monitoring after successful direct response completion
-        logger.info("Direct response completed successfully, ending monitoring")
-        process_monitor.end_monitoring()
+            # End monitoring after successful direct response completion
+            logger.info("Direct response completed successfully, ending monitoring")
+            process_monitor.end_monitoring()
 
         elif routing_decision["function_name"] == "research_from_database":
             logger.info("Using research path based on routing decision")
@@ -1330,7 +1330,7 @@ def _model_generator(
 
                             #status_block = f"**Database:** \n {db_display_name}\n{status_summary}\n---\n"
 
-                            status_summary = status_summary.replace('✅', '**').replace('📄', '**').replace('❌', '**').replace('ℹ️', '**').replace('⚠️', '**').replace('❓', '**')
+                            status_summary = status_summary.replace('✅', '•').replace('📄', '•').replace('❌', '•').replace('ℹ️', '•').replace('⚠️', '•').replace('❓', '•')
                             status_block = f"{db_display_name}: {status_summary}\n\n"
                             yield status_block
                             #yield "<br>\n\n"
@@ -1403,6 +1403,7 @@ def _model_generator(
                                         #     )
                                         #     file_link = page_data.get("file_link", "")
                                         #     file_name = page_data.get("file_name", "")
+
                                         #     # Assign REF number
                                         #     ref_id = str(ref_counter)
                                         if (
@@ -1789,7 +1790,6 @@ def model(
     """
     Synchronous wrapper for the model generator.
     """
-
     logger = logging.getLogger(__name__)
     logger.setLevel(logging.INFO)
     logger.info("Entering synchronous model wrapper.")
