@@ -154,4 +154,3 @@ def check_tables_exist(conn: psycopg2.extensions.connection) -> list:
             cur.close()
     return tables
 
-
