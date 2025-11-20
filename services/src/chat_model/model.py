@@ -126,12 +126,10 @@ def search_apg_catalog_by_embedding(
     """
     Search the apg_catalog table using embeddings to find relevant documents.
 
-
     Args:
         research_statement (str): The research statement to search for
         token (Optional[str]): OAuth token for API authentication
         top_k (int): Number of top results to retrieve (default 5)
-
 
     Returns:
         Tuple[List[Dict[str, Any]], Optional[Dict[str, Any]]]:
@@ -220,9 +218,7 @@ def search_apg_catalog_by_embedding(
         if results:
             logger.info("Top 5 APG Catalog document names:")
             for i, doc in enumerate(results[:5], 1):
-                logger.info(
-                    f"  {i}. {doc.get('document_name', 'N/A')} (score: {doc.get('similarity_score', 0.0):.3f})"
-                )
+                logger.info(f"  {i}. {doc.get('document_name', 'N/A')} (score: {doc.get('similarity_score', 0.0):.3f})")
 
         return results, usage_details
 
@@ -301,6 +297,7 @@ def _process_final_references(
     import re
 
     logger = logging.getLogger(__name__)
+    logger.setLevel(logging.INFO)
 
     # Process all remaining content - support both individual and legacy formats
     def replace_refs(match):
@@ -419,14 +416,15 @@ def _process_reference_buffer(
     import re
 
     logger = logging.getLogger(__name__)
+    logger.setLevel(logging.INFO)
 
     # Debug logging
-    logger.debug(
-        f"Buffer processing: buffer length={len(buffer)}, content preview: '{buffer[-50:]}'"
-    )
+    # logger.debug(
+    #     f"Buffer processing: buffer length={len(buffer)}, content preview: '{buffer[-50:]}'"
+    # )
     if "[REF:" in buffer:
         ref_matches = re.findall(r"\[REF:\d+\]", buffer)
-        logger.debug(f"Found individual references in buffer: {ref_matches}")
+        #logger.debug(f"Found individual references in buffer: {ref_matches}")
 
     # Look for all reference patterns
     # Individual reference pattern for processing
@@ -436,9 +434,9 @@ def _process_reference_buffer(
 
     # Find all individual references
     individual_refs = list(re.finditer(individual_pattern, buffer))
-    logger.debug(
-        f"Found {len(individual_refs)} individual references: {[m.group(0) for m in individual_refs]}"
-    )
+    # logger.debug(
+    #     f"Found {len(individual_refs)} individual references: {[m.group(0) for m in individual_refs]}"
+    # )
 
     # Find legacy format references that aren't single numbers
     legacy_refs = []
@@ -458,22 +456,22 @@ def _process_reference_buffer(
             if not overlaps:
                 legacy_refs.append(legacy_match)
 
-    logger.debug(
-        f"Found {len(legacy_refs)} legacy references: {[m.group(0) for m in legacy_refs]}"
-    )
+    # logger.debug(
+    #     f"Found {len(legacy_refs)} legacy references: {[m.group(0) for m in legacy_refs]}"
+    # )
 
     all_matches = individual_refs + legacy_refs
 
     # Check if we have complete patterns or need to keep buffering
     if not all_matches:
-        logger.debug(f"No complete references found in buffer")
+        #logger.debug(f"No complete references found in buffer")
         if len(buffer) < buffer_size:
             # Check for incomplete references at the end of buffer
             if buffer.endswith("[") or re.search(r"\[REF:?\d*$", buffer):
                 # Incomplete reference at end, keep buffering
-                logger.debug(
-                    f"Incomplete reference at end, keeping buffer: '{buffer[-20:]}'"
-                )
+                # logger.debug(
+                #     f"Incomplete reference at end, keeping buffer: '{buffer[-20:]}'"
+                # )
                 return "", buffer
             # No incomplete references and buffer not full - output what we have
             logger.debug(
