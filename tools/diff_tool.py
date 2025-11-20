@@ -551,10 +551,15 @@ class DiffTool:
 
                         # Check if lines differ only by whitespace
                         ws_only_diff = ''
+                        byte_analysis = ''
                         if left_line and right_line and self._lines_differ_only_by_whitespace(left_line, right_line):
                             ws_only_diff = ' title="⚠ Whitespace-only difference"'
                             left_class += ' ws-diff'
                             right_class += ' ws-diff'
+
+                        # Add byte-level analysis for any difference
+                        if left_line and right_line and left_line != right_line:
+                            byte_analysis = self._get_byte_analysis(left_line, right_line)
 
                         html.append(f"""
                 <tr>
@@ -562,6 +567,13 @@ class DiffTool:
                     <td class="line-code {left_class}"{ws_only_diff}>{self._html_escape(left_line) if left_line else '&nbsp;'}</td>
                     <td class="line-num {right_class}">{right_num}</td>
                     <td class="line-code {right_class}"{ws_only_diff}>{self._html_escape(right_line) if right_line else '&nbsp;'}</td>
+                </tr>""")
+
+                        # Add byte analysis row if there's a difference
+                        if byte_analysis:
+                            html.append(f"""
+                <tr>
+                    <td colspan="4" style="padding: 0;">{byte_analysis}</td>
                 </tr>""")
                 elif tag == 'delete':
                     for i in range(i1, i2):
@@ -688,6 +700,59 @@ class DiffTool:
     def _lines_differ_only_by_whitespace(self, line1: str, line2: str) -> bool:
         """Check if two lines differ only by whitespace."""
         return line1.strip() == line2.strip() and line1 != line2
+
+    def _get_byte_analysis(self, line1: str, line2: str) -> str:
+        """Generate detailed byte-level analysis of two different lines."""
+        analysis = []
+
+        # Basic info
+        analysis.append(f"<div style='font-family: monospace; font-size: 11px; background: #f9f9f9; padding: 8px; margin-top: 4px; border-left: 3px solid #ff5722;'>")
+        analysis.append(f"<strong style='color: #ff5722;'>🔍 BYTE-LEVEL ANALYSIS:</strong><br>")
+        analysis.append(f"Line 1 length: {len(line1)} bytes | Line 2 length: {len(line2)} bytes<br>")
+
+        # Show hex dump of each line
+        hex1 = ' '.join(f'{ord(c):02x}' for c in line1)
+        hex2 = ' '.join(f'{ord(c):02x}' for c in line2)
+
+        analysis.append(f"<br><strong>Line 1 hex:</strong> {hex1}<br>")
+        analysis.append(f"<strong>Line 2 hex:</strong> {hex2}<br>")
+
+        # Character-by-character comparison
+        max_len = max(len(line1), len(line2))
+        diffs = []
+
+        for i in range(max_len):
+            c1 = line1[i] if i < len(line1) else None
+            c2 = line2[i] if i < len(line2) else None
+
+            if c1 != c2:
+                c1_repr = f"'{c1}' (0x{ord(c1):02x})" if c1 else "EOF"
+                c2_repr = f"'{c2}' (0x{ord(c2):02x})" if c2 else "EOF"
+
+                # Special character names
+                if c1 and ord(c1) < 32:
+                    c1_repr += f" [{self._get_control_char_name(ord(c1))}]"
+                if c2 and ord(c2) < 32:
+                    c2_repr += f" [{self._get_control_char_name(ord(c2))}]"
+
+                diffs.append(f"Pos {i}: {c1_repr} ≠ {c2_repr}")
+
+        if diffs:
+            analysis.append(f"<br><strong>Differences found at {len(diffs)} position(s):</strong><br>")
+            for diff in diffs[:10]:  # Show first 10 differences
+                analysis.append(f"• {diff}<br>")
+            if len(diffs) > 10:
+                analysis.append(f"• ... and {len(diffs) - 10} more<br>")
+
+        analysis.append("</div>")
+        return ''.join(analysis)
+
+    def _get_control_char_name(self, byte_val: int) -> str:
+        """Get name for control characters."""
+        names = {
+            0: 'NUL', 9: 'TAB', 10: 'LF', 13: 'CR', 32: 'SPACE'
+        }
+        return names.get(byte_val, f'CTRL-{byte_val}')
 
     def generate_summary_markdown(self, output_path: Path):
         """Generate markdown summary."""
