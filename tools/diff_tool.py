@@ -190,7 +190,7 @@ class DiffTool:
                     f.write(f"  + {path}\n")
 
     def generate_html_diff(self, output_path: Path):
-        """Generate simple, clean diff viewer."""
+        """Generate side-by-side diff viewer with line numbers."""
         print(f"Generating HTML diff: {output_path}")
 
         html = []
@@ -281,33 +281,74 @@ class DiffTool:
             background: #f0f0f0;
         }
 
-        /* Diff Content */
+        /* Side-by-side Diff */
         .diff-content {
             padding: 20px;
-            font-family: 'Courier New', monospace;
-            font-size: 12px;
-            line-height: 1.5;
+            overflow-x: auto;
         }
-        .diff-line {
+        .diff-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-family: 'Courier New', Consolas, monospace;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+        .diff-table td {
             padding: 2px 8px;
+            vertical-align: top;
+            border-right: 1px solid #ddd;
+        }
+        .diff-table td:last-child {
+            border-right: none;
+        }
+        .line-num {
+            width: 50px;
+            text-align: right;
+            color: #999;
+            user-select: none;
+            background: #fafafa;
+            font-weight: normal;
+            padding-right: 12px;
+        }
+        .line-code {
             white-space: pre;
+            overflow-x: auto;
+            max-width: 45vw;
+        }
+        .diff-unchanged {
+            background: white;
         }
         .diff-add {
             background: #e6ffed;
+        }
+        .diff-add .line-code {
             color: #22863a;
         }
         .diff-remove {
             background: #ffeef0;
+        }
+        .diff-remove .line-code {
             color: #cb2431;
         }
-        .diff-context {
+        .diff-empty {
             background: #f6f8fa;
-            color: #666;
         }
-        .line-indicator {
-            display: inline-block;
-            width: 20px;
+        .diff-header-row {
+            background: #e0e0e0;
             font-weight: bold;
+            color: #333;
+        }
+        .diff-header-row td {
+            padding: 8px;
+            border-bottom: 2px solid #999;
+        }
+        .side-label {
+            font-weight: 600;
+            font-size: 11px;
+            color: #666;
+            text-transform: uppercase;
+            padding: 8px !important;
+            background: #f0f0f0;
         }
     </style>
 </head>
@@ -360,15 +401,6 @@ class DiffTool:
         for idx, rel_path in enumerate(file_list):
             content1, content2 = self.modified_files[rel_path]
 
-            # Generate unified diff
-            diff_lines = list(difflib.unified_diff(
-                content1,
-                content2,
-                fromfile='Current (Remote Main)',
-                tofile='IT Modified',
-                lineterm=''
-            ))
-
             html.append(f"""
     <div id="diffView{idx}" class="view diff-view">
         <div class="diff-header">
@@ -384,22 +416,69 @@ class DiffTool:
             html.append("""
             </div>
         </div>
-        <div class="diff-content">""")
+        <div class="diff-content">
+            <table class="diff-table">
+                <tr class="diff-header-row">
+                    <td class="side-label" colspan="2">Current (Remote Main)</td>
+                    <td class="side-label" colspan="2">IT Modified</td>
+                </tr>""")
 
-            # Show unified diff
-            for line in diff_lines:
-                if line.startswith('+++') or line.startswith('---'):
-                    continue
-                elif line.startswith('+'):
-                    html.append(f'<div class="diff-line diff-add"><span class="line-indicator">+</span>{self._html_escape(line[1:])}</div>')
-                elif line.startswith('-'):
-                    html.append(f'<div class="diff-line diff-remove"><span class="line-indicator">-</span>{self._html_escape(line[1:])}</div>')
-                elif line.startswith('@@'):
-                    html.append(f'<div class="diff-line" style="background: #e0e0e0; font-weight: bold; margin-top: 10px;">{self._html_escape(line)}</div>')
-                else:
-                    html.append(f'<div class="diff-line diff-context"><span class="line-indicator"> </span>{self._html_escape(line[1:] if line else "")}</div>')
+            # Generate side-by-side diff
+            matcher = difflib.SequenceMatcher(None, content1, content2)
+            for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+                if tag == 'equal':
+                    for i in range(i1, i2):
+                        line1 = content1[i].rstrip('\n')
+                        line2 = content2[j1 + (i - i1)].rstrip('\n')
+                        html.append(f"""
+                <tr class="diff-unchanged">
+                    <td class="line-num">{i + 1}</td>
+                    <td class="line-code">{self._html_escape(line1)}</td>
+                    <td class="line-num">{j1 + (i - i1) + 1}</td>
+                    <td class="line-code">{self._html_escape(line2)}</td>
+                </tr>""")
+                elif tag == 'replace':
+                    # Show removed lines on left, added lines on right
+                    max_lines = max(i2 - i1, j2 - j1)
+                    for k in range(max_lines):
+                        left_line = content1[i1 + k].rstrip('\n') if i1 + k < i2 else ''
+                        left_num = i1 + k + 1 if i1 + k < i2 else ''
+                        right_line = content2[j1 + k].rstrip('\n') if j1 + k < j2 else ''
+                        right_num = j1 + k + 1 if j1 + k < j2 else ''
+
+                        left_class = 'diff-remove' if left_line else 'diff-empty'
+                        right_class = 'diff-add' if right_line else 'diff-empty'
+
+                        html.append(f"""
+                <tr>
+                    <td class="line-num {left_class}">{left_num}</td>
+                    <td class="line-code {left_class}">{self._html_escape(left_line) if left_line else '&nbsp;'}</td>
+                    <td class="line-num {right_class}">{right_num}</td>
+                    <td class="line-code {right_class}">{self._html_escape(right_line) if right_line else '&nbsp;'}</td>
+                </tr>""")
+                elif tag == 'delete':
+                    for i in range(i1, i2):
+                        line = content1[i].rstrip('\n')
+                        html.append(f"""
+                <tr>
+                    <td class="line-num diff-remove">{i + 1}</td>
+                    <td class="line-code diff-remove">{self._html_escape(line)}</td>
+                    <td class="line-num diff-empty"></td>
+                    <td class="line-code diff-empty">&nbsp;</td>
+                </tr>""")
+                elif tag == 'insert':
+                    for j in range(j1, j2):
+                        line = content2[j].rstrip('\n')
+                        html.append(f"""
+                <tr>
+                    <td class="line-num diff-empty"></td>
+                    <td class="line-code diff-empty">&nbsp;</td>
+                    <td class="line-num diff-add">{j + 1}</td>
+                    <td class="line-code diff-add">{self._html_escape(line)}</td>
+                </tr>""")
 
             html.append("""
+            </table>
         </div>
     </div>""")
 
