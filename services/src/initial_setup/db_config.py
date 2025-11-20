@@ -39,9 +39,6 @@ def get_db_params() -> Dict[str, Any]:
 
 #     logger.info(f"Connecting to DB with user: {user}, host: {host}")
 
-#     if port and port != "5432":  # Only add port if it's non-standard
-#         return f"postgresql://{user}:{password}@{host}:{port}/{dbname}"
-
 #     return f"postgresql://{user}:{password}@{host}"
 
 def construct_dsn(params: dict, for_sqlalchemy=True):
@@ -128,14 +125,31 @@ def check_tables_exist(conn: psycopg2.extensions.connection) -> list:
     Returns:
         List of existing table names
     """
-    with conn.cursor() as cur:
+    # with conn.cursor() as cur:
+    #     cur.execute(
+    #         """
+    #         SELECT table_name
+    #         FROM information_schema.tables
+    #         WHERE table_schema = 'public'
+    #         AND table_name IN ('apg_catalog', 'apg_content')
+    #         """
+    #     )
+    #     tables = [row[0] for row in cur.fetchall()]
+    # return tables
+    try:
+        cur = conn.cursor()
         cur.execute(
             """
             SELECT table_name
             FROM information_schema.tables
             WHERE table_schema = 'public'
             AND table_name IN ('apg_catalog', 'apg_content')
-        """
+            """
         )
         tables = [row[0] for row in cur.fetchall()]
+    except Exception as e:
+        logger.error(f"Error checking tables: {e}", exc_info=True)
+    finally:
+        if cur is not None:
+            cur.close()
     return tables
