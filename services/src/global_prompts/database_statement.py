@@ -2,11 +2,13 @@
 """
 Database Statement Utility
 
-Provides centralized descriptions of available databases to be included in agent prompts.
-This module serves as the single source of truth for database information across the system.
+Provides centralized descriptions of available databases to be used across agents.
+This module serves as the single source of truth for database information.
 """
-
+from config.config import Config
 import logging
+app_config = Config()
+
 
 logger = logging.getLogger(__name__)
 
@@ -87,14 +89,7 @@ AVAILABLE_DATABASES = {
         "description": "RBC's policies on general ledger naming conventions, intra-group account procedures, internal controls over financial reporting (ICFR), and the Enterprise Internal Control Management Policy (ICMP) aligned with frameworks like COSO, SOX, and NI 52-109.",
         "query_type": "semantic search",  # Assuming semantic search
         "content_type": "policies and procedures / internal controls / compliance",
-        "use_when": "Tier 1 (Domain Specific): Questions about GL naming, intra-group account reconciliation, ICFR requirements (SOX/NI 52-109), or the overall ICMP framework (COSO). **Strategy:** Query for specific policy numbers (FIN-ACC-22, FIN-ACC-201), control frameworks, or process details. **Query:** Use terms like 'GL naming convention', 'intra-group accounts', 'ICFR', 'SOX', 'NI 52-109', 'ICMP', 'COSO framework', 'FIN-ACC-22', 'FIN-ACC-201'.",
-    },
-    "internal_sab_99": {
-        "name": "SAB 99 Materiality Assessment Memos",
-        "description": "Internal documents justifying the materiality assessment of financial statement errors, as guided by SEC Staff Accounting Bulletin No. 99. These memos are completed when financial statement errors exceed $120MM and include root cause analysis, control assessment, qualitative factor analysis, and remediation plans.",
-        "query_type": "semantic search",
-        "content_type": "materiality assessment memos / error analysis / remediation documentation",
-        "use_when": "Tier 1 (Domain Specific): Questions about materiality assessments for financial statement errors, SAB 99 compliance, errors exceeding $120MM threshold, qualitative materiality factors, or error remediation. **Strategy:** Query when statement relates to materiality determinations, quantitative/qualitative assessment factors, error evaluation, control deficiencies related to material errors, or corrective action plans. **Query:** Use terms like 'SAB 99', 'materiality assessment', 'financial statement error', '$120MM threshold', 'quantitative materiality', 'qualitative factors', 'root cause analysis', 'control deficiency', 'remediation plan', 'error correction', 'restatement assessment', 'immaterial misstatement', 'intentional misstatement', 'earnings management'.",
+        "use_when": "Tier 1 (Domain Specific): Questions about GL naming, intra-group account reconciliation, ICFR requirements, or control effectiveness.",
     },
     "external_ey": {
         "name": "EY IFRS Guidance",
@@ -108,7 +103,14 @@ AVAILABLE_DATABASES = {
         "description": "The official IFRS standards, interpretations (IFRICs/SICs), guidance, illustrative examples, and the basis for conclusions, serving as an authoritative source for IFRS-related queries.",
         "query_type": "semantic search",
         "content_type": "standards and interpretations",
-        "use_when": "External Authoritative: Official IFRS standard text, interpretations, basis for conclusions. **Strategy:** Consult *only if requested by user* or if internal sources are insufficient/unclear. Use for official standard text or interpretations. **Query:** Use standard numbers (IFRS 15, IAS 38), interpretations (IFRIC/SIC), technical terms, specific paragraphs.",
+        "use_when": "External Authoritative: Official IFRS standard text, interpretations, basis for conclusions. **Strategy:**",
+    },
+    "internal_sab_99": {
+        "name": "SAB 99 Materiality Assessment Memos",
+        "description": "Internal documents justifying the materiality assessment of financial statement errors, as guided by SEC guidance.",
+        "query_type": "semantic_search",
+        "content_type": "materiality assessment memos / error analysis / remediation documentation",
+        "use_when": "Tier 1 (Domain Specific): Questions about materiality assessments for financial statement errors, SAB 99 considerations, or error evaluation processes.",
     },
     # Removed internal_infographic as it's covered by internal_cheatsheet
 }
@@ -168,14 +170,63 @@ The following databases are available for research:
 
 
 # Export database configuration for other modules
-def get_available_databases():
-    """
-    Returns the dictionary of available databases.
+# def get_available_databases():
+#     """
+#     Returns the dictionary of available databases.
 
-    Returns:
-        dict: Dictionary of available database configurations
-    """
-    return AVAILABLE_DATABASES
+#     Returns:
+#         dict: Dictionary of available database configurations
+#     """
+
+#     return AVAILABLE_DATABASES
 
 
-logger.debug("Database statement module initialized")
+# logger.debug("Database statement module initialized")
+
+# Mapping dictionary for document_source to name
+DOCUMENT_SOURCE_MAPPING = {
+    "internal_capm": {
+        "name": "Corporate Accounting Policy Manuals",
+    },
+    "internal_cheatsheets": {
+        "name": "APG Cheatsheets",
+    },
+    "internal_wiki": {
+        "name": "APG Wiki",
+    },
+    "internal_memos": {
+        "name": "APG Internal Accounting Memos",
+    },
+    "internal_par": {
+        "name": "Project Approval Request Guidance",
+    },
+    "internal_aio": {
+        "name": "Auditor Independence Office Policy Documents",
+    },
+    "internal_esg": {
+        "name": "Internal ESG Guidance",
+    },
+    "internal_ext_reporting_and_disclosure": {
+        "name": "External Reporting and Disclosure Policies",
+    },
+    "internal_global_finance_standards": {
+        "name": "Global Financial Standards",
+    },
+    "internal_management_reporting": {
+        "name": "Management Reporting Policies & Guidance",
+    },
+    "internal_process_and_controls": {
+        "name": "Internal Process and Controls Policies",
+    },
+    "external_ey": {
+        "name": "EY IFRS Guidance",
+    },
+    "external_iasb": {
+        "name": "International Accounting Standards Board (IASB)",
+    },
+    "internal_sab_99": {
+        "name": "SAB 99 Materiality Assessment Memos",
+    }
+}
+
+def get_available_databases(filtered=False):
