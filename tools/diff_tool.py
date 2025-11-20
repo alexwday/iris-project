@@ -515,12 +515,24 @@ class DiffTool:
                     for i in range(show_start, show_end):
                         line1 = content1[i].rstrip('\n')
                         line2 = content2[j1 + (i - i1)].rstrip('\n')
+
+                        # Check if these "equal" lines are actually different (shouldn't happen but check anyway)
+                        byte_analysis = ''
+                        if line1 != line2:
+                            byte_analysis = self._get_byte_analysis(line1, line2)
+
                         html.append(f"""
                 <tr class="diff-context">
                     <td class="line-num">{i + 1}</td>
                     <td class="line-code">{self._html_escape(line1)}</td>
                     <td class="line-num">{j1 + (i - i1) + 1}</td>
                     <td class="line-code">{self._html_escape(line2)}</td>
+                </tr>""")
+
+                        if byte_analysis:
+                            html.append(f"""
+                <tr>
+                    <td colspan="4" style="padding: 0;">{byte_analysis}</td>
                 </tr>""")
 
                     last_shown_line = show_end - 1
