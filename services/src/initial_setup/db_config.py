@@ -132,7 +132,7 @@ def check_tables_exist(conn: psycopg2.extensions.connection) -> list:
     #         FROM information_schema.tables
     #         WHERE table_schema = 'public'
     #         AND table_name IN ('apg_catalog', 'apg_content')
-    #         """
+    #     """
     #     )
     #     tables = [row[0] for row in cur.fetchall()]
     # return tables
@@ -153,3 +153,5 @@ def check_tables_exist(conn: psycopg2.extensions.connection) -> list:
         if cur is not None:
             cur.close()
     return tables
+
+
