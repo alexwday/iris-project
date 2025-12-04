@@ -105,8 +105,22 @@ AVAILABLE_DATABASES = {
         "content_type": "standards and interpretations",
         "use_when": "External Authoritative: Official IFRS standard text, interpretations, basis for conclusions. **Strategy:** Consult *only if requested by user* or if internal sources are insufficient/unclear. Use for official standard text or interpretations. **Query:** Use standard numbers (IFRS 15, IAS 38), interpretations (IFRIC/SIC), technical terms, specific paragraphs.",
     },
-    "internal_sab_99": { 
-        "name": "SAB 99 Materiality Assessment Memos",
+    "internal_intragroup_memos": {
+        "name": "Intragroup Reconciliation Memos",
+        "description": "Documentation regarding the permanent material intergroup revenue breaks, including reconciliation analysis and entity-level break identification.",
+        "query_type": "semantic search",
+        "content_type": "memos",
+        "use_when": "Tier 1 (Domain Specific): Questions about permanent breaks within the intergroup reconciliation for revenue per entity. **Strategy:** Query for intergroup break analysis, revenue reconciliation issues, or entity-level discrepancies. **Query:** Use terms like 'IG', 'intergroup', 'breaks', 'revenue breaks', 'permanent breaks', 'insurance break', 'OU', 'CPOU', 'LE', 'CE', 'intergroup reconciliation'.",
+    },
+    "internal_pafe": {
+        "name": "Planning Analytics for Excel (PAfE) User Guide",
+        "description": "Comprehensive user documentation for IBM's Planning Analytics for Excel add-in, covering connection management, report creation, data manipulation, and formula usage for accessing TM1/EPM multidimensional financial data within Microsoft Excel.",
+        "query_type": "semantic search",
+        "content_type": "user guides / technical documentation / procedures",
+        "use_when": "Tier 1 (Domain Specific): Questions about PAfE functionality, EPM/TM1 data access, Excel-based financial reporting, cube database queries, or transitioning from Perspectives. **Strategy:** Query for PAfE features, report types (Exploration/Quick/Dynamic/Custom), Excel formulas (DBRW/TM1RPTVIEW/TM1RPTROW), MDX queries, connection setup, or troubleshooting. **Query:** Use terms like 'PAfE', 'Planning Analytics', 'TM1', 'EPM connection', 'Dynamic Report', 'Quick Report', 'Exploration Report', 'DBRW formula', 'MDX query', 'subset viewer', 'cube data', 'Perspectives migration', 'websheet', 'sandbox', 'Set Editor'.",
+    },
+    "internal_sab_99": {
+        "name": "SAB 99 Memos",
         "description": "Internal documents justifying the materiality assessment of financial statement errors, as guided by SEC Staff Accounting Bulletin No. 99. These memos are completed when financial statement errors exceed $120MM and include root cause analysis, control assessment, qualitative factor analysis, and remediation plans.",
         "query_type": "semantic search",
         "content_type": "materiality assessment memos / error analysis / remediation documentation",
@@ -224,8 +238,14 @@ DOCUMENT_SOURCE_MAPPING = {
     "external_iasb": {
         "name": "International Accounting Standards Board (IASB)",
     },
+    "internal_intragroup_memos": {
+        "name": "Intragroup Reconciliation Memos",
+    },
+    "internal_pafe": {
+        "name": "Planning Analytics for Excel (PAfE) User Guide",
+    },
     "internal_sab_99": {
-        "name": "SAB 99 Materiality Assessment Memos",
+        "name": "SAB 99 Memos",
     }
 }
 
@@ -301,6 +321,8 @@ def get_available_databases(filtered=False):
             "How many errors impacted Deposits?",
             "How many have EUDA related issues?"
         ],
+        "internal_intragroup_memos": [],
+        "internal_pafe": [],
     }
 
     db_to_ad_group = {}
