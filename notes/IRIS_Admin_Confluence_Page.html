@@ -1,0 +1,994 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IRIS Admin &amp; Maintenance Guide</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            line-height: 1.6;
+            color: #172B4D;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #fff;
+        }
+        h1 {
+            color: #0052CC;
+            border-bottom: 2px solid #0052CC;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #172B4D;
+            margin-top: 40px;
+            border-bottom: 1px solid #DFE1E6;
+            padding-bottom: 8px;
+        }
+        h3 {
+            color: #42526E;
+            margin-top: 25px;
+        }
+        h4 {
+            color: #5E6C84;
+            margin-top: 20px;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 15px 0;
+            font-size: 14px;
+        }
+        th, td {
+            border: 1px solid #DFE1E6;
+            padding: 10px 12px;
+            text-align: left;
+            vertical-align: top;
+        }
+        th {
+            background-color: #F4F5F7;
+            font-weight: 600;
+            color: #172B4D;
+        }
+        tr:nth-child(even) {
+            background-color: #FAFBFC;
+        }
+        tr:hover {
+            background-color: #EBECF0;
+        }
+        code {
+            background-color: #F4F5F7;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+            font-size: 13px;
+            color: #172B4D;
+        }
+        pre {
+            background-color: #F4F5F7;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-size: 13px;
+        }
+        .info-box {
+            background-color: #DEEBFF;
+            border-left: 4px solid #0052CC;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 0 3px 3px 0;
+        }
+        .warning-box {
+            background-color: #FFFAE6;
+            border-left: 4px solid #FF991F;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 0 3px 3px 0;
+        }
+        .success-box {
+            background-color: #E3FCEF;
+            border-left: 4px solid #36B37E;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 0 3px 3px 0;
+        }
+        .link-placeholder {
+            color: #0052CC;
+            text-decoration: underline;
+            cursor: pointer;
+        }
+        ol.steps {
+            counter-reset: step-counter;
+            list-style: none;
+            padding-left: 0;
+        }
+        ol.steps li {
+            counter-increment: step-counter;
+            margin-bottom: 15px;
+            padding-left: 45px;
+            position: relative;
+        }
+        ol.steps li::before {
+            content: counter(step-counter);
+            position: absolute;
+            left: 0;
+            width: 30px;
+            height: 30px;
+            background-color: #0052CC;
+            color: white;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 30px;
+            font-weight: bold;
+        }
+        .tag {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .tag-catalog {
+            background-color: #E3FCEF;
+            color: #006644;
+        }
+        .tag-semantic {
+            background-color: #EAE6FF;
+            color: #403294;
+        }
+        .tag-internal {
+            background-color: #DEEBFF;
+            color: #0747A6;
+        }
+        .tag-external {
+            background-color: #FFEBE6;
+            color: #BF2600;
+        }
+        .toc {
+            background-color: #F4F5F7;
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 30px;
+        }
+        .toc h3 {
+            margin-top: 0;
+        }
+        .toc ul {
+            list-style: none;
+            padding-left: 0;
+        }
+        .toc li {
+            margin: 8px 0;
+        }
+        .toc a {
+            color: #0052CC;
+            text-decoration: none;
+        }
+        .toc a:hover {
+            text-decoration: underline;
+        }
+        .small-text {
+            font-size: 12px;
+            color: #5E6C84;
+        }
+    </style>
+</head>
+<body>
+
+<h1>IRIS Admin &amp; Maintenance Guide</h1>
+
+<div class="toc">
+    <h3>Table of Contents</h3>
+    <ul>
+        <li><a href="#database-registry">1. Database Registry</a></li>
+        <li><a href="#refresh-process">2. Database Refresh Process</a></li>
+        <li><a href="#access-permissions">3. Access &amp; Permissions</a></li>
+        <li><a href="#adding-database">4. Adding a New Database</a></li>
+        <li><a href="#quarterly-testing">5. Quarterly Model Testing</a></li>
+        <li><a href="#contacts">6. Contacts &amp; Escalation</a></li>
+        <li><a href="#dev-reference">7. Quick Reference for New Developers</a></li>
+    </ul>
+</div>
+
+<!-- ============================================================== -->
+<h2 id="database-registry">1. Database Registry</h2>
+<!-- ============================================================== -->
+
+<p>IRIS databases are categorized by their search method:</p>
+<ul>
+    <li><span class="tag tag-catalog">Catalog Search</span> - Used for internal databases; processes PDFs to extract metadata and content sections</li>
+    <li><span class="tag tag-semantic">Semantic Search</span> - Used for external databases; processes large documents with embeddings for semantic similarity search</li>
+</ul>
+
+<h3>1.1 Internal Databases <span class="tag tag-internal">Internal</span></h3>
+
+<table>
+    <thead>
+        <tr>
+            <th>Database ID</th>
+            <th>Display Name</th>
+            <th>Description</th>
+            <th>Content Type</th>
+            <th>AD Group</th>
+            <th>Raw Input Folder</th>
+            <th>Raw File Type</th>
+            <th>Prep Script</th>
+            <th>Input Folder</th>
+            <th>Refresh Frequency</th>
+            <th>Est. Duration</th>
+            <th>Owner</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><code>internal_capm</code></td>
+            <td>Corporate Accounting Policy Manuals</td>
+            <td>RBC's comprehensive accounting policies (IFRS/US GAAP)</td>
+            <td>policies and procedures</td>
+            <td class="link-placeholder">[AD Group]</td>
+            <td>N/A</td>
+            <td>N/A</td>
+            <td>N/A</td>
+            <td><code>internal_capm/</code></td>
+            <td class="link-placeholder">[frequency]</td>
+            <td class="link-placeholder">[duration]</td>
+            <td class="link-placeholder">[owner]</td>
+        </tr>
+        <tr>
+            <td><code>internal_cheatsheets</code></td>
+            <td>APG Cheatsheets</td>
+            <td>Concise 1-2 page summaries and infographics on accounting topics</td>
+            <td>summarized guidance / infographics</td>
+            <td class="link-placeholder">[AD Group]</td>
+            <td><code>internal_cheatsheets_raw/</code></td>
+            <td>Images/Infographics</td>
+            <td><span class="link-placeholder">Vision Prep</span></td>
+            <td><code>internal_cheatsheets/</code></td>
+            <td class="link-placeholder">[frequency]</td>
+            <td class="link-placeholder">[duration]</td>
+            <td class="link-placeholder">[owner]</td>
+        </tr>
+        <tr>
+            <td><code>internal_wiki</code></td>
+            <td>APG Wiki</td>
+            <td>RBC-specific accounting compilations and transaction guidance</td>
+            <td>RBC-specific conclusions / guides</td>
+            <td class="link-placeholder">[AD Group]</td>
+            <td><code>internal_wiki_raw/</code></td>
+            <td>Excel (.xlsx)</td>
+            <td><span class="link-placeholder">Excel to PDF Prep</span></td>
+            <td><code>internal_wiki/</code></td>
+            <td class="link-placeholder">[frequency]</td>
+            <td class="link-placeholder">[duration]</td>
+            <td class="link-placeholder">[owner]</td>
+        </tr>
+        <tr>
+            <td><code>internal_memos</code></td>
+            <td>APG Internal Accounting Memos</td>
+            <td>Detailed technical analyses on complex accounting topics</td>
+            <td>technical analysis</td>
+            <td class="link-placeholder">[AD Group]</td>
+            <td>N/A</td>
+            <td>N/A</td>
+            <td>N/A</td>
+            <td><code>internal_memos/</code></td>
+            <td class="link-placeholder">[frequency]</td>
+            <td class="link-placeholder">[duration]</td>
+            <td class="link-placeholder">[owner]</td>
+        </tr>
+        <tr>
+            <td><code>internal_par</code></td>
+            <td>Project Approval Request Guidance</td>
+            <td>PAR policies, workflow, processes, and compliance requirements</td>
+            <td>policy guidance / interpretations</td>
+            <td class="link-placeholder">[AD Group]</td>
+            <td>N/A</td>
+            <td>N/A</td>
+            <td>N/A</td>
+            <td><code>internal_par/</code></td>
+            <td class="link-placeholder">[frequency]</td>
+            <td class="link-placeholder">[duration]</td>
+            <td class="link-placeholder">[owner]</td>
+        </tr>
+        <tr>
+            <td><code>internal_aio</code></td>
+            <td>Auditor Independence Office Policy Documents</td>
+            <td>Auditor independence policies, procedures, and FAQs</td>
+            <td>policy documents / procedures / FAQs</td>
+            <td class="link-placeholder">[AD Group]</td>
+            <td>N/A</td>
+            <td>N/A</td>
+            <td>N/A</td>
+            <td><code>internal_aio/</code></td>
+            <td class="link-placeholder">[frequency]</td>
+            <td class="link-placeholder">[duration]</td>
+            <td class="link-placeholder">[owner]</td>
+        </tr>
+        <tr>
+            <td><code>internal_esg</code></td>
+            <td>Internal ESG Guidance</td>
+            <td>ESG disclosure policies and materiality framework (ISSB/CSRD aligned)</td>
+            <td>ESG policy / disclosure guidance</td>
+            <td class="link-placeholder">[AD Group]</td>
+            <td>N/A</td>
+            <td>N/A</td>
+            <td>N/A</td>
+            <td><code>internal_esg/</code></td>
+            <td class="link-placeholder">[frequency]</td>
+            <td class="link-placeholder">[duration]</td>
+            <td class="link-placeholder">[owner]</td>
+        </tr>
+        <tr>
+            <td><code>internal_ext_reporting_and_disclosure</code></td>
+            <td>External Reporting and Disclosure Policies</td>
+            <td>Material disclosure, subsidiary reporting, trading revenue classification</td>
+            <td>policies / disclosure guidance / compliance</td>
+            <td class="link-placeholder">[AD Group]</td>
+            <td>N/A</td>
+            <td>N/A</td>
+            <td>N/A</td>
+            <td><code>internal_ext_reporting_and_disclosure/</code></td>
+            <td class="link-placeholder">[frequency]</td>
+            <td class="link-placeholder">[duration]</td>
+            <td class="link-placeholder">[owner]</td>
+        </tr>
+        <tr>
+            <td><code>internal_global_finance_standards</code></td>
+            <td>Global Financial Standards</td>
+            <td>Currency reporting, FX, Chart of Accounts policies</td>
+            <td>financial standards / reporting requirements</td>
+            <td class="link-placeholder">[AD Group]</td>
+            <td>N/A</td>
+            <td>N/A</td>
+            <td>N/A</td>
+            <td><code>internal_global_finance_standards/</code></td>
+            <td class="link-placeholder">[frequency]</td>
+            <td class="link-placeholder">[duration]</td>
+            <td class="link-placeholder">[owner]</td>
+        </tr>
+        <tr>
+            <td><code>internal_management_reporting</code></td>
+            <td>Management Reporting Policies &amp; Guidance</td>
+            <td>ROE/RORC metrics, funds transfer pricing, tax allocation</td>
+            <td>management reporting policies / performance metrics</td>
+            <td class="link-placeholder">[AD Group]</td>
+            <td>N/A</td>
+            <td>N/A</td>
+            <td>N/A</td>
+            <td><code>internal_management_reporting/</code></td>
+            <td class="link-placeholder">[frequency]</td>
+            <td class="link-placeholder">[duration]</td>
+            <td class="link-placeholder">[owner]</td>
+        </tr>
+        <tr>
+            <td><code>internal_process_and_controls</code></td>
+            <td>Internal Process and Controls Policies</td>
+            <td>GL naming, ICFR, ICMP (COSO/SOX/NI 52-109)</td>
+            <td>policies / internal controls / compliance</td>
+            <td class="link-placeholder">[AD Group]</td>
+            <td>N/A</td>
+            <td>N/A</td>
+            <td>N/A</td>
+            <td><code>internal_process_and_controls/</code></td>
+            <td class="link-placeholder">[frequency]</td>
+            <td class="link-placeholder">[duration]</td>
+            <td class="link-placeholder">[owner]</td>
+        </tr>
+        <tr>
+            <td><code>internal_sab_99</code></td>
+            <td>SAB 99 Memos</td>
+            <td>Materiality assessment memos for financial statement errors (&gt;$120MM)</td>
+            <td>materiality assessment / error analysis</td>
+            <td class="link-placeholder">[AD Group]</td>
+            <td>N/A</td>
+            <td>N/A</td>
+            <td>N/A</td>
+            <td><code>internal_sab_99/</code></td>
+            <td class="link-placeholder">[frequency]</td>
+            <td class="link-placeholder">[duration]</td>
+            <td class="link-placeholder">[owner]</td>
+        </tr>
+        <tr>
+            <td><code>internal_intragroup_memos</code></td>
+            <td>Intragroup Reconciliation Memos</td>
+            <td>Permanent intergroup revenue break documentation</td>
+            <td>memos</td>
+            <td class="link-placeholder">[AD Group]</td>
+            <td>N/A</td>
+            <td>N/A</td>
+            <td>N/A</td>
+            <td><code>internal_intragroup_memos/</code></td>
+            <td class="link-placeholder">[frequency]</td>
+            <td class="link-placeholder">[duration]</td>
+            <td class="link-placeholder">[owner]</td>
+        </tr>
+        <tr>
+            <td><code>internal_pafe</code></td>
+            <td>Planning Analytics for Excel (PAfE) User Guide</td>
+            <td>IBM PAfE add-in documentation for TM1/EPM data access</td>
+            <td>user guides / technical documentation</td>
+            <td class="link-placeholder">[AD Group]</td>
+            <td>N/A</td>
+            <td>N/A</td>
+            <td>N/A</td>
+            <td><code>internal_pafe/</code></td>
+            <td class="link-placeholder">[frequency]</td>
+            <td class="link-placeholder">[duration]</td>
+            <td class="link-placeholder">[owner]</td>
+        </tr>
+    </tbody>
+</table>
+
+<div class="warning-box">
+    <strong>Note:</strong> <code>internal_intragroup_memos</code> and <code>internal_pafe</code> are defined in <code>AVAILABLE_DATABASES</code> but need to be added to <code>INTERNAL_DATABASES</code> in <code>database_router.py</code> for routing to work properly.
+</div>
+
+<h3>1.2 External Databases <span class="tag tag-external">External</span></h3>
+
+<table>
+    <thead>
+        <tr>
+            <th>Database ID</th>
+            <th>Display Name</th>
+            <th>Description</th>
+            <th>Content Type</th>
+            <th>Document Config</th>
+            <th>AD Group</th>
+            <th>Raw Input Folder</th>
+            <th>Prep Script</th>
+            <th>Refresh Frequency</th>
+            <th>Est. Duration</th>
+            <th>Owner</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><code>external_ey</code></td>
+            <td>EY IFRS Guidance</td>
+            <td>External EY guidance, insights, and IFRS disclosure checklists</td>
+            <td>external guidance</td>
+            <td>
+                <code>single_document</code><br>
+                <span class="small-text">ey_international_gaap_2024 (20 chunks)</span>
+            </td>
+            <td class="link-placeholder">[AD Group]</td>
+            <td><code>external_ey_raw/</code></td>
+            <td><span class="link-placeholder">Semantic Search EY Prep</span></td>
+            <td class="link-placeholder">[frequency]</td>
+            <td class="link-placeholder">[duration]</td>
+            <td class="link-placeholder">[owner]</td>
+        </tr>
+        <tr>
+            <td><code>external_iasb</code></td>
+            <td>International Accounting Standards Board (IASB)</td>
+            <td>Official IFRS standards, IFRICs, SICs, and basis for conclusions</td>
+            <td>standards and interpretations</td>
+            <td>
+                <code>multi_document</code><br>
+                <span class="small-text">
+                    iasb_ias (20 chunks)<br>
+                    iasb_ifrs (20 chunks)<br>
+                    iasb_ifrics (10 chunks)<br>
+                    iasb_sic (10 chunks)
+                </span>
+            </td>
+            <td class="link-placeholder">[AD Group]</td>
+            <td><code>external_iasb_raw/</code></td>
+            <td><span class="link-placeholder">Semantic Search IASB Prep</span></td>
+            <td class="link-placeholder">[frequency]</td>
+            <td class="link-placeholder">[duration]</td>
+            <td class="link-placeholder">[owner]</td>
+        </tr>
+    </tbody>
+</table>
+
+<!-- ============================================================== -->
+<h2 id="refresh-process">2. Database Refresh Process</h2>
+<!-- ============================================================== -->
+
+<h3>2.1 Prep Processes</h3>
+<p>Prep processes convert source files into a format that the main refresh process can consume. Run these <strong>before</strong> the main refresh if applicable.</p>
+
+<table>
+    <thead>
+        <tr>
+            <th>Prep Type</th>
+            <th>Purpose</th>
+            <th>Input</th>
+            <th>Output</th>
+            <th>Script Location</th>
+            <th>Dataiku Notebook</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><strong>Docx to PDF Prep</strong></td>
+            <td>Converts .docx files to PDF; copies existing PDFs to output folder</td>
+            <td><code>*_raw/</code> folders containing .docx and .pdf files</td>
+            <td>PDF files in main input folder</td>
+            <td><code>catalog search - docx prep/docx_to_pdf_prep.py</code></td>
+            <td class="link-placeholder">[Dataiku link]</td>
+        </tr>
+        <tr>
+            <td><strong>Excel to PDF Prep</strong></td>
+            <td>Converts each Excel row into an individual formatted PDF document</td>
+            <td><code>*_raw/</code> folder containing Excel file (.xlsx)</td>
+            <td>Multiple PDFs (one per row) in main input folder</td>
+            <td><code>catalog search - excel prep/excel_to_pdf_prep.py</code></td>
+            <td class="link-placeholder">[Dataiku link]</td>
+        </tr>
+        <tr>
+            <td><strong>Vision Prep</strong></td>
+            <td>Uses vision AI model to extract text from infographics/images (replaces Stage 2 for visual content)</td>
+            <td>PDF files containing infographics</td>
+            <td>Markdown content compatible with Stage 3</td>
+            <td><code>catalog search - vision/stage2_process_vision.py</code></td>
+            <td class="link-placeholder">[Dataiku link]</td>
+        </tr>
+        <tr>
+            <td><strong>Semantic Search EY Prep</strong></td>
+            <td>Converts large EY PDF to markdown; splits into chapters using GUI tool</td>
+            <td>Single EY PDF in raw input folder</td>
+            <td>Chapter-split PDFs and page-level JSON</td>
+            <td>
+                <code>semantic search - ey prep/stage_00_pdf_to_markdown.py</code><br>
+                <code>semantic search - ey prep/stage_00_chapter_splitter.py</code> (PyQt6 GUI)
+            </td>
+            <td class="link-placeholder">[Dataiku link]</td>
+        </tr>
+        <tr>
+            <td><strong>Semantic Search IASB Prep</strong></td>
+            <td>Merges and processes IASB standard PDFs</td>
+            <td>Multiple IASB standard PDFs</td>
+            <td>Merged/processed PDFs ready for semantic search</td>
+            <td>
+                <code>semantic search - iasb prep/stage_00_pdf_merger.py</code><br>
+                <code>semantic search - iasb prep/stage_00_standards_processor.py</code>
+            </td>
+            <td class="link-placeholder">[Dataiku link]</td>
+        </tr>
+    </tbody>
+</table>
+
+<h3>2.2 Catalog Search Refresh <span class="tag tag-catalog">For Internal Databases</span></h3>
+<p>Processes PDF documents to extract metadata and content sections for catalog-based search.</p>
+
+<table>
+    <thead>
+        <tr>
+            <th>Stage</th>
+            <th>Script</th>
+            <th>Description</th>
+            <th>Input</th>
+            <th>Output</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><strong>Stage 1</strong></td>
+            <td><code>stage1_extract_csv.py</code></td>
+            <td>Compares NAS files vs master CSV; identifies new, updated, and deleted files</td>
+            <td>NAS file system + master CSVs</td>
+            <td><code>1C_nas_files_to_process.json</code></td>
+        </tr>
+        <tr>
+            <td><strong>Stage 2</strong></td>
+            <td><code>stage2_process_documents.py</code></td>
+            <td>Extracts document content using Azure Document Intelligence (prebuilt-layout model)</td>
+            <td>PDF files from Stage 1 list</td>
+            <td>Markdown files in <code>2B_outputs/</code></td>
+        </tr>
+        <tr>
+            <td><strong>Stage 3</strong></td>
+            <td><code>stage3_generate_summaries.py</code></td>
+            <td>Generates AI summaries (document_description and document_usage) using GPT</td>
+            <td>Markdown files from Stage 2</td>
+            <td><code>3A_catalog_entries.json</code></td>
+        </tr>
+        <tr>
+            <td><strong>Stage 4</strong></td>
+            <td><code>stage4_update_csv.py</code></td>
+            <td>Updates master CSVs with new entries; deletes removed records</td>
+            <td>Stage 1 delete list + Stage 3 entries</td>
+            <td>Updated <code>master_catalog.csv</code> and <code>master_content.csv</code></td>
+        </tr>
+        <tr>
+            <td><strong>Stage 5</strong></td>
+            <td><code>stage5_output_final_csv.py</code></td>
+            <td>Creates timestamped deployment files; archives processing run</td>
+            <td>Updated master CSVs</td>
+            <td>Timestamped CSVs for IT pickup + archive zip</td>
+        </tr>
+    </tbody>
+</table>
+
+<div class="info-box">
+    <strong>Configuration:</strong> Document sources are configured in the <code>DOCUMENT_SOURCES</code> variable in each stage script. Format: <code>source_name,detail_level</code> (one per line, # for comments)
+</div>
+
+<p><strong>Dataiku All-Stages Notebook:</strong> <span class="link-placeholder">[Link to Catalog Search All-Stages Notebook]</span></p>
+
+<h3>2.3 Semantic Search Refresh <span class="tag tag-semantic">For External Databases</span></h3>
+<p>Processes large documents with chapter/section structure and generates embeddings for semantic similarity search.</p>
+
+<table>
+    <thead>
+        <tr>
+            <th>Stage</th>
+            <th>Script</th>
+            <th>Description</th>
+            <th>Input</th>
+            <th>Output</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><strong>Stage 01</strong></td>
+            <td><code>stage_01_chapter_processing.py</code></td>
+            <td>Processes chapter structure with GPT tool calling</td>
+            <td>Prep stage output (page-level JSON)</td>
+            <td><code>stage1_page_records.json</code></td>
+        </tr>
+        <tr>
+            <td><strong>Stage 02</strong></td>
+            <td><code>stage_02_section_processing.py</code></td>
+            <td>Creates section-level records with natural page boundaries; generates GPT summaries</td>
+            <td><code>stage1_page_records.json</code></td>
+            <td><code>stage2_section_records.json</code></td>
+        </tr>
+        <tr>
+            <td><strong>Stage 02b</strong></td>
+            <td><code>stage_02b_section_page_correction.py</code></td>
+            <td>Corrects page mappings for sections (optional)</td>
+            <td><code>stage2_section_records.json</code></td>
+            <td><code>stage2_5_corrected_sections.json</code></td>
+        </tr>
+        <tr>
+            <td><strong>Stage 03</strong></td>
+            <td><code>stage_03_content_chunking.py</code></td>
+            <td>Chunks sections into 500-750 token chunks for semantic search; preserves HTML page tags</td>
+            <td><code>stage2_5_corrected_sections.json</code></td>
+            <td><code>stage3_chunks.json</code></td>
+        </tr>
+        <tr>
+            <td><strong>Stage 03b</strong></td>
+            <td><code>stage_03b_chunk_page_correction.py</code></td>
+            <td>Corrects chunk page mappings (optional)</td>
+            <td><code>stage3_chunks.json</code></td>
+            <td><code>stage3_5_corrected_chunks.json</code></td>
+        </tr>
+        <tr>
+            <td><strong>Stage 04</strong></td>
+            <td><code>stage_04_embedding_generation.py</code></td>
+            <td>Generates vector embeddings (text-embedding-3-large, 2000 dimensions)</td>
+            <td><code>stage3_5_corrected_chunks.json</code></td>
+            <td><code>stage4_embedded_chunks.json</code></td>
+        </tr>
+        <tr>
+            <td><strong>Stage 05</strong></td>
+            <td><code>stage_05_csv_export.py</code></td>
+            <td>Exports to master CSV database; creates timestamped deployment copy</td>
+            <td><code>stage4_embedded_chunks.json</code></td>
+            <td><code>master_database.csv</code> + deployment CSV</td>
+        </tr>
+        <tr>
+            <td><strong>Stage 06</strong></td>
+            <td><code>stage_06_database_upload.py</code></td>
+            <td>Uploads to PostgreSQL with pgvector; clears and replaces entire table</td>
+            <td><code>master_database.csv</code></td>
+            <td>Updated <code>iris_semantic_search</code> table</td>
+        </tr>
+    </tbody>
+</table>
+
+<p><strong>Dataiku All-Stages Notebook:</strong> <span class="link-placeholder">[Link to Semantic Search All-Stages Notebook]</span></p>
+
+<!-- ============================================================== -->
+<h2 id="access-permissions">3. Access &amp; Permissions</h2>
+<!-- ============================================================== -->
+
+<h3>3.1 Requesting Database Access</h3>
+<ol class="steps">
+    <li>Go to <span class="link-placeholder">[MyMarketplace Link]</span></li>
+    <li>Search for the AD Group from the Database Registry table (Section 1)</li>
+    <li>Submit access request with business justification</li>
+    <li>Approval typically takes X business days</li>
+</ol>
+
+<h3>3.2 AD Group Summary</h3>
+<p class="link-placeholder">[Insert AD Group summary table with group names and the databases they grant access to]</p>
+
+<!-- ============================================================== -->
+<h2 id="adding-database">4. Adding a New Database</h2>
+<!-- ============================================================== -->
+
+<h3>Step 1: Create Folder Structure</h3>
+<ul>
+    <li>Create the input folder on NAS: <code>[NAS_BASE_PATH]/[database_name]/</code></li>
+    <li>If prep is needed, also create: <code>[NAS_BASE_PATH]/[database_name]_raw/</code></li>
+    <li>Place source files in the appropriate folder (raw files in <code>_raw</code>, PDFs in main folder)</li>
+</ul>
+
+<h3>Step 2: Configure Refresh Process</h3>
+<p>Edit the <code>DOCUMENT_SOURCES</code> variable in the refresh stage scripts:</p>
+<p><strong>File:</strong> <code>catalog search/stage1_extract_csv.py</code> (and other stage files)</p>
+<pre>
+DOCUMENT_SOURCES = """
+internal_cheatsheets,detailed
+internal_esg,standard
+<strong>internal_[new_db],standard</strong>  # Add this line
+"""
+</pre>
+<p><strong>Detail levels:</strong> <code>detailed</code>, <code>standard</code>, <code>concise</code></p>
+
+<h3>Step 3: Run Database Refresh</h3>
+<ul>
+    <li>Execute the full catalog search refresh (all stages) in Dataiku</li>
+    <li>Verify the new database appears in <code>master_catalog.csv</code></li>
+</ul>
+
+<h3>Step 4: Add Database Definition</h3>
+<p><strong>File:</strong> <code>services/src/global_prompts/database_statement.py</code></p>
+
+<p>Add to <code>AVAILABLE_DATABASES</code> dict:</p>
+<pre>
+"internal_[new_db]": {
+    "name": "Human Readable Name",
+    "description": "Description of the content...",
+    "query_type": "semantic search",
+    "content_type": "policies / guidance / etc.",
+    "use_when": "Tier 1 (Domain Specific): Description of when to use. **Strategy:** Query guidance. **Query:** Search term suggestions.",
+},
+</pre>
+
+<p>Add to <code>questions_mapping</code> dict (for quarterly testing):</p>
+<pre>
+"internal_[new_db]": [
+    "Sample question 1?",
+    "Sample question 2?",
+    "Sample question 3?",
+    "Sample question 4?",
+],
+</pre>
+
+<h3>Step 5: Configure Database Router</h3>
+<p><strong>File:</strong> <code>services/src/agents/database_subagents/database_router.py</code></p>
+
+<p><strong>For Catalog Search (internal databases):</strong> Add to <code>INTERNAL_DATABASES</code> dict:</p>
+<pre>
+INTERNAL_DATABASES = {
+    ...
+    <strong>"internal_[new_db]": "internal_[new_db]",</strong>
+}
+</pre>
+
+<p><strong>For Semantic Search (external databases):</strong> Add to <code>EXTERNAL_DATABASES</code> dict:</p>
+<pre>
+EXTERNAL_DATABASES = {
+    ...
+    <strong>"external_[new_db]": {
+        "query_type": "single_document",  # or "multi_document"
+        "documents": {"document_name": 20},  # chunk limit per document
+    },</strong>
+}
+</pre>
+
+<div class="warning-box">
+    <strong>Important:</strong> You MUST add the database to BOTH <code>AVAILABLE_DATABASES</code> (database_statement.py) AND the appropriate routing dict (<code>INTERNAL_DATABASES</code> or <code>EXTERNAL_DATABASES</code> in database_router.py). Missing either will cause the database to fail.
+</div>
+
+<h3>Step 6: Configure AD Group Access</h3>
+<ul>
+    <li>Request new AD group creation from IT (if needed)</li>
+    <li>Update <code>AD_GROUP_MAPPING</code> in production environment configuration</li>
+</ul>
+
+<h3>Step 7: Deploy &amp; Verify</h3>
+<ul>
+    <li>Deploy code changes through standard release process</li>
+    <li>Verify new database appears in IRIS UI database list</li>
+    <li>Test sample queries against new database</li>
+</ul>
+
+<!-- ============================================================== -->
+<h2 id="quarterly-testing">5. Quarterly Model Testing</h2>
+<!-- ============================================================== -->
+
+<p><strong>Purpose:</strong> Model Risk compliance - evaluate model accuracy on representative queries each quarter</p>
+
+<h3>5.1 Resources</h3>
+<table>
+    <tr>
+        <td><strong>Blank Test Template (Excel)</strong></td>
+        <td class="link-placeholder">[Link to Excel template]</td>
+    </tr>
+    <tr>
+        <td><strong>Default 50 Test Questions Set</strong></td>
+        <td class="link-placeholder">[Link to test questions - update each quarter]</td>
+    </tr>
+    <tr>
+        <td><strong>Tableau Dashboard - Real Queries &amp; Feedback</strong></td>
+        <td class="link-placeholder">[Link to Tableau dashboard]</td>
+    </tr>
+    <tr>
+        <td><strong>Performance Tracking Metrics Table</strong></td>
+        <td class="link-placeholder">[Link to metrics tracking]</td>
+    </tr>
+</table>
+
+<h3>5.2 Testing Process</h3>
+
+<ol class="steps">
+    <li>
+        <strong>Prepare Test Set</strong>
+        <ul>
+            <li>Take the current set of 50 default test questions</li>
+            <li>Delete 10 questions from the set</li>
+            <li>Go to Tableau dashboard and identify top 10 real user queries from the quarter</li>
+            <li>Add these 10 real queries to replace the deleted ones</li>
+            <li>Save updated set as the new default for next quarter (in Confluence)</li>
+        </ul>
+    </li>
+    <li>
+        <strong>Execute Testing</strong>
+        <ul>
+            <li>For each of the 50 questions:</li>
+            <li style="margin-left: 20px;">Enter question into IRIS UI</li>
+            <li style="margin-left: 20px;">Copy question + answer into Excel template</li>
+            <li style="margin-left: 20px;">Rate response quality on scale 1-10</li>
+        </ul>
+    </li>
+    <li>
+        <strong>Aggregate Feedback Metrics</strong>
+        <ul>
+            <li>Pull thumbs up/thumbs down counts from Tableau dashboard for the quarter</li>
+        </ul>
+    </li>
+    <li>
+        <strong>Update Performance Tracking</strong>
+        <ul>
+            <li>Insert results into performance tracking metrics table</li>
+            <li>Check for threshold breaches (flag any metrics outside acceptable range)</li>
+        </ul>
+    </li>
+    <li>
+        <strong>Submit to Model Risk</strong>
+        <ul>
+            <li>Fill out Model Risk's quarterly template with metrics from tracking table</li>
+            <li>Submit to Model Risk team by deadline</li>
+        </ul>
+    </li>
+</ol>
+
+<!-- ============================================================== -->
+<h2 id="contacts">6. Contacts &amp; Escalation</h2>
+<!-- ============================================================== -->
+
+<h3>IRIS Team</h3>
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Role</th>
+            <th>Email</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td class="link-placeholder">[Name]</td>
+            <td class="link-placeholder">[Role]</td>
+            <td class="link-placeholder">[email]</td>
+        </tr>
+        <tr>
+            <td class="link-placeholder">[Name]</td>
+            <td class="link-placeholder">[Role]</td>
+            <td class="link-placeholder">[email]</td>
+        </tr>
+    </tbody>
+</table>
+
+<h3>Finance Assist (IT)</h3>
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Role</th>
+            <th>Email</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td class="link-placeholder">[Name]</td>
+            <td class="link-placeholder">[Role]</td>
+            <td class="link-placeholder">[email]</td>
+        </tr>
+        <tr>
+            <td class="link-placeholder">[Name]</td>
+            <td class="link-placeholder">[Role]</td>
+            <td class="link-placeholder">[email]</td>
+        </tr>
+    </tbody>
+</table>
+
+<!-- ============================================================== -->
+<h2 id="dev-reference">7. Quick Reference for New Developers</h2>
+<!-- ============================================================== -->
+
+<h3>7.1 Documentation</h3>
+<table>
+    <tr>
+        <td><strong>Model Risk White Paper - Model Architecture</strong></td>
+        <td class="link-placeholder">[Link]</td>
+    </tr>
+    <tr>
+        <td><strong>Model Risk White Paper - Validation</strong></td>
+        <td class="link-placeholder">[Link]</td>
+    </tr>
+</table>
+
+<h3>7.2 Codebase</h3>
+<table>
+    <tr>
+        <td><strong>IRIS Application Repository (GitHub)</strong></td>
+        <td class="link-placeholder">[Link to GitHub repo]</td>
+    </tr>
+    <tr>
+        <td><strong>Database Refresh Repository</strong></td>
+        <td class="link-placeholder">[Link to iris-project-database-refresh]</td>
+    </tr>
+</table>
+
+<h3>7.3 Key Code Files</h3>
+<table>
+    <thead>
+        <tr>
+            <th>Purpose</th>
+            <th>File Path</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>Database definitions (names, descriptions, questions)</td>
+            <td><code>services/src/global_prompts/database_statement.py</code></td>
+        </tr>
+        <tr>
+            <td>Database routing (internal vs external)</td>
+            <td><code>services/src/agents/database_subagents/database_router.py</code></td>
+        </tr>
+        <tr>
+            <td>Catalog search subagent (internal DBs)</td>
+            <td><code>services/src/agents/database_subagents/catalog_search/subagent.py</code></td>
+        </tr>
+        <tr>
+            <td>Semantic search subagent (external DBs)</td>
+            <td><code>services/src/agents/database_subagents/semantic_search_v2/subagent.py</code></td>
+        </tr>
+        <tr>
+            <td>Agent router (query classification)</td>
+            <td><code>services/src/agents/agent_router/router.py</code></td>
+        </tr>
+    </tbody>
+</table>
+
+<h3>7.4 Architecture Summary</h3>
+<div class="info-box">
+    <p><strong>Internal Databases</strong> use the <strong>Catalog Search</strong> method:</p>
+    <ul>
+        <li>Documents processed by Azure Document Intelligence</li>
+        <li>Content stored in <code>apg_catalog</code> and <code>apg_content</code> tables</li>
+        <li>Search uses document metadata and section content</li>
+    </ul>
+
+    <p><strong>External Databases</strong> use the <strong>Semantic Search</strong> method:</p>
+    <ul>
+        <li>Documents chunked and embedded (text-embedding-3-large, 2000 dimensions)</li>
+        <li>Content stored in <code>iris_semantic_search</code> table with pgvector</li>
+        <li>Search uses vector similarity with configurable chunk limits</li>
+    </ul>
+</div>
+
+<hr>
+<p class="small-text">Last updated: <span class="link-placeholder">[Date]</span> | Document owner: <span class="link-placeholder">[Owner]</span></p>
+
+</body>
+</html>
