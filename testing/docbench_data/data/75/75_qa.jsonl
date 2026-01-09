@@ -1,0 +1,4 @@
+{"question": "Is the Bahia Rare Earths Project located in Brazil?", "answer": "Yes.", "type": "text-only", "evidence": "The Project is located in the SW portion of State of Bahia in the Northeast Region of Brazil."}
+{"question": "What is the total area for Lithium properties held by the company in Brazil by the end of 2020?", "answer": "The total area for Lithium properties is 80,934 acres.", "type": "multimodal-t", "evidence": "The question requires locating the sum of the area for all Lithium properties which is directly given in the row labeled \"Total \u2013 Lithium.\""}
+{"question": "On which page does the document present the signature part?", "answer": "page 59.", "type": "meta-data", "evidence": ""}
+{"question": "How much was the annual revenue of Tesla in 2020?", "answer": "Not mentioned.", "type": "unanswerable", "evidence": ""}

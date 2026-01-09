@@ -1,0 +1,3 @@
+{"question": "What is the confidence interval for the ROUGE scores reported in Table 2?", "answer": "\u00b10.24", "type": "text-only", "evidence": "\"All our ROUGE scores have a 95% confidence interval with at most \u00b10.24.\""}
+{"question": "How many times does the paper mention GAN?", "answer": "3.", "type": "meta-data", "evidence": ""}
+{"question": "Does the LSTUR model consider both short-term and long-term user interests?", "answer": "Not mentioned", "type": "unanswerable", "evidence": "randomly chosen from P19-1033."}

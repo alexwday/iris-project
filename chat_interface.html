@@ -3,50 +3,402 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IRIS Chat - RBC Financial Assistant</title>
+    <title>IRIS - Financial Research Assistant</title>
     <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
     <style>
+        :root {
+            --bg-primary: #0f0f0f;
+            --bg-secondary: #1a1a1a;
+            --bg-tertiary: #262626;
+            --bg-hover: #333333;
+            --text-primary: #ffffff;
+            --text-secondary: #a1a1a1;
+            --text-muted: #6b6b6b;
+            --accent: #6366f1;
+            --accent-hover: #818cf8;
+            --success: #22c55e;
+            --error: #ef4444;
+            --border: #333333;
+            --user-bubble: #6366f1;
+            --assistant-bubble: #262626;
+            --radius-sm: 8px;
+            --radius-md: 12px;
+            --radius-lg: 16px;
+            --radius-full: 9999px;
+        }
+
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            background: #f7f7f8;
+            background: var(--bg-primary);
+            color: var(--text-primary);
             height: 100vh;
             display: flex;
             flex-direction: column;
-            font-size: 14px;
+            font-size: 15px;
+            line-height: 1.6;
         }
-        
+
+        /* Header */
         .header {
-            background: #ffffff;
-            border-bottom: 1px solid #e5e5e5;
-            padding: 16px 24px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex-shrink: 0;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .logo-icon {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, var(--accent) 0%, #a855f7 100%);
+            border-radius: var(--radius-sm);
             display: flex;
             align-items: center;
             justify-content: center;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
         }
-        
-        .header h1 {
-            color: #1a1a1a;
-            font-size: 20px;
+
+        .logo-icon svg {
+            width: 18px;
+            height: 18px;
+            fill: white;
+        }
+
+        .logo-text {
+            font-size: 18px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-left: auto;
+        }
+
+        .btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 14px;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .btn svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--accent-hover);
+        }
+
+        .btn-secondary {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            background: var(--bg-hover);
+            border-color: var(--text-muted);
+        }
+
+        .btn-ghost {
+            background: transparent;
+            color: var(--text-secondary);
+            padding: 8px;
+        }
+
+        .btn-ghost:hover {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: var(--radius-full);
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .status-badge.connected {
+            background: rgba(34, 197, 94, 0.15);
+            color: var(--success);
+        }
+
+        .status-badge.disconnected {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--error);
+        }
+
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+
+        /* Main Layout */
+        .main-container {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 300px;
+            background: var(--bg-secondary);
+            border-left: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+            position: fixed;
+            right: 0;
+            top: 57px;
+            bottom: 0;
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+            z-index: 100;
+        }
+
+        .sidebar.open {
+            transform: translateX(0);
+        }
+
+        .sidebar-overlay {
+            position: fixed;
+            inset: 0;
+            top: 57px;
+            background: rgba(0, 0, 0, 0.5);
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+            z-index: 99;
+        }
+
+        .sidebar-overlay.open {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .sidebar-header {
+            padding: 16px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .sidebar-title {
+            font-size: 14px;
             font-weight: 600;
+            color: var(--text-primary);
         }
-        
-        .chat-container {
+
+        .sidebar-close {
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            transition: all 0.15s;
+        }
+
+        .sidebar-close:hover {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+
+        .filter-actions-bar {
+            display: flex;
+            gap: 6px;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+            flex-wrap: wrap;
+        }
+
+        .filter-btn {
+            padding: 5px 10px;
+            font-size: 11px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .filter-btn:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+
+        .filter-btn.active {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: white;
+        }
+
+        .sidebar-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+        }
+
+        .db-section {
+            margin-bottom: 20px;
+        }
+
+        .db-section-title {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .db-section-title::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--border);
+        }
+
+        .db-list {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .db-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 10px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        .db-item:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .db-item input[type="checkbox"] {
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border: 2px solid var(--border);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.15s;
+            flex-shrink: 0;
+        }
+
+        .db-item input[type="checkbox"]:checked {
+            background: var(--accent);
+            border-color: var(--accent);
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3E%3C/svg%3E");
+            background-size: 12px;
+            background-position: center;
+            background-repeat: no-repeat;
+        }
+
+        .db-item label {
+            font-size: 13px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            flex: 1;
+        }
+
+        .db-item:hover label {
+            color: var(--text-primary);
+        }
+
+        .db-count {
+            padding: 12px 16px;
+            background: var(--bg-tertiary);
+            border-top: 1px solid var(--border);
+            font-size: 12px;
+            color: var(--text-muted);
+            text-align: center;
+        }
+
+        .db-loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 20px;
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Chat Area */
+        .chat-area {
             flex: 1;
             display: flex;
             flex-direction: column;
-            max-width: 1200px;
-            margin: 0 auto;
-            width: 100%;
-            height: 100%;
+            min-width: 0;
         }
-        
+
         .messages {
             flex: 1;
             overflow-y: auto;
@@ -55,30 +407,32 @@
             flex-direction: column;
             gap: 24px;
         }
-        
+
         .message {
             display: flex;
-            gap: 12px;
-            animation: fadeIn 0.3s ease-in;
+            gap: 16px;
+            max-width: 900px;
+            animation: messageIn 0.3s ease-out;
         }
-        
-        @keyframes fadeIn {
+
+        @keyframes messageIn {
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
         }
-        
+
         .message.user {
-            justify-content: flex-end;
+            flex-direction: row-reverse;
+            margin-left: auto;
         }
-        
+
         .message.assistant {
-            justify-content: flex-start;
+            margin-right: auto;
         }
-        
+
         .avatar {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
+            width: 36px;
+            height: 36px;
+            border-radius: var(--radius-sm);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -86,535 +440,509 @@
             font-size: 14px;
             flex-shrink: 0;
         }
-        
+
         .avatar.user {
-            background: #10a37f;
+            background: var(--user-bubble);
             color: white;
         }
-        
+
         .avatar.assistant {
-            background: #ab68ff;
+            background: linear-gradient(135deg, var(--accent) 0%, #a855f7 100%);
             color: white;
         }
-        
-        .message-wrapper {
-            max-width: 80%;
+
+        .message-content {
+            padding: 14px 18px;
+            border-radius: var(--radius-lg);
+            line-height: 1.6;
+            font-size: 14px;
+        }
+
+        .message.user .message-content {
+            background: var(--user-bubble);
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+
+        .message.assistant .message-content {
+            background: var(--assistant-bubble);
+            color: var(--text-primary);
+            border-bottom-left-radius: 4px;
+            border: 1px solid var(--border);
+        }
+
+        .message-content h1, .message-content h2, .message-content h3 {
+            margin: 16px 0 8px 0;
+            font-weight: 600;
+            line-height: 1.3;
+        }
+
+        .message-content h1 { font-size: 1.3em; }
+        .message-content h2 { font-size: 1.15em; }
+        .message-content h3 { font-size: 1em; }
+
+        .message-content p {
+            margin: 8px 0;
+        }
+
+        .message-content ul, .message-content ol {
+            margin: 8px 0;
+            padding-left: 24px;
+        }
+
+        .message-content li {
+            margin: 4px 0;
+        }
+
+        .message-content code {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
+            font-size: 0.9em;
+        }
+
+        .message-content pre {
+            background: var(--bg-primary);
+            padding: 16px;
+            border-radius: var(--radius-sm);
+            overflow-x: auto;
+            margin: 12px 0;
+            border: 1px solid var(--border);
+        }
+
+        .message-content pre code {
+            background: none;
+            padding: 0;
+        }
+
+        .message-content blockquote {
+            border-left: 3px solid var(--accent);
+            padding-left: 16px;
+            margin: 12px 0;
+            color: var(--text-secondary);
+        }
+
+        .message-content a {
+            color: var(--accent-hover);
+            text-decoration: none;
+        }
+
+        .message-content a:hover {
+            text-decoration: underline;
+        }
+
+        .message-actions {
+            display: flex;
+            gap: 2px;
+            margin-top: 8px;
+            margin-left: 52px;
+        }
+
+        .action-btn {
+            width: 28px;
+            height: 28px;
+            padding: 0;
+            background: transparent;
+            border: none;
+            border-radius: var(--radius-sm);
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: all 0.15s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .action-btn:hover {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+
+        .action-btn svg {
+            width: 16px;
+            height: 16px;
+            fill: currentColor;
+        }
+
+        /* Typing Indicator */
+        .typing-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 14px 18px;
+            background: var(--assistant-bubble);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            border-bottom-left-radius: 4px;
+        }
+
+        .typing-dots {
+            display: flex;
+            gap: 4px;
+        }
+
+        .typing-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--text-muted);
+            border-radius: 50%;
+            animation: typing 1.4s infinite;
+        }
+
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes typing {
+            0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+            30% { transform: translateY(-4px); opacity: 1; }
+        }
+
+        /* Input Area */
+        .input-area {
+            padding: 20px 24px;
+            background: var(--bg-secondary);
+            border-top: 1px solid var(--border);
+        }
+
+        .input-container {
+            max-width: 900px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .input-wrapper {
+            flex: 1;
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .input-box {
+            width: 100%;
+            padding: 14px 56px 14px 18px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            color: var(--text-primary);
+            font-size: 14px;
+            font-family: inherit;
+            line-height: 1.5;
+            resize: none;
+            min-height: 52px;
+            max-height: 200px;
+            outline: none;
+            transition: border-color 0.15s, box-shadow 0.15s;
+        }
+
+        .input-box::placeholder {
+            color: var(--text-muted);
+        }
+
+        .input-box:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+        }
+
+        .input-box:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .send-button {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 36px;
+            height: 36px;
+            background: var(--accent);
+            border: none;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.15s;
+        }
+
+        .send-button:hover:not(:disabled) {
+            background: var(--accent-hover);
+        }
+
+        .send-button:disabled {
+            background: var(--bg-hover);
+            cursor: not-allowed;
+        }
+
+        .send-button svg {
+            width: 18px;
+            height: 18px;
+            fill: white;
+        }
+
+        .filter-toggle-btn {
+            width: 44px;
+            height: 44px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s;
+            flex-shrink: 0;
+            position: relative;
+        }
+
+        .filter-toggle-btn:hover {
+            background: var(--bg-hover);
+            border-color: var(--text-muted);
+        }
+
+        .filter-toggle-btn.active {
+            background: var(--accent);
+            border-color: var(--accent);
+        }
+
+        .filter-toggle-btn svg {
+            width: 20px;
+            height: 20px;
+            fill: var(--text-secondary);
+        }
+
+        .filter-toggle-btn.active svg {
+            fill: white;
+        }
+
+        .filter-badge {
+            position: absolute;
+            top: -4px;
+            right: -4px;
+            min-width: 18px;
+            height: 18px;
+            background: var(--accent);
+            border-radius: var(--radius-full);
+            font-size: 10px;
+            font-weight: 600;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 4px;
+        }
+
+        .filter-toggle-btn.active .filter-badge {
+            background: white;
+            color: var(--accent);
+        }
+
+        .input-hint {
+            text-align: center;
+            margin-top: 10px;
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        .input-hint kbd {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: inherit;
+            font-size: 10px;
+        }
+
+        /* Toast */
+        .toast-container {
+            position: fixed;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
             display: flex;
             flex-direction: column;
             gap: 8px;
         }
-        
-        .message-content {
-            padding: 12px 16px;
-            border-radius: 18px;
-            line-height: 1.4;
-            word-wrap: break-word;
+
+        .toast {
+            padding: 12px 20px;
+            border-radius: var(--radius-sm);
             font-size: 13px;
+            font-weight: 500;
+            animation: toastIn 0.3s ease-out;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
         }
-        
-        .message.user .message-content {
-            background: #10a37f;
+
+        .toast.success {
+            background: var(--success);
             color: white;
         }
-        
-        .message.assistant .message-content {
-            background: #ffffff;
-            color: #1a1a1a;
-            border: 1px solid #e5e5e5;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-        }
-        
-        .message-actions {
-            display: flex;
-            gap: 8px;
-            padding: 0 4px;
-        }
-        
-        .email-button {
-            background: #0078d4;
+
+        .toast.error {
+            background: var(--error);
             color: white;
-            border: none;
-            padding: 6px 12px;
-            border-radius: 6px;
+        }
+
+        @keyframes toastIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Error */
+        .error-banner {
+            padding: 10px 16px;
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: var(--radius-sm);
+            color: var(--error);
             font-size: 12px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            transition: background-color 0.2s;
-        }
-        
-        .email-button:hover {
-            background: #106ebe;
-        }
-        
-        .email-button svg {
-            width: 14px;
-            height: 14px;
-            fill: white;
-        }
-        
-        .message-content h1, .message-content h2, .message-content h3 {
-            margin: 16px 0 8px 0;
-            font-weight: 600;
-        }
-        
-        .message-content h1 { font-size: 1.2em; }
-        .message-content h2 { font-size: 1.1em; }
-        .message-content h3 { font-size: 1.0em; }
-        
-        .message-content p {
-            margin: 8px 0;
-        }
-        
-        .message-content ul, .message-content ol {
-            margin: 8px 0;
-            padding-left: 20px;
-        }
-        
-        .message-content li {
-            margin: 4px 0;
-        }
-        
-        .message-content code {
-            background: #f6f8fa;
-            padding: 2px 4px;
-            border-radius: 4px;
-            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-            font-size: 0.85em;
-        }
-        
-        .message-content pre {
-            background: #f6f8fa;
-            padding: 12px;
-            border-radius: 8px;
-            overflow-x: auto;
-            margin: 8px 0;
-            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-            font-size: 0.8em;
-        }
-        
-        .message-content blockquote {
-            border-left: 4px solid #d1d5db;
-            padding-left: 12px;
-            margin: 8px 0;
-            color: #6b7280;
-        }
-        
-        .input-container {
-            padding: 24px;
-            background: #ffffff;
-            border-top: 1px solid #e5e5e5;
-        }
-        
-        .database-selector {
-            margin-bottom: 16px;
-            padding: 16px;
-            background: #f8f9fa;
-            border: 1px solid #e5e5e5;
-            border-radius: 8px;
-            max-width: 1200px;
-            margin: 0 auto 16px auto;
-        }
-        
-        .database-selector-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
             margin-bottom: 12px;
         }
-        
-        .database-selector-header h3 {
-            margin: 0;
-            font-size: 14px;
-            font-weight: 600;
-            color: #374151;
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
         }
-        
-        .filter-toggle {
-            background: #6366f1;
-            color: white;
-            border: none;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 12px;
-            cursor: pointer;
-        }
-        
-        .filter-toggle:hover {
-            background: #5856eb;
-        }
-        
-        .database-groups {
-            display: none;
-        }
-        
-        .database-groups.show {
-            display: block;
-        }
-        
-        .database-group {
-            margin-bottom: 16px;
-        }
-        
-        .database-group h4 {
-            margin: 0 0 8px 0;
-            font-size: 13px;
-            font-weight: 600;
-            color: #6b7280;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        
-        .checkbox-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 8px;
-        }
-        
-        .checkbox-item {
-            display: flex;
-            align-items: center;
-            padding: 6px 8px;
-            background: white;
-            border: 1px solid #e5e5e5;
-            border-radius: 4px;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        
-        .checkbox-item:hover {
-            background: #f1f5f9;
-            border-color: #6366f1;
-        }
-        
-        .checkbox-item input[type="checkbox"] {
-            margin-right: 8px;
-            cursor: pointer;
-        }
-        
-        .checkbox-item label {
-            margin: 0;
-            font-size: 12px;
-            font-weight: 500;
-            color: #374151;
-            cursor: pointer;
-            flex: 1;
-        }
-        
-        .control-buttons {
-            margin-top: 12px;
-            display: flex;
-            gap: 8px;
-        }
-        
-        .control-buttons button {
-            background: #6366f1;
-            color: white;
-            border: none;
-            padding: 6px 12px;
-            border-radius: 4px;
-            font-size: 12px;
-            cursor: pointer;
-        }
-        
-        .control-buttons button:hover {
-            background: #5856eb;
-        }
-        
-        .control-buttons button.secondary {
-            background: #9ca3af;
-        }
-        
-        .control-buttons button.secondary:hover {
-            background: #6b7280;
-        }
-        
-        .selected-count {
-            font-size: 11px;
-            color: #6b7280;
-            margin-left: auto;
-        }
-        
-        .input-wrapper {
-            position: relative;
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-        
-        .input-box {
-            width: 100%;
-            padding: 12px 50px 12px 16px;
-            border: 2px solid #e5e5e5;
-            border-radius: 24px;
-            font-size: 14px;
-            font-family: inherit;
-            outline: none;
-            resize: none;
-            min-height: 48px;
-            max-height: 150px;
-            transition: border-color 0.2s;
-        }
-        
-        .input-box:focus {
-            border-color: #10a37f;
-        }
-        
-        .input-box:disabled {
-            background: #f9f9f9;
-            cursor: not-allowed;
-        }
-        
-        .send-button {
-            position: absolute;
-            right: 8px;
-            top: 50%;
-            transform: translateY(-50%);
-            background: #10a37f;
-            border: none;
-            border-radius: 50%;
-            width: 32px;
-            height: 32px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: background-color 0.2s;
-        }
-        
-        .send-button:hover:not(:disabled) {
-            background: #0d8a6b;
-        }
-        
-        .send-button:disabled {
-            background: #d1d5db;
-            cursor: not-allowed;
-        }
-        
-        .send-button svg {
-            width: 16px;
-            height: 16px;
-            fill: white;
-        }
-        
-        .typing-indicator {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            color: #6b7280;
-            font-style: italic;
-        }
-        
-        .typing-dots {
-            display: flex;
-            gap: 2px;
-        }
-        
-        .typing-dot {
-            width: 4px;
-            height: 4px;
-            background: #6b7280;
-            border-radius: 50%;
-            animation: typing 1.5s infinite;
-        }
-        
-        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
-        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
-        
-        @keyframes typing {
-            0%, 60%, 100% { opacity: 0.3; }
-            30% { opacity: 1; }
-        }
-        
-        .error-message {
-            background: #fee2e2;
-            color: #dc2626;
-            padding: 12px 16px;
-            border-radius: 8px;
-            margin: 16px 24px;
-            border: 1px solid #fecaca;
-        }
-        
-        .status-indicator {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            padding: 8px 12px;
-            border-radius: 16px;
-            font-size: 12px;
-            font-weight: 500;
-            z-index: 1000;
-        }
-        
-        .status-indicator.connected {
-            background: #d1fae5;
-            color: #065f46;
-            border: 1px solid #a7f3d0;
-        }
-        
-        .status-indicator.disconnected {
-            background: #fee2e2;
-            color: #dc2626;
-            border: 1px solid #fecaca;
-        }
-        
-        /* Scrollbar styling */
-        .messages::-webkit-scrollbar {
-            width: 6px;
-        }
-        
-        .messages::-webkit-scrollbar-track {
+
+        ::-webkit-scrollbar-track {
             background: transparent;
         }
-        
-        .messages::-webkit-scrollbar-thumb {
-            background: #d1d5db;
-            border-radius: 3px;
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--bg-hover);
+            border-radius: 4px;
         }
-        
-        .messages::-webkit-scrollbar-thumb:hover {
-            background: #9ca3af;
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-muted);
         }
-        
-        /* Mobile responsiveness */
+
+        /* Mobile */
         @media (max-width: 768px) {
-            .header {
-                padding: 12px 16px;
+            .sidebar {
+                display: none;
             }
-            
+
+            .header {
+                padding: 10px 16px;
+            }
+
             .messages {
                 padding: 16px;
-                gap: 16px;
             }
-            
-            .input-container {
+
+            .input-area {
                 padding: 16px;
-            }
-            
-            .message-wrapper {
-                max-width: 90%;
             }
         }
     </style>
 </head>
 <body>
     <div class="header">
-        <h1>IRIS Financial Assistant</h1>
-    </div>
-    
-    <div class="status-indicator" id="statusIndicator">
-        Connecting...
-    </div>
-    
-    <div class="chat-container">
-        <div class="messages" id="messages">
-            <div class="message assistant">
-                <div class="avatar assistant">AI</div>
-                <div class="message-wrapper">
-                    <div class="message-content">
-                        <p>Hello! I'm IRIS, your RBC Financial Assistant. I can help you with financial research, policies, procedures, and regulatory information. What would you like to know?</p>
-                    </div>
+        <div class="header-left">
+            <div class="logo">
+                <div class="logo-icon">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                    </svg>
                 </div>
+                <span class="logo-text">IRIS</span>
             </div>
         </div>
-        
-        <div class="input-container">
-            <div class="database-selector">
-                <div class="database-selector-header">
-                    <h3>Database Filters</h3>
-                    <div class="selected-count" id="selectedCount">All databases (14)</div>
-                    <button class="filter-toggle" id="filterToggle">Show Filters</button>
+
+        <div class="header-actions">
+            <button class="btn btn-primary" id="newChatBtn" title="New conversation (Cmd/Ctrl+K)">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                </svg>
+                New Chat
+            </button>
+            <button class="btn btn-secondary" id="resetServerBtn" title="Clear server caches">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+                </svg>
+                Reset
+            </button>
+            <div class="status-badge" id="statusIndicator">
+                <span class="status-dot"></span>
+                <span>Connecting...</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-container" id="toastContainer"></div>
+
+    <div class="main-container">
+        <div class="sidebar-overlay" id="sidebarOverlay"></div>
+        <div class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-title">Database Filters</div>
+                <button class="btn-ghost sidebar-close" id="sidebarClose" title="Close">
+                    <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+                        <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="filter-actions-bar">
+                <button class="filter-btn active" id="selectAllBtn">All</button>
+                <button class="filter-btn" id="selectInternalBtn">Internal</button>
+                <button class="filter-btn" id="selectExternalBtn">External</button>
+                <button class="filter-btn" id="clearAllBtn">None</button>
+            </div>
+            <div class="sidebar-content" id="databaseFiltersContainer">
+                <div class="db-loading">
+                    <div class="spinner"></div>
+                    Loading databases...
                 </div>
-                
-                <div class="database-groups" id="databaseGroups">
-                    <div class="database-group">
-                        <h4>Internal Knowledge Bases</h4>
-                        <div class="checkbox-grid">
-                            <div class="checkbox-item">
-                                <input type="checkbox" id="internal_aio" value="internal_aio" checked>
-                                <label for="internal_aio">AIO</label>
-                            </div>
-                            <div class="checkbox-item">
-                                <input type="checkbox" id="internal_capm" value="internal_capm" checked>
-                                <label for="internal_capm">CAPM</label>
-                            </div>
-                            <div class="checkbox-item">
-                                <input type="checkbox" id="internal_cheatsheets" value="internal_cheatsheets" checked>
-                                <label for="internal_cheatsheets">Cheatsheets</label>
-                            </div>
-                            <div class="checkbox-item">
-                                <input type="checkbox" id="internal_esg" value="internal_esg" checked>
-                                <label for="internal_esg">ESG</label>
-                            </div>
-                            <div class="checkbox-item">
-                                <input type="checkbox" id="internal_ext_reporting_and_disclosure" value="internal_ext_reporting_and_disclosure" checked>
-                                <label for="internal_ext_reporting_and_disclosure">External Reporting</label>
-                            </div>
-                            <div class="checkbox-item">
-                                <input type="checkbox" id="internal_global_finance_standards" value="internal_global_finance_standards" checked>
-                                <label for="internal_global_finance_standards">Global Finance Standards</label>
-                            </div>
-                            <div class="checkbox-item">
-                                <input type="checkbox" id="internal_management_reporting" value="internal_management_reporting" checked>
-                                <label for="internal_management_reporting">Management Reporting</label>
-                            </div>
-                            <div class="checkbox-item">
-                                <input type="checkbox" id="internal_memos" value="internal_memos" checked>
-                                <label for="internal_memos">Memos</label>
-                            </div>
-                            <div class="checkbox-item">
-                                <input type="checkbox" id="internal_par" value="internal_par" checked>
-                                <label for="internal_par">PAR</label>
-                            </div>
-                            <div class="checkbox-item">
-                                <input type="checkbox" id="internal_process_and_controls" value="internal_process_and_controls" checked>
-                                <label for="internal_process_and_controls">Process & Controls</label>
-                            </div>
-                            <div class="checkbox-item">
-                                <input type="checkbox" id="internal_sab_99" value="internal_sab_99" checked>
-                                <label for="internal_sab_99">SAB 99 Memos</label>
-                            </div>
-                            <div class="checkbox-item">
-                                <input type="checkbox" id="internal_wiki" value="internal_wiki" checked>
-                                <label for="internal_wiki">Wiki</label>
-                            </div>
-                        </div>
+            </div>
+            <div class="db-count" id="selectedCount">Loading...</div>
+        </div>
+
+        <div class="chat-area">
+            <div class="messages" id="messages">
+                <div class="message assistant">
+                    <div class="avatar assistant">
+                        <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
+                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                        </svg>
                     </div>
-                    
-                    <div class="database-group">
-                        <h4>External Guidance</h4>
-                        <div class="checkbox-grid">
-                            <div class="checkbox-item">
-                                <input type="checkbox" id="external_ey" value="external_ey" checked>
-                                <label for="external_ey">EY International GAAP</label>
-                            </div>
-                            <div class="checkbox-item">
-                                <input type="checkbox" id="external_iasb" value="external_iasb" checked>
-                                <label for="external_iasb">IASB Standards</label>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="control-buttons">
-                        <button id="selectAllBtn">Select All</button>
-                        <button id="clearAllBtn" class="secondary">Clear All</button>
-                        <button id="selectInternalBtn">Internal Only</button>
-                        <button id="selectExternalBtn">External Only</button>
+                    <div class="message-content">
+                        <p>Hello! I'm IRIS, your financial research assistant. I can help you explore RBC policies, accounting standards, regulatory guidance, and more.</p>
+                        <p>What would you like to know?</p>
                     </div>
                 </div>
             </div>
-            <div class="input-wrapper">
-                <textarea 
-                    class="input-box" 
-                    id="messageInput" 
-                    placeholder="Ask me anything about RBC financial policies..."
-                    rows="1"
-                ></textarea>
-                <button class="send-button" id="sendButton">
-                    <svg viewBox="0 0 24 24">
-                        <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
-                    </svg>
-                </button>
+
+            <div class="input-area">
+                <div class="input-container">
+                    <div class="input-wrapper">
+                        <textarea
+                            class="input-box"
+                            id="messageInput"
+                            placeholder="Ask about financial policies, accounting standards, or regulations..."
+                            rows="1"
+                        ></textarea>
+                        <button class="send-button" id="sendButton">
+                            <svg viewBox="0 0 24 24">
+                                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <button class="filter-toggle-btn" id="filterToggleBtn" title="Database filters">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z"/>
+                        </svg>
+                        <span class="filter-badge" id="filterBadge">16</span>
+                    </button>
+                </div>
+                <div class="input-hint">
+                    <kbd>Enter</kbd> to send · <kbd>Shift+Enter</kbd> for new line · <kbd>Cmd/Ctrl+K</kbd> to reset
+                </div>
             </div>
         </div>
     </div>
@@ -625,22 +953,32 @@
                 this.apiUrl = 'http://localhost:8000';
                 this.messages = [];
                 this.isStreaming = false;
-                
+                this.databases = [];
+
                 this.messagesContainer = document.getElementById('messages');
                 this.messageInput = document.getElementById('messageInput');
                 this.sendButton = document.getElementById('sendButton');
                 this.statusIndicator = document.getElementById('statusIndicator');
-                
+                this.toastContainer = document.getElementById('toastContainer');
+                this.newChatBtn = document.getElementById('newChatBtn');
+                this.resetServerBtn = document.getElementById('resetServerBtn');
+                this.sidebar = document.getElementById('sidebar');
+                this.sidebarOverlay = document.getElementById('sidebarOverlay');
+                this.filterToggleBtn = document.getElementById('filterToggleBtn');
+                this.filterBadge = document.getElementById('filterBadge');
+                this.sidebarClose = document.getElementById('sidebarClose');
+
                 this.init();
             }
-            
+
             init() {
                 this.setupEventListeners();
+                this.setupKeyboardShortcuts();
                 this.checkAPIConnection();
                 this.autoResizeTextarea();
-                this.updateSelectedCount();
+                this.loadDatabases();
             }
-            
+
             setupEventListeners() {
                 this.sendButton.addEventListener('click', () => this.sendMessage());
                 this.messageInput.addEventListener('keydown', (e) => {
@@ -649,408 +987,478 @@
                         this.sendMessage();
                     }
                 });
-                
+
                 this.messageInput.addEventListener('input', () => {
                     this.autoResizeTextarea();
                 });
-                
-                // Database selector event listeners
-                document.getElementById('filterToggle').addEventListener('click', () => {
-                    const groups = document.getElementById('databaseGroups');
-                    const toggle = document.getElementById('filterToggle');
-                    
-                    if (groups.classList.contains('show')) {
-                        groups.classList.remove('show');
-                        toggle.textContent = 'Show Filters';
-                    } else {
-                        groups.classList.add('show');
-                        toggle.textContent = 'Hide Filters';
-                    }
-                });
-                
+
+                this.newChatBtn.addEventListener('click', () => this.resetConversation());
+                this.resetServerBtn.addEventListener('click', () => this.resetServer());
+
+                // Sidebar toggle
+                this.filterToggleBtn.addEventListener('click', () => this.toggleSidebar());
+                this.sidebarClose.addEventListener('click', () => this.closeSidebar());
+                this.sidebarOverlay.addEventListener('click', () => this.closeSidebar());
+
                 document.getElementById('selectAllBtn').addEventListener('click', () => {
-                    const checkboxes = document.querySelectorAll('input[type="checkbox"]');
-                    checkboxes.forEach(cb => cb.checked = true);
+                    this.setFilterButtons('all');
+                    document.querySelectorAll('#databaseFiltersContainer input[type="checkbox"]').forEach(cb => cb.checked = true);
                     this.updateSelectedCount();
                 });
-                
+
                 document.getElementById('clearAllBtn').addEventListener('click', () => {
-                    const checkboxes = document.querySelectorAll('input[type="checkbox"]');
-                    checkboxes.forEach(cb => cb.checked = false);
+                    this.setFilterButtons('none');
+                    document.querySelectorAll('#databaseFiltersContainer input[type="checkbox"]').forEach(cb => cb.checked = false);
                     this.updateSelectedCount();
                 });
-                
+
                 document.getElementById('selectInternalBtn').addEventListener('click', () => {
-                    const checkboxes = document.querySelectorAll('input[type="checkbox"]');
-                    checkboxes.forEach(cb => {
+                    this.setFilterButtons('internal');
+                    document.querySelectorAll('#databaseFiltersContainer input[type="checkbox"]').forEach(cb => {
                         cb.checked = cb.value.startsWith('internal_');
                     });
                     this.updateSelectedCount();
                 });
-                
+
                 document.getElementById('selectExternalBtn').addEventListener('click', () => {
-                    const checkboxes = document.querySelectorAll('input[type="checkbox"]');
-                    checkboxes.forEach(cb => {
+                    this.setFilterButtons('external');
+                    document.querySelectorAll('#databaseFiltersContainer input[type="checkbox"]').forEach(cb => {
                         cb.checked = cb.value.startsWith('external_');
                     });
                     this.updateSelectedCount();
                 });
-                
-                // Add change listeners to all checkboxes
-                document.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-                    cb.addEventListener('change', () => this.updateSelectedCount());
+            }
+
+            setFilterButtons(active) {
+                document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+                const btnMap = { 'all': 'selectAllBtn', 'internal': 'selectInternalBtn', 'external': 'selectExternalBtn', 'none': 'clearAllBtn' };
+                document.getElementById(btnMap[active])?.classList.add('active');
+            }
+
+            setupKeyboardShortcuts() {
+                document.addEventListener('keydown', (e) => {
+                    if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+                        e.preventDefault();
+                        this.resetConversation();
+                    }
                 });
             }
-            
+
             autoResizeTextarea() {
                 const textarea = this.messageInput;
                 textarea.style.height = 'auto';
-                textarea.style.height = Math.min(textarea.scrollHeight, 150) + 'px';
+                textarea.style.height = Math.min(textarea.scrollHeight, 200) + 'px';
             }
-            
+
             async checkAPIConnection() {
                 try {
                     const response = await fetch(`${this.apiUrl}/health`);
                     if (response.ok) {
-                        this.updateStatus('connected', '✅ Connected');
+                        this.updateStatus('connected', 'Connected');
                     } else {
-                        this.updateStatus('disconnected', '❌ API Error');
+                        this.updateStatus('disconnected', 'API Error');
                     }
                 } catch (error) {
-                    this.updateStatus('disconnected', '❌ Disconnected');
+                    this.updateStatus('disconnected', 'Disconnected');
                 }
             }
-            
+
             updateStatus(status, text) {
-                this.statusIndicator.className = `status-indicator ${status}`;
-                this.statusIndicator.textContent = text;
+                this.statusIndicator.className = `status-badge ${status}`;
+                this.statusIndicator.innerHTML = `<span class="status-dot"></span><span>${text}</span>`;
             }
-            
+
             async sendMessage() {
                 const message = this.messageInput.value.trim();
                 if (!message || this.isStreaming) return;
-                
-                // Add user message
+
                 this.addMessage('user', message);
                 this.messageInput.value = '';
                 this.autoResizeTextarea();
-                
-                // Prepare messages for API
+
                 const apiMessages = this.messages.map(msg => ({
                     role: msg.role,
                     content: msg.content
                 }));
-                
+
                 try {
                     this.setInputState(false);
                     await this.streamResponse(apiMessages);
                 } catch (error) {
                     console.error('Error sending message:', error);
-                    this.showError('Failed to send message. Please try again.');
+                    this.showToast('Failed to send message', 'error');
                 } finally {
                     this.setInputState(true);
                 }
             }
-            
+
             addMessage(role, content) {
                 this.messages.push({ role, content });
-                
+
                 const messageDiv = document.createElement('div');
                 messageDiv.className = `message ${role}`;
-                
+
                 const avatar = document.createElement('div');
                 avatar.className = `avatar ${role}`;
-                avatar.textContent = role === 'user' ? 'U' : 'AI';
-                
-                const wrapperDiv = document.createElement('div');
-                wrapperDiv.className = 'message-wrapper';
-                
+
+                if (role === 'assistant') {
+                    avatar.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>`;
+                } else {
+                    avatar.textContent = 'U';
+                }
+
                 const contentDiv = document.createElement('div');
                 contentDiv.className = 'message-content';
-                
+
                 if (role === 'assistant') {
                     contentDiv.innerHTML = marked.parse(content);
                 } else {
                     contentDiv.textContent = content;
                 }
-                
-                wrapperDiv.appendChild(contentDiv);
-                
-                // Add email button for assistant messages
-                if (role === 'assistant' && content) {
-                    const actionsDiv = document.createElement('div');
-                    actionsDiv.className = 'message-actions';
-                    
-                    const emailButton = document.createElement('button');
-                    emailButton.className = 'email-button';
-                    emailButton.innerHTML = `
-                        <svg viewBox="0 0 24 24">
-                            <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
-                        </svg>
-                        Email This Response
-                    `;
-                    emailButton.onclick = () => this.sendEmail(content);
-                    
-                    actionsDiv.appendChild(emailButton);
-                    wrapperDiv.appendChild(actionsDiv);
-                }
-                
-                if (role === 'user') {
-                    messageDiv.appendChild(wrapperDiv);
-                    messageDiv.appendChild(avatar);
-                } else {
-                    messageDiv.appendChild(avatar);
-                    messageDiv.appendChild(wrapperDiv);
-                }
-                
+
+                messageDiv.appendChild(avatar);
+                messageDiv.appendChild(contentDiv);
                 this.messagesContainer.appendChild(messageDiv);
                 this.scrollToBottom();
-                
+
                 return contentDiv;
             }
-            
+
             async streamResponse(messages) {
                 this.isStreaming = true;
-                
-                // Add typing indicator
+
                 const typingDiv = this.addTypingIndicator();
-                
+
                 try {
                     const selectedDatabases = this.getSelectedDatabases();
                     const requestBody = {
                         messages: messages,
                         stream: true
                     };
-                    
+
                     if (selectedDatabases) {
                         requestBody.db_names = selectedDatabases;
                     }
-                    
+
                     const response = await fetch(`${this.apiUrl}/chat`, {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
+                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(requestBody)
                     });
-                    
+
                     if (!response.ok) {
                         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                     }
-                    
-                    // Remove typing indicator
+
                     typingDiv.remove();
-                    
-                    // Create assistant message container
+
                     const assistantContentDiv = this.addMessage('assistant', '');
                     let fullResponse = '';
-                    
+
                     const reader = response.body.getReader();
                     const decoder = new TextDecoder();
-                    
+
                     while (true) {
                         const { done, value } = await reader.read();
                         if (done) break;
-                        
+
                         const chunk = decoder.decode(value, { stream: true });
                         fullResponse += chunk;
-                        
-                        // Update the message content with markdown rendering
+
                         assistantContentDiv.innerHTML = marked.parse(fullResponse);
                         this.scrollToBottom();
                     }
-                    
-                    // Update the stored message
+
                     this.messages[this.messages.length - 1].content = fullResponse;
-                    
-                    // Add email button after streaming is complete
+
+                    // Add action buttons
                     if (fullResponse) {
-                        const messageDiv = assistantContentDiv.closest('.message');
-                        const wrapperDiv = assistantContentDiv.closest('.message-wrapper');
-                        
-                        // Check if email button doesn't already exist
-                        if (!wrapperDiv.querySelector('.message-actions')) {
-                            const actionsDiv = document.createElement('div');
-                            actionsDiv.className = 'message-actions';
-                            
-                            const emailButton = document.createElement('button');
-                            emailButton.className = 'email-button';
-                            emailButton.innerHTML = `
-                                <svg viewBox="0 0 24 24">
-                                    <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
-                                </svg>
-                                Email This Response
-                            `;
-                            emailButton.onclick = () => this.sendEmail(fullResponse);
-                            
-                            actionsDiv.appendChild(emailButton);
-                            wrapperDiv.appendChild(actionsDiv);
-                        }
+                        const msgIndex = this.messages.length - 1;
+                        const actionsDiv = document.createElement('div');
+                        actionsDiv.className = 'message-actions';
+
+                        const copyBtn = document.createElement('button');
+                        copyBtn.className = 'action-btn';
+                        copyBtn.title = 'Copy';
+                        copyBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>';
+                        copyBtn.addEventListener('click', () => this.copyMessage(msgIndex));
+
+                        const emailBtn = document.createElement('button');
+                        emailBtn.className = 'action-btn';
+                        emailBtn.title = 'Email';
+                        emailBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>';
+                        emailBtn.addEventListener('click', () => this.emailMessage(msgIndex));
+
+                        actionsDiv.appendChild(copyBtn);
+                        actionsDiv.appendChild(emailBtn);
+                        assistantContentDiv.closest('.message').appendChild(actionsDiv);
                     }
-                    
+
                 } catch (error) {
                     typingDiv.remove();
                     throw error;
                 }
-                
+
                 this.isStreaming = false;
             }
-            
+
             addTypingIndicator() {
                 const messageDiv = document.createElement('div');
                 messageDiv.className = 'message assistant';
-                
+
                 const avatar = document.createElement('div');
                 avatar.className = 'avatar assistant';
-                avatar.textContent = 'AI';
-                
+                avatar.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>`;
+
                 const typingDiv = document.createElement('div');
-                typingDiv.className = 'message-content typing-indicator';
+                typingDiv.className = 'typing-indicator';
                 typingDiv.innerHTML = `
-                    <span>Thinking</span>
                     <div class="typing-dots">
                         <div class="typing-dot"></div>
                         <div class="typing-dot"></div>
                         <div class="typing-dot"></div>
                     </div>
                 `;
-                
+
                 messageDiv.appendChild(avatar);
                 messageDiv.appendChild(typingDiv);
                 this.messagesContainer.appendChild(messageDiv);
                 this.scrollToBottom();
-                
+
                 return messageDiv;
             }
-            
+
             setInputState(enabled) {
                 this.messageInput.disabled = !enabled;
                 this.sendButton.disabled = !enabled;
             }
-            
-            showError(message) {
-                const errorDiv = document.createElement('div');
-                errorDiv.className = 'error-message';
-                errorDiv.textContent = message;
-                this.messagesContainer.appendChild(errorDiv);
-                this.scrollToBottom();
-                
-                setTimeout(() => {
-                    errorDiv.remove();
-                }, 5000);
-            }
-            
+
             scrollToBottom() {
                 this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
             }
-            
+
             getSelectedDatabases() {
-                const checkboxes = document.querySelectorAll('input[type="checkbox"]:checked');
+                const checkboxes = document.querySelectorAll('#databaseFiltersContainer input[type="checkbox"]:checked');
                 const selected = Array.from(checkboxes).map(cb => cb.value);
                 return selected.length > 0 ? selected : null;
             }
-            
+
             updateSelectedCount() {
-                const checkboxes = document.querySelectorAll('input[type="checkbox"]');
-                const selectedCheckboxes = document.querySelectorAll('input[type="checkbox"]:checked');
+                const checkboxes = document.querySelectorAll('#databaseFiltersContainer input[type="checkbox"]');
+                const selectedCheckboxes = document.querySelectorAll('#databaseFiltersContainer input[type="checkbox"]:checked');
                 const total = checkboxes.length;
                 const selected = selectedCheckboxes.length;
-                
+
                 const countElement = document.getElementById('selectedCount');
-                if (selected === 0) {
+                if (total === 0) {
+                    countElement.textContent = 'Loading...';
+                } else if (selected === 0) {
                     countElement.textContent = 'No databases selected';
                 } else if (selected === total) {
-                    countElement.textContent = `All databases (${total})`;
+                    countElement.textContent = `All ${total} databases selected`;
                 } else {
-                    countElement.textContent = `${selected} of ${total} databases`;
+                    countElement.textContent = `${selected} of ${total} selected`;
+                }
+
+                // Update filter badge
+                this.filterBadge.textContent = selected;
+
+                // Update filter button states
+                if (selected === total) this.setFilterButtons('all');
+                else if (selected === 0) this.setFilterButtons('none');
+                else {
+                    document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
                 }
             }
-            
-            sendEmail(content) {
-                // Convert markdown to plain text for email
+
+            toggleSidebar() {
+                this.sidebar.classList.toggle('open');
+                this.sidebarOverlay.classList.toggle('open');
+                this.filterToggleBtn.classList.toggle('active');
+            }
+
+            closeSidebar() {
+                this.sidebar.classList.remove('open');
+                this.sidebarOverlay.classList.remove('open');
+                this.filterToggleBtn.classList.remove('active');
+            }
+
+            resetConversation() {
+                this.messages = [];
+                this.messagesContainer.innerHTML = `
+                    <div class="message assistant">
+                        <div class="avatar assistant">
+                            <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
+                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                            </svg>
+                        </div>
+                        <div class="message-content">
+                            <p>Hello! I'm IRIS, your financial research assistant. I can help you explore RBC policies, accounting standards, regulatory guidance, and more.</p>
+                            <p>What would you like to know?</p>
+                        </div>
+                    </div>
+                `;
+
+                this.messageInput.value = '';
+                this.autoResizeTextarea();
+                this.messageInput.focus();
+                this.showToast('Conversation cleared');
+            }
+
+            async loadDatabases() {
+                const container = document.getElementById('databaseFiltersContainer');
+
+                try {
+                    const response = await fetch(`${this.apiUrl}/databases`);
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+
+                    const data = await response.json();
+                    this.databases = data.databases;
+                    this.renderDatabaseFilters(data.databases);
+                } catch (error) {
+                    console.error('Failed to load databases:', error);
+                    this.renderFallbackFilters();
+                }
+            }
+
+            renderDatabaseFilters(databases) {
+                const container = document.getElementById('databaseFiltersContainer');
+                const internal = databases.filter(db => db.is_internal);
+                const external = databases.filter(db => !db.is_internal);
+
+                let html = '';
+
+                if (internal.length > 0) {
+                    html += `
+                        <div class="db-section">
+                            <div class="db-section-title">Internal</div>
+                            <div class="db-list">
+                                ${internal.map(db => `
+                                    <div class="db-item">
+                                        <input type="checkbox" id="${db.id}" value="${db.id}" checked>
+                                        <label for="${db.id}">${db.name}</label>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+
+                if (external.length > 0) {
+                    html += `
+                        <div class="db-section">
+                            <div class="db-section-title">External</div>
+                            <div class="db-list">
+                                ${external.map(db => `
+                                    <div class="db-item">
+                                        <input type="checkbox" id="${db.id}" value="${db.id}" checked>
+                                        <label for="${db.id}">${db.name}</label>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+
+                container.innerHTML = html;
+
+                container.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                    cb.addEventListener('change', () => this.updateSelectedCount());
+                });
+
+                this.updateSelectedCount();
+            }
+
+            renderFallbackFilters() {
+                const fallbackDatabases = [
+                    { id: 'internal_aio', name: 'AIO', is_internal: true },
+                    { id: 'internal_capm', name: 'CAPM', is_internal: true },
+                    { id: 'internal_cheatsheets', name: 'Cheatsheets', is_internal: true },
+                    { id: 'internal_esg', name: 'ESG', is_internal: true },
+                    { id: 'internal_ext_reporting_and_disclosure', name: 'External Reporting', is_internal: true },
+                    { id: 'internal_global_finance_standards', name: 'Global Finance Standards', is_internal: true },
+                    { id: 'internal_management_reporting', name: 'Management Reporting', is_internal: true },
+                    { id: 'internal_memos', name: 'Memos', is_internal: true },
+                    { id: 'internal_par', name: 'PAR', is_internal: true },
+                    { id: 'internal_process_and_controls', name: 'Process & Controls', is_internal: true },
+                    { id: 'internal_sab_99', name: 'SAB 99 Memos', is_internal: true },
+                    { id: 'internal_wiki', name: 'Wiki', is_internal: true },
+                    { id: 'external_ey', name: 'EY International GAAP', is_internal: false },
+                    { id: 'external_iasb', name: 'IASB Standards', is_internal: false },
+                ];
+
+                this.databases = fallbackDatabases;
+
+                const container = document.getElementById('databaseFiltersContainer');
+                container.innerHTML = '<div class="error-banner">Could not load from server. Using defaults.</div>';
+
+                this.renderDatabaseFilters(fallbackDatabases);
+            }
+
+            async resetServer() {
+                if (!confirm('Clear all server caches and reload configurations?')) {
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`${this.apiUrl}/reset`, { method: 'POST' });
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+
+                    this.showToast('Server reset complete');
+                    await this.loadDatabases();
+                } catch (error) {
+                    console.error('Failed to reset server:', error);
+                    this.showToast('Reset failed: ' + error.message, 'error');
+                }
+            }
+
+            showToast(message, type = 'success') {
+                const toast = document.createElement('div');
+                toast.className = `toast ${type}`;
+                toast.textContent = message;
+
+                this.toastContainer.appendChild(toast);
+
+                setTimeout(() => {
+                    toast.style.opacity = '0';
+                    toast.style.transform = 'translateY(20px)';
+                    toast.style.transition = 'all 0.3s';
+                    setTimeout(() => toast.remove(), 300);
+                }, 3000);
+            }
+
+            copyMessage(msgIndex) {
+                const content = this.messages[msgIndex]?.content || '';
+                navigator.clipboard.writeText(content).then(() => {
+                    this.showToast('Copied to clipboard');
+                }).catch(() => {
+                    this.showToast('Failed to copy', 'error');
+                });
+            }
+
+            emailMessage(msgIndex) {
+                const content = this.messages[msgIndex]?.content || '';
                 const tempDiv = document.createElement('div');
                 tempDiv.innerHTML = marked.parse(content);
-                
-                // Extract text content and format it nicely
-                let plainText = this.htmlToPlainText(tempDiv);
-                
-                // Truncate if too long for URL (Outlook has limits)
+                let plainText = tempDiv.textContent || tempDiv.innerText;
+
                 const maxLength = 2000;
                 if (plainText.length > maxLength) {
-                    plainText = plainText.substring(0, maxLength) + '\n\n[Response truncated for email. Please refer to the chat for the complete response.]';
+                    plainText = plainText.substring(0, maxLength) + '\n\n[Truncated...]';
                 }
-                
-                // Create mailto link with Outlook-compatible formatting
-                const subject = encodeURIComponent('IRIS Financial Assistant Response');
-                const body = encodeURIComponent(
-                    'Dear Team,\n\n' +
-                    'Please find below the response from IRIS Financial Assistant:\n\n' +
-                    '---\n\n' +
-                    plainText +
-                    '\n\n---\n\n' +
-                    'Best regards,\n' +
-                    'IRIS Assistant'
-                );
-                
-                // Use mailto link which will open in default email client (typically Outlook in corporate environments)
-                const mailtoLink = `mailto:?subject=${subject}&body=${body}`;
-                window.location.href = mailtoLink;
-            }
-            
-            htmlToPlainText(element) {
-                let text = '';
-                const walk = (node) => {
-                    if (node.nodeType === Node.TEXT_NODE) {
-                        text += node.textContent;
-                    } else if (node.nodeType === Node.ELEMENT_NODE) {
-                        const tagName = node.tagName.toLowerCase();
-                        
-                        // Add appropriate formatting based on element type
-                        if (tagName === 'br') {
-                            text += '\n';
-                        } else if (tagName === 'p' || tagName === 'div') {
-                            if (text && !text.endsWith('\n')) text += '\n';
-                        } else if (tagName === 'h1' || tagName === 'h2' || tagName === 'h3') {
-                            if (text && !text.endsWith('\n')) text += '\n\n';
-                            text += '### ';
-                        } else if (tagName === 'li') {
-                            text += '\n• ';
-                        } else if (tagName === 'code') {
-                            text += '`';
-                        } else if (tagName === 'pre') {
-                            text += '\n```\n';
-                        }
-                        
-                        // Process children
-                        for (const child of node.childNodes) {
-                            walk(child);
-                        }
-                        
-                        // Add closing formatting
-                        if (tagName === 'code') {
-                            text += '`';
-                        } else if (tagName === 'pre') {
-                            text += '\n```\n';
-                        } else if ((tagName === 'p' || tagName === 'div') && !text.endsWith('\n')) {
-                            text += '\n';
-                        } else if ((tagName === 'h1' || tagName === 'h2' || tagName === 'h3') && !text.endsWith('\n')) {
-                            text += '\n\n';
-                        }
-                    }
-                };
-                
-                walk(element);
-                
-                // Clean up excessive newlines
-                text = text.replace(/\n{3,}/g, '\n\n');
-                
-                return text.trim();
+
+                const subject = encodeURIComponent('IRIS Research Response');
+                const body = encodeURIComponent(`IRIS Response:\n\n${plainText}\n\n---\nGenerated by IRIS Financial Assistant`);
+                window.location.href = `mailto:?subject=${subject}&body=${body}`;
             }
         }
-        
-        // Initialize the chat when the page loads
+
         document.addEventListener('DOMContentLoaded', () => {
-            new IRISChat();
+            window.irisChat = new IRISChat();
         });
     </script>
 </body>

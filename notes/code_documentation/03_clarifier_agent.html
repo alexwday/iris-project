@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stage 3: Clarifier Agent</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-light: #dbeafe;
+            --secondary: #64748b;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --bg: #ffffff;
+            --bg-alt: #f8fafc;
+            --border: #e2e8f0;
+            --text: #1e293b;
+            --text-light: #64748b;
+            --code-bg: #1e293b;
+            --code-text: #e2e8f0;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: var(--text);
+            background: var(--bg);
+            padding: 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            color: var(--text);
+        }
+
+        h2 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin: 2rem 0 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid var(--primary);
+            color: var(--text);
+        }
+
+        h3 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin: 1.5rem 0 0.75rem;
+            color: var(--text);
+        }
+
+        .subtitle {
+            color: var(--text-light);
+            font-size: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        /* Flow Diagram */
+        .flow-diagram {
+            background: var(--bg-alt);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 2rem;
+            margin: 1.5rem 0;
+        }
+
+        .flow-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .flow-box {
+            background: var(--bg);
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem 1.5rem;
+            width: 100%;
+            max-width: 600px;
+        }
+
+        .flow-box.input {
+            border-color: var(--primary);
+            background: var(--primary-light);
+        }
+
+        .flow-box.process {
+            border-color: var(--secondary);
+        }
+
+        .flow-box.output {
+            border-color: var(--success);
+            background: #d1fae5;
+        }
+
+        .flow-box.decision {
+            border-color: var(--warning);
+            background: #fef3c7;
+        }
+
+        .flow-box h4 {
+            font-size: 0.875rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.5rem;
+            color: var(--text-light);
+        }
+
+        .flow-arrow {
+            font-size: 1.5rem;
+            color: var(--secondary);
+        }
+
+        .flow-params {
+            font-size: 0.875rem;
+            color: var(--text);
+        }
+
+        .flow-params code {
+            background: var(--code-bg);
+            color: var(--code-text);
+            padding: 0.125rem 0.375rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+        }
+
+        /* Tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+            font-size: 0.9rem;
+        }
+
+        th, td {
+            text-align: left;
+            padding: 0.75rem 1rem;
+            border: 1px solid var(--border);
+        }
+
+        th {
+            background: var(--bg-alt);
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        td {
+            background: var(--bg);
+        }
+
+        td code {
+            background: var(--code-bg);
+            color: var(--code-text);
+            padding: 0.125rem 0.375rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+        }
+
+        /* Code Blocks */
+        .code-block {
+            background: var(--code-bg);
+            color: var(--code-text);
+            border-radius: 8px;
+            padding: 1rem 1.25rem;
+            margin: 1rem 0;
+            overflow-x: auto;
+            font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+            font-size: 0.85rem;
+            line-height: 1.5;
+        }
+
+        .code-block .comment {
+            color: #6b7280;
+        }
+
+        .code-block .string {
+            color: #10b981;
+        }
+
+        .code-block .keyword {
+            color: #f59e0b;
+        }
+
+        /* Info Box */
+        .info-box {
+            background: var(--primary-light);
+            border-left: 4px solid var(--primary);
+            padding: 1rem 1.25rem;
+            margin: 1rem 0;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .info-box.success {
+            background: #d1fae5;
+            border-left-color: var(--success);
+        }
+
+        .info-box.warning {
+            background: #fef3c7;
+            border-left-color: var(--warning);
+        }
+
+        /* Step Section */
+        .step {
+            background: var(--bg-alt);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+        }
+
+        .step-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+
+        .step-number {
+            background: var(--primary);
+            color: white;
+            width: 2rem;
+            height: 2rem;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        .step-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        /* Decision Box */
+        .decision-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+
+        .decision-option {
+            background: var(--bg);
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+
+        .decision-option.path-a {
+            border-color: var(--warning);
+        }
+
+        .decision-option.path-b {
+            border-color: var(--success);
+        }
+
+        .decision-option h4 {
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .decision-option p {
+            font-size: 0.85rem;
+            color: var(--text-light);
+        }
+
+        /* Lists */
+        ul {
+            margin: 0.5rem 0 0.5rem 1.5rem;
+        }
+
+        li {
+            margin: 0.25rem 0;
+        }
+
+        /* Context Box */
+        .context-box {
+            background: #f0fdf4;
+            border: 1px solid #86efac;
+            border-radius: 8px;
+            padding: 1rem 1.25rem;
+            margin: 1rem 0;
+        }
+
+        .context-box h4 {
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: #166534;
+        }
+    </style>
+</head>
+<body>
+    <h1>Stage 3: Clarifier Agent</h1>
+    <p class="subtitle">Context sufficiency check — determines if clarifying questions are needed or research can proceed</p>
+
+    <div class="info-box">
+        <strong>When is this called?</strong> Only when the Router Agent (Stage 1) returns <code>research_from_database</code>.
+        This is the first step of the research path.
+    </div>
+
+    <h2>Architecture Flow Diagram</h2>
+
+    <div class="flow-diagram">
+        <div class="flow-container">
+            <div class="flow-box input">
+                <h4>Inputs</h4>
+                <div class="flow-params">
+                    <strong>conversation:</strong> <code>{"messages": [{"role": "user", "content": "..."}]}</code><br>
+                    <strong>token:</strong> OAuth token or API key string
+                </div>
+            </div>
+
+            <div class="flow-arrow">↓</div>
+
+            <div class="flow-box process">
+                <h4>Step 1: Load Prompts</h4>
+                <div class="flow-params">
+                    Table: <code>iris_prompts</code><br>
+                    Filter: <code>layer='agent'</code> AND <code>name='clarifier'</code><br>
+                    Fields: <code>system_prompt</code>, <code>tool_definition</code>, <code>user_prompt</code>
+                </div>
+            </div>
+
+            <div class="flow-arrow">↓</div>
+
+            <div class="flow-box process">
+                <h4>Step 2: Format Conversation</h4>
+                <div class="flow-params">
+                    Transform messages array → formatted string<br>
+                    Replace placeholder: <code>{{conversation}}</code>
+                </div>
+            </div>
+
+            <div class="flow-arrow">↓</div>
+
+            <div class="flow-box process">
+                <h4>Step 3: LLM Tool Call</h4>
+                <div class="flow-params">
+                    Model: <code>gpt-4.1</code> (config.MODEL_LARGE)<br>
+                    Temperature: <code>0.0</code> (deterministic)<br>
+                    Max tokens: <code>4,096</code><br>
+                    Tool: <code>make_clarifier_decision</code> (forced)
+                </div>
+            </div>
+
+            <div class="flow-arrow">↓</div>
+
+            <div class="flow-box decision">
+                <h4>Decision Point</h4>
+                <div class="flow-params">
+                    <code>"request_essential_context"</code> → Ask clarifying question<br>
+                    <code>"proceed_with_research"</code> → Continue to Planner Agent
+                </div>
+            </div>
+
+            <div class="flow-arrow">↓</div>
+
+            <div class="flow-box output">
+                <h4>Output</h4>
+                <div class="flow-params">
+                    <strong>action:</strong> <code>"request_essential_context"</code> or <code>"proceed_with_research"</code><br>
+                    <strong>output:</strong> Clarifying question OR research statement
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <h2>Step-by-Step Execution</h2>
+
+    <div class="step">
+        <div class="step-header">
+            <div class="step-number">1</div>
+            <div class="step-title">Load Prompts from Database</div>
+        </div>
+
+        <table>
+            <tr>
+                <th>Parameter</th>
+                <th>Value</th>
+            </tr>
+            <tr>
+                <td>Table</td>
+                <td><code>iris_prompts</code></td>
+            </tr>
+            <tr>
+                <td>Filter</td>
+                <td><code>layer = 'agent'</code> AND <code>name = 'clarifier'</code></td>
+            </tr>
+            <tr>
+                <td>Fields Retrieved</td>
+                <td><code>system_prompt</code>, <code>tool_definition</code>, <code>user_prompt</code></td>
+            </tr>
+        </table>
+
+        <h3>Example Prompt Data</h3>
+        <div class="code-block">
+<span class="keyword">system_prompt:</span>
+  You are a context assessment agent. Analyze the conversation to determine
+  if there is sufficient context to proceed with research, or if essential
+  clarifying questions must be asked first.
+
+<span class="keyword">user_prompt:</span>
+  Analyze this conversation and decide whether to proceed with research
+  or request essential context:
+  <span class="string">{{conversation}}</span>
+
+<span class="keyword">tool_definition:</span>
+  - type: function
+    function:
+      name: make_clarifier_decision
+      parameters:
+        properties:
+          action:
+            type: string
+            enum: [request_essential_context, proceed_with_research]
+          output:
+            type: string
+            description: Clarifying question OR research statement
+        </div>
+    </div>
+
+    <div class="step">
+        <div class="step-header">
+            <div class="step-number">2</div>
+            <div class="step-title">Format Conversation for Prompt</div>
+        </div>
+
+        <table>
+            <tr>
+                <th>Parameter</th>
+                <th>Value</th>
+            </tr>
+            <tr>
+                <td>Input Format</td>
+                <td><code>{"messages": [{"role": "user", "content": "..."}, ...]}</code></td>
+            </tr>
+            <tr>
+                <td>Output Format</td>
+                <td><code>"[ROLE]: content"</code> joined by <code>\n\n</code></td>
+            </tr>
+            <tr>
+                <td>Placeholder</td>
+                <td><code>{{conversation}}</code> in user_prompt template</td>
+            </tr>
+        </table>
+
+        <p style="margin-top: 0.5rem; font-size: 0.9rem; color: var(--text-light);">
+            <em>Same formatting function as Router Agent — uses shared <code>format_conversation_for_prompt()</code></em>
+        </p>
+    </div>
+
+    <div class="step">
+        <div class="step-header">
+            <div class="step-number">3</div>
+            <div class="step-title">LLM Tool Call</div>
+        </div>
+
+        <table>
+            <tr>
+                <th>Parameter</th>
+                <th>Value</th>
+            </tr>
+            <tr>
+                <td>Model</td>
+                <td><code>config.MODEL_LARGE</code> → <code>gpt-4.1</code></td>
+            </tr>
+            <tr>
+                <td>Temperature</td>
+                <td><code>0.0</code> (fully deterministic)</td>
+            </tr>
+            <tr>
+                <td>Max Tokens</td>
+                <td><code>4,096</code></td>
+            </tr>
+            <tr>
+                <td>Streaming</td>
+                <td><code>false</code> (wait for complete response)</td>
+            </tr>
+            <tr>
+                <td>Tool Name</td>
+                <td><code>make_clarifier_decision</code></td>
+            </tr>
+            <tr>
+                <td>Tool Choice</td>
+                <td><code>required</code> (LLM must call this function)</td>
+            </tr>
+        </table>
+
+        <h3>Tool Definition Sent to LLM</h3>
+        <div class="code-block">
+[{
+  <span class="string">"type"</span>: <span class="string">"function"</span>,
+  <span class="string">"function"</span>: {
+    <span class="string">"name"</span>: <span class="string">"make_clarifier_decision"</span>,
+    <span class="string">"parameters"</span>: {
+      <span class="string">"type"</span>: <span class="string">"object"</span>,
+      <span class="string">"properties"</span>: {
+        <span class="string">"action"</span>: {
+          <span class="string">"type"</span>: <span class="string">"string"</span>,
+          <span class="string">"enum"</span>: [<span class="string">"request_essential_context"</span>, <span class="string">"proceed_with_research"</span>]
+        },
+        <span class="string">"output"</span>: {
+          <span class="string">"type"</span>: <span class="string">"string"</span>,
+          <span class="string">"description"</span>: <span class="string">"Clarifying question OR research statement"</span>
+        }
+      },
+      <span class="string">"required"</span>: [<span class="string">"action"</span>, <span class="string">"output"</span>]
+    }
+  }
+}]
+        </div>
+    </div>
+
+    <div class="step">
+        <div class="step-header">
+            <div class="step-number">4</div>
+            <div class="step-title">Parse and Validate Response</div>
+        </div>
+
+        <table>
+            <tr>
+                <th>Field</th>
+                <th>Type</th>
+                <th>Validation</th>
+            </tr>
+            <tr>
+                <td><code>action</code></td>
+                <td>string</td>
+                <td>Required — must be present</td>
+            </tr>
+            <tr>
+                <td><code>output</code></td>
+                <td>string</td>
+                <td>Required — must be present</td>
+            </tr>
+        </table>
+
+        <h3>Example Response — Need Clarification</h3>
+        <div class="code-block">
+{
+  <span class="string">"action"</span>: <span class="string">"request_essential_context"</span>,
+  <span class="string">"output"</span>: <span class="string">"Which fiscal quarter are you asking about - Q1, Q2, Q3, or Q4?"</span>
+}
+        </div>
+
+        <h3>Example Response — Proceed with Research</h3>
+        <div class="code-block">
+{
+  <span class="string">"action"</span>: <span class="string">"proceed_with_research"</span>,
+  <span class="string">"output"</span>: <span class="string">"Find documentation about the CAPM discount rate methodology for Q2 2024"</span>
+}
+        </div>
+    </div>
+
+    <h2>Output</h2>
+
+    <table>
+        <tr>
+            <th>Field</th>
+            <th>Type</th>
+            <th>Description</th>
+        </tr>
+        <tr>
+            <td><code>action</code></td>
+            <td>string</td>
+            <td><code>"request_essential_context"</code> or <code>"proceed_with_research"</code></td>
+        </tr>
+        <tr>
+            <td><code>output</code></td>
+            <td>string</td>
+            <td>Clarifying question to ask user OR research statement for Planner</td>
+        </tr>
+    </table>
+
+    <h3>What Happens Next</h3>
+    <div class="decision-grid">
+        <div class="decision-option path-a">
+            <h4>→ request_essential_context</h4>
+            <p><strong>Return to user</strong><br>
+            Display the clarifying question in <code>output</code> field<br>
+            Wait for user response before continuing</p>
+        </div>
+        <div class="decision-option path-b">
+            <h4>→ proceed_with_research</h4>
+            <p><strong>Go to Planner Agent</strong> (Stage 4)<br>
+            Pass <code>output</code> as the research statement<br>
+            Planner selects databases and passes to Metadata Subagent</p>
+        </div>
+    </div>
+
+    <div class="info-box">
+        <strong>Unified Architecture Note:</strong> The metadata subagent uses a unified 3-way decision architecture.
+        For each document, it decides: <code>answered</code> (finding from metadata sufficient),
+        <code>irrelevant</code> (not relevant), or <code>needs_deep_research</code> (trigger file research).
+        This eliminates the need for the clarifier to pre-determine research depth.
+    </div>
+
+    <h2>Decision Logic</h2>
+
+    <div class="info-box warning">
+        <strong>LLM chooses <code>request_essential_context</code> when:</strong>
+        <ul>
+            <li>Time period is ambiguous (e.g., "What's the rate?" without specifying quarter)</li>
+            <li>Business unit/segment unclear (e.g., which LOB or geography)</li>
+            <li>Critical terminology needs clarification</li>
+            <li>Request is too vague to form a research statement</li>
+        </ul>
+    </div>
+
+    <div class="info-box success">
+        <strong>LLM chooses <code>proceed_with_research</code> when:</strong>
+        <ul>
+            <li>Research question is clear and specific</li>
+            <li>All essential context is provided (time, scope, topic)</li>
+            <li>User explicitly answered a previous clarifying question</li>
+            <li>Request mentions specific documents, rates, or methodologies</li>
+        </ul>
+    </div>
+
+    <h2>The Research Statement</h2>
+
+    <div class="info-box">
+        <strong>Key Output:</strong> When proceeding with research, the <code>output</code> field contains a
+        <em>research statement</em> — a reformulated, clear description of what to search for in the databases.
+    </div>
+
+    <h3>Research Statement Examples</h3>
+    <table>
+        <tr>
+            <th>User Message</th>
+            <th>Generated Research Statement</th>
+        </tr>
+        <tr>
+            <td>"What's the CAPM rate for Q2?"</td>
+            <td>"Find the CAPM discount rate methodology and specific rate value for fiscal Q2 2024"</td>
+        </tr>
+        <tr>
+            <td>"Show me the loan loss reserve policy"</td>
+            <td>"Locate documentation describing the loan loss reserve policy and calculation methodology"</td>
+        </tr>
+        <tr>
+            <td>"How do we calculate expected credit losses?"</td>
+            <td>"Find documentation on expected credit loss (ECL) calculation methodology and IFRS 9 implementation"</td>
+        </tr>
+    </table>
+
+    <h2>Comparison: Router vs Clarifier</h2>
+
+    <table>
+        <tr>
+            <th>Aspect</th>
+            <th>Router Agent (Stage 1)</th>
+            <th>Clarifier Agent (Stage 3)</th>
+        </tr>
+        <tr>
+            <td>Question Answered</td>
+            <td>"Does this need database research?"</td>
+            <td>"Is there enough context to research?"</td>
+        </tr>
+        <tr>
+            <td>Tool Name</td>
+            <td><code>route_query</code></td>
+            <td><code>make_clarifier_decision</code></td>
+        </tr>
+        <tr>
+            <td>Output Fields</td>
+            <td>1 field: <code>function_name</code></td>
+            <td>2 fields: <code>action</code>, <code>output</code></td>
+        </tr>
+        <tr>
+            <td>Generates Content</td>
+            <td>No — just routes</td>
+            <td>Yes — generates research statement or question</td>
+        </tr>
+        <tr>
+            <td>Model</td>
+            <td><code>gpt-4.1</code></td>
+            <td><code>gpt-4.1</code></td>
+        </tr>
+    </table>
+
+    <h2>Configuration Reference</h2>
+
+    <table>
+        <tr>
+            <th>Config</th>
+            <th>Source</th>
+            <th>Value</th>
+        </tr>
+        <tr>
+            <td>Model Name</td>
+            <td><code>MODEL_CAPABILITY = "large"</code></td>
+            <td><code>gpt-4.1</code></td>
+        </tr>
+        <tr>
+            <td>Max Tokens</td>
+            <td><code>MODEL_MAX_TOKENS</code></td>
+            <td><code>4,096</code></td>
+        </tr>
+        <tr>
+            <td>Temperature</td>
+            <td><code>MODEL_TEMPERATURE</code></td>
+            <td><code>0.0</code></td>
+        </tr>
+        <tr>
+            <td>Prompt Token Cost</td>
+            <td><code>config</code></td>
+            <td>$0.00015 / 1K tokens</td>
+        </tr>
+        <tr>
+            <td>Completion Token Cost</td>
+            <td><code>config</code></td>
+            <td>$0.0006 / 1K tokens</td>
+        </tr>
+    </table>
+
+    <h2>File Location</h2>
+    <div class="code-block">
+services/src/agent/clarifier.py
+    </div>
+
+</body>
+</html>

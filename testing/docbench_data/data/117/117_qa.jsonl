@@ -1,0 +1,5 @@
+{"question": "What is the most common abbreviation in the report?", "answer": "HIV.", "type": "meta-data", "evidence": ""}
+{"question": "When was the document approved?", "answer": "On June 4, 2022.", "type": "meta-data", "evidence": ""}
+{"question": "when was the document revised?", "answer": "Not mentioned.", "type": "unanswerable", "evidence": ""}
+{"question": "Does PEPFAR have experience working with marginalized populations?", "answer": "Yes.", "type": "text-only", "evidence": "Bureau Cross-Cutting Management Objective 1.2 Justification and Linkages"}
+{"question": "Will PEPFAR increase its funding and support for community-led monitoring?", "answer": "Yes.", "type": "text-only", "evidence": "\"PEPFAR will increase its funding and support for CLM, conducted by local independent civil society organizations...\""}

@@ -1,0 +1,5 @@
+{"question": "What is the title of the document?", "answer": "BUREAU OF INTERNATIONAL NARCOTICS AND LAW ENFORCEMENT AFFAIRS", "type": "meta-data", "evidence": ""}
+{"question": "How many words are there in the document?", "answer": "5933.", "type": "meta-data", "evidence": ""}
+{"question": "What is Bureau Goal 5 mainly talking about?", "answer": "The report does not contain Bureau Goal 5.", "type": "unanswerable", "evidence": ""}
+{"question": "What is the main focus of INL to mitigate the risks of criminals quickly adopting new methods of synthetic drug production?", "answer": "INL focuses on precursor chemical control, class-based scheduling, and investing in global early warning systems.", "type": "text-only", "evidence": "The text indicates \"To mitigate these risks, INL focuses on precursor chemical control, class-based scheduling, and invests in global early warning systems to stay abreast of rapidly evolving production and use trends.\""}
+{"question": "Is disrupting synthetic drug markets one of the objectives of Bureau Goal 1?", "answer": "Yes.", "type": "text-only", "evidence": "Bureau Objective 1.1."}

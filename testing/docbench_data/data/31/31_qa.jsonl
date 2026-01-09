@@ -1,0 +1,3 @@
+{"question": "What metric is used to measure the performance of the caption-image compatibility score?", "answer": "Recall@K and median rank.", "type": "text-only", "evidence": "\"...measure Recall@K, with K \u2208 {1, 5, 10}, i.e., the percentage of images/captions for which the corresponding caption/image is one of the first K retrieved; and median rank.\""}
+{"question": "On which page does the paper detail the baseline models?", "answer": "4 or 1702.", "type": "meta-data", "evidence": ""}
+{"question": "What are the performances of NER systems in CoNLL French?", "answer": "Not mentioned.", "type": "unanswerable", "evidence": ""}

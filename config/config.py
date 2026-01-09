@@ -17,7 +17,7 @@ import builtins
 from typing import Dict, List, Any
 
 # Import the original config from services.src
-from services.src.initial_setup.env_config import config as original_config
+from services.src.utils.env_config import config as original_config
 
 logger = logging.getLogger(__name__)
 
@@ -108,9 +108,12 @@ class Config:
         # For local development: grant access to all databases
         # Import here to avoid circular dependency
         try:
-            from services.src.global_prompts.database_statement import AVAILABLE_DATABASES
+            from services.src.agent.tools.database_metadata import (
+                get_repository,
+            )
 
-            all_db_ids = list(AVAILABLE_DATABASES.keys())
+            repo = get_repository()
+            all_db_ids = list(repo.get_all_databases().keys())
 
             # Default mapping: "all_users" group has access to everything
             default_mapping = {
@@ -126,13 +129,15 @@ class Config:
                 for group_mapping in mapping_str.split(";"):
                     if ":" in group_mapping:
                         group, dbs = group_mapping.split(":", 1)
-                        custom_mapping[group.strip()] = [db.strip() for db in dbs.split(",")]
+                        custom_mapping[group.strip()] = [
+                            db.strip() for db in dbs.split(",")
+                        ]
                 return custom_mapping
 
             return default_mapping
 
         except ImportError as e:
-            logger.warning(f"Could not import AVAILABLE_DATABASES: {e}")
+            logger.warning(f"Could not import database_metadata: {e}")
             return {"all_users": []}
 
     # =========================================================================

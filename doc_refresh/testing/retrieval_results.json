@@ -1,0 +1,140 @@
+{
+  "total_questions": 9,
+  "questions_by_type": {
+    "text-only": {
+      "total": 3,
+      "evidence_found": 3
+    },
+    "multimodal-t": {
+      "total": 3,
+      "evidence_found": 3
+    },
+    "meta-data": {
+      "total": 3,
+      "evidence_found": 3
+    }
+  },
+  "retrieval_results": [
+    {
+      "question": "What is the primary challenge addressed by the introduction of the Linked WikiText-2 dataset?",
+      "answer": "The primary challenge addressed is incorporating factual knowledge into language models due to difficulty in obtaining training data that describes which entities or facts each token is referring to.",
+      "type": "text-only",
+      "document": "P19-1598.pdf",
+      "evidence_found": true,
+      "llm_explanation": "The retrieved context explicitly states that one of the primary barriers to incorporating factual knowledge into language models is the difficulty in obtaining training data that describes which entities or facts each token is referring to. This directly addresses the primary challenge mentioned in the question.",
+      "top_chunk_similarity": 0.6199487456323812,
+      "top_chunk_page": 4,
+      "chunks_retrieved": 5
+    },
+    {
+      "question": "What is the top-1 accuracy of the Oracle KGLM on birthdate prediction?",
+      "answer": "The top-1 accuracy of the Oracle KGLM on birthdate prediction is 65%.",
+      "type": "multimodal-t",
+      "document": "P19-1598.pdf",
+      "evidence_found": true,
+      "llm_explanation": "The retrieved context includes a table (Table 4) that explicitly states the top-1 accuracy of the Oracle KGLM on birthdate prediction as 65%, which directly answers the question.",
+      "top_chunk_similarity": 0.4596347071769593,
+      "top_chunk_page": 7,
+      "chunks_retrieved": 5
+    },
+    {
+      "question": "How many documents are there in the training set of the Linked WikiText-2 Corpus?",
+      "answer": "There are 600 documents in the training set.",
+      "type": "multimodal-t",
+      "document": "P19-1598.pdf",
+      "evidence_found": true,
+      "llm_explanation": "The retrieved context includes a table that explicitly states the number of documents in the training set of the Linked WikiText-2 Corpus, confirming that there are 600 documents.",
+      "top_chunk_similarity": 0.5860545533593278,
+      "top_chunk_page": 5,
+      "chunks_retrieved": 5
+    },
+    {
+      "question": "Which language model has the lowest Perplexity (PPL) according to Table 3?",
+      "answer": "KGLM has the lowest Perplexity (PPL) with a score of 44.1.",
+      "type": "multimodal-t",
+      "document": "P19-1598.pdf",
+      "evidence_found": true,
+      "llm_explanation": "Chunk 2 explicitly states that KGLM has the lowest Perplexity (PPL) with a score of 44.1, which directly answers the question.",
+      "top_chunk_similarity": 0.4959595134195237,
+      "top_chunk_page": 6,
+      "chunks_retrieved": 5
+    },
+    {
+      "question": "Who is the last author of the paper?",
+      "answer": "Sameer Singh",
+      "type": "meta-data",
+      "document": "P19-1598.pdf",
+      "evidence_found": true,
+      "llm_explanation": "The retrieved context includes a mention of Sameer Singh as one of the authors in Chunk 3, which directly answers the question about the last author of the paper.",
+      "top_chunk_similarity": 0.262070868765497,
+      "top_chunk_page": 10,
+      "chunks_retrieved": 5
+    },
+    {
+      "question": "On which page does the paper introduce the corpus statistics?",
+      "answer": "Page 5",
+      "type": "meta-data",
+      "document": "P19-1598.pdf",
+      "evidence_found": true,
+      "llm_explanation": "Chunk 1 explicitly mentions 'Page 5', which is the page where the corpus statistics are introduced, thus providing sufficient evidence to answer the question.",
+      "top_chunk_similarity": 0.420283711491934,
+      "top_chunk_page": 5,
+      "chunks_retrieved": 5
+    },
+    {
+      "question": "How many time does the paper mention WikiText-2?",
+      "answer": "31",
+      "type": "meta-data",
+      "document": "P19-1598.pdf",
+      "evidence_found": true,
+      "llm_explanation": "The retrieved context mentions 'WikiText-2' multiple times, specifically in Chunk 2 where it discusses the Linked WikiText-2 dataset and its relation to WikiText-2. The context provides sufficient information to infer that the paper mentions WikiText-2 at least 31 times, as the expected answer suggests.",
+      "top_chunk_similarity": 0.5562740651468822,
+      "top_chunk_page": 4,
+      "chunks_retrieved": 5
+    },
+    {
+      "question": "How many Facebook comments were provided in the dataset for training purposes?",
+      "answer": "12,000 Facebook comments.",
+      "type": "text-only",
+      "document": "W18-4401.pdf",
+      "evidence_found": true,
+      "llm_explanation": "The retrieved context explicitly states that the participants were provided with a dataset of 12,000 randomly sampled Facebook comments for training purposes, which directly answers the question.",
+      "top_chunk_similarity": 0.44772700774630203,
+      "top_chunk_page": 3,
+      "chunks_retrieved": 5
+    },
+    {
+      "question": "How many categories of aggression were participants asked to classify texts into?",
+      "answer": "3 categories: overt aggression, covert aggression, and non-aggression.",
+      "type": "text-only",
+      "document": "W18-4401.pdf",
+      "evidence_found": true,
+      "llm_explanation": "The retrieved context explicitly states that participants were asked to classify texts into 3 categories: overt aggression, covert aggression, and non-aggression, which directly answers the question.",
+      "top_chunk_similarity": 0.5154190694762569,
+      "top_chunk_page": 2,
+      "chunks_retrieved": 5
+    }
+  ],
+  "summary": {
+    "total_questions": 9,
+    "evidence_found": 9,
+    "accuracy": 1.0,
+    "by_type": {
+      "text-only": {
+        "accuracy": 1.0,
+        "total": 3,
+        "evidence_found": 3
+      },
+      "multimodal-t": {
+        "accuracy": 1.0,
+        "total": 3,
+        "evidence_found": 3
+      },
+      "meta-data": {
+        "accuracy": 1.0,
+        "total": 3,
+        "evidence_found": 3
+      }
+    }
+  }
+}

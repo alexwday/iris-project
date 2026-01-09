@@ -1,0 +1,4 @@
+{"question": "Which defense mechanism resulted in the highest recovery of the original accuracy in the BERT model under the 'all' attack setting?", "answer": "BERT + Pass-through.", "type": "text-only", "evidence": "Table 4 shows that the BERT + Pass-through resulted in 84.5% accuracy under 'all' attacks compared to the original 89.0%, indicating the highest recovery."}
+{"question": "What is the Word Error Rate (WER) of the ATD spell-corrector model for the 'Key' attack?", "answer": "The Word Error Rate (WER) for the ATD spell-corrector model for the 'Key' attack is 6.9%.", "type": "multimodal-t", "evidence": "This information is directly listed under the 'Key' column for the ATD model in Table 2."}
+{"question": "How many sections are there in this paper?", "answer": "6.", "type": "meta-data", "evidence": ""}
+{"question": "What is the fourth author's name?", "answer": "The paper does not have a fourth author.", "type": "unanswerable", "evidence": ""}

@@ -1,0 +1,3 @@
+{"question": "On which page does the newspaper detail a Washington Scandal?", "answer": "On page B9.", "type": "meta-data", "evidence": ""}
+{"question": "Does the newspaper contain the news about N.Y.P.D.?", "answer": "Yes.", "type": "meta-data", "evidence": ""}
+{"question": "Is the article about the \"Factory for Weight-Loss Surgery\" critical of Bellevue Hospital's practices?", "answer": "Not mentioned.", "type": "unanswerable", "evidence": ""}

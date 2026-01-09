@@ -1,66 +1,84 @@
-# services/src/api.py
 """
-FastAPI REST API for IRIS Chat System
+FastAPI REST API for IRIS Chat System.
 
-This module provides a minimal FastAPI interface to the IRIS chat system,
-exposing the core functionality as REST endpoints while keeping the existing
-folder structure and logic intact.
+This module provides a FastAPI interface to the IRIS chat system,
+exposing the core functionality as REST endpoints.
 
 Endpoints:
-    POST /chat - Process a conversation through IRIS agents
-    GET /health - Health check endpoint
-    GET /docs - Automatic API documentation
+    POST /chat: Process a conversation through IRIS agents
+    GET /health: Health check endpoint
+    GET /: Root endpoint with API info
+    GET /databases: List available databases
+    POST /reset: Clear server caches
 
-Dependencies:
-    - fastapi
-    - pydantic
-    - uvicorn
+Functions:
+    get_chat_processor: Lazy import for async chat model
+    get_streaming_chat_processor: Lazy import for streaming chat model
+    stream_chat_response: Async generator for streaming responses
+    chat_endpoint: Main chat endpoint handler
+    health_check: Health check handler
+    root: Root endpoint handler
+    get_databases: Database listing handler
+    reset_server: Cache reset handler
+    startup_event: FastAPI startup hook
+    shutdown_event: FastAPI shutdown hook
+
+Classes:
+    ChatMessage: Single message in a conversation
+    ChatRequest: Incoming chat request payload
+    ChatResponse: Non-streaming response payload
+    HealthResponse: Health check response payload
 """
+
+from typing import Any, Callable, Dict, List, Optional
+import asyncio
+import importlib
+import logging
+import queue
+import threading
 
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from typing import List, Dict, Any, Optional
-import logging
-import time
-import asyncio
-import json
 
-# Import your existing modules
-from .initial_setup.logging_config import configure_logging
-from .initial_setup.env_config import config
+from .utils.logging_format import configure_logging
+from .utils.env_config import config
 
-# Configure logging
+API_VERSION = "1.0.0"
+
 configure_logging()
 logger = logging.getLogger(__name__)
 
-# Create FastAPI app
 app = FastAPI(
     title="IRIS Chat API",
-    description="RBC IRIS Intelligent Response System - AI-powered financial chat assistant",
-    version="1.0.0",
+    description=(
+        "RBC IRIS Intelligent Response System - AI-powered financial chat assistant"
+    ),
+    version=API_VERSION,
     docs_url="/docs",
     redoc_url="/redoc",
 )
 
-# Add CORS middleware for RBC environment
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure as needed for RBC security
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
 
-# Pydantic models for request/response
 class ChatMessage(BaseModel):
+    """Single message in a conversation."""
+
     role: str = Field(..., description="Message role: 'user' or 'assistant'")
     content: str = Field(..., description="Message content")
 
 
 class ChatRequest(BaseModel):
+    """Incoming chat request payload."""
+
     messages: List[ChatMessage] = Field(..., description="Conversation history")
     stream: bool = Field(default=False, description="Enable streaming response")
     db_names: Optional[List[str]] = Field(
@@ -69,118 +87,151 @@ class ChatRequest(BaseModel):
 
 
 class ChatResponse(BaseModel):
+    """Non-streaming chat response payload."""
+
     response: str = Field(..., description="IRIS response")
 
 
 class HealthResponse(BaseModel):
+    """Health check response payload."""
+
     status: str
     environment: str
     version: str
 
 
-# Import chat model function after FastAPI setup to avoid circular imports
-def get_chat_processor():
+def _lazy_import(module_path: str, attr_name: str) -> Any:
     """
-    Lazy import to avoid circular dependencies.
+    Perform a lazy import to avoid circular dependencies.
+
+    Args:
+        module_path: The module path to import from.
+        attr_name: The attribute name to import from the module.
 
     Returns:
-        Callable: The async chat model function for processing conversations
+        The imported attribute.
+
+    Raises:
+        ImportError: If the module or attribute cannot be imported.
+    """
+    module = importlib.import_module(module_path, package="services.src")
+    return getattr(module, attr_name)
+
+
+def get_chat_processor() -> Callable:
+    """
+    Lazily import the async chat model to avoid circular dependencies.
+
+    Returns:
+        The process_request_async function from chat_model.model.
+
+    Raises:
+        ImportError: If the chat model module cannot be imported.
     """
     try:
-        from .chat_model.model import process_request_async
-
-        return process_request_async
-    except ImportError:
+        return _lazy_import(".chat_model.model", "process_request_async")
+    except (ImportError, AttributeError) as exc:
         logger.error(
-            "Failed to import chat model. Make sure to add the async wrapper to model.py"
+            "Failed to import chat model. "
+            "Make sure to add the async wrapper to model.py"
         )
-        raise ImportError("Chat model not properly configured for async operation")
+        raise ImportError(
+            "Chat model not properly configured for async operation"
+        ) from exc
 
 
-def get_streaming_chat_processor():
+def get_streaming_chat_processor() -> Callable:
     """
-    Lazy import for streaming chat processor.
+    Lazily import the streaming chat model to avoid circular dependencies.
 
     Returns:
-        Callable: The streaming chat model function for processing conversations
+        The model generator function from chat_model.model.
+
+    Raises:
+        ImportError: If the streaming chat model module cannot be imported.
     """
     try:
-        from .chat_model.model import model
-
-        return model
-    except ImportError:
+        return _lazy_import(".chat_model.model", "model")
+    except (ImportError, AttributeError) as exc:
         logger.error("Failed to import streaming chat model")
-        raise ImportError("Streaming chat model not properly configured")
+        raise ImportError("Streaming chat model not properly configured") from exc
+
+
+class StreamingError(Exception):
+    """Exception raised during streaming response generation."""
 
 
 async def stream_chat_response(
     conversation: List[Dict[str, str]], db_names: Optional[List[str]] = None
 ):
     """
-    Generator function for streaming chat responses.
-    Yields chunks as they are generated by the IRIS model.
+    Async generator that streams chat responses from the IRIS model.
+
+    Uses a thread-based queue to bridge the synchronous model generator
+    with the async FastAPI streaming response.
+
+    Args:
+        conversation: List of message dictionaries with 'role' and 'content' keys.
+        db_names: Optional list of database names to restrict the search scope.
+
+    Yields:
+        String chunks of the response as they are generated.
     """
-    import concurrent.futures
-    import queue
-    import threading
-
     try:
-        # Get the streaming chat processor
         model_func = get_streaming_chat_processor()
-
-        # Convert to expected format
         conversation_dict = {"messages": conversation}
-
-        # Use a queue to pass chunks between threads
         chunk_queue: queue.Queue = queue.Queue()
-        exception_container = [None]
+        exception_container: List[Optional[Exception]] = [None]
 
         def run_sync_generator():
-            """Run the synchronous generator in a separate thread"""
+            """Execute the synchronous model generator in a background thread."""
             try:
                 for chunk in model_func(
                     conversation_dict, debug_mode=False, db_names=db_names
                 ):
                     if isinstance(chunk, str):
                         chunk_queue.put(chunk)
-                chunk_queue.put(None)  # Sentinel to indicate completion
-            except Exception as e:
-                exception_container[0] = e
+                chunk_queue.put(None)
+            except (
+                ImportError,
+                RuntimeError,
+                ValueError,
+                TypeError,
+                KeyError,
+                AttributeError,
+                OSError,
+                ConnectionError,
+                TimeoutError,
+            ) as exc:
+                exception_container[0] = exc
                 chunk_queue.put(None)
 
-        # Start the generator in a separate thread
         thread = threading.Thread(target=run_sync_generator)
         thread.start()
 
-        # Stream chunks as they become available
         while True:
-            # Check for chunks without blocking too long
             try:
                 chunk = chunk_queue.get(timeout=0.1)
-                if chunk is None:  # Sentinel value
+                if chunk is None:
                     break
-                # Yield chunk as-is to preserve original spacing and timing
                 yield chunk
-                # Give control back to event loop to ensure chunk is flushed
                 await asyncio.sleep(0)
             except queue.Empty:
-                # Check if there's an exception
-                if exception_container[0]:
-                    raise exception_container[0]
-                # Give control back to the event loop
+                stored_exception = exception_container[0]
+                if stored_exception is not None:
+                    raise StreamingError(str(stored_exception)) from stored_exception
                 await asyncio.sleep(0.01)
                 continue
 
-        # Wait for thread to complete
         thread.join(timeout=1)
 
-        # Check for exceptions after completion
-        if exception_container[0]:
-            raise exception_container[0]
+        stored_exception = exception_container[0]
+        if stored_exception is not None:
+            raise StreamingError(str(stored_exception)) from stored_exception
 
-    except Exception as e:
-        logger.error(f"Streaming error: {str(e)}", exc_info=True)
-        yield f"Error: {str(e)}"
+    except (ImportError, RuntimeError, ValueError, StreamingError) as exc:
+        logger.error("Streaming error: %s", str(exc), exc_info=True)
+        yield f"Error: {exc}"
 
 
 @app.post("/chat")
@@ -188,24 +239,30 @@ async def chat_endpoint(request: ChatRequest):
     """
     Process a conversation through the IRIS system.
 
-    This endpoint accepts a conversation history and routes it through the
-    appropriate IRIS agents to generate a response.
+    Accepts a conversation history and routes it through the appropriate
+    IRIS agents to generate a response.
 
-    If stream=true, returns Server-Sent Events stream.
-    If stream=false, returns JSON response.
+    Args:
+        request: ChatRequest containing messages, stream flag, and optional db_names.
+
+    Returns:
+        StreamingResponse if stream=True, otherwise ChatResponse with full response.
+
+    Raises:
+        HTTPException: 500 error if processing fails.
     """
     try:
         logger.info(
-            f"Received chat request with {len(request.messages)} messages, stream={request.stream}"
+            "Received chat request with %d messages, stream=%s",
+            len(request.messages),
+            request.stream,
         )
 
-        # Convert Pydantic models to dict format expected by existing code
         conversation = [
             {"role": msg.role, "content": msg.content} for msg in request.messages
         ]
 
         if request.stream:
-            # Return streaming response
             logger.info("Returning streaming response")
             return StreamingResponse(
                 stream_chat_response(conversation, request.db_names),
@@ -215,85 +272,166 @@ async def chat_endpoint(request: ChatRequest):
                     "Connection": "keep-alive",
                 },
             )
-        else:
-            # Return complete response
-            logger.info("Returning complete response")
-            process_request_async = get_chat_processor()
-            result = await process_request_async(
-                conversation, stream=False, db_names=request.db_names
-            )
 
-            logger.info("Chat request processed successfully")
-            return ChatResponse(response=result.get("response", ""))
+        logger.info("Returning complete response")
+        process_request_async = get_chat_processor()
+        result = await process_request_async(
+            conversation, stream=False, db_names=request.db_names
+        )
 
-    except Exception as e:
-        logger.error(f"Chat endpoint error: {str(e)}", exc_info=True)
+        logger.info("Chat request processed successfully")
+        return ChatResponse(response=result.get("response", ""))
+
+    except (ImportError, RuntimeError, ValueError) as exc:
+        logger.error("Chat endpoint error: %s", str(exc), exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Internal server error: {str(e)}",
-        )
+            detail=f"Internal server error: {exc}",
+        ) from exc
 
 
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
     """
-    Health check endpoint to verify the API is running and properly configured.
+    Verify the API is running and properly configured.
+
+    Returns:
+        HealthResponse with status, environment, and version.
+
+    Raises:
+        HTTPException: 503 error if configuration validation fails.
     """
     try:
-        # Validate configuration
         config.validate()
 
         return HealthResponse(
-            status="healthy", environment=config.ENVIRONMENT, version="1.0.0"
+            status="healthy", environment=config.ENVIRONMENT, version=API_VERSION
         )
-    except Exception as e:
-        logger.error(f"Health check failed: {str(e)}")
+    except (ValueError, RuntimeError, AttributeError) as exc:
+        logger.error("Health check failed: %s", str(exc))
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Service unhealthy: {str(e)}",
-        )
+            detail=f"Service unhealthy: {exc}",
+        ) from exc
 
 
 @app.get("/")
 async def root():
     """
-    Root endpoint with basic information about the API.
+    Return basic information about the API.
+
+    Returns:
+        Dictionary with API name, documentation URL, health URL, and version.
     """
     return {
         "message": "IRIS Chat API",
         "docs": "/docs",
         "health": "/health",
-        "version": "1.0.0",
+        "version": API_VERSION,
     }
 
 
-# Startup event to validate configuration
+@app.get("/databases")
+async def get_databases():
+    """
+    Return available databases from the registry.
+
+    Used by the frontend to dynamically populate database filter checkboxes.
+
+    Returns:
+        Dictionary with 'databases' key containing list of database info dicts.
+
+    Raises:
+        HTTPException: 500 error if database retrieval fails.
+    """
+    try:
+        get_available_databases = _lazy_import(
+            ".agent.tools.database_metadata", "get_available_databases"
+        )
+        databases = get_available_databases()
+
+        result = []
+        for db_source, db_config in databases.items():
+            result.append(
+                {
+                    "id": db_source,
+                    "name": db_config.get("name", db_source),
+                    "is_internal": db_source.startswith("internal_"),
+                }
+            )
+
+        result.sort(key=lambda x: (not x["is_internal"], x["name"]))
+
+        logger.info("Returning %d databases", len(result))
+        return {"databases": result}
+
+    except (ImportError, RuntimeError, ValueError) as exc:
+        logger.error("Failed to get databases: %s", str(exc), exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve databases: {exc}",
+        ) from exc
+
+
+@app.post("/reset")
+async def reset_server():
+    """
+    Clear all server caches and reload configurations.
+
+    Invalidates the database metadata cache, forcing a fresh load
+    from PostgreSQL on the next request.
+
+    Returns:
+        Dictionary with reset status and message.
+
+    Raises:
+        HTTPException: 500 error if cache invalidation fails.
+    """
+    try:
+        get_repository = _lazy_import(
+            ".agent.tools.database_metadata", "get_repository"
+        )
+        repo = get_repository()
+        repo.invalidate_cache()
+
+        logger.info("Server caches cleared successfully")
+        return {"status": "reset", "message": "Server caches cleared successfully"}
+
+    except (ImportError, RuntimeError, ValueError, AttributeError) as exc:
+        logger.error("Failed to reset server: %s", str(exc), exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to reset server: {exc}",
+        ) from exc
+
+
 @app.on_event("startup")
 async def startup_event():
     """
     Perform startup validation and initialization.
+
+    Validates environment configuration and logs startup status.
+
+    Raises:
+        ValueError: If configuration validation fails.
     """
     logger.info("Starting IRIS Chat API...")
 
-    try:
-        # Validate environment configuration
-        if not config.validate():
-            raise ValueError("Configuration validation failed")
+    if not config.validate():
+        raise ValueError("Configuration validation failed")
 
-        logger.info(
-            f"IRIS Chat API started successfully in {config.ENVIRONMENT} environment"
-        )
-
-    except Exception as e:
-        logger.error(f"Startup failed: {str(e)}")
-        raise
+    logger.info(
+        "IRIS Chat API started successfully in %s environment",
+        config.ENVIRONMENT,
+    )
 
 
-# Shutdown event
 @app.on_event("shutdown")
 async def shutdown_event():
     """
-    Cleanup on shutdown.
+    Perform cleanup on application shutdown.
+
+    Logs shutdown message for monitoring purposes.
     """
     logger.info("Shutting down IRIS Chat API...")
 
@@ -301,7 +439,10 @@ async def shutdown_event():
 if __name__ == "__main__":
     import uvicorn
 
-    # Development server
     uvicorn.run(
-        "services.src.api:app", host="0.0.0.0", port=8000, reload=True, log_level="info"
+        "services.src.api:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=True,
+        log_level="info",
     )

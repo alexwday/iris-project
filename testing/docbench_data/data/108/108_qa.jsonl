@@ -1,0 +1,4 @@
+{"question": "When was the document revised?", "answer": "On November 29, 2023.", "type": "meta-data", "evidence": ""}
+{"question": "How many times does the report mention \"PM\"?", "answer": "86.", "type": "meta-data", "evidence": ""}
+{"question": "Is there a concern about the loss of institutional knowledge due to employee retention issues?", "answer": "Not mentioned.", "type": "unanswerable", "evidence": "random from FBS_F_Public-Accessible"}
+{"question": "What strategies will the Bureau use to help partners better counter non-state threats?", "answer": "rms transfers and security assistance, including institutional capacity building.", "type": "text-only", "evidence": "\"PM will help partners better counter these threats and address the underlying drivers of instability through arms transfers and security assistance, including institutional capacity building.\""}

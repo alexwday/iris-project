@@ -1,0 +1,3 @@
+{"question": "Which model's style space shows a clearer separation between different styles according to Figure 2?", "answer": "The style space of DAE shows a clearer separation between different styles compared to VAE's style space.", "type": "multimodal-f", "evidence": "The figure visually shows distinct clusters for styles in the DAE plot while VAE's plot clusters are closer together, making them less distinguishable."}
+{"question": "On which page does the paper detail the hyperparameter settings?", "answer": "6 or 429.", "type": "meta-data", "evidence": ""}
+{"question": "What is the accuracy score of the proposed VAE method on GLUE benchmark?", "answer": "Not mentioned.", "type": "unanswerable", "evidence": ""}

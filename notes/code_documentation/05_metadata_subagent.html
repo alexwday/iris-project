@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stage 5: Metadata Subagent (Unified 3-Way Architecture)</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-light: #dbeafe;
+            --secondary: #64748b;
+            --success: #10b981;
+            --success-light: #d1fae5;
+            --warning: #f59e0b;
+            --warning-light: #fef3c7;
+            --danger: #ef4444;
+            --purple: #8b5cf6;
+            --purple-light: #ede9fe;
+            --orange: #f97316;
+            --orange-light: #ffedd5;
+            --teal: #14b8a6;
+            --teal-light: #ccfbf1;
+            --bg: #ffffff;
+            --bg-alt: #f8fafc;
+            --border: #e2e8f0;
+            --text: #1e293b;
+            --text-light: #64748b;
+            --code-bg: #1e293b;
+            --code-text: #e2e8f0;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: var(--text);
+            background: var(--bg);
+            padding: 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            color: var(--text);
+        }
+
+        h2 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin: 2rem 0 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid var(--primary);
+            color: var(--text);
+        }
+
+        h3 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin: 1.5rem 0 0.75rem;
+            color: var(--text);
+        }
+
+        .subtitle {
+            color: var(--text-light);
+            font-size: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        /* Flow Diagram */
+        .flow-diagram {
+            background: var(--bg-alt);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 2rem;
+            margin: 1.5rem 0;
+        }
+
+        .flow-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .flow-box {
+            background: var(--bg);
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem 1.5rem;
+            width: 100%;
+            max-width: 800px;
+        }
+
+        .flow-box.input {
+            border-color: var(--primary);
+            background: var(--primary-light);
+        }
+
+        .flow-box.process {
+            border-color: var(--secondary);
+        }
+
+        .flow-box.decision {
+            border-color: var(--orange);
+            background: var(--orange-light);
+        }
+
+        .flow-box.batch {
+            border-color: var(--teal);
+            background: var(--teal-light);
+        }
+
+        .flow-box.output-a {
+            border-color: var(--success);
+            background: var(--success-light);
+        }
+
+        .flow-box.output-b {
+            border-color: var(--purple);
+            background: var(--purple-light);
+        }
+
+        .flow-box.output-c {
+            border-color: var(--warning);
+            background: var(--warning-light);
+        }
+
+        .flow-box h4 {
+            font-size: 0.875rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.5rem;
+            color: var(--text-light);
+        }
+
+        .flow-arrow {
+            font-size: 1.5rem;
+            color: var(--secondary);
+        }
+
+        .flow-params {
+            font-size: 0.875rem;
+            color: var(--text);
+        }
+
+        .flow-params code {
+            background: var(--code-bg);
+            color: var(--code-text);
+            padding: 0.125rem 0.375rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+        }
+
+        .flow-branch {
+            display: flex;
+            gap: 1rem;
+            width: 100%;
+            max-width: 800px;
+        }
+
+        .flow-branch .flow-box {
+            flex: 1;
+        }
+
+        /* Tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+            font-size: 0.9rem;
+        }
+
+        th, td {
+            text-align: left;
+            padding: 0.75rem 1rem;
+            border: 1px solid var(--border);
+        }
+
+        th {
+            background: var(--bg-alt);
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        td {
+            background: var(--bg);
+        }
+
+        td code {
+            background: var(--code-bg);
+            color: var(--code-text);
+            padding: 0.125rem 0.375rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+        }
+
+        /* Code Blocks */
+        .code-block {
+            background: var(--code-bg);
+            color: var(--code-text);
+            border-radius: 8px;
+            padding: 1rem 1.25rem;
+            margin: 1rem 0;
+            overflow-x: auto;
+            font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+            font-size: 0.85rem;
+            line-height: 1.5;
+        }
+
+        .code-block .comment {
+            color: #6b7280;
+        }
+
+        .code-block .string {
+            color: #10b981;
+        }
+
+        .code-block .keyword {
+            color: #f59e0b;
+        }
+
+        .code-block .highlight {
+            color: #f472b6;
+        }
+
+        /* Info Box */
+        .info-box {
+            background: var(--primary-light);
+            border-left: 4px solid var(--primary);
+            padding: 1rem 1.25rem;
+            margin: 1rem 0;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .info-box.success {
+            background: var(--success-light);
+            border-left-color: var(--success);
+        }
+
+        .info-box.warning {
+            background: var(--warning-light);
+            border-left-color: var(--warning);
+        }
+
+        .info-box.purple {
+            background: var(--purple-light);
+            border-left-color: var(--purple);
+        }
+
+        .info-box.orange {
+            background: var(--orange-light);
+            border-left-color: var(--orange);
+        }
+
+        .info-box.teal {
+            background: var(--teal-light);
+            border-left-color: var(--teal);
+        }
+
+        /* Phase Section */
+        .phase {
+            background: var(--bg-alt);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+        }
+
+        .phase-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+
+        .phase-number {
+            background: var(--primary);
+            color: white;
+            width: 2rem;
+            height: 2rem;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        .phase-number.orange {
+            background: var(--orange);
+        }
+
+        .phase-number.teal {
+            background: var(--teal);
+        }
+
+        .phase-number.purple {
+            background: var(--purple);
+        }
+
+        .phase-number.success {
+            background: var(--success);
+        }
+
+        .phase-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        /* Lists */
+        ul, ol {
+            margin: 0.5rem 0 0.5rem 1.5rem;
+        }
+
+        li {
+            margin: 0.25rem 0;
+        }
+
+        /* Badge */
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .badge.stage1 {
+            background: var(--orange-light);
+            color: var(--orange);
+        }
+
+        .badge.universal {
+            background: var(--purple-light);
+            color: var(--purple);
+        }
+
+        .badge.unified {
+            background: var(--success-light);
+            color: var(--success);
+        }
+
+        /* Decision Grid */
+        .decision-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+
+        .decision-card {
+            background: var(--bg);
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+
+        .decision-card.answered {
+            border-color: var(--success);
+        }
+
+        .decision-card.irrelevant {
+            border-color: var(--secondary);
+        }
+
+        .decision-card.needs-research {
+            border-color: var(--purple);
+        }
+
+        .decision-card h4 {
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .decision-card p {
+            font-size: 0.85rem;
+            color: var(--text-light);
+        }
+    </style>
+</head>
+<body>
+    <h1>Stage 5: Metadata Subagent</h1>
+    <p class="subtitle">
+        <span class="badge stage1">Stage 1 of Cascading Retrieval</span>
+        <span class="badge universal">Universal (All Databases)</span>
+        <span class="badge unified">Unified 3-Way Decisions</span>
+    </p>
+
+    <div class="info-box success">
+        <strong>Unified Metadata-First Architecture</strong><br>
+        Every query goes through metadata first. For EACH document, the LLM makes a 3-way decision:
+        <ul>
+            <li><strong>answered:</strong> Finding from metadata (summary + chunks) is sufficient</li>
+            <li><strong>irrelevant:</strong> Document not relevant to the query</li>
+            <li><strong>needs_deep_research:</strong> Document likely relevant but needs full content analysis</li>
+        </ul>
+        <strong>Key Benefits:</strong> LLM sees actual metadata before deciding (not blind guessing). Per-document decisions enable <em>programmatic</em> reference building.
+    </div>
+
+    <h2>Architecture Flow Diagram</h2>
+
+    <div class="flow-diagram">
+        <div class="flow-container">
+            <div class="flow-box input">
+                <h4>Inputs from Query Context</h4>
+                <div class="flow-params">
+                    <strong>research_statement:</strong> <code>"Find CAPM discount rate methodology"</code><br>
+                    <strong>db_source:</strong> <code>"internal_par"</code><br>
+                    <strong>query_embedding:</strong> Pre-computed by Planner (Stage 4)
+                </div>
+            </div>
+
+            <div class="flow-arrow">↓</div>
+
+            <div class="flow-box process">
+                <h4>Step 1: Fetch All Documents</h4>
+                <div class="flow-params">
+                    Query: <code>iris_document_metadata</code> by similarity<br>
+                    Returns: Full summaries + top N chunks per document
+                </div>
+            </div>
+
+            <div class="flow-arrow">↓</div>
+
+            <div class="flow-box batch">
+                <h4>Step 2: Batch Processing (Parallel)</h4>
+                <div class="flow-params">
+                    Split into batches of <code>batch_size</code> (default: 10)<br>
+                    Process up to <code>max_parallel_batches</code> (default: 5) concurrently<br>
+                    Each batch: LLM makes 3-way decision per document
+                </div>
+            </div>
+
+            <div class="flow-arrow">↓</div>
+
+            <div class="flow-box decision">
+                <h4>Step 3: Per-Document 3-Way Decisions</h4>
+                <div class="flow-params">
+                    For each document in batch, LLM returns one of:<br>
+                    <code>answered</code> | <code>irrelevant</code> | <code>needs_deep_research</code>
+                </div>
+            </div>
+
+            <div class="flow-arrow">↓</div>
+
+            <div class="flow-branch">
+                <div class="flow-box output-a">
+                    <h4>Answered Docs</h4>
+                    <div class="flow-params">
+                        Build response + reference_index from findings
+                    </div>
+                </div>
+                <div class="flow-box output-c">
+                    <h4>Irrelevant Docs</h4>
+                    <div class="flow-params">
+                        Counted but excluded from response
+                    </div>
+                </div>
+                <div class="flow-box output-b">
+                    <h4>Needs Research Docs</h4>
+                    <div class="flow-params">
+                        Pass doc IDs to File Research Subagent
+                    </div>
+                </div>
+            </div>
+
+            <div class="flow-arrow">↓</div>
+
+            <div class="flow-box output-a">
+                <h4>Return UnifiedMetadataResult</h4>
+                <div class="flow-params">
+                    <code>answered_response</code> + <code>answered_reference_index</code> + <code>needs_research_doc_ids</code>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <h2>The 3-Way Decision Model</h2>
+
+    <div class="decision-grid">
+        <div class="decision-card answered">
+            <h4>answered</h4>
+            <p>The document's summary and top chunks contain sufficient information to answer the research question.</p>
+            <p style="margin-top: 0.5rem;"><strong>Returns:</strong> finding, page_reference (optional), confidence</p>
+        </div>
+        <div class="decision-card irrelevant">
+            <h4>irrelevant</h4>
+            <p>The document is not relevant to the research statement based on its metadata.</p>
+            <p style="margin-top: 0.5rem;"><strong>Returns:</strong> (nothing - just status)</p>
+        </div>
+        <div class="decision-card needs-research">
+            <h4>needs_deep_research</h4>
+            <p>The document appears relevant but metadata doesn't have enough detail. Needs full document analysis.</p>
+            <p style="margin-top: 0.5rem;"><strong>Returns:</strong> research_hint (why)</p>
+        </div>
+    </div>
+
+    <div class="info-box orange">
+        <strong>Key Design:</strong> The LLM makes decisions AFTER seeing actual document metadata - not blindly upfront. This is more accurate than having the clarifier pre-guess whether "deep research" is needed.
+    </div>
+
+    <h2>Step-by-Step Execution</h2>
+
+    <div class="phase">
+        <div class="phase-header">
+            <div class="phase-number">1</div>
+            <div class="phase-title">Fetch All Documents</div>
+        </div>
+
+        <p>All documents from the specified database are fetched with full summaries and top chunks.</p>
+
+        <div class="code-block">
+<span class="keyword">SELECT</span>
+    m.id <span class="keyword">AS</span> document_id,
+    m.document_name,
+    m.document_summary,  <span class="comment">-- Full summary</span>
+    m.document_type,
+    m.page_count,
+    m.file_name,
+    <span class="string">1 - (m.summary_embedding &lt;=&gt; CAST(:embedding AS vector))</span> <span class="keyword">AS</span> similarity_score
+<span class="keyword">FROM</span> iris_document_metadata m
+<span class="keyword">WHERE</span> m.db_source = <span class="string">:db_source</span>
+<span class="keyword">AND</span> m.summary_embedding <span class="keyword">IS NOT NULL</span>
+<span class="keyword">ORDER BY</span> similarity_score <span class="keyword">DESC</span>
+<span class="comment">-- No LIMIT - fetch all, batching handles token management</span>
+        </div>
+
+        <h3>Top Chunks Per Document</h3>
+        <div class="code-block">
+<span class="keyword">SELECT</span>
+    c.chunk_content,
+    c.page_number,
+    <span class="string">1 - (c.chunk_embedding &lt;=&gt; CAST(:embedding AS vector))</span> <span class="keyword">AS</span> chunk_similarity
+<span class="keyword">FROM</span> iris_document_chunks c
+<span class="keyword">WHERE</span> c.document_id = <span class="string">:doc_id</span>
+<span class="keyword">AND</span> c.chunk_embedding <span class="keyword">IS NOT NULL</span>
+<span class="keyword">ORDER BY</span> chunk_similarity <span class="keyword">DESC</span>
+<span class="keyword">LIMIT</span> :top_chunks_in_metadata  <span class="comment">-- Default: 3</span>
+        </div>
+    </div>
+
+    <div class="phase">
+        <div class="phase-header">
+            <div class="phase-number teal">2</div>
+            <div class="phase-title">Batch Processing (Parallel)</div>
+        </div>
+
+        <p>Documents are split into batches and processed in parallel.</p>
+
+        <div class="code-block">
+<span class="comment"># Batch creation</span>
+batches = [all_documents[i:i + batch_size] <span class="keyword">for</span> i <span class="keyword">in</span> range(0, len(all_documents), batch_size)]
+
+<span class="comment"># Example: 45 documents, batch_size=10 → 5 batches</span>
+<span class="comment"># Batch 1: docs 1-10   ┐</span>
+<span class="comment"># Batch 2: docs 11-20  │ Processed in parallel</span>
+<span class="comment"># Batch 3: docs 21-30  │ (up to max_parallel_batches)</span>
+<span class="comment"># Batch 4: docs 31-40  │</span>
+<span class="comment"># Batch 5: docs 41-45  ┘</span>
+
+<span class="keyword">with</span> ThreadPoolExecutor(max_workers=max_parallel_batches) <span class="keyword">as</span> executor:
+    futures = [executor.submit(process_batch_unified, batch) <span class="keyword">for</span> batch <span class="keyword">in</span> batches]
+        </div>
+
+        <table>
+            <tr>
+                <th>Config Key</th>
+                <th>Default</th>
+                <th>Description</th>
+            </tr>
+            <tr>
+                <td><code>batch_size</code></td>
+                <td><code>10</code></td>
+                <td>Documents per batch</td>
+            </tr>
+            <tr>
+                <td><code>max_parallel_batches</code></td>
+                <td><code>5</code></td>
+                <td>Maximum concurrent batches</td>
+            </tr>
+            <tr>
+                <td><code>top_chunks_in_metadata</code></td>
+                <td><code>3</code></td>
+                <td>Top chunks fetched per document</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="phase">
+        <div class="phase-header">
+            <div class="phase-number orange">3</div>
+            <div class="phase-title">Per-Document 3-Way Decisions</div>
+        </div>
+
+        <p>For each batch, the LLM makes a 3-way decision for every document using the <code>return_unified_decisions</code> tool.</p>
+
+        <h3>Tool Definition</h3>
+        <div class="code-block">
+{
+  <span class="string">"name"</span>: <span class="string">"return_unified_decisions"</span>,
+  <span class="string">"parameters"</span>: {
+    <span class="string">"document_decisions"</span>: [
+      {
+        <span class="string">"document_id"</span>: <span class="string">"uuid"</span>,  <span class="comment">// MUST match exactly what was sent</span>
+        <span class="string">"status"</span>: <span class="string">"answered | irrelevant | needs_deep_research"</span>,
+        <span class="string">"finding"</span>: <span class="string">"..."</span>,  <span class="comment">// If answered</span>
+        <span class="string">"page_reference"</span>: <span class="keyword">5</span>,  <span class="comment">// Optional, if answered</span>
+        <span class="string">"confidence"</span>: <span class="string">"high | medium | low"</span>,  <span class="comment">// If answered</span>
+        <span class="string">"research_hint"</span>: <span class="string">"..."</span>  <span class="comment">// If needs_deep_research</span>
+      }
+    ]
+  }
+}
+        </div>
+
+        <h3>Example Response</h3>
+        <div class="code-block">
+{
+  <span class="string">"document_decisions"</span>: [
+    {
+      <span class="string">"document_id"</span>: <span class="string">"abc-123"</span>,
+      <span class="string">"status"</span>: <span class="string">"answered"</span>,
+      <span class="string">"finding"</span>: <span class="string">"The CAPM discount rate for Q2 2024 is 8.5% based on..."</span>,
+      <span class="string">"page_reference"</span>: <span class="keyword">12</span>,
+      <span class="string">"confidence"</span>: <span class="string">"high"</span>
+    },
+    {
+      <span class="string">"document_id"</span>: <span class="string">"def-456"</span>,
+      <span class="string">"status"</span>: <span class="string">"irrelevant"</span>
+    },
+    {
+      <span class="string">"document_id"</span>: <span class="string">"ghi-789"</span>,
+      <span class="string">"status"</span>: <span class="string">"needs_deep_research"</span>,
+      <span class="string">"research_hint"</span>: <span class="string">"Summary mentions rate methodology but lacks specific values"</span>
+    }
+  ]
+}
+        </div>
+    </div>
+
+    <div class="phase">
+        <div class="phase-header">
+            <div class="phase-number success">4</div>
+            <div class="phase-title">Build Response and Reference Index</div>
+        </div>
+
+        <p>Decisions are validated, then response and references are built programmatically from <code>answered</code> findings.</p>
+
+        <h3>Validation</h3>
+        <ul>
+            <li>Filter to only document_ids we actually sent</li>
+            <li>Invalid status values default to <code>needs_deep_research</code> (safer)</li>
+            <li>Missing documents default to <code>needs_deep_research</code></li>
+        </ul>
+
+        <h3>Programmatic Reference Building</h3>
+        <div class="code-block">
+<span class="comment"># References are built from KNOWN document metadata</span>
+<span class="comment"># NOT from LLM-generated text (which is error-prone)</span>
+
+<span class="keyword">for</span> decision <span class="keyword">in</span> answered_decisions:
+    doc = documents[decision.document_id]
+    reference_index[str(ref_num)] = {
+        <span class="string">"doc_name"</span>: doc.document_name,  <span class="comment"># From our database</span>
+        <span class="string">"page"</span>: decision.page_reference,  <span class="comment"># From LLM (validated)</span>
+        <span class="string">"file_link"</span>: doc.file_name,       <span class="comment"># From our database</span>
+        <span class="string">"finding"</span>: decision.finding
+    }
+    ref_num += 1
+        </div>
+
+        <div class="info-box teal">
+            <strong>Why Programmatic References?</strong> When sending 10 documents in a batch, we know exactly which document each finding is about via <code>document_id</code>. This lets us build accurate reference links from our database metadata, rather than relying on the LLM to correctly format document names in its response text.
+        </div>
+    </div>
+
+    <h2>Output: UnifiedMetadataResult</h2>
+
+    <table>
+        <tr>
+            <th>Field</th>
+            <th>Type</th>
+            <th>Description</th>
+        </tr>
+        <tr>
+            <td><code>answered_findings</code></td>
+            <td>List[DocumentDecision]</td>
+            <td>All documents with status="answered" (includes finding, page_ref, confidence)</td>
+        </tr>
+        <tr>
+            <td><code>needs_research_doc_ids</code></td>
+            <td>List[str]</td>
+            <td>Document IDs with status="needs_deep_research" (for Stage 2)</td>
+        </tr>
+        <tr>
+            <td><code>irrelevant_count</code></td>
+            <td>int</td>
+            <td>Count of documents marked irrelevant</td>
+        </tr>
+        <tr>
+            <td><code>answered_response</code></td>
+            <td>str</td>
+            <td>Formatted response text from answered findings with [REF:N] markers</td>
+        </tr>
+        <tr>
+            <td><code>answered_reference_index</code></td>
+            <td>Dict[str, ReferenceEntry]</td>
+            <td>Reference index keyed by "1", "2", etc.</td>
+        </tr>
+    </table>
+
+    <h2>What Happens Next (In Database Router)</h2>
+
+    <div class="flow-diagram">
+        <div class="flow-container">
+            <div class="flow-box input">
+                <h4>Metadata Result Received</h4>
+                <div class="flow-params">
+                    answered_response + answered_reference_index + needs_research_doc_ids
+                </div>
+            </div>
+
+            <div class="flow-arrow">↓</div>
+
+            <div class="flow-box process">
+                <h4>Initialize Combined Response</h4>
+                <div class="flow-params">
+                    Start with <code>answered_response</code><br>
+                    Copy <code>answered_reference_index</code>
+                </div>
+            </div>
+
+            <div class="flow-arrow">↓</div>
+
+            <div class="flow-box decision">
+                <h4>Check needs_research_doc_ids</h4>
+                <div class="flow-params">
+                    <code>if needs_research_doc_ids:</code> → Trigger File Research<br>
+                    <code>else:</code> → Return answered response directly
+                </div>
+            </div>
+
+            <div class="flow-arrow">↓</div>
+
+            <div class="flow-box output-b">
+                <h4>File Research (Stage 2) - If Needed</h4>
+                <div class="flow-params">
+                    Fetch all chunks for <code>needs_research_doc_ids</code><br>
+                    LLM synthesizes page-level findings<br>
+                    Reference numbers continue: REF:N+1, REF:N+2, ...
+                </div>
+            </div>
+
+            <div class="flow-arrow">↓</div>
+
+            <div class="flow-box output-a">
+                <h4>Merged Final Response</h4>
+                <div class="flow-params">
+                    Metadata findings + File research findings<br>
+                    Combined reference_index (REF:1 through REF:M)
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="info-box purple">
+        <strong>Reference Merging Example:</strong>
+        <ul>
+            <li>Metadata answered 3 docs: REF:1, REF:2, REF:3</li>
+            <li>File research for 2 docs: REF:4, REF:5, REF:6, REF:7</li>
+            <li>Final reference_index: keys "1" through "7"</li>
+        </ul>
+    </div>
+
+    <h2>Configuration (from Database Registry)</h2>
+
+    <p>Configuration is loaded from <code>iris_database_registry.research_config</code> at runtime:</p>
+
+    <div class="code-block">
+<span class="comment"># From iris_database_registry.research_config JSONB</span>
+{
+  <span class="string">"batch_size"</span>: 10,              <span class="comment">// Documents per batch</span>
+  <span class="string">"max_parallel_batches"</span>: 5,     <span class="comment">// Concurrent batch processing</span>
+  <span class="string">"max_selected_files"</span>: 20,      <span class="comment">// Cap for file research</span>
+  <span class="string">"top_chunks_in_metadata"</span>: 3,   <span class="comment">// Top chunks per document</span>
+  <span class="string">"max_parallel_files"</span>: 5,       <span class="comment">// (Used by file research)</span>
+  <span class="string">"max_chunks_per_file"</span>: 20      <span class="comment">// (Used by file research)</span>
+}
+    </div>
+
+    <div class="info-box teal">
+        <strong>Per-Database Config:</strong> Each database in <code>iris_database_registry</code> can have its own <code>research_config</code> values, allowing different batch sizes or chunk counts per database.
+    </div>
+
+    <h2>Prompts Used</h2>
+
+    <table>
+        <tr>
+            <th>Prompt Name</th>
+            <th>Tool Name</th>
+            <th>Purpose</th>
+        </tr>
+        <tr>
+            <td><code>subagent/metadata_unified_findings</code></td>
+            <td><code>return_unified_decisions</code></td>
+            <td>Per-document 3-way decisions for each batch</td>
+        </tr>
+    </table>
+
+    <h2>Database Tables Used</h2>
+
+    <table>
+        <tr>
+            <th>Table</th>
+            <th>Columns Used</th>
+            <th>Purpose</th>
+        </tr>
+        <tr>
+            <td><code>iris_document_metadata</code></td>
+            <td><code>document_summary</code>, <code>summary_embedding</code></td>
+            <td>Document summaries and embeddings for similarity search</td>
+        </tr>
+        <tr>
+            <td><code>iris_document_chunks</code></td>
+            <td><code>chunk_content</code>, <code>chunk_embedding</code>, <code>page_number</code></td>
+            <td>Top chunks for context</td>
+        </tr>
+        <tr>
+            <td><code>iris_database_registry</code></td>
+            <td><code>research_config</code></td>
+            <td>Per-database configuration</td>
+        </tr>
+        <tr>
+            <td><code>iris_prompts</code></td>
+            <td><code>system_prompt</code>, <code>user_prompt</code>, <code>tool_definition</code></td>
+            <td>Prompt configurations for LLM calls</td>
+        </tr>
+    </table>
+
+    <h2>File Location</h2>
+    <div class="code-block">
+services/src/agent/tools/metadata_subagent.py
+    </div>
+
+</body>
+</html>
