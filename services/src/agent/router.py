@@ -1,24 +1,13 @@
-"""
-Router Agent Module.
-
-Handles routing decisions for user queries by analyzing conversation context
-and determining the appropriate processing path (direct response or research).
-
-Functions:
-    get_routing_decision: Get routing decision from the model via tool call
-
-Classes:
-    RouterError: Exception for router-related errors
-"""
+"""Router agent that selects the processing path via an LLM tool call."""
 
 import json
 import logging
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
-from ..connections.llm import call_llm
+from ..connections.llm import execute_llm_call
 from ..utils.env_config import config
-from ..utils.input_sanitizer import format_conversation_for_prompt
-from ..utils.prompt_loader import get_composed_prompt
+from ..utils.input_sanitizer import format_conversation_history_for_prompt
+from ..utils.prompt_loader import fetch_prompt_with_context
 
 MODEL_CAPABILITY = "large"
 MODEL_MAX_TOKENS = 4096
@@ -31,14 +20,13 @@ class RouterError(Exception):
     """Exception raised for router-related errors."""
 
 
-def _get_model_settings() -> Dict[str, Any]:
-    """
-    Get model settings from config based on capability tier.
+def _get_router_model_settings() -> Dict[str, Any]:
+    """Return model settings from config based on capability tier.
 
     Returns:
-        Dictionary containing model name and token costs.
+        Dict[str, Any]: Model name and token cost metadata.
     """
-    model_config = config.get_model_config(MODEL_CAPABILITY)
+    model_config = config.get_model_settings(MODEL_CAPABILITY)
     return {
         "name": model_config["name"],
         "prompt_token_cost": model_config["prompt_token_cost"],
@@ -46,24 +34,24 @@ def _get_model_settings() -> Dict[str, Any]:
     }
 
 
-def _build_messages(
+def _build_router_messages(
     system_prompt: str,
     user_prompt_template: str,
     conversation: Dict[str, Any],
-) -> list:
-    """
-    Build the messages list for the LLM call.
+) -> List[Dict[str, str]]:
+    """Construct the messages list for the LLM call.
 
     Args:
-        system_prompt: The system prompt content.
-        user_prompt_template: Template for user message with {{conversation}} placeholder.
-        conversation: Conversation dict with 'messages' key.
+        system_prompt: System prompt content.
+        user_prompt_template: Template for user message with `{{conversation}}`
+            placeholder.
+        conversation: Conversation payload with a `messages` key.
 
     Returns:
-        List of message dictionaries for the LLM.
+        List[Dict[str, str]]: Messages for the LLM request.
 
     Raises:
-        RouterError: If user_prompt_template is not provided from database.
+        RouterError: If the user prompt template is missing.
     """
     if not user_prompt_template:
         raise RouterError(
@@ -71,29 +59,29 @@ def _build_messages(
             "Please ensure the prompt is configured in the prompts table."
         )
 
-    messages = [{"role": "system", "content": system_prompt}]
+    conversation_context = format_conversation_history_for_prompt(conversation)
+    return [
+        {"role": "system", "content": system_prompt},
+        {
+            "role": "user",
+            "content": user_prompt_template.replace(
+                "{{conversation}}", conversation_context
+            ),
+        },
+    ]
 
-    conversation_context = format_conversation_for_prompt(conversation)
-    user_content = user_prompt_template.replace(
-        "{{conversation}}", conversation_context
-    )
 
-    messages.append({"role": "user", "content": user_content})
-    return messages
-
-
-def _extract_tool_response(response: Any) -> Dict[str, Any]:
-    """
-    Extract and validate tool call arguments from LLM response.
+def _parse_router_tool_response(response: Any) -> Dict[str, Any]:
+    """Extract and validate tool call arguments from the LLM response.
 
     Args:
-        response: The LLM response object.
+        response: LLM response object.
 
     Returns:
-        Parsed arguments dictionary from the tool call.
+        Dict[str, Any]: Parsed arguments dictionary from the tool call.
 
     Raises:
-        RouterError: If response is invalid or tool call parsing fails.
+        RouterError: If the response is invalid or tool call parsing fails.
     """
     if not response or not hasattr(response, "choices") or not response.choices:
         raise RouterError("Invalid or empty response received from LLM")
@@ -112,72 +100,78 @@ def _extract_tool_response(response: Any) -> Dict[str, Any]:
         )
 
     tool_call = message.tool_calls[0]
+    function_name = getattr(getattr(tool_call, "function", None), "name", None)
+    if function_name != "route_query":
+        raise RouterError(f"Unexpected function call: {function_name}")
 
-    if tool_call.function.name != "route_query":
-        raise RouterError(f"Unexpected function call: {tool_call.function.name}")
+    arguments = tool_call.function.arguments
+    if isinstance(arguments, dict):
+        parsed_arguments = arguments
+    else:
+        try:
+            parsed_arguments = json.loads(arguments)
+        except (TypeError, json.JSONDecodeError) as exc:
+            raise RouterError(
+                f"Invalid JSON in tool arguments: {tool_call.function.arguments}"
+            ) from exc
 
-    try:
-        return json.loads(tool_call.function.arguments)
-    except json.JSONDecodeError as exc:
-        raise RouterError(
-            f"Invalid JSON in tool arguments: {tool_call.function.arguments}"
-        ) from exc
+    if not isinstance(parsed_arguments, dict):
+        raise RouterError("Tool arguments must be a JSON object")
+
+    return parsed_arguments
 
 
-def _validate_routing_decision(arguments: Dict[str, Any]) -> str:
-    """
-    Validate and extract function name from tool arguments.
+def _validate_routing_function_name(arguments: Dict[str, Any]) -> str:
+    """Validate and extract the function name from tool arguments.
 
     Args:
         arguments: Parsed tool call arguments.
 
     Returns:
-        Validated function name string.
+        str: Validated function name.
 
     Raises:
-        RouterError: If function_name is missing.
+        RouterError: If `function_name` is missing or empty.
     """
     function_name = arguments.get("function_name")
-    if not function_name:
+    if not function_name or not isinstance(function_name, str):
         raise RouterError("Missing 'function_name' in tool arguments")
     return function_name
 
 
-def get_routing_decision(
+def generate_routing_decision(
     conversation: Dict[str, Any],
     token: str,
     available_databases: Optional[Dict[str, Any]] = None,
 ) -> Tuple[Dict[str, Any], Optional[Dict[str, Any]]]:
-    """
-    Get routing decision from the model using a tool call.
+    """Return the routing decision from the model using a tool call.
 
     Analyzes the conversation and determines whether to respond directly
     or proceed with database research.
 
     Args:
-        conversation: Conversation dict with 'messages' key containing message list.
-        token: Authentication token for API access (OAuth token in RBC,
-            API key in local environment).
-        available_databases: Dict of available database configurations
-            filtered by user selection. Helps router understand what data is available.
+        conversation: Conversation payload with `messages`.
+        token: Authentication token for API access.
+        available_databases: Optional database configurations filtered by user
+            selection.
 
     Returns:
-        Tuple containing:
-            - Routing decision dict with 'function_name' key
-            - Usage details dict for the LLM call, or None if error
+        Tuple[Dict[str, Any], Optional[Dict[str, Any]]]: Routing decision dict with
+            `function_name` and usage details for the LLM call, or None if unavailable.
 
     Raises:
-        RouterError: If there is an error getting the routing decision.
+        RouterError: If the routing decision cannot be determined.
     """
     try:
-        db_names = list(available_databases.keys()) if available_databases else None
-        system_prompt, tools, user_prompt_template = get_composed_prompt(
-            "agent", "router", filtered_database=True, db_names=db_names
+        system_prompt, tools, user_prompt_template = fetch_prompt_with_context(
+            "agent", "router", available_databases=available_databases
         )
-        model_settings = _get_model_settings()
-        messages = _build_messages(system_prompt, user_prompt_template, conversation)
+        model_settings = _get_router_model_settings()
+        messages = _build_router_messages(
+            system_prompt, user_prompt_template, conversation
+        )
 
-        response, usage_details = call_llm(
+        response, usage_details = execute_llm_call(
             oauth_token=token,
             model=model_settings["name"],
             messages=messages,
@@ -193,8 +187,8 @@ def get_routing_decision(
             completion_token_cost=model_settings["completion_token_cost"],
         )
 
-        arguments = _extract_tool_response(response)
-        function_name = _validate_routing_decision(arguments)
+        arguments = _parse_router_tool_response(response)
+        function_name = _validate_routing_function_name(arguments)
 
         logger.info("Routing decision: %s", function_name)
 

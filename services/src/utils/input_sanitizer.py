@@ -6,8 +6,8 @@ language models. Standardizes different conversation formats, filters by
 role, and manages history length.
 
 Functions:
-    process_conversation: Filter and format conversation data
-    format_conversation_for_prompt: Format conversation dict to string for LLM prompts
+    sanitize_conversation_history: Filter and format conversation data
+    format_conversation_history_for_prompt: Format conversation dict to string for LLM prompts
 """
 
 import logging
@@ -22,78 +22,87 @@ MAX_HISTORY_LENGTH = config.MAX_HISTORY_LENGTH
 logger = logging.getLogger(__name__)
 
 
-def process_conversation(conversation: Any) -> Dict[str, List[Dict[str, str]]]:
-    """
-    Process and filter conversation history based on configured settings.
-
-    Only extracts required fields (role and content) from messages.
+def sanitize_conversation_history(
+    conversation: Any,
+) -> Dict[str, List[Dict[str, str]]]:
+    """Filter conversation history based on configured settings.
 
     Args:
-        conversation: Raw conversation data. Either a list of messages
-            (e.g. [{"role": "...", "content": "..."}]) or a dict with
-            "messages" as a key.
+        conversation (Any): Raw conversation data. Either a list of message
+            dicts or a dict containing a `messages` key.
 
     Returns:
-        Filtered conversation data with standardized messages.
+        Dict[str, List[Dict[str, str]]]: Sanitized conversation data containing
+        standardized messages.
 
     Raises:
-        ValueError: If conversation format is invalid or required fields missing.
+        ValueError: If the conversation format is invalid.
     """
-    try:
-        if isinstance(conversation, list):
-            conversation = {"messages": conversation}
-        elif not isinstance(conversation, dict) or "messages" not in conversation:
-            raise ValueError("Invalid conversation format")
-
+    if isinstance(conversation, list):
+        messages = conversation
+    elif isinstance(conversation, dict) and "messages" in conversation:
         messages = conversation["messages"]
+    else:
+        raise ValueError(
+            "Invalid conversation format; expected list or dict with 'messages'."
+        )
 
-        filtered_messages = []
-        for msg in messages:
-            if "role" not in msg or "content" not in msg:
-                logger.warning("Skipping message missing required fields: %s", msg)
-                continue
+    if not isinstance(messages, list):
+        raise ValueError("Conversation messages must be provided as a list.")
 
-            role_allowed = msg["role"] in ALLOWED_ROLES
-            is_system = INCLUDE_SYSTEM_MESSAGES and msg["role"] == "system"
-            if role_allowed or is_system:
-                filtered_message = {"role": msg["role"], "content": msg["content"]}
-                filtered_messages.append(filtered_message)
+    filtered_messages = []
+    for msg in messages:
+        if not isinstance(msg, dict):
+            logger.warning("Skipping non-dict message: %s", msg)
+            continue
 
-        recent_messages = filtered_messages[-MAX_HISTORY_LENGTH:]
+        role = msg.get("role")
+        content = msg.get("content")
+        if role is None or content is None:
+            logger.warning("Skipping message missing required fields: %s", msg)
+            continue
 
-        return {"messages": recent_messages}
+        if role == "system" and not INCLUDE_SYSTEM_MESSAGES:
+            continue
+        if role != "system" and role not in ALLOWED_ROLES:
+            continue
 
-    except (ValueError, TypeError, KeyError) as exc:
-        logger.error("Error processing conversation: %s", exc)
-        raise
+        filtered_messages.append({"role": role, "content": content})
+
+    return {"messages": filtered_messages[-MAX_HISTORY_LENGTH:]}
 
 
-def format_conversation_for_prompt(conversation: Dict[str, Any]) -> str:
-    """
-    Format conversation messages into a structured string for LLM prompts.
-
-    Converts a conversation dict (with 'messages' key) into a formatted
-    string suitable for inclusion in prompt templates.
+def format_conversation_history_for_prompt(conversation: Dict[str, Any]) -> str:
+    """Format conversation messages into a structured string for LLM prompts.
 
     Args:
-        conversation: Conversation dict with 'messages' key containing
-            list of message dicts with 'role' and 'content' keys.
+        conversation (Dict[str, Any]): Conversation dict with a `messages` key
+            containing message dicts with `role` and `content` keys.
 
     Returns:
-        Formatted string representation of the conversation.
-        Format: "[ROLE]: content" separated by double newlines.
+        str: Conversation rendered as "[ROLE]: content" separated by double
+        newlines, or a fallback message when no history is available.
 
-    Example:
-        Input: {"messages": [{"role": "user", "content": "Hello"}]}
-        Output: "[USER]: Hello"
+    Raises:
+        ValueError: If the `messages` entry is not a list.
     """
-    if not conversation or "messages" not in conversation:
+    messages = conversation.get("messages") if isinstance(conversation, dict) else None
+    if not messages:
         return "No conversation history available."
+    if not isinstance(messages, list):
+        raise ValueError("conversation['messages'] must be provided as a list.")
 
     formatted_parts = []
-    for msg in conversation["messages"]:
+    for msg in messages:
+        if not isinstance(msg, dict):
+            logger.warning("Skipping non-dict message: %s", msg)
+            continue
         role = msg.get("role", "unknown").upper()
         content = msg.get("content", "")
         formatted_parts.append(f"[{role}]: {content}")
 
-    return "\n\n".join(formatted_parts)
+    return (
+        "\n\n".join(formatted_parts)
+        if formatted_parts
+        else "No conversation history available."
+    )

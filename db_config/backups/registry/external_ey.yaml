@@ -1,0 +1,49 @@
+db_source: external_ey
+db_name: EY IFRS Guidance
+db_summary: External accounting guidance and interpretations from EY, including insights, disclosure checklists, and clarifications
+  on the application of IFRS standards.
+db_description: '**Content:** External accounting guidance and interpretations from EY, including insights, disclosure checklists,
+  and clarifications on the application of IFRS standards.
+
+
+  **Tier/Priority:** EXTERNAL SUPPLEMENTARY - Third-party interpretations that support but do not replace official standards.
+
+
+  **Usage Guidance:** Consult when explicitly requested by user OR when internal sources are insufficient and an external
+  perspective would help. Use to supplement internal knowledge, fill gaps, or get external interpretation. Particularly useful
+  for disclosure examples and checklists. Internal RBC guidance should remain preferred for policy questions.
+
+
+  **When to Select:** Explicit requests for EY guidance, external/third-party interpretations, IFRS disclosure checklists,
+  disclosure examples, or when internal sources lack sufficient detail on practical application.
+
+
+  **Query Tips:** Use standard numbers (IFRS 15, IAS 38), technical terms, specific paragraphs.
+
+
+  **Query Type:** semantic search'
+enabled: true
+search_modes:
+- catalog
+- semantic
+ad_groups:
+- all_users
+- local_dev
+batch_size: 10
+max_selected_files: 8
+top_chunks_in_catalog_selection: 2
+top_chunks_in_metadata_research: 3
+page_threshold_for_full_content: 100
+enable_db_wide_deep_research: true
+max_parallel_files: 5
+max_chunks_per_file: 20
+metadata_context_fields:
+- document_summary
+catalog_config: null
+semantic_config: null
+metadata_config: null
+sample_questions:
+- What does EY''s guidance say about lease modification accounting under IFRS 16?
+- Does the EY disclosure checklist include requirements for financial instrument classification?
+- How does EY interpret principal-versus-agent considerations in IFRS 15?
+- What EY perspective exists on recycling of OCI balances?

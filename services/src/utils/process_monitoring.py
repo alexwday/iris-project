@@ -1,17 +1,8 @@
 """
-Process Monitoring Module.
+Process monitoring utilities.
 
-Provides a structured way to monitor and report on the various stages
-of execution in the application. Tracks timing, token usage, and
-stage-specific details for debugging and analysis.
-
-Classes:
-    ProcessStage: Represents a single stage in the application process
-    ProcessMonitor: Tracks and reports on application execution stages
-
-Functions:
-    enable_monitoring: Enable or disable process monitoring
-    get_process_monitor: Get the global process monitor instance
+Provides helpers to track stage timing, token usage, and LLM call details for
+debugging and analysis.
 """
 
 import json
@@ -21,13 +12,14 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 from .env_config import config
 
 logger = logging.getLogger(__name__)
 
 
-class ProcessStage:
+class ProcessStageMetrics:
     """
     Represents a single stage in the application process.
 
@@ -87,18 +79,28 @@ class ProcessStage:
         self.details.update(kwargs)
 
     def get_total_tokens(self) -> int:
-        """Calculate total tokens from all LLM calls in this stage."""
-        total = 0
-        for call in self.llm_calls_data:
-            total += call.get("prompt_tokens", 0) + call.get("completion_tokens", 0)
-        return total
+        """
+        Calculate total tokens from all LLM calls in this stage.
+
+        Returns:
+            Total token count across prompts and completions.
+        """
+        return sum(
+            call.get("prompt_tokens", 0) + call.get("completion_tokens", 0)
+            for call in self.llm_calls_data
+        )
 
     def get_total_cost(self) -> float:
-        """Calculate total cost from all LLM calls in this stage."""
+        """
+        Calculate total cost from all LLM calls in this stage.
+
+        Returns:
+            Combined cost of all LLM calls.
+        """
         return sum(call.get("cost", 0.0) for call in self.llm_calls_data)
 
 
-class ProcessMonitor:
+class ProcessMonitoringManager:
     """
     Monitors and reports on the stages of application execution.
 
@@ -114,8 +116,7 @@ class ProcessMonitor:
             enabled: Whether monitoring is enabled.
         """
         self.enabled = enabled
-        self.stages: Dict[str, ProcessStage] = {}
-        self.current_stage: Optional[str] = None
+        self.stages: Dict[str, ProcessStageMetrics] = {}
         self.start_time: Optional[datetime] = None
         self.end_time: Optional[datetime] = None
         self.run_uuid: Optional[uuid.UUID] = None
@@ -132,12 +133,17 @@ class ProcessMonitor:
         self.run_uuid = run_uuid
 
     def start_monitoring(self) -> None:
-        """Start the overall monitoring process."""
+        """
+        Start the overall monitoring process.
+
+        Generates a run UUID when one has not been set.
+        """
         if not self.enabled:
             return
         self.start_time = datetime.now(timezone.utc)
+        if self.run_uuid is None:
+            self.run_uuid = uuid.uuid4()
         self.stages = {}
-        self.current_stage = None
         self.end_time = None
 
     def end_monitoring(self) -> None:
@@ -154,7 +160,11 @@ class ProcessMonitor:
             session: SQLAlchemy session object within an active transaction.
 
         Raises:
-            RuntimeError: If database logging fails.
+            SQLAlchemyError: If the insert statement fails.
+            ValueError: If stage data cannot be serialized.
+            TypeError: If stage data has unexpected types.
+            RuntimeError: If database execution cannot complete.
+            OSError: If the database driver encounters an OS error.
         """
         if not self.enabled:
             return
@@ -187,14 +197,24 @@ class ProcessMonitor:
             return
 
         try:
-            for record in records:
-                session.execute(insert_query, record)
-        except (ValueError, TypeError, RuntimeError, OSError) as db_err:
+            session.execute(insert_query, records)
+        except (
+            SQLAlchemyError,
+            ValueError,
+            TypeError,
+            RuntimeError,
+            OSError,
+        ) as db_err:
             logger.error("Database error during process monitor logging: %s", db_err)
             raise
 
     def _prepare_records_for_db(self) -> List[Dict[str, Any]]:
-        """Prepare stage records for database insertion."""
+        """
+        Prepare stage records for database insertion.
+
+        Returns:
+            List of stage dictionaries ready for SQL execution.
+        """
         records = []
         for stage in self.stages.values():
             try:
@@ -243,10 +263,9 @@ class ProcessMonitor:
             return
 
         if stage_name not in self.stages:
-            self.stages[stage_name] = ProcessStage(stage_name)
+            self.stages[stage_name] = ProcessStageMetrics(stage_name)
 
         self.stages[stage_name].start()
-        self.current_stage = stage_name
 
     def end_stage(self, stage_name: str, status: str = "completed") -> None:
         """
@@ -260,8 +279,6 @@ class ProcessMonitor:
             return
 
         self.stages[stage_name].end(status)
-        if self.current_stage == stage_name:
-            self.current_stage = None
 
     def add_llm_call_details_to_stage(
         self, stage_name: str, call_details: Dict[str, Any]
@@ -290,15 +307,27 @@ class ProcessMonitor:
         self.stages[stage_name].add_details(**kwargs)
 
 
-_monitor_state: Dict[str, ProcessMonitor] = {"instance": ProcessMonitor(enabled=False)}
+_monitor_state: Dict[str, ProcessMonitoringManager] = {
+    "instance": ProcessMonitoringManager(enabled=False)
+}
 
 
-def enable_monitoring(enabled: bool = True) -> None:
-    """Enable or disable process monitoring."""
+def set_process_monitoring_enabled(enabled: bool = True) -> None:
+    """
+    Enable or disable process monitoring.
+
+    Args:
+        enabled: Whether monitoring should be turned on.
+    """
     if _monitor_state["instance"].enabled != enabled:
-        _monitor_state["instance"] = ProcessMonitor(enabled=enabled)
+        _monitor_state["instance"] = ProcessMonitoringManager(enabled=enabled)
 
 
-def get_process_monitor() -> ProcessMonitor:
-    """Get the global process monitor instance."""
+def get_process_monitor_instance() -> ProcessMonitoringManager:
+    """
+    Get the global process monitor instance.
+
+    Returns:
+        The shared ProcessMonitoringManager singleton.
+    """
     return _monitor_state["instance"]

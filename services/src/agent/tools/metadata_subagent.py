@@ -1,63 +1,26 @@
-"""
-Metadata Subagent for Universal Cascading Retrieval Architecture.
+"""Metadata subagent that routes every query through document metadata.
 
-Single path where every query goes through metadata first.
-Each document gets a 3-way decision:
-- "answered": Finding from metadata is sufficient
-- "irrelevant": Document not relevant to query
-- "needs_deep_research": Document likely relevant but needs full content
-
-Flow:
-1. Fetch all documents (summaries + top chunks)
-2. Batch documents (batch_size=10, parallel processing)
-3. For each document, LLM makes 3-way decision
-4. Build response from "answered" findings with reference_index
-5. Return list of doc IDs that need deep research
-
-The database_router then:
-- Uses answered_response directly
-- Triggers file_research_subagent only for needs_research_doc_ids
-- Merges file research findings with metadata findings
-- Continues reference numbering across both
-
-Key Design: Per-document decisions enable PROGRAMMATIC reference building.
-The LLM returns document_id with each decision, which we validate against
-what we sent. References are built from known document metadata,
-not from LLM-generated text (which is error-prone).
-
-Functions:
-    query_metadata_unified: Entry point with mode-dependent processing
-    fetch_all_documents: Fetch all docs with summaries and top chunks
-    process_batch_unified: Process batch with 3-way decisions
-    process_catalog_selection: Batch file selection for file_selection mode
-
-Classes:
-    DocumentMetadata: TypedDict for document metadata
-    DocumentDecision: TypedDict for 3-way per-document decision
-    UnifiedMetadataResult: TypedDict for unified result
+The LLM makes per-document 3-way decisions (answered, irrelevant, needs_deep_research)
+so references can be built deterministically from metadata before any deep research.
 """
 
 import json
 import logging
-from typing import Any, Dict, List, Optional, Tuple, TypedDict
+from typing import Any, Dict, List, Optional, Set, Tuple, TypedDict
 
 from sqlalchemy import text
 
 from ...utils.env_config import config
-from ...utils.prompt_loader import get_prompt
-from ...connections.postgres import get_session
-from ...connections.llm import call_llm
+from ...utils.prompt_loader import fetch_prompt_with_context
+from ...connections.postgres import get_database_session
+from ...connections.llm import execute_llm_call
+from .research_types import Finding, FindingsList
 
 logger = logging.getLogger(__name__)
-
-# =============================================================================
-# CONFIGURATION - loaded from database registry at runtime
-# =============================================================================
 
 MODEL_CAPABILITY = "large"
 MODEL_MAX_TOKENS = 4096
 MODEL_TEMPERATURE = 0.2
-DEFAULT_TOP_CHUNKS_PER_DOC = 3
 
 MetadataContext = Dict[str, Any]
 
@@ -66,16 +29,12 @@ class MetadataSubagentError(Exception):
     """Exception raised for metadata subagent errors."""
 
 
-# =============================================================================
-# TYPE DEFINITIONS
-# =============================================================================
-
-
 class DocumentMetadata(TypedDict):
     """Document-level metadata from iris_document_metadata."""
 
-    document_id: str  # UUID as string
+    document_id: str
     document_name: str
+    document_index: int
     document_summary: str
     document_type: Optional[str]
     page_count: Optional[int]
@@ -92,14 +51,13 @@ class DocumentDecision(TypedDict):
     - "answered": Finding from metadata is sufficient
     - "irrelevant": Document not relevant to query
     - "needs_deep_research": Document likely relevant but needs full content
+    Finding is required for all statuses; page_reference is optional.
     """
 
     document_id: str
-    status: str  # "answered" | "irrelevant" | "needs_deep_research"
-    finding: Optional[str]  # If answered - the research finding
-    page_reference: Optional[int]  # If answered - specific page if mentioned
-    confidence: Optional[str]  # If answered - "high" | "medium" | "low"
-    research_hint: Optional[str]  # If needs_deep_research - why it needs more
+    status: str
+    finding: str
+    page_reference: Optional[int]
 
 
 class UnifiedBatchResult(TypedDict):
@@ -112,11 +70,11 @@ class UnifiedBatchResult(TypedDict):
 class UnifiedMetadataResult(TypedDict):
     """Result from unified metadata processing across all batches."""
 
-    answered_findings: List[DocumentDecision]  # Documents answered from metadata
-    needs_research_doc_ids: List[str]  # Document IDs needing deep research
-    irrelevant_count: int  # Count of irrelevant documents
-    answered_response: str  # Formatted response from answered findings
-    answered_reference_index: Dict[str, Any]  # Reference index from answered
+    answered_findings: List[DocumentDecision]
+    needs_research_doc_ids: List[str]
+    irrelevant_count: int
+    answered_response: str
+    findings: FindingsList  # Unified finding format for summarizer
 
 
 class BatchSelection(TypedDict):
@@ -140,14 +98,8 @@ class ReferenceEntry(TypedDict):
     finding: str
 
 
-# =============================================================================
-# CONFIG LOADING
-# =============================================================================
-
-
 def _get_research_config(db_source: str) -> Dict[str, Any]:
-    """
-    Load research_config from iris_database_registry.
+    """Load research configuration from iris_database_registry.
 
     Args:
         db_source: Database source identifier.
@@ -158,16 +110,15 @@ def _get_research_config(db_source: str) -> Dict[str, Any]:
     Raises:
         MetadataSubagentError: If configuration cannot be loaded.
     """
-    from .database_metadata import DatabaseMetadataRepository
+    from .database_metadata import DatabaseMetadataCache
 
     try:
-        config = DatabaseMetadataRepository().get_research_config(db_source)
+        research_config = DatabaseMetadataCache().get_research_config(db_source)
     except Exception as exc:
         raise MetadataSubagentError(
             f"Failed to load research_config for {db_source}: {exc}"
         ) from exc
 
-    # Validate required config fields
     required_fields = [
         "batch_size",
         "max_selected_files",
@@ -175,50 +126,46 @@ def _get_research_config(db_source: str) -> Dict[str, Any]:
         "top_chunks_in_metadata_research",
         "page_threshold_for_full_content",
         "enable_db_wide_deep_research",
+        "metadata_context_fields",
     ]
-    missing = [f for f in required_fields if f not in config]
+    missing = [field for field in required_fields if field not in research_config]
     if missing:
         raise MetadataSubagentError(
             f"Missing required config fields for {db_source}: {missing}"
         )
 
-    return config
+    return research_config
 
 
-# =============================================================================
-# DATABASE QUERIES
-# =============================================================================
-
-
-def fetch_all_documents(
+def fetch_all_document_metadata(
     db_source: str,
     query_embedding: List[float],
-    top_chunks_per_doc: int = DEFAULT_TOP_CHUNKS_PER_DOC,
+    top_chunks_per_doc: int,
 ) -> List[DocumentMetadata]:
-    """
-    Fetch ALL documents with full summaries and top chunks.
-
-    No limit on document count - batching handles token management.
+    """Fetch metadata and top chunks for every document in a source.
 
     Args:
-        db_source: The database source to query.
-        query_embedding: The query embedding vector for similarity ranking.
+        db_source: Database source to query.
+        query_embedding: Query embedding vector for similarity ranking.
         top_chunks_per_doc: Number of top chunks per document.
 
     Returns:
-        List of DocumentMetadata with full summaries and top chunks.
+        Documents ordered by similarity score.
+
+    Raises:
+        MetadataSubagentError: If the database query fails.
     """
     logger.info("Fetching all documents for %s", db_source)
-    documents: List[DocumentMetadata] = []
 
     try:
-        with get_session() as session:
+        documents: List[DocumentMetadata] = []
+        with get_database_session() as session:
             embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
 
-            # Fetch all documents with embeddings, ranked by similarity
-            doc_result = session.execute(
-                text(
-                    """
+            doc_rows = (
+                session.execute(
+                    text(
+                        """
                     SELECT
                         m.id,
                         m.document_name,
@@ -226,7 +173,8 @@ def fetch_all_documents(
                         m.document_type,
                         m.page_count,
                         m.file_name,
-                        1 - (m.summary_embedding <=> CAST(:embedding AS halfvec)) AS similarity_score,
+                        1 - (m.summary_embedding <=> CAST(:embedding AS halfvec))
+                            AS similarity_score,
                         (SELECT COUNT(*) FROM iris_document_chunks c
                          WHERE c.document_id = m.id) as chunk_count
                     FROM iris_document_metadata m
@@ -234,20 +182,21 @@ def fetch_all_documents(
                     AND m.summary_embedding IS NOT NULL
                     ORDER BY similarity_score DESC
                     """
-                ),
-                {"embedding": embedding_str, "db_source": db_source},
+                    ),
+                    {"embedding": embedding_str, "db_source": db_source},
+                )
+                .mappings()
+                .all()
             )
-
-            doc_rows = doc_result.mappings().all()
             logger.info("Found %d documents in %s", len(doc_rows), db_source)
 
-            for row in doc_rows:
+            for idx, row in enumerate(doc_rows, 1):
                 doc_id = str(row["id"])
 
-                # Fetch top chunks for this document
-                chunk_result = session.execute(
-                    text(
-                        """
+                chunk_rows = (
+                    session.execute(
+                        text(
+                            """
                         SELECT
                             c.id,
                             c.chunk_number,
@@ -256,44 +205,44 @@ def fetch_all_documents(
                             c.subsection_name,
                             c.hierarchy_path,
                             c.page_number,
-                            1 - (c.chunk_embedding <=> CAST(:embedding AS halfvec)) AS chunk_similarity
+                            1 - (c.chunk_embedding <=> CAST(:embedding AS halfvec))
+                                AS chunk_similarity
                         FROM iris_document_chunks c
                         WHERE c.document_id = :doc_id
                         AND c.chunk_embedding IS NOT NULL
                         ORDER BY chunk_similarity DESC
                         LIMIT :limit
                         """
-                    ),
-                    {
-                        "embedding": embedding_str,
-                        "doc_id": row["id"],
-                        "limit": top_chunks_per_doc,
-                    },
+                        ),
+                        {
+                            "embedding": embedding_str,
+                            "doc_id": row["id"],
+                            "limit": top_chunks_per_doc,
+                        },
+                    )
+                    .mappings()
+                    .all()
                 )
 
-                top_chunks = []
-                for chunk_row in chunk_result.mappings().all():
-                    top_chunks.append(
-                        {
-                            "chunk_id": str(chunk_row["id"]),
-                            "chunk_number": chunk_row["chunk_number"],
-                            "chunk_content": chunk_row["chunk_content"],
-                            "primary_section_name": chunk_row["primary_section_name"],
-                            "subsection_name": chunk_row["subsection_name"],
-                            "hierarchy_path": chunk_row["hierarchy_path"],
-                            "page_number": chunk_row["page_number"],
-                            "similarity": (
-                                float(chunk_row["chunk_similarity"])
-                                if chunk_row["chunk_similarity"]
-                                else 0.0
-                            ),
-                        }
-                    )
+                top_chunks = [
+                    {
+                        "chunk_id": str(chunk_row["id"]),
+                        "chunk_number": chunk_row["chunk_number"],
+                        "chunk_content": chunk_row["chunk_content"],
+                        "primary_section_name": chunk_row["primary_section_name"],
+                        "subsection_name": chunk_row["subsection_name"],
+                        "hierarchy_path": chunk_row["hierarchy_path"],
+                        "page_number": chunk_row["page_number"],
+                        "similarity": float(chunk_row["chunk_similarity"] or 0.0),
+                    }
+                    for chunk_row in chunk_rows
+                ]
 
                 documents.append(
                     {
                         "document_id": doc_id,
                         "document_name": row["document_name"],
+                        "document_index": idx,
                         "document_summary": row["document_summary"] or "",
                         "document_type": row["document_type"],
                         "page_count": row["page_count"],
@@ -303,71 +252,90 @@ def fetch_all_documents(
                         "top_chunks": top_chunks,
                     }
                 )
-
-    except (ValueError, TypeError, KeyError, RuntimeError) as exc:
+        return documents
+    except Exception as exc:
         logger.error(
             "Error fetching documents for %s: %s", db_source, exc, exc_info=True
         )
-
-    return documents
-
-
-# =============================================================================
-# DOCUMENT FORMATTING
-# =============================================================================
+        raise MetadataSubagentError(
+            f"Failed to fetch documents for {db_source}: {exc}"
+        ) from exc
 
 
-def _format_batch_documents(documents: List[DocumentMetadata]) -> str:
-    """Format batch documents for LLM processing.
+def _format_batch_documents(
+    documents: List[DocumentMetadata],
+    metadata_context_fields: Optional[List[str]] = None,
+) -> str:
+    """Format a batch of documents for LLM processing using XML.
 
-    Each document includes its ID prominently so LLM can reference it
-    in the per-document findings response.
+    Args:
+        documents: Documents to include in the batch prompt.
+        metadata_context_fields: Which metadata fields to include. Valid values:
+            'document_summary', 'document_description', 'document_usage'.
+            Defaults to ['document_summary'] if not specified.
+
+    Returns:
+        XML formatted string for the LLM prompt.
     """
-    formatted = ""
+    if metadata_context_fields is None:
+        metadata_context_fields = ["document_summary"]
+
+    parts: List[str] = []
 
     for i, doc in enumerate(documents, 1):
-        formatted += f"## Document {i}\n"
-        formatted += f"**document_id:** `{doc['document_id']}`\n"
-        formatted += f"**document_name:** {doc['document_name']}\n"
-        formatted += f"**Type:** {doc.get('document_type', 'Unknown')}\n"
-        formatted += f"**Pages:** {doc.get('page_count', 'Unknown')}\n\n"
-        formatted += f"**Summary:**\n{doc['document_summary']}\n\n"
+        parts.append(f"<document index=\"{i}\">")
+        parts.append(f"  <document_id>{doc['document_id']}</document_id>")
+        parts.append(f"  <document_name>{doc['document_name']}</document_name>")
+        parts.append(f"  <type>{doc.get('document_type', 'Unknown')}</type>")
+        parts.append(f"  <pages>{doc.get('page_count', 'Unknown')}</pages>")
+
+        # Include configured metadata fields
+        if "document_summary" in metadata_context_fields and doc.get("document_summary"):
+            parts.append(f"  <summary>{doc['document_summary']}</summary>")
+        if "document_description" in metadata_context_fields and doc.get("document_description"):
+            parts.append(f"  <description>{doc['document_description']}</description>")
+        if "document_usage" in metadata_context_fields and doc.get("document_usage"):
+            parts.append(f"  <usage>{doc['document_usage']}</usage>")
 
         if doc.get("top_chunks"):
-            formatted += "**Most Relevant Excerpts:**\n"
+            parts.append("  <excerpts>")
             for chunk in doc["top_chunks"]:
                 page_num = chunk.get("page_number", "?")
+                location = ""
                 if chunk.get("hierarchy_path"):
-                    formatted += f"*From {chunk['hierarchy_path']} (Page {page_num})*\n"
+                    location = chunk["hierarchy_path"]
                 elif chunk.get("primary_section_name"):
-                    formatted += f"*From {chunk['primary_section_name']}"
+                    location = chunk["primary_section_name"]
                     if chunk.get("subsection_name"):
-                        formatted += f" > {chunk['subsection_name']}"
-                    formatted += f" (Page {page_num})*\n"
-                else:
-                    formatted += f"*(Page {page_num})*\n"
+                        location += f" > {chunk['subsection_name']}"
+
+                parts.append(f"    <excerpt page=\"{page_num}\" location=\"{location}\">")
                 content = chunk.get("chunk_content", "")
-                formatted += f"```\n{content}\n```\n\n"
+                # Escape XML special characters in content
+                content = (
+                    content.replace("&", "&amp;")
+                    .replace("<", "&lt;")
+                    .replace(">", "&gt;")
+                )
+                parts.append(f"      {content}")
+                parts.append("    </excerpt>")
+            parts.append("  </excerpts>")
 
-        formatted += "---\n\n"
+        parts.append("</document>")
+        parts.append("")
 
-    return formatted
-
-
-# =============================================================================
-# FILE SELECTION PATH
-# =============================================================================
+    return "\n".join(parts)
 
 
-def select_files_from_batch(
+def select_relevant_files_from_batch(
     research_statement: str,
     batch_documents: List[DocumentMetadata],
     batch_number: int,
     total_batches: int,
     ctx: MetadataContext,
+    metadata_context_fields: Optional[List[str]] = None,
 ) -> Tuple[BatchSelection, Optional[Dict[str, Any]]]:
-    """
-    LLM selects relevant files from a batch for deep research.
+    """Select relevant files from a batch via LLM tool call.
 
     Args:
         research_statement: The research query.
@@ -375,33 +343,34 @@ def select_files_from_batch(
         batch_number: Current batch number (1-indexed).
         total_batches: Total number of batches.
         ctx: Context with token, process_monitor, etc.
+        metadata_context_fields: Which metadata fields to include in document context.
 
     Returns:
-        Tuple of (BatchSelection, usage_details).
+        Batch selection and optional usage details.
+
+    Raises:
+        MetadataSubagentError: If the LLM does not return a valid selection.
     """
     logger.info("Selecting files from batch %d of %d", batch_number, total_batches)
     usage_details = None
 
     try:
-        prompt = get_prompt("subagent", "catalog_batch_selection")
-        if not prompt:
-            raise ValueError("Prompt not found: subagent/catalog_batch_selection")
+        system_prompt, tools, user_template = fetch_prompt_with_context(
+            "subagent", "catalog_batch_selection"
+        )
 
-        formatted_docs = _format_batch_documents(batch_documents)
+        formatted_docs = _format_batch_documents(batch_documents, metadata_context_fields)
 
-        system_prompt = prompt.get("system_prompt", "")
         user_prompt = (
-            prompt.get("user_prompt", "")
-            .replace("{{research_statement}}", research_statement)
+            user_template.replace("{{research_statement}}", research_statement)
             .replace("{{batch_number}}", str(batch_number))
             .replace("{{total_batches}}", str(total_batches))
             .replace("{{batch_documents}}", formatted_docs)
         )
 
-        model_config = config.get_model_config(MODEL_CAPABILITY)
-        tools = [prompt.get("tool_definition")] if prompt.get("tool_definition") else []
+        model_config = config.get_model_settings(MODEL_CAPABILITY)
 
-        result = call_llm(
+        result = execute_llm_call(
             oauth_token=ctx.get("token") or "placeholder_token",
             model=model_config["name"],
             messages=[
@@ -425,13 +394,11 @@ def select_files_from_batch(
         else:
             response = result
 
-        # Track usage
         process_monitor = ctx.get("process_monitor")
         stage_name = ctx.get("stage_name")
         if usage_details and process_monitor and stage_name:
             process_monitor.add_llm_call_details_to_stage(stage_name, usage_details)
 
-        # Parse tool response - must get valid selection
         if not (
             response
             and hasattr(response, "choices")
@@ -446,7 +413,8 @@ def select_files_from_batch(
         tool_call = response.choices[0].message.tool_calls[0]
         if tool_call.function.name != "select_relevant_files":
             raise MetadataSubagentError(
-                f"Unexpected tool call '{tool_call.function.name}' for batch {batch_number}"
+                f"Unexpected tool call '{tool_call.function.name}' "
+                f"for batch {batch_number}"
             )
 
         arguments = json.loads(tool_call.function.arguments)
@@ -466,16 +434,16 @@ def select_files_from_batch(
         ) from exc
 
 
-def process_catalog_selection(
+def process_catalog_file_selection(
     research_statement: str,
     db_source: str,
     all_documents: List[DocumentMetadata],
     batch_size: int,
     max_selected_files: int,
     ctx: MetadataContext,
+    metadata_context_fields: Optional[List[str]] = None,
 ) -> Tuple[List[str], str]:
-    """
-    Process catalog selection path: batch documents and select relevant files.
+    """Batch documents and select relevant files for deep research.
 
     Args:
         research_statement: The research query.
@@ -484,6 +452,7 @@ def process_catalog_selection(
         batch_size: Number of documents per batch.
         max_selected_files: Maximum number of files to select for deep research.
         ctx: Context with token, process_monitor, etc.
+        metadata_context_fields: Which metadata fields to include in document context.
 
     Returns:
         Tuple of (list of selected document IDs, combined reasoning).
@@ -498,7 +467,6 @@ def process_catalog_selection(
         max_selected_files,
     )
 
-    # Create batches
     batches = [
         all_documents[i : i + batch_size]
         for i in range(0, len(all_documents), batch_size)
@@ -508,30 +476,37 @@ def process_catalog_selection(
         "Created %d batches of up to %d documents each", total_batches, batch_size
     )
 
-    # Process each batch
     all_selected_ids: List[str] = []
     all_reasoning: List[str] = []
 
     for batch_num, batch_docs in enumerate(batches, 1):
-        selection, _ = select_files_from_batch(
+        selection, _ = select_relevant_files_from_batch(
             research_statement=research_statement,
             batch_documents=batch_docs,
             batch_number=batch_num,
             total_batches=total_batches,
             ctx=ctx,
+            metadata_context_fields=metadata_context_fields,
         )
         all_selected_ids.extend(selection["selected_ids"])
         if selection["reasoning"]:
             all_reasoning.append(f"Batch {batch_num}: {selection['reasoning']}")
 
-    # Enforce max_selected_files limit
-    if len(all_selected_ids) > max_selected_files:
+    deduped_ids: List[str] = []
+    seen_ids: Set[str] = set()
+    for doc_id in all_selected_ids:
+        if doc_id in seen_ids:
+            continue
+        seen_ids.add(doc_id)
+        deduped_ids.append(doc_id)
+
+    if len(deduped_ids) > max_selected_files:
         logger.info(
             "Limiting selected files from %d to %d (max_selected_files)",
-            len(all_selected_ids),
+            len(deduped_ids),
             max_selected_files,
         )
-        all_selected_ids = all_selected_ids[:max_selected_files]
+        deduped_ids = deduped_ids[:max_selected_files]
 
     combined_reasoning = (
         " | ".join(all_reasoning) if all_reasoning else "File selection"
@@ -543,40 +518,26 @@ def process_catalog_selection(
         db_source,
     )
 
-    return all_selected_ids, combined_reasoning
-
-
-# =============================================================================
-# UNIFIED METADATA-FIRST ARCHITECTURE
-# Single path with 3-way per-document decisions:
-# - answered: Finding from metadata is sufficient
-# - irrelevant: Document not relevant
-# - needs_deep_research: Needs full document analysis
-# =============================================================================
+    return deduped_ids, combined_reasoning
 
 
 def _validate_unified_decisions(
     raw_decisions: List[Dict[str, Any]],
-    valid_doc_ids: set,
+    valid_doc_ids: Set[str],
     batch_documents: List[DocumentMetadata],
 ) -> List[DocumentDecision]:
-    """
-    Validate and normalize 3-way decisions from LLM response.
-
-    - Filters to only document_ids we actually sent
-    - Ensures all documents in batch have a decision
-    - Defaults missing documents to needs_deep_research (safer than irrelevant)
+    """Validate and normalize 3-way decisions from the LLM response.
 
     Args:
         raw_decisions: Raw decisions from LLM response.
-        valid_doc_ids: Set of document_ids we sent to LLM.
-        batch_documents: The documents in the batch.
+        valid_doc_ids: Document IDs that were sent to the LLM.
+        batch_documents: Documents in the current batch.
 
     Returns:
-        Validated list of DocumentDecision.
+        Validated list of per-document decisions.
     """
     validated: List[DocumentDecision] = []
-    seen_ids: set = set()
+    seen_ids: Set[str] = set()
 
     valid_statuses = {"answered", "irrelevant", "needs_deep_research"}
 
@@ -584,7 +545,6 @@ def _validate_unified_decisions(
         doc_id = d.get("document_id", "")
         status = d.get("status", "")
 
-        # Skip if not in our batch, already seen, or invalid status
         if doc_id not in valid_doc_ids or doc_id in seen_ids:
             if doc_id and doc_id not in valid_doc_ids:
                 logger.warning("LLM returned unknown document_id: %s", doc_id)
@@ -600,70 +560,88 @@ def _validate_unified_decisions(
 
         seen_ids.add(doc_id)
 
+        finding = d.get("finding")
+        page_reference = d.get("page_reference") if status == "answered" else None
+
+        # If status is "answered" but no finding provided, switch to needs_deep_research
+        if status == "answered" and not finding:
+            logger.warning(
+                "Doc %s marked 'answered' but no finding provided, "
+                "switching to needs_deep_research",
+                doc_id,
+            )
+            status = "needs_deep_research"
+            finding = "No finding provided - requires full document research"
+            page_reference = None
+        elif status == "needs_deep_research" and not finding:
+            finding = "No finding provided"
+        elif status == "irrelevant" and not finding:
+            finding = "Not relevant to query"
+
         validated.append(
             {
                 "document_id": doc_id,
                 "status": status,
-                "finding": d.get("finding") if status == "answered" else None,
-                "page_reference": (
-                    d.get("page_reference") if status == "answered" else None
-                ),
-                "confidence": d.get("confidence") if status == "answered" else None,
-                "research_hint": (
-                    d.get("research_hint") if status == "needs_deep_research" else None
-                ),
+                "finding": finding,
+                "page_reference": page_reference,
             }
         )
 
-    # Add missing documents - default to needs_deep_research (safer assumption)
     for doc in batch_documents:
         if doc["document_id"] not in seen_ids:
             logger.warning(
-                "Document %s missing from LLM response, defaulting to needs_deep_research",
+                "Document %s missing from LLM response, "
+                "defaulting to needs_deep_research",
                 doc["document_id"],
             )
             validated.append(
                 {
                     "document_id": doc["document_id"],
                     "status": "needs_deep_research",
-                    "finding": None,
+                    "finding": "No finding provided",
                     "page_reference": None,
-                    "confidence": None,
-                    "research_hint": "Document was not evaluated by LLM",
                 }
             )
 
     return validated
 
 
-def _build_reference_index_from_decisions(
+def _build_findings_from_decisions(
     decisions: List[DocumentDecision],
     documents: List[DocumentMetadata],
-    start_ref_num: int = 1,
-) -> Dict[str, ReferenceEntry]:
-    """
-    Build reference index from answered decisions.
-
-    Only includes documents with status="answered" and a finding.
-    References are built from KNOWN document metadata.
+    db_source: str,
+) -> FindingsList:
+    """Build unified findings list from metadata decisions.
 
     Args:
         decisions: Per-document decisions with 3-way status.
         documents: Full document metadata list.
-        start_ref_num: Starting reference number (for merging with file research).
+        db_source: Database identifier.
 
     Returns:
-        Reference index dict keyed by reference number.
+        List of Finding objects in unified format.
     """
     doc_lookup = {doc["document_id"]: doc for doc in documents}
+    doc_order = {
+        doc["document_id"]: doc.get("document_index", idx)
+        for idx, doc in enumerate(documents, 1)
+    }
 
-    reference_index: Dict[str, ReferenceEntry] = {}
-    ref_num = start_ref_num
+    relevant_decisions = [
+        d
+        for d in decisions
+        if d.get("status") in {"answered", "needs_deep_research"}
+        and d.get("finding")
+    ]
 
-    for decision in decisions:
-        if decision.get("status") != "answered" or not decision.get("finding"):
-            continue
+    sorted_decisions = sorted(
+        relevant_decisions,
+        key=lambda d: doc_order.get(d.get("document_id", ""), float("inf")),
+    )
 
+    findings: FindingsList = []
+
+    for decision in sorted_decisions:
         doc_id = decision["document_id"]
         doc = doc_lookup.get(doc_id)
 
@@ -671,70 +649,70 @@ def _build_reference_index_from_decisions(
             logger.warning("Document not found for decision: %s", doc_id)
             continue
 
-        reference_index[str(ref_num)] = {
-            "doc_name": doc["document_name"],
-            "page": decision.get("page_reference"),
-            "file_link": doc.get("file_name"),
-            "file_name": doc.get("file_name"),
-            "source_filename": doc["document_name"],
-            "highlight_text": "",
+        findings.append({
             "document_id": doc_id,
+            "document_name": doc["document_name"],
+            "file_name": doc.get("file_name") or doc["document_name"],
+            "file_link": doc.get("file_name") or "",
+            "page": decision.get("page_reference"),
             "finding": decision.get("finding", ""),
-        }
-        ref_num += 1
+            "source": "metadata",
+            "db_source": db_source,
+        })
 
-    return reference_index
+    return findings
 
 
 def _format_unified_response(
     decisions: List[DocumentDecision],
     documents: List[DocumentMetadata],
-    start_ref_num: int = 1,
 ) -> str:
-    """
-    Format answered decisions into research response text.
+    """Format decisions into structured research response text.
 
     Args:
         decisions: Per-document decisions.
         documents: Full document metadata list.
-        start_ref_num: Starting reference number.
 
     Returns:
         Formatted research response string.
     """
     doc_lookup = {doc["document_id"]: doc for doc in documents}
-    response_parts = []
-    ref_num = start_ref_num
+    doc_order = {
+        doc["document_id"]: doc.get("document_index", idx)
+        for idx, doc in enumerate(documents, 1)
+    }
 
-    for decision in decisions:
-        if decision.get("status") != "answered" or not decision.get("finding"):
-            continue
+    sorted_decisions = sorted(
+        decisions,
+        key=lambda d: doc_order.get(d.get("document_id", ""), float("inf")),
+    )
 
-        doc = doc_lookup.get(decision["document_id"])
+    lines: List[str] = ["File # | Filename | Status | Finding | Page"]
+
+    for decision in sorted_decisions:
+        doc_id = decision.get("document_id")
+        doc = doc_lookup.get(doc_id)
         if not doc:
+            logger.warning("Document not found for formatting: %s", doc_id)
             continue
 
-        doc_name = doc["document_name"]
+        file_index = doc_order.get(doc_id)
+        index_label = str(file_index) if file_index is not None else "-"
+
+        filename = doc.get("file_name") or doc.get("document_name") or doc_id or "-"
+        status = decision.get("status", "")
+        finding = decision.get("finding") or ""
         page_ref = decision.get("page_reference")
-        finding_text = decision["finding"]
-        confidence = decision.get("confidence", "")
+        page_label = str(page_ref) if page_ref is not None else "-"
 
-        # Format with reference and confidence
-        if page_ref:
-            header = f"**{doc_name}** (p. {page_ref}) [REF:{ref_num}]"
-        else:
-            header = f"**{doc_name}** [REF:{ref_num}]"
+        lines.append(
+            f"File {index_label} | {filename} | {status} | {finding} | {page_label}"
+        )
 
-        if confidence:
-            header += f" _{confidence} confidence_"
-
-        response_parts.append(f"{header}:\n{finding_text}")
-        ref_num += 1
-
-    if not response_parts:
+    if len(lines) == 1:
         return ""
 
-    return "\n\n".join(response_parts)
+    return "\n".join(lines)
 
 
 def process_batch_unified(
@@ -743,9 +721,9 @@ def process_batch_unified(
     batch_number: int,
     total_batches: int,
     ctx: MetadataContext,
+    metadata_context_fields: Optional[List[str]] = None,
 ) -> Tuple[UnifiedBatchResult, Optional[Dict[str, Any]]]:
-    """
-    Process a batch with 3-way per-document decisions.
+    """Run LLM to produce per-document decisions for a batch.
 
     Args:
         research_statement: The research query.
@@ -753,9 +731,13 @@ def process_batch_unified(
         batch_number: Current batch number (1-indexed).
         total_batches: Total number of batches.
         ctx: Context with token, process_monitor, etc.
+        metadata_context_fields: Which metadata fields to include in document context.
 
     Returns:
         Tuple of (UnifiedBatchResult, usage_details).
+
+    Raises:
+        MetadataSubagentError: If the LLM call fails or responds unexpectedly.
     """
     logger.info(
         "Processing unified batch %d of %d (%d documents)",
@@ -764,29 +746,26 @@ def process_batch_unified(
         len(batch_documents),
     )
     usage_details = None
-    valid_doc_ids = {doc["document_id"] for doc in batch_documents}
+    valid_doc_ids: Set[str] = {doc["document_id"] for doc in batch_documents}
 
     try:
-        prompt = get_prompt("subagent", "metadata_unified_findings")
-        if not prompt:
-            raise ValueError("Prompt not found: subagent/metadata_unified_findings")
+        system_prompt, tools, user_template = fetch_prompt_with_context(
+            "subagent", "metadata_unified_findings"
+        )
 
-        formatted_docs = _format_batch_documents(batch_documents)
+        formatted_docs = _format_batch_documents(batch_documents, metadata_context_fields)
 
-        system_prompt = prompt.get("system_prompt", "")
         user_prompt = (
-            prompt.get("user_prompt", "")
-            .replace("{{research_statement}}", research_statement)
+            user_template.replace("{{research_statement}}", research_statement)
             .replace("{{batch_number}}", str(batch_number))
             .replace("{{total_batches}}", str(total_batches))
             .replace("{{document_count}}", str(len(batch_documents)))
             .replace("{{batch_documents}}", formatted_docs)
         )
 
-        model_config = config.get_model_config(MODEL_CAPABILITY)
-        tools = [prompt.get("tool_definition")] if prompt.get("tool_definition") else []
+        model_config = config.get_model_settings(MODEL_CAPABILITY)
 
-        result = call_llm(
+        result = execute_llm_call(
             oauth_token=ctx.get("token") or "placeholder_token",
             model=model_config["name"],
             messages=[
@@ -810,13 +789,11 @@ def process_batch_unified(
         else:
             response = result
 
-        # Track usage
         process_monitor = ctx.get("process_monitor")
         stage_name = ctx.get("stage_name")
         if usage_details and process_monitor and stage_name:
             process_monitor.add_llm_call_details_to_stage(stage_name, usage_details)
 
-        # Parse tool response - must get valid decisions
         if not (
             response
             and hasattr(response, "choices")
@@ -831,7 +808,8 @@ def process_batch_unified(
         tool_call = response.choices[0].message.tool_calls[0]
         if tool_call.function.name != "return_unified_decisions":
             raise MetadataSubagentError(
-                f"Unexpected tool call '{tool_call.function.name}' for unified batch {batch_number}"
+                f"Unexpected tool call '{tool_call.function.name}' "
+                f"for unified batch {batch_number}"
             )
 
         arguments = json.loads(tool_call.function.arguments)
@@ -855,51 +833,31 @@ def process_batch_unified(
         ) from exc
 
 
-def query_metadata_unified(
+def execute_unified_metadata_query(
     research_statement: str,
     db_source: str,
     query_context: Optional[MetadataContext] = None,
     mode: str = "metadata_research",
 ) -> UnifiedMetadataResult:
-    """
-    Query document metadata with mode-dependent processing.
-
-    Two processing modes based on query type:
-
-    **file_selection mode** (for selective/non-DB-wide queries):
-    - Uses top 1 chunk per file (minimal context)
-    - LLM SELECTS which files to deep research (binary yes/no)
-    - ALL selected files go to deep research
-    - Used when clarifier determines query is NOT DB-wide
-
-    **metadata_research mode** (for DB-wide queries):
-    - Uses top 3 chunks per file (more context for answering)
-    - LLM makes 3-way decision: answered/irrelevant/needs_deep_research
-    - Only "needs_deep_research" files go to deep research
-    - Used when clarifier determines query IS DB-wide
+    """Query metadata and branch into file selection or metadata research.
 
     Args:
         research_statement: The research query/statement.
-        db_source: Database source to query (e.g., 'internal_capm').
-        query_context: Context dict containing:
-            - token: OAuth token
-            - process_monitor: For tracking
-            - stage_name: For tracking
-            - query_embedding: Required, pre-computed by planner
-        mode: Processing mode - "file_selection" or "metadata_research"
-            (default: "metadata_research" for backward compatibility)
+        db_source: Database source to query.
+        query_context: Context dict containing OAuth token, process tracking, and
+            required `query_embedding`.
+        mode: "file_selection" (select files only) or "metadata_research" (answer if
+            possible from metadata).
 
     Returns:
-        UnifiedMetadataResult with:
-        - answered_findings: Documents answered from metadata (empty for file_selection)
-        - needs_research_doc_ids: Document IDs for deep research
-        - irrelevant_count: Count of irrelevant documents
-        - answered_response: Formatted response from answered findings
-        - answered_reference_index: Reference index from answered
+        UnifiedMetadataResult containing answered findings and document IDs for deep
+        research.
+
+    Raises:
+        MetadataSubagentError: If the mode, config, or inputs are invalid.
     """
     ctx = query_context or {}
 
-    # Validate mode - strict, no fallback
     if mode not in ("file_selection", "metadata_research"):
         raise MetadataSubagentError(
             f"Invalid mode '{mode}'. Must be 'file_selection' or 'metadata_research'."
@@ -912,7 +870,6 @@ def query_metadata_unified(
         research_statement[:100],
     )
 
-    # Query embedding is required - no fallback
     query_embedding = ctx.get("query_embedding")
     if query_embedding is None:
         raise MetadataSubagentError(
@@ -920,30 +877,32 @@ def query_metadata_unified(
             "Query embedding must be pre-computed by planner."
         )
 
-    # Load config - will raise MetadataSubagentError if config unavailable
     research_config = _get_research_config(db_source)
     batch_size = research_config["batch_size"]
     max_selected_files = research_config["max_selected_files"]
+    metadata_context_fields = research_config["metadata_context_fields"]
 
-    # Mode-dependent chunk count from config:
-    # - file_selection: top_chunks_in_catalog_selection (typically 1)
-    # - metadata_research: top_chunks_in_metadata_research (typically 3)
-    if mode == "file_selection":
-        top_chunks = research_config["top_chunks_in_catalog_selection"]
-    else:
-        top_chunks = research_config["top_chunks_in_metadata_research"]
+    top_chunks = (
+        research_config["top_chunks_in_catalog_selection"]
+        if mode == "file_selection"
+        else research_config["top_chunks_in_metadata_research"]
+    )
 
     logger.info(
-        "Config for %s (mode=%s): batch_size=%d, top_chunks=%d, max_selected_files=%d",
+        "Config for %s (mode=%s): batch_size=%d, top_chunks=%d, max_selected_files=%d, "
+        "metadata_context_fields=%s",
         db_source,
         mode,
         batch_size,
         top_chunks,
         max_selected_files,
+        metadata_context_fields,
     )
 
-    # Fetch all documents
-    all_documents = fetch_all_documents(db_source, query_embedding, top_chunks)
+    all_documents = fetch_all_document_metadata(db_source, query_embedding, top_chunks)
+
+    for idx, doc in enumerate(all_documents, 1):
+        doc["document_index"] = doc.get("document_index", idx)
 
     if not all_documents:
         return {
@@ -951,30 +910,23 @@ def query_metadata_unified(
             "needs_research_doc_ids": [],
             "irrelevant_count": 0,
             "answered_response": f"No documents found in {db_source}.",
-            "answered_reference_index": {},
+            "findings": [],
         }
 
-    # ==========================================================================
-    # MODE-DEPENDENT PROCESSING
-    # ==========================================================================
-
     if mode == "file_selection":
-        # FILE SELECTION MODE (for selective/non-DB-wide queries)
-        # - LLM selects files from catalog (binary yes/no)
-        # - ALL selected files go to deep research
-        # - No answered findings (selection only, not answering)
         logger.info(
             "File selection mode: selecting files from %d documents",
             len(all_documents),
         )
 
-        selected_ids, reasoning = process_catalog_selection(
+        selected_ids, _reasoning = process_catalog_file_selection(
             research_statement=research_statement,
             db_source=db_source,
             all_documents=all_documents,
             batch_size=batch_size,
             max_selected_files=max_selected_files,
             ctx=ctx,
+            metadata_context_fields=metadata_context_fields,
         )
 
         logger.info(
@@ -983,88 +935,80 @@ def query_metadata_unified(
             len(selected_ids),
         )
 
-        # For file_selection mode, ALL selected files go to deep research
-        # No answered findings - this is selection, not answering
         return {
             "answered_findings": [],
             "needs_research_doc_ids": selected_ids,
             "irrelevant_count": len(all_documents) - len(selected_ids),
-            "answered_response": "",  # No response - just selection
-            "answered_reference_index": {},
+            "answered_response": "",
+            "findings": [],  # File selection mode has no metadata findings
         }
 
-    else:
-        # METADATA RESEARCH MODE (for DB-wide queries)
-        # - LLM makes 3-way decisions: answered/irrelevant/needs_deep_research
-        # - Only "needs_deep_research" files go to deep research
-        logger.info(
-            "Metadata research mode: processing %d documents with 3-way decisions",
-            len(all_documents),
-        )
+    logger.info(
+        "Metadata research mode: processing %d documents with 3-way decisions",
+        len(all_documents),
+    )
 
-        # Create batches
-        batches = [
-            all_documents[i : i + batch_size]
-            for i in range(0, len(all_documents), batch_size)
-        ]
-        total_batches = len(batches)
-        logger.info("Created %d batches for sequential processing", total_batches)
+    batches = [
+        all_documents[i : i + batch_size]
+        for i in range(0, len(all_documents), batch_size)
+    ]
+    total_batches = len(batches)
+    logger.info("Created %d batches for sequential processing", total_batches)
 
-        # Process batches sequentially
-        all_decisions: List[DocumentDecision] = []
+    all_decisions: List[DocumentDecision] = []
 
-        for batch_num, batch_docs in enumerate(batches, 1):
-            try:
-                batch_result, _ = process_batch_unified(
-                    research_statement,
-                    batch_docs,
-                    batch_num,
-                    total_batches,
-                    ctx,
-                )
-                all_decisions.extend(batch_result["document_decisions"])
-                logger.info(
-                    "Metadata research batch %d/%d complete: %d decisions",
-                    batch_num,
-                    total_batches,
-                    len(batch_result["document_decisions"]),
-                )
-            except Exception as exc:
-                logger.error(
-                    "Metadata research batch %d failed: %s",
-                    batch_num,
-                    exc,
-                    exc_info=True,
-                )
-                raise
+    for batch_num, batch_docs in enumerate(batches, 1):
+        try:
+            batch_result, _ = process_batch_unified(
+                research_statement,
+                batch_docs,
+                batch_num,
+                total_batches,
+                ctx,
+                metadata_context_fields=metadata_context_fields,
+            )
+            all_decisions.extend(batch_result["document_decisions"])
+            logger.info(
+                "Metadata research batch %d/%d complete: %d decisions",
+                batch_num,
+                total_batches,
+                len(batch_result["document_decisions"]),
+            )
+        except Exception as exc:
+            logger.error(
+                "Metadata research batch %d failed: %s",
+                batch_num,
+                exc,
+                exc_info=True,
+            )
+            raise
 
-        # Categorize decisions
-        answered_findings = [d for d in all_decisions if d.get("status") == "answered"]
-        needs_research = [
-            d for d in all_decisions if d.get("status") == "needs_deep_research"
-        ]
-        irrelevant = [d for d in all_decisions if d.get("status") == "irrelevant"]
+    answered_findings = [d for d in all_decisions if d.get("status") == "answered"]
+    needs_research = [
+        d for d in all_decisions if d.get("status") == "needs_deep_research"
+    ]
+    irrelevant = [d for d in all_decisions if d.get("status") == "irrelevant"]
 
-        needs_research_doc_ids = [d["document_id"] for d in needs_research]
+    needs_research_doc_ids = [d["document_id"] for d in needs_research]
 
-        logger.info(
-            "Metadata research complete for %s: %d answered, %d need research, %d irrelevant",
-            db_source,
-            len(answered_findings),
-            len(needs_research),
-            len(irrelevant),
-        )
+    logger.info(
+        "Metadata research complete for %s: "
+        "%d answered, %d need research, %d irrelevant",
+        db_source,
+        len(answered_findings),
+        len(needs_research),
+        len(irrelevant),
+    )
 
-        # Build response and reference index from answered findings
-        answered_response = _format_unified_response(answered_findings, all_documents)
-        answered_reference_index = _build_reference_index_from_decisions(
-            answered_findings, all_documents
-        )
+    answered_response = _format_unified_response(all_decisions, all_documents)
+    findings = _build_findings_from_decisions(
+        all_decisions, all_documents, db_source
+    )
 
-        return {
-            "answered_findings": answered_findings,
-            "needs_research_doc_ids": needs_research_doc_ids,
-            "irrelevant_count": len(irrelevant),
-            "answered_response": answered_response,
-            "answered_reference_index": answered_reference_index,
-        }
+    return {
+        "answered_findings": answered_findings,
+        "needs_research_doc_ids": needs_research_doc_ids,
+        "irrelevant_count": len(irrelevant),
+        "answered_response": answered_response,
+        "findings": findings,
+    }

@@ -1,0 +1,49 @@
+db_source: internal_intragroup_memos
+db_name: Intragroup Reconciliation Memos
+db_summary: Documentation regarding the permanent material intergroup revenue breaks, including reconciliation analysis and
+  entity-level break identification.
+db_description: '**Content:** Documentation of permanent material intergroup revenue breaks, including reconciliation analysis
+  and entity-level break identification.
+
+
+  **Tier/Priority:** DOMAIN EXPERT - Specialized guidance for intergroup reconciliation and permanent break handling.
+
+
+  **Usage Guidance:** Use for questions on classifying, documenting, and explaining intergroup revenue discrepancies, including
+  entity attribution and reconciliation procedures.
+
+
+  **When to Select:** Queries mentioning intergroup/IG reconciliation, permanent revenue breaks, entity-level discrepancies,
+  OU/CPOU/LE/CE codes, or procedures for analyzing and documenting revenue breaks.
+
+
+  **Query Tips:** Use terms like ''IG'', ''intergroup'', ''breaks'', ''revenue breaks'', ''permanent breaks'', ''insurance
+  break'', ''OU'', ''CPOU'', ''LE'', ''CE'', ''intergroup reconciliation''.
+
+
+  **Query Type:** semantic search'
+enabled: true
+search_modes:
+- catalog
+- semantic
+ad_groups:
+- all_users
+- local_dev
+batch_size: 10
+max_selected_files: 10
+top_chunks_in_catalog_selection: 1
+top_chunks_in_metadata_research: 3
+page_threshold_for_full_content: 150
+enable_db_wide_deep_research: true
+max_parallel_files: 5
+max_chunks_per_file: 20
+metadata_context_fields:
+- document_summary
+catalog_config: null
+semantic_config: null
+metadata_config: null
+sample_questions:
+- What qualifies as a permanent break in the intergroup revenue reconciliation?
+- How should revenue breaks be attributed across legal entities and OUs/CPOUs?
+- What steps are recommended to investigate recurring intergroup revenue differences?
+- How are insurance-related intergroup breaks documented?

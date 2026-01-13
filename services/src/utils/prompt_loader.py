@@ -1,60 +1,47 @@
 """
 Prompt Loader Module.
 
-Loads agent and global prompts from PostgreSQL database.
-Provides composition of global prompts into agent system prompts.
+Loads prompts from PostgreSQL and injects context based on layer.
 
 Functions:
-    get_prompt: Get a prompt from the database
-    get_global_prompt: Get a global prompt by name
-    compose_system_prompt: Compose a system prompt with globals
-    get_composed_prompt: Get a fully composed prompt
+    fetch_prompt_from_database: Get raw prompt from database (internal)
+    fetch_prompt_with_context: Get prompt with context injected (main entry point)
 """
 
 import logging
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
-from ..connections.postgres import get_session
-from .fiscal_context import get_fiscal_statement
-
-try:
-    from ..agent.tools.database_metadata import (
-        get_database_statement,
-        get_filtered_database_statement,
-    )
-
-    _DATABASE_METADATA_AVAILABLE = True
-except ImportError:
-    _DATABASE_METADATA_AVAILABLE = False
+from ..connections.postgres import get_database_session
+from .fiscal_context import generate_fiscal_context_statement
 
 logger = logging.getLogger(__name__)
 
-GLOBAL_PROMPT_ORDER = ["project", "fiscal", "database", "restrictions"]
-
-_prompt_cache: Dict[str, Dict] = {}
+_prompt_cache: Dict[str, Dict[str, Any]] = {}
 
 
-def get_prompt(layer: str, name: str, model: str = "iris") -> Optional[Dict]:
-    """
-    Get a prompt from the database with caching.
+def fetch_prompt_from_database(
+    layer: str, name: str, model: str = "iris"
+) -> Optional[Dict[str, Any]]:
+    """Fetch a prompt from the database with caching.
 
     Args:
-        layer: Prompt layer (agent, subagent, global).
-        name: Prompt name.
-        model: Model identifier.
+        layer (str): Prompt layer (agent, subagent, global).
+        name (str): Prompt name.
+        model (str): Model identifier.
 
     Returns:
-        Dict with prompt data or None if not found.
+        Optional[Dict[str, Any]]: Prompt fields if found, otherwise None.
     """
     cache_key = f"{model}/{layer}/{name}"
 
     if cache_key in _prompt_cache:
-        return _prompt_cache[cache_key]
+        return _prompt_cache[cache_key].copy()
 
     try:
-        with get_session() as session:
+        with get_database_session() as session:
             result = session.execute(
                 text(
                     """
@@ -82,151 +69,146 @@ def get_prompt(layer: str, name: str, model: str = "iris") -> Optional[Dict]:
                 "description": row[4],
             }
             _prompt_cache[cache_key] = prompt_data
-            return prompt_data
+            return prompt_data.copy()
 
-    except (ValueError, TypeError, KeyError, RuntimeError, OSError) as exc:
+    except (
+        SQLAlchemyError,
+        ValueError,
+        TypeError,
+        KeyError,
+        RuntimeError,
+        OSError,
+    ) as exc:
         logger.error("Error loading prompt %s: %s", cache_key, exc)
         return None
 
 
-def get_global_prompt(name: str) -> str:
-    """
-    Get a global prompt by name.
-
-    Special handling for dynamic prompts:
-    - 'fiscal': Generated dynamically based on current date
-    - 'database': Generated from iris_database_registry
-
-    Args:
-        name: Global prompt name (project, restrictions, fiscal, database).
-
-    Returns:
-        The global prompt content.
-    """
-    if name == "fiscal":
-        return get_fiscal_statement()
-
-    if name == "database":
-        if not _DATABASE_METADATA_AVAILABLE:
-            logger.warning("database_metadata module not available")
-            return ""
-        return get_database_statement()
-
-    prompt = get_prompt("global", name)
-    if prompt:
-        return prompt.get("system_prompt", "")
-    return ""
-
-
-def compose_system_prompt(
-    base_prompt: str,
-    uses_global: List[str],
-    context_placeholder: str = "{{CONTEXT_START}}",
+def _format_database_context_block(
+    available_databases: Optional[Dict[str, Any]]
 ) -> str:
-    """
-    Compose a system prompt by inserting global prompts.
-
-    The base prompt should contain {{CONTEXT_START}} which gets replaced
-    with all the global context statements.
+    """Build an XML-like string describing available databases.
 
     Args:
-        base_prompt: The agent's base system prompt.
-        uses_global: List of global prompt names to include.
-        context_placeholder: Placeholder to replace (default: {{CONTEXT_START}}).
+        available_databases (Optional[Dict[str, Any]]): Database configs keyed by
+            identifier. If None, a fallback loader is used.
 
     Returns:
-        Composed system prompt with globals inserted.
+        str: Structured description of databases for prompt injection.
     """
-    if not uses_global:
-        return base_prompt.replace(context_placeholder, "")
+    if available_databases is None:
+        try:
+            from ..agent.tools.database_metadata import fetch_available_databases
 
-    ordered_globals = [name for name in GLOBAL_PROMPT_ORDER if name in uses_global]
-    ordered_globals.extend(name for name in uses_global if name not in ordered_globals)
+            available_databases = fetch_available_databases()
+        except ImportError:
+            logger.warning("database_metadata module not available")
+            return (
+                "<AVAILABLE_DATABASES>\n"
+                "Database information not available.\n"
+                "</AVAILABLE_DATABASES>"
+            )
 
-    context_parts = []
-    for name in ordered_globals:
-        content = get_global_prompt(name)
-        if content:
-            context_parts.append(content)
+    if not available_databases:
+        return (
+            "<AVAILABLE_DATABASES>\n"
+            "No databases available.\n"
+            "</AVAILABLE_DATABASES>"
+        )
 
-    context_block = "\n\n".join(context_parts)
+    lines: List[str] = ["<AVAILABLE_DATABASES>"]
 
-    if context_placeholder in base_prompt:
-        return base_prompt.replace(context_placeholder, context_block)
-    return context_block + "\n\n" + base_prompt
+    def _render_section(db_items: Dict[str, Any], tag: str) -> None:
+        if not db_items:
+            return
+        lines.append(f"<{tag}>")
+        for db_name, db_info in db_items.items():
+            name = db_info.get("name", db_name)
+            description = db_info.get("description", "")
+            lines.extend(
+                [
+                    f'<DATABASE id="{db_name}">',
+                    f"  <NAME>{name}</NAME>",
+                    f"  <DESCRIPTION>{description}</DESCRIPTION>",
+                    "</DATABASE>",
+                ]
+            )
+        lines.append(f"</{tag}>")
+
+    internal_dbs = {
+        key: value
+        for key, value in available_databases.items()
+        if key.startswith("internal_")
+    }
+    external_dbs = {
+        key: value
+        for key, value in available_databases.items()
+        if key.startswith("external_")
+    }
+    _render_section(internal_dbs, "INTERNAL_DATABASES")
+    _render_section(external_dbs, "EXTERNAL_DATABASES")
+
+    lines.append("</AVAILABLE_DATABASES>")
+    return "\n".join(lines)
 
 
-def _build_filtered_context(uses_global: List[str], filtered_stmt: str) -> str:
-    """Build context block with filtered database statement."""
-    context_parts = []
-    for global_name in GLOBAL_PROMPT_ORDER:
-        if global_name not in uses_global:
-            continue
-        if global_name == "database":
-            context_parts.append(filtered_stmt)
-        else:
-            content = get_global_prompt(global_name)
-            if content:
-                context_parts.append(content)
-    return "\n\n".join(context_parts)
-
-
-def get_composed_prompt(
+def fetch_prompt_with_context(
     layer: str,
     name: str,
     model: str = "iris",
-    filtered_database: bool = False,
-    db_names: Optional[List[str]] = None,
-) -> Tuple[str, Optional[List[Dict]], Optional[str]]:
-    """
-    Get a fully composed prompt with global contexts inserted.
+    available_databases: Optional[Dict[str, Any]] = None,
+) -> Tuple[str, List[Any], str]:
+    """Load a prompt and inject context appropriate for the given layer.
+
+    For agent layers the fiscal and database contexts are injected; subagents
+    only receive fiscal context; global layers are passed through unchanged.
 
     Args:
-        layer: Prompt layer (agent, subagent).
-        name: Prompt name.
-        model: Model identifier (default: iris).
-        filtered_database: If True, use filtered database statement.
-        db_names: List of database names to filter to (for planner).
+        layer (str): Prompt layer (agent, subagent, global).
+        name (str): Prompt name.
+        model (str): Model identifier.
+        available_databases (Optional[Dict[str, Any]]): Pre-filtered databases for
+            agent prompts. When None, all available databases are loaded.
 
     Returns:
-        Tuple of (composed_system_prompt, tools_list, user_prompt_template).
-        The user_prompt_template may contain placeholders like {{conversation}},
-        {{research_statement}}, etc. that the caller should replace.
+        Tuple[str, List[Any], str]: System prompt (with context), list of tool
+        definitions (or an empty list), and the user prompt template.
 
     Raises:
-        ValueError: If prompt is not found.
+        ValueError: If the requested prompt cannot be found.
     """
-    prompt = get_prompt(layer, name, model)
+    prompt = fetch_prompt_from_database(layer, name, model)
     if not prompt:
         raise ValueError(f"Prompt not found: {model}/{layer}/{name}")
 
-    base_prompt = prompt.get("system_prompt", "")
-    uses_global = prompt.get("uses_global", [])
+    system_prompt = prompt.get("system_prompt", "")
     tool_definition = prompt.get("tool_definition")
-    user_prompt = prompt.get("user_prompt")
+    user_prompt = prompt.get("user_prompt", "")
 
-    composed = _compose_with_database_handling(
-        base_prompt, uses_global, filtered_database, db_names
-    )
+    inject_fiscal = layer in ("agent", "subagent")
+    inject_database = layer == "agent"
 
-    tools = [tool_definition] if tool_definition else None
+    if inject_fiscal and "{{FISCAL_CONTEXT}}" in system_prompt:
+        system_prompt = system_prompt.replace(
+            "{{FISCAL_CONTEXT}}", generate_fiscal_context_statement()
+        )
 
-    return composed, tools, user_prompt
+    if inject_database and "{{DATABASE_CONTEXT}}" in system_prompt:
+        db_statement = _format_database_context_block(available_databases)
+        system_prompt = system_prompt.replace("{{DATABASE_CONTEXT}}", db_statement)
 
+    if not inject_fiscal and "{{FISCAL_CONTEXT}}" in system_prompt:
+        logger.warning(
+            "Prompt %s/%s has {{FISCAL_CONTEXT}} but layer doesn't inject it",
+            layer,
+            name,
+        )
+    if not inject_database and "{{DATABASE_CONTEXT}}" in system_prompt:
+        logger.warning(
+            "Prompt %s/%s has {{DATABASE_CONTEXT}} but layer doesn't inject it",
+            layer,
+            name,
+        )
 
-def _compose_with_database_handling(
-    base_prompt: str,
-    uses_global: List[str],
-    filtered_database: bool,
-    db_names: Optional[List[str]],
-) -> str:
-    """Compose prompt, handling filtered database if requested."""
-    if not filtered_database or "database" not in uses_global:
-        return compose_system_prompt(base_prompt, uses_global)
+    tools = [tool_definition] if tool_definition else []
 
-    if not _DATABASE_METADATA_AVAILABLE:
-        return compose_system_prompt(base_prompt, uses_global)
-
-    filtered_stmt = get_filtered_database_statement(db_names)
-    context_block = _build_filtered_context(uses_global, filtered_stmt)
-    return base_prompt.replace("{{CONTEXT_START}}", context_block)
+    return system_prompt, tools, user_prompt

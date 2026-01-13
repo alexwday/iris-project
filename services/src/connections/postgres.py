@@ -1,18 +1,9 @@
-"""
-PostgreSQL Database Connection Module.
-
-Provides SQLAlchemy-based database access with connection pooling.
-All database parameters are loaded from environment variables.
-
-Functions:
-    get_session: Context manager for database sessions (main interface)
-    get_engine: Direct engine access for advanced use cases
-    construct_dsn: Build database connection string from parameters
-"""
+"""PostgreSQL database connections via SQLAlchemy with connection pooling."""
 
 import logging
 from contextlib import contextmanager
 from typing import Any, Callable, Dict, Generator, Optional
+from urllib.parse import quote_plus
 
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
@@ -32,11 +23,15 @@ class _ConnectionManager:
         self._engine: Optional[Engine] = None
         self._factory: Optional[Callable[[], Session]] = None
 
-    def get_engine(self) -> Engine:
-        """Get or create the SQLAlchemy engine."""
+    def get_database_engine(self) -> Engine:
+        """Return a pooled SQLAlchemy engine.
+
+        Returns:
+            Engine: Shared engine instance.
+        """
         if self._engine is None:
-            params = _get_db_params()
-            dsn = construct_dsn(params)
+            params = _get_database_params()
+            dsn = build_database_dsn(params)
             logger.info("Creating SQLAlchemy engine with connection pooling")
             self._engine = create_engine(
                 dsn,
@@ -49,9 +44,13 @@ class _ConnectionManager:
         return self._engine
 
     def get_session_factory(self) -> Callable[[], Session]:
-        """Get or create the session factory."""
+        """Return a session factory bound to the engine.
+
+        Returns:
+            Callable[[], Session]: Factory that yields sessions.
+        """
         if self._factory is None:
-            engine = self.get_engine()
+            engine = self.get_database_engine()
             self._factory = sessionmaker(bind=engine, expire_on_commit=False)
         return self._factory
 
@@ -59,97 +58,98 @@ class _ConnectionManager:
 _connection_manager = _ConnectionManager()
 
 
-def _get_db_params() -> Dict[str, Any]:
-    """
-    Get database connection parameters from environment configuration.
+def _get_database_params() -> Dict[str, Any]:
+    """Return database connection parameters from environment configuration.
 
     Returns:
-        Dictionary with database connection parameters.
+        Dict[str, Any]: Raw database connection parameters.
     """
     logger.debug("Getting database parameters from environment configuration")
-    return config.get_db_params()
+    return config.get_database_params()
 
 
-def construct_dsn(params: Dict[str, Any]) -> str:
-    """
-    Construct SQLAlchemy DSN from database parameters.
-
-    This function can be patched for local development to disable SSL.
+def build_database_dsn(params: Dict[str, Any]) -> str:
+    """Build SQLAlchemy DSN from database parameters.
 
     Args:
         params: Database connection parameters.
 
     Returns:
-        SQLAlchemy connection string.
+        str: SQLAlchemy connection string.
 
     Raises:
-        ValueError: If host is not set or port/host count mismatch.
+        ValueError: If required parameters are missing or invalid.
     """
-    hosts = params.get("host")
-    if not hosts:
-        raise ValueError("Host is not set or is empty.")
-
-    hosts = hosts.split(",")
-    port = params.get("port")
+    raw_hosts = params.get("host", "")
+    raw_ports = str(params.get("port", "")).strip()
     database = params.get("dbname")
     user = params.get("user")
     password = params.get("password")
 
-    logger.info("Using database: %s", database)
-    logger.info("Using host(s): %s", hosts)
-    logger.info("Using port(s): %s", port)
+    if not raw_hosts:
+        raise ValueError("Host is not set or is empty.")
+    hosts = [host.strip() for host in raw_hosts.split(",") if host.strip()]
+    if not hosts:
+        raise ValueError("Host is not set or is empty.")
 
-    if "," in str(port):
-        ports = port.split(",")
-        if len(ports) != len(hosts):
-            raise ValueError("The number of ports must match the number of hosts.")
+    if not raw_ports:
+        raise ValueError("Port is not set or is empty.")
+    if "," in raw_ports:
+        ports = [port.strip() for port in raw_ports.split(",") if port.strip()]
     else:
-        ports = [port] * len(hosts)
+        ports = [raw_ports] * len(hosts)
+    if len(ports) != len(hosts):
+        raise ValueError("The number of ports must match the number of hosts.")
 
-    primary_host_port = f"{hosts[0]}:{ports[0]}"
-    dsn = (
-        f"postgresql+psycopg2://{user}:{password}@{primary_host_port}/{database}?"
-        f"sslmode=require&target_session_attrs=read-write"
+    if not database:
+        raise ValueError("Database name is not set.")
+    if not user:
+        raise ValueError("Database user is not set.")
+    if password is None:
+        raise ValueError("Database password is not set.")
+
+    host_port = ",".join(f"{host}:{port}" for host, port in zip(hosts, ports))
+    safe_user = quote_plus(str(user))
+    safe_password = quote_plus(str(password))
+    safe_database = quote_plus(str(database))
+
+    logger.info("Using database: %s", database)
+    logger.info("Using host(s): %s", host_port)
+    logger.info("Using port(s): %s", ports)
+
+    # Use sslmode=prefer for local development (localhost), require for production
+    is_local = all(h in ("localhost", "127.0.0.1") for h in hosts)
+    sslmode = "prefer" if is_local else "require"
+
+    return (
+        f"postgresql+psycopg2://{safe_user}:{safe_password}@{host_port}/{safe_database}"
+        f"?sslmode={sslmode}&target_session_attrs=read-write"
     )
-
-    return dsn
 
 
 @contextmanager
-def get_session() -> Generator[Session, None, None]:
-    """
-    Context manager for SQLAlchemy database sessions.
-
-    Provides automatic commit on success and rollback on error.
-
-    Usage:
-        with get_session() as session:
-            result = session.execute(text("SELECT * FROM table"))
-            rows = result.mappings().all()
+def get_database_session() -> Generator[Session, None, None]:
+    """Yield a SQLAlchemy session with automatic commit/rollback handling.
 
     Yields:
-        SQLAlchemy session object.
+        Session: Active SQLAlchemy session.
     """
     factory = _connection_manager.get_session_factory()
     session = factory()
     try:
         yield session
         session.commit()
-    except (ValueError, TypeError, KeyError, RuntimeError) as exc:
+    except Exception as exc:
         session.rollback()
         raise exc
     finally:
         session.close()
 
 
-def get_engine() -> Engine:
-    """
-    Get the SQLAlchemy engine for direct access.
-
-    Use this only when you need direct engine access (e.g., for pd.read_sql).
-    For most operations, use get_session() context manager instead.
+def get_database_engine() -> Engine:
+    """Return the shared SQLAlchemy engine for direct access.
 
     Returns:
-        SQLAlchemy engine object.
+        Engine: Shared SQLAlchemy engine.
     """
-    return _connection_manager.get_engine()
+    return _connection_manager.get_database_engine()

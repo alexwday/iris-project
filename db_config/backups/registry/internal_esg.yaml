@@ -1,0 +1,49 @@
+db_source: internal_esg
+db_name: Internal ESG Guidance
+db_summary: RBC's policies and frameworks for ESG disclosures, including the ESG Materiality Framework and guidance on evaluating
+  changes to prior period ESG information, aligned with global standards like ISSB and CSRD.
+db_description: '**Content:** RBC''s policies and frameworks for ESG disclosures, including the ESG Materiality Framework
+  and guidance on evaluating changes to prior period ESG information aligned with ISSB and CSRD expectations.
+
+
+  **Tier/Priority:** DOMAIN EXPERT - Specialized ESG reporting policy and disclosure guidance.
+
+
+  **Usage Guidance:** Use for ESG reporting requirements, materiality assessments, treatment of prior period changes, and
+  alignment with external ESG frameworks.
+
+
+  **When to Select:** Queries about ESG materiality thresholds, handling prior period ESG adjustments, required ESG metrics/disclosures,
+  ISSB or CSRD alignment, or treatment of ESG measurement uncertainty.
+
+
+  **Query Tips:** Use terms like ''ESG materiality'', ''prior period ESG'', ''ISSB alignment'', ''CSRD'', ''ESG metrics'',
+  ''sustainability report'', ''measurement uncertainty''.
+
+
+  **Query Type:** semantic search'
+enabled: true
+search_modes:
+- catalog
+- semantic
+ad_groups:
+- all_users
+- local_dev
+batch_size: 10
+max_selected_files: 10
+top_chunks_in_catalog_selection: 1
+top_chunks_in_metadata_research: 3
+page_threshold_for_full_content: 150
+enable_db_wide_deep_research: true
+max_parallel_files: 5
+max_chunks_per_file: 20
+metadata_context_fields:
+- document_summary
+catalog_config: null
+semantic_config: null
+metadata_config: null
+sample_questions:
+- If something isn't material should it still go into the Sustainability Report?
+- Is there a threshold for materiality?
+- How to treat measurement uncertainty in the ESG framework?
+- What are the ESG guidelines for revising materiality from prior reporting periods?

@@ -1,0 +1,49 @@
+db_source: internal_par
+db_name: Project Approval Request Guidance
+db_summary: RBC's internal policies and interpretations specifically related to Project Approval Requests (PAR), including
+  workflow, processes, and compliance requirements.
+db_description: '**Content:** RBC''s internal policies and interpretations for Project Approval Requests (PAR), including
+  workflow, processes, and compliance requirements.
+
+
+  **Tier/Priority:** DOMAIN EXPERT - Specialized guidance for PAR governance and approvals.
+
+
+  **Usage Guidance:** Use for approval level rules, required documentation, workflow steps, and governance expectations for
+  PAR submissions.
+
+
+  **When to Select:** Queries mentioning PAR approval thresholds, required meetings or governance steps, addendum requirements,
+  workflow roles, or compliance obligations for project approvals.
+
+
+  **Query Tips:** Use RBC terms and reference PAR processes/workflows. Include terms like ''PAR'', ''project approval'', ''approval
+  level'', ''addendum'', ''GE meeting'', ''GOCx meeting''.
+
+
+  **Query Type:** semantic search'
+enabled: true
+search_modes:
+- catalog
+- semantic
+ad_groups:
+- all_users
+- local_dev
+batch_size: 10
+max_selected_files: 10
+top_chunks_in_catalog_selection: 1
+top_chunks_in_metadata_research: 3
+page_threshold_for_full_content: 150
+enable_db_wide_deep_research: true
+max_parallel_files: 5
+max_chunks_per_file: 20
+metadata_context_fields:
+- document_summary
+catalog_config: null
+semantic_config: null
+metadata_config: null
+sample_questions:
+- What would the approval level be if i had a Contract PAR greater than $200MM?
+- Who is responsible for the fulfillment of all monitoring, reporting, and follow up of the PAR?
+- According to RBC PAR when is an addendum required?
+- How do I know if my PAR requires a GE or GOCx meeting?

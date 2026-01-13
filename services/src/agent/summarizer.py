@@ -1,23 +1,11 @@
-"""
-Summarizer Agent Module.
-
-Generates the final research summary based on aggregated detailed research
-findings from various databases. Part of the IRIS cascading retrieval
-architecture.
-
-Functions:
-    generate_streaming_summary: Generate a streaming summary from research findings
-
-Classes:
-    SummarizerError: Exception for summarizer-related errors
-"""
+"""Summarizer agent for generating final research summaries."""
 
 import logging
 from typing import Any, Dict, Generator, Optional
 
-from ..connections.llm import call_llm
+from ..connections.llm import execute_llm_call
 from ..utils.env_config import config
-from ..utils.prompt_loader import get_composed_prompt
+from ..utils.prompt_loader import fetch_prompt_with_context
 
 MODEL_CAPABILITY = "large"
 MODEL_MAX_TOKENS = 16384
@@ -31,13 +19,12 @@ class SummarizerError(Exception):
 
 
 def _get_model_settings() -> Dict[str, Any]:
-    """
-    Get model settings from config based on capability tier.
+    """Return model settings pulled from the configured capability tier.
 
     Returns:
-        Dictionary containing model name and token costs.
+        Dict[str, Any]: Model name and token costs.
     """
-    model_config = config.get_model_config(MODEL_CAPABILITY)
+    model_config = config.get_model_settings(MODEL_CAPABILITY)
     return {
         "name": model_config["name"],
         "prompt_token_cost": model_config["prompt_token_cost"],
@@ -45,69 +32,69 @@ def _get_model_settings() -> Dict[str, Any]:
     }
 
 
-def _format_research_context(
+def _format_aggregated_research_context(
     aggregated_detailed_research: Dict[str, str],
     available_databases: Dict[str, Any],
 ) -> str:
-    """
-    Format the aggregated research findings into context string.
+    """Format aggregated research findings into a context string.
 
     Args:
-        aggregated_detailed_research: Dictionary of research text keyed by database.
-        available_databases: Database configurations for display name lookup.
+        aggregated_detailed_research (Dict[str, str]): Research text keyed by
+            database name.
+        available_databases (Dict[str, Any]): Database configurations for
+            display names.
 
     Returns:
-        Formatted research context string.
+        str: Research context block for the LLM.
     """
-    research_context = "Aggregated Detailed Research Findings:\n\n"
+    lines = ["Aggregated Detailed Research Findings:", ""]
 
     if not aggregated_detailed_research:
-        research_context += (
-            "No detailed research findings were provided or generated.\n"
-        )
-        return research_context
+        lines.append("No detailed research findings were provided or generated.")
+        return "\n".join(lines)
 
-    for db_name, research_text in aggregated_detailed_research.items():
+    for db_name, research_text in (aggregated_detailed_research or {}).items():
         db_display_name = available_databases.get(db_name, {}).get("name", db_name)
-        research_context += f"=== Findings from: {db_display_name} ===\n"
-        research_context += f"{research_text}\n\n"
+        lines.append(f"=== Findings from: {db_display_name} ===")
+        lines.append(research_text or "")
+        lines.append("")
 
-    return research_context.strip()
+    return "\n".join(lines).rstrip()
 
 
-def _format_reference_context(reference_index: Dict[str, Dict[str, Any]]) -> str:
-    """
-    Format the reference index into context string.
+def _format_reference_index_context(reference_index: Dict[str, Dict[str, Any]]) -> str:
+    """Format the reference index into a context string.
 
     Args:
-        reference_index: Mapping of reference IDs to document details.
+        reference_index (Dict[str, Dict[str, Any]]): Mapping of reference IDs to
+            document details.
 
     Returns:
-        Formatted reference context string.
+        str: Reference context block for the LLM.
     """
-    ref_context = "Available References:\n"
+    lines = ["Available References:"]
 
     for ref_id, ref_data in reference_index.items():
         doc_name = ref_data.get("doc_name", "Unknown")
         page = ref_data.get("page", 1)
-        ref_context += f"[REF:{ref_id}] = {doc_name} - Page {page}\n"
+        lines.append(f"[REF:{ref_id}] = {doc_name} - Page {page}")
 
-    return ref_context.strip()
+    return "\n".join(lines)
 
 
 def _build_user_message(
     user_prompt_template: str,
     research_statement: Optional[str],
 ) -> str:
-    """
-    Build the user message content for the summary request.
+    """Build the user message content for the summary request.
 
     Args:
-        user_prompt_template: Template from database with placeholders.
-        research_statement: Optional research query for context.
+        user_prompt_template (str): Template from the database with
+            placeholders.
+        research_statement (Optional[str]): Optional research query for context.
 
     Returns:
-        Formatted user message string.
+        str: User message content with placeholders filled.
 
     Raises:
         SummarizerError: If user_prompt_template is not provided from database.
@@ -132,22 +119,24 @@ def _build_messages(
     available_databases: Dict[str, Any],
     summary_context: Optional[Dict[str, Any]],
 ) -> list:
-    """
-    Build the complete messages list for the LLM call.
+    """Build the complete messages list for the LLM call.
 
     Args:
-        system_prompt: The system prompt content.
-        user_prompt_template: Template from database with placeholders.
-        aggregated_detailed_research: Dictionary of research text keyed by database.
-        available_databases: Database configurations for display name lookup.
-        summary_context: Optional dict with 'research_statement' and 'reference_index'.
+        system_prompt (str): The system prompt content.
+        user_prompt_template (str): Template from database with placeholders.
+        aggregated_detailed_research (Dict[str, str]): Research text keyed by
+            database.
+        available_databases (Dict[str, Any]): Database configurations for
+            display name lookup.
+        summary_context (Optional[Dict[str, Any]]): Optional dict with
+            `research_statement` and `reference_index`.
 
     Returns:
-        List of message dictionaries for the LLM.
+        list: Message dictionaries for the LLM.
     """
     messages = [{"role": "system", "content": system_prompt}]
 
-    research_context = _format_research_context(
+    research_context = _format_aggregated_research_context(
         aggregated_detailed_research, available_databases
     )
     messages.append({"role": "system", "content": research_context})
@@ -155,7 +144,7 @@ def _build_messages(
     if summary_context:
         reference_index = summary_context.get("reference_index")
         if reference_index:
-            ref_context = _format_reference_context(reference_index)
+            ref_context = _format_reference_index_context(reference_index)
             messages.append({"role": "system", "content": ref_context})
 
         research_statement = summary_context.get("research_statement")
@@ -168,31 +157,24 @@ def _build_messages(
     return messages
 
 
-def generate_streaming_summary(
+def stream_research_summary(
     aggregated_detailed_research: Dict[str, str],
     token: Optional[str],
     available_databases: Dict[str, Any],
     summary_context: Optional[Dict[str, Any]] = None,
 ) -> Generator[Any, None, None]:
-    """
-    Generate the final response based on aggregated detailed research.
-
-    Streams content chunks to the caller, with usage details yielded as
-    the final item.
+    """Stream the final response based on aggregated detailed research.
 
     Args:
-        aggregated_detailed_research: Dictionary keyed by database name,
-            containing the detailed research string for each.
-        token: Authentication token for API access (OAuth token in RBC,
-            API key in local environment).
-        available_databases: Available database configurations.
-        summary_context: Optional dict containing:
-            - research_statement: The research query for context
-            - reference_index: Master reference index mapping ref IDs to details
+        aggregated_detailed_research (Dict[str, str]): Detailed research text
+            keyed by database.
+        token (Optional[str]): Authentication token for API access.
+        available_databases (Dict[str, Any]): Available database configurations.
+        summary_context (Optional[Dict[str, Any]]): Optional context with
+            `research_statement` and `reference_index`.
 
     Yields:
-        Content chunks (str) during streaming, then a final dict containing
-        usage details: {'usage_details': {...}}.
+        str | dict: Streaming content chunks followed by usage details.
 
     Raises:
         SummarizerError: If there is an error generating the summary.
@@ -201,8 +183,8 @@ def generate_streaming_summary(
 
     try:
         model_settings = _get_model_settings()
-        system_prompt, _, user_prompt_template = get_composed_prompt(
-            "agent", "summarizer"
+        system_prompt, _, user_prompt_template = fetch_prompt_with_context(
+            "agent", "summarizer", available_databases=available_databases
         )
 
         messages = _build_messages(
@@ -213,7 +195,7 @@ def generate_streaming_summary(
             summary_context,
         )
 
-        llm_stream = call_llm(
+        llm_stream = execute_llm_call(
             oauth_token=token,
             model=model_settings["name"],
             messages=messages,
@@ -227,14 +209,14 @@ def generate_streaming_summary(
         for item in llm_stream:
             if isinstance(item, dict) and "usage_details" in item:
                 final_usage_details = item
-                break
-            if (
-                hasattr(item, "choices")
-                and item.choices
-                and item.choices[0].delta
-                and item.choices[0].delta.content
-            ):
-                yield item.choices[0].delta.content
+                continue
+
+            choices = getattr(item, "choices", None)
+            if choices:
+                delta = getattr(choices[0], "delta", None)
+                content = getattr(delta, "content", None)
+                if content:
+                    yield content
 
         if final_usage_details:
             yield final_usage_details

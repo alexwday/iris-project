@@ -1,0 +1,52 @@
+db_source: internal_memos
+db_name: APG Internal Accounting Memos
+db_summary: Detailed technical analyses on complex accounting topics, written by RBC finance teams and approved by the Accounting
+  Policy Group (APG), offering in-depth guidance on specific issues.
+db_description: '**Content:** Formal internal accounting memos written by RBC finance teams and approved by the Accounting
+  Policy Group (APG). Each memo documents detailed technical analyses of specific accounting issues, capturing the question
+  raised, alternatives considered, reasoning applied, and the final decision/resolution.
+
+
+  **Tier/Priority:** SUPPLEMENTARY SOURCE (Formal Analysis) - APG-approved memos that supplement core policy with documented
+  reasoning on specific accounting issues.
+
+
+  **Usage Guidance:** Contains formal documented decisions on complex or judgmental accounting matters. Use when you need
+  the reasoning behind an accounting treatment, precedent for similar situations, or understanding of alternatives that were
+  considered and rejected. These represent formally approved APG positions with full technical analysis.
+
+
+  **When to Select:** Questions seeking: documented rationale for accounting treatments, precedent on complex transactions,
+  formal APG decisions on judgmental matters, analysis of why a particular approach was chosen, or historical decisions on
+  accounting issues that required formal resolution.
+
+
+  **Query Tips:** Focus on application scenarios, specific conclusions, and industry/scenario terms.
+
+
+  **Query Type:** semantic search'
+enabled: true
+search_modes:
+- catalog
+- semantic
+ad_groups:
+- all_users
+- local_dev
+batch_size: 10
+max_selected_files: 15
+top_chunks_in_catalog_selection: 1
+top_chunks_in_metadata_research: 3
+page_threshold_for_full_content: 150
+enable_db_wide_deep_research: true
+max_parallel_files: 5
+max_chunks_per_file: 20
+metadata_context_fields:
+- document_summary
+catalog_config: null
+semantic_config: null
+metadata_config: null
+sample_questions:
+- What was APG's documented reasoning for the accounting treatment of cloud computing implementation costs?
+- Is there a memo explaining why RBC chose a particular approach for syndicated loan derecognition?
+- What alternatives were considered for expected credit loss modeling on off-balance-sheet commitments?
+- Has APG issued a formal position on embedded derivative assessment for structured products?

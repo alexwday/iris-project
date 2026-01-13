@@ -42,12 +42,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from .utils.logging_format import configure_logging
+from .utils.logging_format import configure_root_logger
 from .utils.env_config import config
 
 API_VERSION = "1.0.0"
 
-configure_logging()
+configure_root_logger()
 logger = logging.getLogger(__name__)
 
 app = FastAPI(
@@ -123,13 +123,15 @@ def get_chat_processor() -> Callable:
     Lazily import the async chat model to avoid circular dependencies.
 
     Returns:
-        The process_request_async function from chat_model.model.
+        The process_conversation_request_async function from chat_model.model.
 
     Raises:
         ImportError: If the chat model module cannot be imported.
     """
     try:
-        return _lazy_import(".chat_model.model", "process_request_async")
+        return _lazy_import(
+            ".chat_model.model", "process_conversation_request_async"
+        )
     except (ImportError, AttributeError) as exc:
         logger.error(
             "Failed to import chat model. "
@@ -145,13 +147,13 @@ def get_streaming_chat_processor() -> Callable:
     Lazily import the streaming chat model to avoid circular dependencies.
 
     Returns:
-        The model generator function from chat_model.model.
+        The streaming model generator function from chat_model.model.
 
     Raises:
         ImportError: If the streaming chat model module cannot be imported.
     """
     try:
-        return _lazy_import(".chat_model.model", "model")
+        return _lazy_import(".chat_model.model", "stream_model_response")
     except (ImportError, AttributeError) as exc:
         logger.error("Failed to import streaming chat model")
         raise ImportError("Streaming chat model not properly configured") from exc
@@ -274,8 +276,8 @@ async def chat_endpoint(request: ChatRequest):
             )
 
         logger.info("Returning complete response")
-        process_request_async = get_chat_processor()
-        result = await process_request_async(
+        process_conversation_request_async = get_chat_processor()
+        result = await process_conversation_request_async(
             conversation, stream=False, db_names=request.db_names
         )
 
@@ -302,7 +304,7 @@ async def health_check():
         HTTPException: 503 error if configuration validation fails.
     """
     try:
-        config.validate()
+        config.validate_required_environment()
 
         return HealthResponse(
             status="healthy", environment=config.ENVIRONMENT, version=API_VERSION
@@ -345,10 +347,10 @@ async def get_databases():
         HTTPException: 500 error if database retrieval fails.
     """
     try:
-        get_available_databases = _lazy_import(
-            ".agent.tools.database_metadata", "get_available_databases"
+        fetch_available_databases = _lazy_import(
+            ".agent.tools.database_metadata", "fetch_available_databases"
         )
-        databases = get_available_databases()
+        databases = fetch_available_databases()
 
         result = []
         for db_source, db_config in databases.items():
@@ -388,10 +390,10 @@ async def reset_server():
         HTTPException: 500 error if cache invalidation fails.
     """
     try:
-        get_repository = _lazy_import(
-            ".agent.tools.database_metadata", "get_repository"
+        get_metadata_repository = _lazy_import(
+            ".agent.tools.database_metadata", "get_metadata_repository"
         )
-        repo = get_repository()
+        repo = get_metadata_repository()
         repo.invalidate_cache()
 
         logger.info("Server caches cleared successfully")
@@ -417,7 +419,7 @@ async def startup_event():
     """
     logger.info("Starting IRIS Chat API...")
 
-    if not config.validate():
+    if not config.validate_required_environment():
         raise ValueError("Configuration validation failed")
 
     logger.info(

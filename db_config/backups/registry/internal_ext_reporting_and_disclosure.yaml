@@ -1,0 +1,50 @@
+db_source: internal_ext_reporting_and_disclosure
+db_name: External Reporting and Disclosure Policies
+db_summary: RBC's guidelines on material information disclosure, subsidiary reporting, trading revenue classification, and
+  auditor independence, ensuring compliance with regulatory frameworks like OSFI, FRTB, and SEC standards.
+db_description: '**Content:** RBC''s guidelines on material information disclosure, subsidiary reporting, trading revenue
+  classification, and auditor independence to ensure compliance with regulatory frameworks such as OSFI, FRTB, and SEC standards.
+
+
+  **Tier/Priority:** DOMAIN EXPERT - Specialized policies for external reporting and disclosure controls.
+
+
+  **Usage Guidance:** Use for determining disclosure obligations, authorized spokesperson rules, trading revenue classification
+  criteria, and requirements for engaging external auditors to maintain compliance.
+
+
+  **When to Select:** Queries about material or non-material disclosure protocols, subsidiary or trading activity reporting,
+  quiet period or spokesperson restrictions, trading revenue classification under FRTB/SEC expectations, auditor engagement
+  and independence controls, or references to policies such as LAW-8, FIN-ACC-217, FIN-ACC-212, or FIN-ACC-213.
+
+
+  **Query Tips:** Use terms like ''material information'', ''disclosure policy'', ''subsidiary reporting'', ''trading revenue'',
+  ''FRTB'', ''auditor engagement'', ''auditor independence'', ''FIN-ACC-217'', ''FIN-ACC-212'', ''FIN-ACC-213''.
+
+
+  **Query Type:** semantic search'
+enabled: true
+search_modes:
+- catalog
+- semantic
+ad_groups:
+- all_users
+- local_dev
+batch_size: 10
+max_selected_files: 10
+top_chunks_in_catalog_selection: 1
+top_chunks_in_metadata_research: 3
+page_threshold_for_full_content: 150
+enable_db_wide_deep_research: true
+max_parallel_files: 5
+max_chunks_per_file: 20
+metadata_context_fields:
+- document_summary
+catalog_config: null
+semantic_config: null
+metadata_config: null
+sample_questions:
+- 'According to the disclosure policy: Who are authorized spokespersons?'
+- What guidelines should be followed for announcements that are not material?
+- Can an RBC employee speak at a conference during quiet period?
+- Which teams must review forward-looking information before it's disclosed?

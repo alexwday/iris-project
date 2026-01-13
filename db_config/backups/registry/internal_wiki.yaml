@@ -1,0 +1,52 @@
+db_source: internal_wiki
+db_name: APG Wiki
+db_summary: RBC-specific accounting compilations and guidance for unique transactions, providing detailed interpretations
+  and applications of accounting standards tailored to RBC's business scenarios.
+db_description: '**Content:** APG Wiki containing Q&A-style knowledge base entries - questions received by the Accounting
+  Policy Group and their researched resolutions. Provides RBC-specific accounting compilations, detailed interpretations,
+  and application guidance for unique transactions tailored to RBC''s business scenarios. Covers a broad range of accounting
+  questions from simple to moderately complex.
+
+
+  **Tier/Priority:** SUPPLEMENTARY SOURCE (Q&A Knowledge Base) - APG Q&A entries that supplement core policy with practical
+  answers to accounting questions.
+
+
+  **Usage Guidance:** Contains practical answers to accounting questions that APG has addressed over time. Use when looking
+  for how APG has resolved specific accounting questions. Provides concise Q&A-style resolutions rather than lengthy formal
+  documentation. Especially useful for specific transaction types or application examples.
+
+
+  **When to Select:** Questions about: how RBC/APG has handled specific accounting scenarios, practical resolutions to accounting
+  questions, APG guidance on day-to-day accounting issues, or answers to common accounting questions.
+
+
+  **Query Tips:** Focus on application scenarios, specific conclusions, and industry/scenario terms.
+
+
+  **Query Type:** semantic search'
+enabled: true
+search_modes:
+- catalog
+- semantic
+ad_groups:
+- all_users
+- local_dev
+batch_size: 10
+max_selected_files: 15
+top_chunks_in_catalog_selection: 1
+top_chunks_in_metadata_research: 3
+page_threshold_for_full_content: 150
+enable_db_wide_deep_research: true
+max_parallel_files: 5
+max_chunks_per_file: 20
+metadata_context_fields:
+- document_summary
+catalog_config: null
+semantic_config: null
+metadata_config: null
+sample_questions:
+- How has APG answered questions about breakage fees on early mortgage repayments?
+- What's the APG guidance on loyalty point accruals for card reward programs?
+- Has APG addressed how to account for bundled wealth management service fees?
+- What does APG say about capitalizing vs expensing software development costs?

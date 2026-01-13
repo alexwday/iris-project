@@ -1,0 +1,51 @@
+db_source: internal_cheatsheets
+db_name: APG Cheatsheets
+db_summary: Concise, 1-2 page summaries and infographics on specific accounting topics, offering quick, visual guidance for
+  key concepts and policies.
+db_description: '**Content:** APG Cheatsheets - concise 1-2 page summaries and infographics on specific accounting topics,
+  offering quick visual guidance for key concepts and policies. Contains decision trees, checklists, flowcharts, and visual
+  summaries that distill complex topics into scannable formats.
+
+
+  **Tier/Priority:** SUPPLEMENTARY SOURCE (Visual Quick Reference) - APG infographics that supplement core policy with visual
+  aids for common accounting topics.
+
+
+  **Usage Guidance:** Contains visual quick references for frequently asked accounting topics. Use when a scannable visual
+  format would be helpful - decision trees, checklists, or infographic summaries. Best for well-established topics where APG
+  has created visual aids to provide definitions and overviews.
+
+
+  **When to Select:** Questions seeking: visual decision aids, checklists for accounting determinations, flowcharts for classification
+  or recognition decisions, or quick visual summaries of common accounting topics.
+
+
+  **Query Tips:** Use concise, topic-focused queries suitable for semantic search.
+
+
+  **Query Type:** semantic search'
+enabled: true
+search_modes:
+- catalog
+- semantic
+ad_groups:
+- all_users
+- local_dev
+batch_size: 10
+max_selected_files: 10
+top_chunks_in_catalog_selection: 1
+top_chunks_in_metadata_research: 3
+page_threshold_for_full_content: 150
+enable_db_wide_deep_research: true
+max_parallel_files: 5
+max_chunks_per_file: 20
+metadata_context_fields:
+- document_summary
+catalog_config: null
+semantic_config: null
+metadata_config: null
+sample_questions:
+- Is there a decision tree for determining lease classification?
+- Do we have a checklist for hedge accounting eligibility?
+- Is there a flowchart for financial asset derecognition?
+- Do we have a visual guide for impairment indicator assessment?

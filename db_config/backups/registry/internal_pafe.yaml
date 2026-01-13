@@ -1,0 +1,52 @@
+db_source: internal_pafe
+db_name: Planning Analytics for Excel (PAfE) User Guide
+db_summary: Comprehensive user documentation for IBM's Planning Analytics for Excel add-in, covering connection management,
+  report creation, data manipulation, and formula usage for accessing TM1/EPM multidimensional financial data within Microsoft
+  Excel.
+db_description: '**Content:** Comprehensive user documentation for IBM''s Planning Analytics for Excel add-in, covering connection
+  management, report creation, data manipulation, and formula usage for accessing TM1/EPM multidimensional financial data
+  within Microsoft Excel.
+
+
+  **Tier/Priority:** DOMAIN EXPERT - Specialized guidance for Planning Analytics for Excel usage and support.
+
+
+  **Usage Guidance:** Use for operational instructions, feature explanations, and troubleshooting when working with PAfE/TM1/EPM
+  data connections, reports, and Excel-based analytics.
+
+
+  **When to Select:** Queries referencing PAfE or Planning Analytics features, TM1/EPM connections, report types (Exploration/Quick/Dynamic/Custom),
+  DBRW/TM1RPTVIEW/TM1RPTROW formulas, MDX queries, subset editor usage, sandbox features, or migration from Perspectives.
+
+
+  **Query Tips:** Use terms like ''PAfE'', ''Planning Analytics'', ''TM1'', ''EPM connection'', ''Dynamic Report'', ''Quick
+  Report'', ''Exploration Report'', ''DBRW formula'', ''MDX query'', ''subset viewer'', ''cube data'', ''Perspectives migration'',
+  ''websheet'', ''sandbox'', ''Set Editor''.
+
+
+  **Query Type:** semantic search'
+enabled: true
+search_modes:
+- catalog
+- semantic
+ad_groups:
+- all_users
+- local_dev
+batch_size: 10
+max_selected_files: 10
+top_chunks_in_catalog_selection: 1
+top_chunks_in_metadata_research: 3
+page_threshold_for_full_content: 150
+enable_db_wide_deep_research: true
+max_parallel_files: 5
+max_chunks_per_file: 20
+metadata_context_fields:
+- document_summary
+catalog_config: null
+semantic_config: null
+metadata_config: null
+sample_questions:
+- How do I configure an EPM connection to a TM1 server in PAfE?
+- What steps create a Dynamic Report from an Exploration view?
+- What is the DBRW formula syntax for retrieving cube data with multiple dimensions?
+- How can I migrate a Perspectives report to PAfE while preserving formatting?

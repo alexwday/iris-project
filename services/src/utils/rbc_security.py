@@ -1,11 +1,6 @@
-"""
-RBC Security Certificate Setup Module.
+"""RBC Security certificate setup.
 
-Simplified SSL setup using rbc_security library when available.
-Can be disabled with IRIS_DEV_MODE=true environment variable for local development.
-
-Functions:
-    setup_ssl: Configure SSL certificates for RBC environment
+Uses optional ``rbc_security`` support for SSL; disabled when IRIS_DEV_MODE=true.
 """
 
 import logging
@@ -23,15 +18,15 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
-def setup_ssl() -> Optional[str]:
-    """
-    Set up SSL certificates for RBC environment.
+def configure_rbc_security_certs() -> Optional[str]:
+    """Configure SSL certificates for the RBC environment.
 
-    Uses rbc_security library if available.
-    Can be disabled with IRIS_DEV_MODE=true environment variable.
+    Skips configuration when ``config.DEV_MODE`` is true. Logs a warning and
+    returns None if the optional ``rbc_security`` dependency is missing.
 
     Returns:
-        "rbc_security" if certificates were enabled, None otherwise.
+        Optional[str]: ``"rbc_security"`` when certificates are enabled; otherwise
+        None.
     """
     if config.DEV_MODE:
         logger.info("DEV_MODE: Skipping SSL setup")
@@ -39,10 +34,8 @@ def setup_ssl() -> Optional[str]:
 
     if not _RBC_SECURITY_AVAILABLE:
         logger.warning(
-            "rbc_security not available - install with: pip install rbc_security"
-        )
-        logger.warning(
-            "Continuing without SSL certificates (may fail in RBC environment)"
+            "rbc_security not available; install with `pip install rbc_security`. "
+            "Continuing without SSL certificates (may fail in RBC environment)."
         )
         return None
 

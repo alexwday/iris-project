@@ -11,8 +11,8 @@ The clarifier determines:
 3. For DB-wide queries, whether to request user approval for extended research
 
 Functions:
-    clarify_research_needs: Determines if essential context is needed,
-                            detects DB-wide queries, and manages approval flow
+    generate_clarifier_decision: Determines if essential context is needed,
+                                 detects DB-wide queries, and manages approval flow
 
 Classes:
     ClarifierError: Exception for clarifier-related errors
@@ -22,10 +22,10 @@ import json
 import logging
 from typing import Any, Dict, Optional, Tuple
 
-from ..connections.llm import call_llm
+from ..connections.llm import execute_llm_call
 from ..utils.env_config import config
-from ..utils.input_sanitizer import format_conversation_for_prompt
-from ..utils.prompt_loader import get_composed_prompt
+from ..utils.input_sanitizer import format_conversation_history_for_prompt
+from ..utils.prompt_loader import fetch_prompt_with_context
 
 MODEL_CAPABILITY = "large"
 MODEL_MAX_TOKENS = 4096
@@ -38,14 +38,13 @@ class ClarifierError(Exception):
     """Exception raised for clarifier-related errors."""
 
 
-def _get_model_settings() -> Dict[str, Any]:
-    """
-    Get model settings from config based on capability tier.
+def _get_clarifier_model_settings() -> Dict[str, Any]:
+    """Return model settings for the clarifier LLM.
 
     Returns:
-        Dictionary containing model name and token costs.
+        Dict[str, Any]: Model name and token costs.
     """
-    model_config = config.get_model_config(MODEL_CAPABILITY)
+    model_config = config.get_model_settings(MODEL_CAPABILITY)
     return {
         "name": model_config["name"],
         "prompt_token_cost": model_config["prompt_token_cost"],
@@ -53,24 +52,23 @@ def _get_model_settings() -> Dict[str, Any]:
     }
 
 
-def _build_messages(
+def _build_clarifier_messages(
     system_prompt: str,
     user_prompt_template: str,
     conversation: Dict[str, Any],
 ) -> list:
-    """
-    Build the messages list for the LLM call.
+    """Build the messages payload for the LLM call.
 
     Args:
-        system_prompt: The system prompt content.
-        user_prompt_template: Template for user message with {{conversation}} placeholder.
-        conversation: Conversation dict with 'messages' key.
+        system_prompt: System prompt content.
+        user_prompt_template: Template containing the ``{{conversation}}`` placeholder.
+        conversation: Conversation payload with a ``messages`` key.
 
     Returns:
-        List of message dictionaries for the LLM.
+        list[dict[str, str]]: Message dictionaries for the LLM.
 
     Raises:
-        ClarifierError: If user_prompt_template is not provided from database.
+        ClarifierError: If no user prompt template is provided.
     """
     if not user_prompt_template:
         raise ClarifierError(
@@ -80,7 +78,7 @@ def _build_messages(
 
     messages = [{"role": "system", "content": system_prompt}]
 
-    conversation_context = format_conversation_for_prompt(conversation)
+    conversation_context = format_conversation_history_for_prompt(conversation)
     user_content = user_prompt_template.replace(
         "{{conversation}}", conversation_context
     )
@@ -89,24 +87,24 @@ def _build_messages(
     return messages
 
 
-def _extract_tool_response(response: Any) -> Dict[str, Any]:
-    """
-    Extract and validate tool call arguments from LLM response.
+def _parse_clarifier_tool_response(response: Any) -> Dict[str, Any]:
+    """Extract and validate tool call arguments from the LLM response.
 
     Args:
-        response: The LLM response object.
+        response: Response returned by ``execute_llm_call``.
 
     Returns:
-        Parsed arguments dictionary from the tool call.
+        Dict[str, Any]: Parsed arguments dictionary from the tool call.
 
     Raises:
-        ClarifierError: If response is invalid or tool call parsing fails.
+        ClarifierError: If the response is invalid or tool call parsing fails.
     """
     if not response or not hasattr(response, "choices") or not response.choices:
         raise ClarifierError("Invalid or empty response received from LLM")
 
-    message = response.choices[0].message
-    if not message or not message.tool_calls:
+    message = getattr(response.choices[0], "message", None)
+    tool_calls = getattr(message, "tool_calls", None)
+    if not message or not tool_calls:
         content_returned = (
             message.content if message and message.content else "No content"
         )
@@ -118,7 +116,7 @@ def _extract_tool_response(response: Any) -> Dict[str, Any]:
             "No tool call received in response, content returned instead."
         )
 
-    tool_call = message.tool_calls[0]
+    tool_call = tool_calls[0]
 
     if tool_call.function.name != "make_clarifier_decision":
         raise ClarifierError(f"Unexpected function call: {tool_call.function.name}")
@@ -131,19 +129,31 @@ def _extract_tool_response(response: Any) -> Dict[str, Any]:
         ) from exc
 
 
-def _validate_decision_fields(arguments: Dict[str, Any]) -> Dict[str, Any]:
+def _normalize_bool_flag(value: Any) -> bool:
+    """Normalize bool-like values from tool arguments.
+
+    Args:
+        value: Value to normalize.
+
+    Returns:
+        bool: Parsed boolean.
     """
-    Validate and extract decision fields from tool arguments.
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"true", "1", "yes"}
+    return bool(value)
+
+
+def _validate_clarifier_decision(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """Validate and normalize decision fields from tool arguments.
 
     Args:
         arguments: Parsed tool call arguments.
 
     Returns:
-        Validated decision dictionary with:
-        - action: The clarifier decision action
-        - output: Questions, approval request, or research statement
-        - is_db_wide: Whether query requires checking ALL files in a database
-        - deep_research_approved: Whether user approved extended research
+        Dict[str, Any]: Decision fields containing ``action``, ``output``,
+            ``is_db_wide``, and ``deep_research_approved``.
 
     Raises:
         ClarifierError: If required fields are missing.
@@ -157,41 +167,33 @@ def _validate_decision_fields(arguments: Dict[str, Any]) -> Dict[str, Any]:
     if not output:
         raise ClarifierError("Missing 'output' in tool arguments")
 
-    # Validate action is one of the expected values
     valid_actions = {
-        "request_essential_context",
+        "ask_clarification",
         "request_deep_research_approval",
-        "create_research_statement",
+        "proceed_with_research",
     }
     if action not in valid_actions:
-        logger.warning("Unexpected action '%s', defaulting to create_research_statement", action)
-        action = "create_research_statement"
-
-    # Extract optional boolean fields with defaults
-    is_db_wide = arguments.get("is_db_wide", False)
-    deep_research_approved = arguments.get("deep_research_approved", False)
-
-    # Ensure boolean types
-    if not isinstance(is_db_wide, bool):
-        is_db_wide = bool(is_db_wide) if is_db_wide else False
-    if not isinstance(deep_research_approved, bool):
-        deep_research_approved = bool(deep_research_approved) if deep_research_approved else False
+        logger.warning(
+            "Unexpected action '%s', defaulting to proceed_with_research", action
+        )
+        action = "proceed_with_research"
 
     return {
         "action": action,
         "output": output,
-        "is_db_wide": is_db_wide,
-        "deep_research_approved": deep_research_approved,
+        "is_db_wide": _normalize_bool_flag(arguments.get("is_db_wide", False)),
+        "deep_research_approved": _normalize_bool_flag(
+            arguments.get("deep_research_approved", False)
+        ),
     }
 
 
-def clarify_research_needs(
+def generate_clarifier_decision(
     conversation: Dict[str, Any],
     token: str,
     available_databases: Optional[Dict[str, Any]] = None,
 ) -> Tuple[Dict[str, Any], Optional[Dict[str, Any]]]:
-    """
-    Determine if essential context is needed or create a research statement.
+    """Determine the clarifier decision for a conversation.
 
     Uses LLM tool calling to make a structured decision about whether to
     ask clarifying questions, request approval for extended research, or
@@ -201,34 +203,30 @@ def clarify_research_needs(
     ALL files in a database) and manages the approval flow for extended research.
 
     Args:
-        conversation: Conversation dict with 'messages' key containing message list.
-        token: Authentication token for API access (OAuth token in RBC,
-            API key in local environment).
-        available_databases: Dict of available database configurations
-            filtered by user selection. Used to show only accessible databases.
+        conversation: Conversation payload with a ``messages`` list.
+        token: Authentication token for LLM access.
+        available_databases: Available database configurations filtered by user
+            selection.
 
     Returns:
-        Tuple containing:
-            - Clarifier decision dict with:
-                - action: 'request_essential_context', 'request_deep_research_approval',
-                          or 'create_research_statement'
-                - output: Questions, approval request message, or research statement
-                - is_db_wide: True if query requires checking ALL files in a database
-                - deep_research_approved: True if user approved extended research
-            - Usage details dict for the LLM call, or None if error
+        Tuple[Dict[str, Any], Optional[Dict[str, Any]]]: Decision dictionary with
+            ``action`` (``ask_clarification``, ``request_deep_research_approval``,
+            or ``proceed_with_research``), ``output``, ``is_db_wide``,
+            ``deep_research_approved``, and optional LLM usage details.
 
     Raises:
         ClarifierError: If there is an error in the clarification process.
     """
     try:
-        db_names = list(available_databases.keys()) if available_databases else None
-        system_prompt, tools, user_prompt_template = get_composed_prompt(
-            "agent", "clarifier", filtered_database=True, db_names=db_names
+        system_prompt, tools, user_prompt_template = fetch_prompt_with_context(
+            "agent", "clarifier", available_databases=available_databases
         )
-        model_settings = _get_model_settings()
-        messages = _build_messages(system_prompt, user_prompt_template, conversation)
+        model_settings = _get_clarifier_model_settings()
+        messages = _build_clarifier_messages(
+            system_prompt, user_prompt_template, conversation
+        )
 
-        response, usage_details = call_llm(
+        response, usage_details = execute_llm_call(
             oauth_token=token,
             model=model_settings["name"],
             messages=messages,
@@ -244,8 +242,8 @@ def clarify_research_needs(
             completion_token_cost=model_settings["completion_token_cost"],
         )
 
-        arguments = _extract_tool_response(response)
-        decision = _validate_decision_fields(arguments)
+        arguments = _parse_clarifier_tool_response(response)
+        decision = _validate_clarifier_decision(arguments)
 
         logger.info(
             "Clarifier decision: action=%s, is_db_wide=%s, deep_research_approved=%s",

@@ -1,0 +1,51 @@
+db_source: internal_global_finance_standards
+db_name: Global Financial Standards
+db_summary: RBC's policies on currency reporting, resident/non-resident splits, foreign exchange (FX) position accounts, the
+  Global Chart of Accounts structure, and the Global Rates policy, ensuring consistency and compliance in financial reporting
+  across the organization.
+db_description: '**Content:** RBC''s policies on currency reporting, resident/non-resident splits, foreign exchange (FX) position
+  accounts, the Global Chart of Accounts structure, and the Global Rates policy to ensure consistent financial reporting.
+
+
+  **Tier/Priority:** DOMAIN EXPERT - Specialized standards for global finance reporting consistency.
+
+
+  **Usage Guidance:** Use for guidance on currency and residency reporting rules, FX position account setup, chart of accounts
+  structure, and required FX rates used in reporting.
+
+
+  **When to Select:** Queries about currency reporting standards, resident versus non-resident requirements, FX position account
+  usage, chart of accounts design or abbreviations, mandated global FX rates, or references to standards such as FIN-ACC-14
+  or FIN-ACC-10.
+
+
+  **Query Tips:** Use terms like ''currency reporting'', ''resident reporting'', ''FX position account'', ''chart of accounts'',
+  ''global FX rates'', ''FIN-ACC-14'', ''FIN-ACC-10''.
+
+
+  **Query Type:** semantic search'
+enabled: true
+search_modes:
+- catalog
+- semantic
+ad_groups:
+- all_users
+- local_dev
+batch_size: 10
+max_selected_files: 10
+top_chunks_in_catalog_selection: 1
+top_chunks_in_metadata_research: 3
+page_threshold_for_full_content: 150
+enable_db_wide_deep_research: true
+max_parallel_files: 5
+max_chunks_per_file: 20
+metadata_context_fields:
+- document_summary
+catalog_config: null
+semantic_config: null
+metadata_config: null
+sample_questions:
+- What are the minimum standards for Non-Interest Expenses in COA reporting?
+- What is RBC's global FX rate policy?
+- What are examples of regulatory reports RBC provides OSFI?
+- What are requirements for resident and non-resident transactions?

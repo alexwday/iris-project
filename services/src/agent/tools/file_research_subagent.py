@@ -8,19 +8,20 @@ Stage 2 of the cascading retrieval process:
 4. Return page-based research findings with citations
 
 Chunk Retrieval:
-Similarity-based retrieval is REQUIRED. The query_embedding must be provided
-in the context. Chunks are fetched by embedding similarity within each
-document, then sorted by page order for coherent presentation.
+Hierarchical retrieval prioritizes document structure. For small documents,
+all chunks are returned in page order. For larger files, similarity search
+selects seed chunks which are then expanded by primary section, subsection,
+or neighbor ranges for coherent context.
 
 This subagent is UNIVERSAL - works for ALL databases (internal and external)
 by querying the unified document tables.
 
 Functions:
-    fetch_document_chunks: Fetch chunks using similarity search
-    load_file_research_config: Load prompt configuration from PostgreSQL
-    format_document_for_llm: Format document chunks for LLM prompt
-    synthesize_single_document: LLM synthesis for a single document
-    query_file_research_sync: Main entry point for Stage 2 file research
+    fetch_chunks_with_hierarchical_expansion: Structured retrieval with expansion
+    load_file_research_prompt_config: Load prompt configuration from PostgreSQL
+    format_document_chunks_for_llm: Format document chunks for LLM prompt
+    synthesize_document_research: LLM synthesis for a single document
+    execute_file_research_sync: Main entry point for Stage 2 file research
 
 Classes:
     ChunkData: TypedDict for chunk data from database
@@ -33,16 +34,18 @@ Classes:
 
 import json
 import logging
+from functools import lru_cache
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Any, Dict, List, Optional, Tuple, TypedDict
+from typing import Any, Dict, List, Optional, Set, Tuple, TypedDict, Literal, NotRequired
 
 from sqlalchemy import text
 
 from ...utils.env_config import config
-from ...utils.prompt_loader import get_prompt
-from ...connections.postgres import get_session
-from ...connections.llm import call_llm
-from .database_metadata import DatabaseMetadataRepository
+from ...utils.prompt_loader import fetch_prompt_with_context
+from ...connections.postgres import get_database_session
+from ...connections.llm import execute_llm_call
+from .database_metadata import DatabaseMetadataCache
+from .research_types import Finding, FindingsList
 
 logger = logging.getLogger(__name__)
 
@@ -54,8 +57,6 @@ class FileResearchError(Exception):
 MODEL_CAPABILITY = "large"
 MODEL_MAX_TOKENS = 4096
 MODEL_TEMPERATURE = 0.2
-DEFAULT_MAX_CHUNKS_PER_FILE = 20
-DEFAULT_MAX_PARALLEL_FILES = 5
 
 SynthesisContext = Dict[str, Any]
 ResearchContext = Dict[str, Any]
@@ -72,6 +73,61 @@ class ChunkData(TypedDict):
     hierarchy_path: Optional[str]
     page_number: Optional[int]
     page_reference: Optional[str]
+    primary_section_number: NotRequired[Optional[int]]
+    subsection_number: NotRequired[Optional[int]]
+    primary_section_page_count: NotRequired[Optional[int]]
+    subsection_page_count: NotRequired[Optional[int]]
+
+
+ExpansionLevel = Literal[
+    "document_full",
+    "primary_section",
+    "subsection",
+    "neighbor",
+]
+
+
+class ChunkGroup(TypedDict):
+    """Grouped chunks with expansion metadata for formatting."""
+
+    primary_section_number: Optional[int]
+    primary_section_name: Optional[str]
+    hierarchy_path: Optional[str]
+    subsection_number: Optional[int]
+    subsection_name: Optional[str]
+    expansion_level: ExpansionLevel
+    chunks: List[ChunkData]
+
+
+class ExpansionMetrics(TypedDict):
+    """Metrics tracking hierarchical expansion effectiveness."""
+
+    # Document-level info
+    document_page_count: Optional[int]
+    retrieval_method: Literal["full_context", "similarity_expansion"]
+
+    # Seed chunk stats (from similarity search)
+    seed_chunks_count: int
+    seed_primary_sections_count: int  # How many different primary sections in seed
+
+    # Expansion stats
+    groups_total: int
+    groups_document_full: int
+    groups_primary_section: int
+    groups_subsection: int
+    groups_neighbor: int
+
+    # Gap filling stats
+    gap_ranges_filled: int  # Number of gaps that were filled
+    gap_pages_filled: int  # Total pages added via gap filling
+
+    # Final context stats
+    final_chunks_count: int
+    final_pages_count: int
+    final_primary_sections_count: int
+
+    # Expansion ratio (final chunks / seed chunks)
+    expansion_ratio: float
 
 
 class DocumentChunks(TypedDict):
@@ -81,10 +137,12 @@ class DocumentChunks(TypedDict):
     document_name: str
     file_name: Optional[str]
     chunks: List[ChunkData]
+    chunk_groups: NotRequired[List[ChunkGroup]]
+    expansion_metrics: NotRequired[ExpansionMetrics]
 
 
 class PageResearch(TypedDict):
-    """Research finding for a specific page."""
+    """Research finding for a specific page (mapped from extracted facts)."""
 
     page_number: int
     research_content: str
@@ -104,166 +162,1063 @@ class DocumentResearch(TypedDict):
 class FileResearchResult(TypedDict):
     """Result structure from file research subagent."""
 
-    documents: Dict[str, Dict[str, PageResearch]]
+    findings: FindingsList  # Unified finding format for summarizer
     status_summary: str
-    reference_index: Dict[str, Dict[str, Any]]
     db_source: str
 
 
-def fetch_document_chunks(
-    document_ids: List[str],
-    db_source: str,
-    max_chunks_per_file: int = DEFAULT_MAX_CHUNKS_PER_FILE,
-    query_embedding: List[float] = None,
-) -> List[DocumentChunks]:
-    """
-    Fetch chunks for specified documents from iris_document_chunks.
+def _map_chunk_row(row: Any) -> ChunkData:
+    """Map a database row to ChunkData."""
 
-    Uses similarity search to find the most relevant chunks within each
-    document. Chunks are ordered by similarity to the query embedding,
-    then sorted by page order for coherent presentation.
+    return {
+        "chunk_id": str(row["id"]),
+        "chunk_number": row["chunk_number"],
+        "chunk_content": row["chunk_content"],
+        "primary_section_name": row.get("primary_section_name"),
+        "subsection_name": row.get("subsection_name"),
+        "hierarchy_path": row.get("hierarchy_path"),
+        "page_number": row.get("page_number"),
+        "page_reference": row.get("hierarchy_path"),
+        "primary_section_number": row.get("primary_section_number"),
+        "subsection_number": row.get("subsection_number"),
+        "primary_section_page_count": row.get("primary_section_page_count"),
+        "subsection_page_count": row.get("subsection_page_count"),
+    }
+
+
+def _sort_chunks(chunks: List[ChunkData]) -> List[ChunkData]:
+    """Sort chunks by page_number then chunk_number."""
+
+    return sorted(
+        chunks,
+        key=lambda r: ((r.get("page_number") or 0), r.get("chunk_number", 0)),
+    )
+
+
+def _primary_section_sort_key(section_number: Optional[int]) -> Tuple[int, int]:
+    """Sort key that places numbered sections before unknown ones."""
+
+    if section_number is None:
+        return (1, 0)
+    return (0, section_number)
+
+
+def _chunk_group_sort_key(group: ChunkGroup) -> Tuple[int, int, int, str]:
+    """Sort chunk groups by primary and subsection ordering."""
+
+    primary_sort = _primary_section_sort_key(group.get("primary_section_number"))
+    subsection_number = group.get("subsection_number")
+    subsection_sort = subsection_number if subsection_number is not None else -1
+    return (
+        primary_sort[0],
+        primary_sort[1],
+        subsection_sort,
+        group.get("expansion_level", "neighbor"),
+    )
+
+
+def _merge_ranges(ranges: List[Tuple[int, int]]) -> List[Tuple[int, int]]:
+    """Merge overlapping numeric ranges."""
+
+    if not ranges:
+        return []
+
+    sorted_ranges = sorted(ranges, key=lambda r: r[0])
+    merged: List[Tuple[int, int]] = [sorted_ranges[0]]
+
+    for start, end in sorted_ranges[1:]:
+        last_start, last_end = merged[-1]
+        if start <= last_end + 1:
+            merged[-1] = (last_start, max(last_end, end))
+        else:
+            merged.append((start, end))
+
+    return merged
+
+
+def _dedup_chunks(chunks: List[ChunkData]) -> List[ChunkData]:
+    """Remove duplicate chunks while preserving sort order."""
+
+    seen_ids: Set[str] = set()
+    deduped: List[ChunkData] = []
+
+    for chunk in _sort_chunks(chunks):
+        chunk_id = chunk.get("chunk_id")
+        if chunk_id and chunk_id not in seen_ids:
+            seen_ids.add(chunk_id)
+            deduped.append(chunk)
+
+    return deduped
+
+
+def _fetch_document_metadata(
+    session: Any, doc_id: str, db_source: str
+) -> Dict[str, Any]:
+    """Fetch metadata for a single document."""
+
+    doc_result = session.execute(
+        text(
+            """
+            SELECT id, document_name, file_name, page_count
+            FROM iris_document_metadata
+            WHERE id = :doc_id AND db_source = :db_source
+        """
+        ),
+        {"doc_id": doc_id, "db_source": db_source},
+    )
+    doc_row = doc_result.mappings().first()
+
+    if not doc_row:
+        raise FileResearchError(f"Document {doc_id} not found in {db_source}")
+
+    return {
+        "id": str(doc_row["id"]),
+        "document_name": doc_row["document_name"],
+        "file_name": doc_row.get("file_name"),
+        "page_count": doc_row.get("page_count"),
+    }
+
+
+def _fetch_all_chunks_for_document(
+    session: Any, doc_id: str, db_source: str
+) -> List[ChunkData]:
+    """Fetch every chunk for a document ordered by page and chunk number."""
+
+    chunk_result = session.execute(
+        text(
+            """
+            SELECT
+                id,
+                chunk_number,
+                chunk_content,
+                primary_section_name,
+                subsection_name,
+                hierarchy_path,
+                page_number,
+                primary_section_number,
+                subsection_number,
+                primary_section_page_count,
+                subsection_page_count
+            FROM iris_document_chunks
+            WHERE document_id = :doc_id
+              AND db_source = :db_source
+            ORDER BY page_number, chunk_number
+        """
+        ),
+        {"doc_id": doc_id, "db_source": db_source},
+    )
+
+    chunk_rows = chunk_result.mappings().all()
+    return _sort_chunks([_map_chunk_row(row) for row in chunk_rows])
+
+
+def _fetch_chunks_by_page_range(
+    session: Any,
+    doc_id: str,
+    db_source: str,
+    start_page: int,
+    end_page: int,
+) -> List[ChunkData]:
+    """Fetch chunks within a page range (inclusive).
 
     Args:
-        document_ids: List of document UUIDs to fetch chunks for.
-        db_source: Database source for filtering.
-        max_chunks_per_file: Maximum chunks to fetch per document.
-        query_embedding: Embedding vector for similarity search (REQUIRED).
+        session: Database session.
+        doc_id: Document UUID.
+        db_source: Database source.
+        start_page: First page number (inclusive).
+        end_page: Last page number (inclusive).
 
     Returns:
-        List of DocumentChunks with all chunk data.
-
-    Raises:
-        FileResearchError: If query_embedding is not provided or document fetch fails.
+        List[ChunkData]: Chunks from the specified page range.
     """
-    if not query_embedding:
-        raise FileResearchError(
-            "query_embedding is required for chunk retrieval. "
-            "Similarity-based search is mandatory - no fallback to sequential ordering."
+    chunk_result = session.execute(
+        text(
+            """
+            SELECT
+                id,
+                chunk_number,
+                chunk_content,
+                primary_section_name,
+                subsection_name,
+                hierarchy_path,
+                page_number,
+                primary_section_number,
+                subsection_number,
+                primary_section_page_count,
+                subsection_page_count
+            FROM iris_document_chunks
+            WHERE document_id = :doc_id
+              AND db_source = :db_source
+              AND page_number >= :start_page
+              AND page_number <= :end_page
+            ORDER BY page_number, chunk_number
+        """
+        ),
+        {
+            "doc_id": doc_id,
+            "db_source": db_source,
+            "start_page": start_page,
+            "end_page": end_page,
+        },
+    )
+
+    chunk_rows = chunk_result.mappings().all()
+    return _sort_chunks([_map_chunk_row(row) for row in chunk_rows])
+
+
+def _fetch_similarity_chunks_for_document(
+    session: Any,
+    doc_id: str,
+    db_source: str,
+    embedding_str: str,
+    limit: int,
+) -> List[ChunkData]:
+    """Fetch top chunks for a document using similarity search."""
+
+    chunk_result = session.execute(
+        text(
+            """
+            SELECT
+                id,
+                chunk_number,
+                chunk_content,
+                primary_section_name,
+                subsection_name,
+                hierarchy_path,
+                page_number,
+                primary_section_number,
+                subsection_number,
+                primary_section_page_count,
+                subsection_page_count
+            FROM iris_document_chunks
+            WHERE document_id = :doc_id
+              AND db_source = :db_source
+              AND chunk_embedding IS NOT NULL
+            ORDER BY chunk_embedding <=> CAST(:embedding AS halfvec)
+            LIMIT :limit
+        """
+        ),
+        {
+            "doc_id": doc_id,
+            "db_source": db_source,
+            "embedding": embedding_str,
+            "limit": limit,
+        },
+    )
+
+    chunk_rows = chunk_result.mappings().all()
+    return _sort_chunks([_map_chunk_row(row) for row in chunk_rows])
+
+
+def _build_primary_section_clause(
+    primary_section_number: Optional[int],
+) -> Tuple[str, Dict[str, Any]]:
+    """Build SQL clause and params for primary section filtering."""
+
+    if primary_section_number is None:
+        return "primary_section_number IS NULL", {}
+    return "primary_section_number = :primary_section_number", {
+        "primary_section_number": primary_section_number
+    }
+
+
+def _build_subsection_clause(
+    subsection_number: Optional[int],
+) -> Tuple[str, Dict[str, Any]]:
+    """Build SQL clause and params for subsection filtering."""
+
+    if subsection_number is None:
+        return "subsection_number IS NULL", {}
+    return "subsection_number = :subsection_number", {
+        "subsection_number": subsection_number
+    }
+
+
+def _fetch_primary_section_chunks(
+    session: Any,
+    document_id: str,
+    db_source: str,
+    primary_section_number: Optional[int],
+) -> List[ChunkData]:
+    """Fetch all chunks for a primary section."""
+
+    primary_clause, primary_params = _build_primary_section_clause(
+        primary_section_number
+    )
+
+    query = f"""
+        SELECT
+            id,
+            chunk_number,
+            chunk_content,
+            primary_section_name,
+            subsection_name,
+            hierarchy_path,
+            page_number,
+            primary_section_number,
+            subsection_number,
+            primary_section_page_count,
+            subsection_page_count
+        FROM iris_document_chunks
+        WHERE document_id = :doc_id
+          AND db_source = :db_source
+          AND {primary_clause}
+        ORDER BY page_number, chunk_number
+    """
+
+    params: Dict[str, Any] = {"doc_id": document_id, "db_source": db_source}
+    params.update(primary_params)
+
+    chunk_rows = session.execute(text(query), params).mappings().all()
+    return _sort_chunks([_map_chunk_row(row) for row in chunk_rows])
+
+
+def _fetch_subsection_chunks(
+    session: Any,
+    document_id: str,
+    db_source: str,
+    primary_section_number: Optional[int],
+    subsection_number: Optional[int],
+) -> List[ChunkData]:
+    """Fetch all chunks for a subsection within a primary section."""
+
+    primary_clause, primary_params = _build_primary_section_clause(
+        primary_section_number
+    )
+    subsection_clause, subsection_params = _build_subsection_clause(subsection_number)
+
+    query = f"""
+        SELECT
+            id,
+            chunk_number,
+            chunk_content,
+            primary_section_name,
+            subsection_name,
+            hierarchy_path,
+            page_number,
+            primary_section_number,
+            subsection_number,
+            primary_section_page_count,
+            subsection_page_count
+        FROM iris_document_chunks
+        WHERE document_id = :doc_id
+          AND db_source = :db_source
+          AND {primary_clause}
+          AND {subsection_clause}
+        ORDER BY page_number, chunk_number
+    """
+
+    params: Dict[str, Any] = {"doc_id": document_id, "db_source": db_source}
+    params.update(primary_params)
+    params.update(subsection_params)
+
+    chunk_rows = session.execute(text(query), params).mappings().all()
+    return _sort_chunks([_map_chunk_row(row) for row in chunk_rows])
+
+
+def _fetch_neighbor_chunks(
+    session: Any,
+    document_id: str,
+    db_source: str,
+    primary_section_number: Optional[int],
+    start_chunk: int,
+    end_chunk: int,
+) -> List[ChunkData]:
+    """Fetch neighbor chunks around a chunk range within a primary section."""
+
+    primary_clause, primary_params = _build_primary_section_clause(
+        primary_section_number
+    )
+
+    query = f"""
+        SELECT
+            id,
+            chunk_number,
+            chunk_content,
+            primary_section_name,
+            subsection_name,
+            hierarchy_path,
+            page_number,
+            primary_section_number,
+            subsection_number,
+            primary_section_page_count,
+            subsection_page_count
+        FROM iris_document_chunks
+        WHERE document_id = :doc_id
+          AND db_source = :db_source
+          AND {primary_clause}
+          AND chunk_number BETWEEN :start_chunk AND :end_chunk
+        ORDER BY page_number, chunk_number
+    """
+
+    params: Dict[str, Any] = {
+        "doc_id": document_id,
+        "db_source": db_source,
+        "start_chunk": start_chunk,
+        "end_chunk": end_chunk,
+    }
+    params.update(primary_params)
+
+    chunk_rows = session.execute(text(query), params).mappings().all()
+    return _sort_chunks([_map_chunk_row(row) for row in chunk_rows])
+
+
+def _group_full_document_chunks(chunks: List[ChunkData]) -> List[ChunkGroup]:
+    """Group chunks for full-document retrieval with subsection hierarchy."""
+
+    primary_sections: Dict[Optional[int], Dict[str, Any]] = {}
+
+    for chunk in _sort_chunks(chunks):
+        primary_number = chunk.get("primary_section_number")
+        primary_entry = primary_sections.setdefault(
+            primary_number,
+            {
+                "primary_section_name": chunk.get("primary_section_name"),
+                "hierarchy_path": chunk.get("hierarchy_path"),
+                "primary_chunks": [],
+                "subsections": {},
+            },
         )
 
+        if not primary_entry["primary_section_name"] and chunk.get(
+            "primary_section_name"
+        ):
+            primary_entry["primary_section_name"] = chunk.get("primary_section_name")
+        if not primary_entry["hierarchy_path"] and chunk.get("hierarchy_path"):
+            primary_entry["hierarchy_path"] = chunk.get("hierarchy_path")
+
+        subsection_number = chunk.get("subsection_number")
+        if subsection_number is None:
+            primary_entry["primary_chunks"].append(chunk)
+            continue
+
+        subsections: Dict[Optional[int], Dict[str, Any]] = primary_entry["subsections"]
+        subsection_entry = subsections.setdefault(
+            subsection_number,
+            {
+                "subsection_name": chunk.get("subsection_name"),
+                "hierarchy_path": chunk.get("hierarchy_path"),
+                "chunks": [],
+            },
+        )
+        if not subsection_entry["subsection_name"] and chunk.get("subsection_name"):
+            subsection_entry["subsection_name"] = chunk.get("subsection_name")
+        if not subsection_entry["hierarchy_path"] and chunk.get("hierarchy_path"):
+            subsection_entry["hierarchy_path"] = chunk.get("hierarchy_path")
+        subsection_entry["chunks"].append(chunk)
+
+    chunk_groups: List[ChunkGroup] = []
+
+    for primary_number in sorted(primary_sections.keys(), key=_primary_section_sort_key):
+        primary_entry = primary_sections[primary_number]
+
+        if primary_entry["primary_chunks"]:
+            chunk_groups.append(
+                {
+                    "primary_section_number": primary_number,
+                    "primary_section_name": primary_entry["primary_section_name"],
+                    "hierarchy_path": primary_entry["hierarchy_path"],
+                    "subsection_number": None,
+                    "subsection_name": None,
+                    "expansion_level": "document_full",
+                    "chunks": _dedup_chunks(primary_entry["primary_chunks"]),
+                }
+            )
+
+        subsections: Dict[Optional[int], Dict[str, Any]] = primary_entry["subsections"]
+        for subsection_number in sorted(
+            subsections.keys(),
+            key=lambda s: (1, 0) if s is None else (0, s),
+        ):
+            subsection_entry = subsections[subsection_number]
+            chunk_groups.append(
+                {
+                    "primary_section_number": primary_number,
+                    "primary_section_name": primary_entry["primary_section_name"],
+                    "hierarchy_path": subsection_entry.get("hierarchy_path"),
+                    "subsection_number": subsection_number,
+                    "subsection_name": subsection_entry.get("subsection_name"),
+                    "expansion_level": "subsection",
+                    "chunks": _dedup_chunks(subsection_entry.get("chunks", [])),
+                }
+            )
+
+    return sorted(chunk_groups, key=_chunk_group_sort_key)
+
+
+def _first_non_empty(chunks: List[ChunkData], key: str) -> Optional[str]:
+    """Return the first non-empty value for a key from chunk list."""
+
+    for chunk in chunks:
+        value = chunk.get(key)
+        if value:
+            return value
+    return None
+
+
+def _expand_chunks_for_document(
+    session: Any,
+    document_id: str,
+    db_source: str,
+    seed_chunks: List[ChunkData],
+    research_config: Dict[str, Any],
+) -> List[ChunkGroup]:
+    """Apply hierarchical expansion to retrieved chunks."""
+
+    max_primary_pages = research_config["max_primary_section_page_count"]
+    max_subsection_pages = research_config["max_subsection_page_count"]
+    max_neighbour_chunks = research_config["max_neighbour_chunks"]
+
+    chunk_groups: List[ChunkGroup] = []
+    neighbor_candidates: Dict[Optional[int], List[ChunkData]] = {}
+    primary_sections: Dict[Optional[int], List[ChunkData]] = {}
+
+    for chunk in seed_chunks:
+        primary_sections.setdefault(chunk.get("primary_section_number"), []).append(
+            chunk
+        )
+
+    for primary_number, primary_chunks in primary_sections.items():
+        primary_page_count = primary_chunks[0].get("primary_section_page_count")
+
+        if primary_page_count is not None and primary_page_count <= max_primary_pages:
+            section_chunks = _fetch_primary_section_chunks(
+                session, document_id, db_source, primary_number
+            )
+            if not section_chunks:
+                section_chunks = primary_chunks
+
+            chunk_groups.append(
+                {
+                    "primary_section_number": primary_number,
+                    "primary_section_name": _first_non_empty(
+                        section_chunks or primary_chunks, "primary_section_name"
+                    ),
+                    "hierarchy_path": _first_non_empty(
+                        section_chunks or primary_chunks, "hierarchy_path"
+                    ),
+                    "subsection_number": None,
+                    "subsection_name": None,
+                    "expansion_level": "primary_section",
+                    "chunks": _dedup_chunks(section_chunks),
+                }
+            )
+            continue
+
+        subsection_groups: Dict[Optional[int], List[ChunkData]] = {}
+        for chunk in primary_chunks:
+            subsection_groups.setdefault(chunk.get("subsection_number"), []).append(
+                chunk
+            )
+
+        for subsection_number, subsection_chunks in subsection_groups.items():
+            subsection_page_count = subsection_chunks[0].get("subsection_page_count")
+
+            if (
+                subsection_page_count is not None
+                and subsection_page_count <= max_subsection_pages
+            ):
+                expanded_subsection = _fetch_subsection_chunks(
+                    session,
+                    document_id,
+                    db_source,
+                    primary_number,
+                    subsection_number,
+                )
+                if not expanded_subsection:
+                    expanded_subsection = subsection_chunks
+
+                chunk_groups.append(
+                    {
+                        "primary_section_number": primary_number,
+                        "primary_section_name": _first_non_empty(
+                            expanded_subsection or subsection_chunks,
+                            "primary_section_name",
+                        ),
+                        "hierarchy_path": _first_non_empty(
+                            expanded_subsection or subsection_chunks, "hierarchy_path"
+                        ),
+                        "subsection_number": subsection_number,
+                        "subsection_name": _first_non_empty(
+                            expanded_subsection or subsection_chunks, "subsection_name"
+                        ),
+                        "expansion_level": "subsection",
+                        "chunks": _dedup_chunks(expanded_subsection),
+                    }
+                )
+            else:
+                neighbor_candidates.setdefault(primary_number, []).extend(
+                    subsection_chunks
+                )
+
+    for primary_number, candidate_chunks in neighbor_candidates.items():
+        if not candidate_chunks:
+            continue
+
+        ranges: List[Tuple[int, int]] = []
+        for chunk in candidate_chunks:
+            chunk_num = chunk.get("chunk_number")
+            if chunk_num is None:
+                continue
+            start_chunk = max(chunk_num - max_neighbour_chunks, 1)
+            end_chunk = chunk_num + max_neighbour_chunks
+            ranges.append((start_chunk, end_chunk))
+
+        neighbor_chunks: List[ChunkData] = []
+        for start_chunk, end_chunk in _merge_ranges(ranges):
+            neighbor_chunks.extend(
+                _fetch_neighbor_chunks(
+                    session,
+                    document_id,
+                    db_source,
+                    primary_number,
+                    start_chunk,
+                    end_chunk,
+                )
+            )
+
+        if not neighbor_chunks:
+            neighbor_chunks = candidate_chunks
+
+        chunk_groups.append(
+            {
+                "primary_section_number": primary_number,
+                "primary_section_name": _first_non_empty(
+                    neighbor_chunks or candidate_chunks, "primary_section_name"
+                ),
+                "hierarchy_path": _first_non_empty(
+                    neighbor_chunks or candidate_chunks, "hierarchy_path"
+                ),
+                "subsection_number": None,
+                "subsection_name": None,
+                "expansion_level": "neighbor",
+                "chunks": _dedup_chunks(neighbor_chunks),
+            }
+        )
+
+    return sorted(chunk_groups, key=_chunk_group_sort_key)
+
+
+def _fill_page_gaps(
+    session: Any,
+    doc_id: str,
+    db_source: str,
+    existing_chunks: List[ChunkData],
+    max_gap_pages: int,
+) -> Tuple[List[ChunkData], int, int]:
+    """Fill gaps between retrieved page ranges.
+
+    If pages [4, 5, 9, 10] are retrieved and max_gap_pages=3, the gap
+    between 5 and 9 is 3 pages (6, 7, 8), so we fill it to get
+    [4, 5, 6, 7, 8, 9, 10].
+
+    Args:
+        session: Database session.
+        doc_id: Document UUID.
+        db_source: Database source.
+        existing_chunks: Already retrieved chunks.
+        max_gap_pages: Maximum gap size (in pages) to fill.
+
+    Returns:
+        Tuple of (gap_chunks, gap_ranges_filled, gap_pages_filled):
+        - gap_chunks: List of chunks that fill the gaps (not including existing)
+        - gap_ranges_filled: Number of gaps that were filled
+        - gap_pages_filled: Total pages added via gap filling
+    """
+    if not existing_chunks or max_gap_pages <= 0:
+        return [], 0, 0
+
+    # Get unique page numbers, sorted
+    existing_pages = sorted(
+        set(c.get("page_number") for c in existing_chunks if c.get("page_number"))
+    )
+
+    if len(existing_pages) < 2:
+        return [], 0, 0
+
+    # Find gaps to fill
+    gap_chunks: List[ChunkData] = []
+    gap_ranges_filled = 0
+    gap_pages_filled = 0
+    existing_chunk_ids = set(c.get("id") for c in existing_chunks)
+
+    for i in range(len(existing_pages) - 1):
+        current_page = existing_pages[i]
+        next_page = existing_pages[i + 1]
+        gap_size = next_page - current_page - 1
+
+        # If gap is within limit, fill it
+        if 0 < gap_size <= max_gap_pages:
+            gap_start = current_page + 1
+            gap_end = next_page - 1
+
+            fetched_chunks = _fetch_chunks_by_page_range(
+                session, doc_id, db_source, gap_start, gap_end
+            )
+
+            # Only add chunks we don't already have
+            new_chunks = [
+                c for c in fetched_chunks if c.get("id") not in existing_chunk_ids
+            ]
+
+            if new_chunks:
+                gap_chunks.extend(new_chunks)
+                existing_chunk_ids.update(c.get("id") for c in new_chunks)
+                gap_ranges_filled += 1
+                gap_pages_filled += gap_size
+
+                logger.debug(
+                    "Filled gap pages %d-%d (%d pages, %d chunks) for document %s",
+                    gap_start,
+                    gap_end,
+                    gap_size,
+                    len(new_chunks),
+                    doc_id,
+                )
+
+    if gap_chunks:
+        logger.info(
+            "Gap filling for %s: filled %d gaps, added %d pages (%d chunks)",
+            doc_id,
+            gap_ranges_filled,
+            gap_pages_filled,
+            len(gap_chunks),
+        )
+
+    return gap_chunks, gap_ranges_filled, gap_pages_filled
+
+
+def _compute_expansion_metrics(
+    chunk_groups: List[ChunkGroup],
+    page_count: Optional[int],
+    retrieval_method: Literal["full_context", "similarity_expansion"],
+    seed_chunks_count: int = 0,
+    seed_primary_sections: Optional[Set[Optional[int]]] = None,
+    gap_ranges_filled: int = 0,
+    gap_pages_filled: int = 0,
+) -> ExpansionMetrics:
+    """Compute expansion metrics from chunk groups.
+
+    Args:
+        chunk_groups: List of chunk groups with expansion levels.
+        page_count: Document page count.
+        retrieval_method: How chunks were retrieved.
+        seed_chunks_count: Number of seed chunks from similarity search.
+        seed_primary_sections: Set of primary section numbers in seed chunks.
+        gap_ranges_filled: Number of gaps that were filled.
+        gap_pages_filled: Total pages added via gap filling.
+
+    Returns:
+        ExpansionMetrics: Computed metrics for tracking.
+    """
+    # Count groups by expansion level
+    groups_document_full = 0
+    groups_primary_section = 0
+    groups_subsection = 0
+    groups_neighbor = 0
+
+    all_chunks: List[ChunkData] = []
+    all_pages: Set[int] = set()
+    all_primary_sections: Set[Optional[int]] = set()
+
+    for group in chunk_groups:
+        level = group.get("expansion_level", "neighbor")
+        if level == "document_full":
+            groups_document_full += 1
+        elif level == "primary_section":
+            groups_primary_section += 1
+        elif level == "subsection":
+            groups_subsection += 1
+        else:
+            groups_neighbor += 1
+
+        for chunk in group.get("chunks", []):
+            all_chunks.append(chunk)
+            if chunk.get("page_number") is not None:
+                all_pages.add(chunk["page_number"])
+            all_primary_sections.add(chunk.get("primary_section_number"))
+
+    final_chunks_count = len(_dedup_chunks(all_chunks))
+    seed_count = seed_chunks_count if seed_chunks_count > 0 else final_chunks_count
+
+    return {
+        "document_page_count": page_count,
+        "retrieval_method": retrieval_method,
+        "seed_chunks_count": seed_chunks_count,
+        "seed_primary_sections_count": len(seed_primary_sections) if seed_primary_sections else 0,
+        "groups_total": len(chunk_groups),
+        "groups_document_full": groups_document_full,
+        "groups_primary_section": groups_primary_section,
+        "groups_subsection": groups_subsection,
+        "groups_neighbor": groups_neighbor,
+        "gap_ranges_filled": gap_ranges_filled,
+        "gap_pages_filled": gap_pages_filled,
+        "final_chunks_count": final_chunks_count,
+        "final_pages_count": len(all_pages),
+        "final_primary_sections_count": len(all_primary_sections),
+        "expansion_ratio": round(final_chunks_count / seed_count, 2) if seed_count > 0 else 1.0,
+    }
+
+
+def _log_expansion_metrics(
+    document_name: str,
+    metrics: ExpansionMetrics,
+) -> None:
+    """Log expansion metrics for observability.
+
+    Args:
+        document_name: Name of the document.
+        metrics: Computed expansion metrics.
+    """
+    gap_info = ""
+    if metrics["gap_pages_filled"] > 0:
+        gap_info = f", gap_fill={metrics['gap_ranges_filled']} ranges/{metrics['gap_pages_filled']} pages"
+
     logger.info(
-        "Fetching chunks by similarity for %d documents from %s",
+        "Expansion metrics for '%s': method=%s, seed=%d chunks from %d sections, "
+        "groups=%d (full=%d, primary=%d, subsec=%d, neighbor=%d)%s, "
+        "final=%d chunks/%d pages, expansion_ratio=%.2f",
+        document_name,
+        metrics["retrieval_method"],
+        metrics["seed_chunks_count"],
+        metrics["seed_primary_sections_count"],
+        metrics["groups_total"],
+        metrics["groups_document_full"],
+        metrics["groups_primary_section"],
+        metrics["groups_subsection"],
+        metrics["groups_neighbor"],
+        gap_info,
+        metrics["final_chunks_count"],
+        metrics["final_pages_count"],
+        metrics["expansion_ratio"],
+    )
+
+
+def fetch_chunks_with_hierarchical_expansion(
+    document_ids: List[str],
+    db_source: str,
+    research_config: Dict[str, Any],
+    query_embedding: Optional[List[float]] = None,
+) -> List[DocumentChunks]:
+    """
+    Fetch chunks using hierarchical expansion and document structure.
+
+    Steps:
+        1. If page_count is below threshold, fetch full document content.
+        2. Otherwise run similarity search to get top chunks.
+        3. Expand by primary section, subsection, or neighbor ranges.
+        4. Return grouped chunks for XML formatting.
+
+    Args:
+        document_ids: Document UUIDs to fetch.
+        db_source: Database source.
+        research_config: Registry config containing expansion thresholds.
+        query_embedding: Query embedding for similarity search (required for
+            large documents).
+
+    Returns:
+        List[DocumentChunks]: Documents with grouped chunks.
+
+    Raises:
+        FileResearchError: If configuration is missing or retrieval fails.
+    """
+
+    required_config = [
+        "max_pages_for_full_context",
+        "max_chunks_per_file",
+        "max_primary_section_page_count",
+        "max_subsection_page_count",
+        "max_neighbour_chunks",
+        "max_gap_fill_pages",
+    ]
+    missing_config = [field for field in required_config if field not in research_config]
+    if missing_config:
+        raise FileResearchError(
+            f"Missing research_config fields for {db_source}: {missing_config}"
+        )
+
+    embedding_str = (
+        "[" + ",".join(str(x) for x in query_embedding) + "]"
+        if query_embedding
+        else None
+    )
+
+    logger.info(
+        "Fetching chunks with hierarchical expansion for %d documents from %s",
         len(document_ids),
         db_source,
     )
 
     documents: List[DocumentChunks] = []
-    embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
 
     try:
-        with get_session() as session:
+        with get_database_session() as session:
             for doc_id in document_ids:
-                doc_result = session.execute(
-                    text(
-                        """
-                        SELECT id, document_name, file_name
-                        FROM iris_document_metadata
-                        WHERE id = :doc_id AND db_source = :db_source
-                    """
-                    ),
-                    {"doc_id": doc_id, "db_source": db_source},
-                )
-                doc_row = doc_result.mappings().first()
+                metadata = _fetch_document_metadata(session, doc_id, db_source)
+                page_count = metadata.get("page_count")
 
-                if not doc_row:
-                    raise FileResearchError(
-                        f"Document {doc_id} not found in {db_source}"
+                if (
+                    page_count is not None
+                    and page_count <= research_config["max_pages_for_full_context"]
+                ):
+                    logger.info(
+                        "Document %s has %s pages <= threshold %s. Fetching full context.",
+                        metadata["document_name"],
+                        page_count,
+                        research_config["max_pages_for_full_context"],
                     )
+                    all_chunks = _fetch_all_chunks_for_document(
+                        session, doc_id, db_source
+                    )
+                    chunk_groups = _group_full_document_chunks(all_chunks)
 
-                # Similarity-based retrieval (top-K by relevance)
-                chunk_result = session.execute(
-                    text(
-                        """
-                        SELECT
-                            id,
-                            chunk_number,
-                            chunk_content,
-                            primary_section_name,
-                            subsection_name,
-                            hierarchy_path,
-                            page_number,
-                            1 - (chunk_embedding <=> CAST(:embedding AS halfvec)) AS similarity
-                        FROM iris_document_chunks
-                        WHERE document_id = :doc_id
-                          AND db_source = :db_source
-                          AND chunk_embedding IS NOT NULL
-                        ORDER BY chunk_embedding <=> CAST(:embedding AS halfvec)
-                        LIMIT :limit
-                    """
-                    ),
-                    {
-                        "doc_id": doc_id,
-                        "db_source": db_source,
-                        "embedding": embedding_str,
-                        "limit": max_chunks_per_file,
-                    },
-                )
+                    # Compute metrics for full context retrieval
+                    metrics = _compute_expansion_metrics(
+                        chunk_groups=chunk_groups,
+                        page_count=page_count,
+                        retrieval_method="full_context",
+                        seed_chunks_count=len(all_chunks),
+                        seed_primary_sections=set(
+                            c.get("primary_section_number") for c in all_chunks
+                        ),
+                    )
+                    _log_expansion_metrics(metadata["document_name"], metrics)
 
-                chunk_rows = chunk_result.mappings().all()
-
-                # Sort by page_number for display
-                # (keeps them in logical document order after filtering by relevance)
-                chunk_rows = sorted(
-                    chunk_rows,
-                    key=lambda r: (r["page_number"] or 0, r["chunk_number"]),
-                )
-
-                chunks: List[ChunkData] = []
-                for chunk_row in chunk_rows:
-                    chunks.append(
+                    documents.append(
                         {
-                            "chunk_id": str(chunk_row["id"]),
-                            "chunk_number": chunk_row["chunk_number"],
-                            "chunk_content": chunk_row["chunk_content"],
-                            "primary_section_name": chunk_row["primary_section_name"],
-                            "subsection_name": chunk_row["subsection_name"],
-                            "hierarchy_path": chunk_row["hierarchy_path"],
-                            "page_number": chunk_row["page_number"],
-                            "page_reference": chunk_row[
-                                "hierarchy_path"
-                            ],  # Use hierarchy_path
+                            "document_id": metadata["id"],
+                            "document_name": metadata["document_name"],
+                            "file_name": metadata.get("file_name"),
+                            "chunks": all_chunks,
+                            "chunk_groups": chunk_groups,
+                            "expansion_metrics": metrics,
                         }
                     )
+                    continue
+
+                if not embedding_str:
+                    raise FileResearchError(
+                        "query_embedding is required for similarity-based retrieval"
+                    )
+
+                seed_chunks = _fetch_similarity_chunks_for_document(
+                    session,
+                    doc_id,
+                    db_source,
+                    embedding_str,
+                    research_config["max_chunks_per_file"],
+                )
+
+                if not seed_chunks:
+                    raise FileResearchError(
+                        f"No chunks found for document {metadata['document_name']}"
+                    )
+
+                expanded_groups = _expand_chunks_for_document(
+                    session, doc_id, db_source, seed_chunks, research_config
+                )
+                if not expanded_groups:
+                    expanded_groups = [
+                        {
+                            "primary_section_number": seed_chunks[0].get(
+                                "primary_section_number"
+                            ),
+                            "primary_section_name": _first_non_empty(
+                                seed_chunks, "primary_section_name"
+                            ),
+                            "hierarchy_path": _first_non_empty(
+                                seed_chunks, "hierarchy_path"
+                            ),
+                            "subsection_number": seed_chunks[0].get(
+                                "subsection_number"
+                            ),
+                            "subsection_name": _first_non_empty(
+                                seed_chunks, "subsection_name"
+                            ),
+                            "expansion_level": "neighbor",
+                            "chunks": _dedup_chunks(seed_chunks),
+                        }
+                    ]
+
+                aggregated_chunks = _dedup_chunks(
+                    [chunk for group in expanded_groups for chunk in group["chunks"]]
+                )
+
+                # Gap filling: fill small gaps between retrieved page ranges
+                gap_ranges_filled = 0
+                gap_pages_filled = 0
+                max_gap_pages = research_config.get("max_gap_fill_pages", 0)
+
+                if max_gap_pages > 0 and aggregated_chunks:
+                    gap_chunks, gap_ranges_filled, gap_pages_filled = _fill_page_gaps(
+                        session,
+                        doc_id,
+                        db_source,
+                        aggregated_chunks,
+                        max_gap_pages,
+                    )
+                    if gap_chunks:
+                        # Add gap chunks to aggregated set
+                        aggregated_chunks = _dedup_chunks(
+                            aggregated_chunks + gap_chunks
+                        )
+
+                # Compute metrics for similarity-based expansion
+                seed_primary_sections = set(
+                    c.get("primary_section_number") for c in seed_chunks
+                )
+                metrics = _compute_expansion_metrics(
+                    chunk_groups=expanded_groups,
+                    page_count=page_count,
+                    retrieval_method="similarity_expansion",
+                    seed_chunks_count=len(seed_chunks),
+                    seed_primary_sections=seed_primary_sections,
+                    gap_ranges_filled=gap_ranges_filled,
+                    gap_pages_filled=gap_pages_filled,
+                )
+                _log_expansion_metrics(metadata["document_name"], metrics)
 
                 documents.append(
                     {
-                        "document_id": str(doc_row["id"]),
-                        "document_name": doc_row["document_name"],
-                        "file_name": doc_row["file_name"],
-                        "chunks": chunks,
+                        "document_id": metadata["id"],
+                        "document_name": metadata["document_name"],
+                        "file_name": metadata.get("file_name"),
+                        "chunks": aggregated_chunks,
+                        "chunk_groups": expanded_groups,
+                        "expansion_metrics": metrics,
                     }
                 )
 
             logger.info(
-                "Retrieved chunks for %d documents from %s", len(documents), db_source
+                "Retrieved expanded chunks for %d documents from %s",
+                len(documents),
+                db_source,
             )
-
     except FileResearchError:
         raise
     except Exception as exc:
         raise FileResearchError(
-            f"Error fetching chunks for {db_source}: {exc}"
+            f"Error fetching hierarchical chunks for {db_source}: {exc}"
         ) from exc
 
     return documents
 
 
-def load_file_research_config() -> Dict[str, Any]:
+@lru_cache(maxsize=1)
+def load_file_research_prompt_config() -> Dict[str, Any]:
     """
     Load file research configuration from PostgreSQL.
 
     Returns:
-        Configuration dictionary with system prompt, tools, and user_prompt.
+        Dict[str, Any]: Configuration with system prompt, tools, and user_prompt.
 
     Raises:
-        ValueError: If prompt not found in database.
-        ValueError: If user_prompt not found in database.
+        ValueError: Raised when prompt is missing in the database.
     """
-    prompt = get_prompt("subagent", "file_research")
-    if not prompt:
-        raise ValueError("Prompt not found: subagent/file_research")
+    system_prompt, tools, user_prompt = fetch_prompt_with_context(
+        "subagent", "file_research"
+    )
 
-    user_prompt = prompt.get("user_prompt")
     if not user_prompt:
         raise ValueError(
             "user_prompt not found in database for subagent/file_research. "
@@ -271,54 +1226,153 @@ def load_file_research_config() -> Dict[str, Any]:
         )
 
     return {
-        "system_prompt": prompt.get("system_prompt", ""),
+        "system_prompt": system_prompt,
         "user_prompt": user_prompt,
-        "tools": (
-            [prompt.get("tool_definition")] if prompt.get("tool_definition") else []
-        ),
+        "tools": tools,
     }
 
 
-def format_document_for_llm(document: DocumentChunks) -> str:
+def format_document_chunks_for_llm(document: DocumentChunks) -> str:
     """
     Format a document's chunks for LLM research synthesis.
 
     Args:
-        document: Document with all its chunks.
+        document (DocumentChunks): Document with all its chunks.
 
     Returns:
-        Formatted string for LLM prompt.
+        str: Formatted string for LLM prompt.
     """
-    formatted = f"# {document['document_name']}\n\n"
-
     if not document["chunks"]:
-        formatted += "No content available.\n"
-        return formatted
+        return "No content available.\n"
 
-    page_chunks: Dict[int, List[ChunkData]] = {}
-    for chunk in document["chunks"]:
-        page = chunk.get("page_number") or 0
-        if page not in page_chunks:
-            page_chunks[page] = []
-        page_chunks[page].append(chunk)
+    chunk_groups = document.get("chunk_groups") or _group_full_document_chunks(
+        document["chunks"]
+    )
+    if not chunk_groups:
+        return "No content available.\n"
 
-    for page in sorted(page_chunks.keys()):
-        chunks = page_chunks[page]
-        formatted += f"\n## Page {page}\n\n"
+    return _format_chunk_groups_xml(document, chunk_groups)
 
-        for chunk in chunks:
-            if chunk.get("hierarchy_path"):
-                formatted += f"*{chunk['hierarchy_path']}*\n\n"
-            elif chunk.get("primary_section_name"):
-                formatted += f"*{chunk['primary_section_name']}"
-                if chunk.get("subsection_name"):
-                    formatted += f" > {chunk['subsection_name']}"
-                formatted += "*\n\n"
 
-            formatted += f"{chunk['chunk_content']}\n\n"
-            formatted += "---\n"
+def _format_chunk_xml(chunk: ChunkData, indent: str = "  ") -> List[str]:
+    """Render a single chunk as XML with content markers."""
 
-    return formatted
+    page_number = chunk.get("page_number") or 0
+    content_lines = (chunk.get("chunk_content") or "").splitlines() or [""]
+    lines = [
+        f'{indent}<chunk page="{page_number}">',
+        f"{indent}  <content_start/>",
+    ]
+    for line in content_lines:
+        lines.append(f"{indent}  {line}")
+    lines.append(f"{indent}  <content_end/>")
+    lines.append(f"{indent}</chunk>")
+    return lines
+
+
+def _format_chunk_groups_xml(
+    document: DocumentChunks, chunk_groups: List[ChunkGroup]
+) -> str:
+    """Format chunk groups into the hierarchical XML structure."""
+
+    file_name = document.get("file_name") or document["document_name"]
+    primary_sections: Dict[Optional[int], Dict[str, Any]] = {}
+
+    for group in chunk_groups:
+        primary_number = group.get("primary_section_number")
+        primary_entry = primary_sections.setdefault(
+            primary_number,
+            {
+                "primary_section_name": group.get("primary_section_name"),
+                "hierarchy_path": group.get("hierarchy_path"),
+                "chunks": [],
+                "subsections": {},
+            },
+        )
+
+        if not primary_entry["primary_section_name"] and group.get(
+            "primary_section_name"
+        ):
+            primary_entry["primary_section_name"] = group.get("primary_section_name")
+        if not primary_entry["hierarchy_path"] and group.get("hierarchy_path"):
+            primary_entry["hierarchy_path"] = group.get("hierarchy_path")
+
+        if group.get("expansion_level") == "subsection":
+            subsection_number = group.get("subsection_number")
+            subsections: Dict[Optional[int], Dict[str, Any]] = primary_entry[
+                "subsections"
+            ]
+            subsection_entry = subsections.setdefault(
+                subsection_number,
+                {
+                    "subsection_name": group.get("subsection_name"),
+                    "hierarchy_path": group.get("hierarchy_path"),
+                    "chunks": [],
+                },
+            )
+            if not subsection_entry["subsection_name"] and group.get(
+                "subsection_name"
+            ):
+                subsection_entry["subsection_name"] = group.get("subsection_name")
+            if not subsection_entry.get("hierarchy_path") and group.get(
+                "hierarchy_path"
+            ):
+                subsection_entry["hierarchy_path"] = group.get("hierarchy_path")
+            subsection_entry["chunks"].extend(group.get("chunks", []))
+        else:
+            primary_entry["chunks"].extend(group.get("chunks", []))
+
+    lines = [f'<document id="{document["document_id"]}" filename="{file_name}">']
+
+    for primary_number in sorted(
+        primary_sections.keys(), key=_primary_section_sort_key
+    ):
+        primary_entry = primary_sections[primary_number]
+        attrs: List[str] = []
+        if primary_entry.get("hierarchy_path"):
+            attrs.append(f'hierarchy_path="{primary_entry["hierarchy_path"]}"')
+        if primary_entry.get("primary_section_name"):
+            attrs.append(f'name="{primary_entry["primary_section_name"]}"')
+        attr_str = f" {' '.join(attrs)}" if attrs else ""
+
+        lines.append(f"  <primary_section{attr_str}>")
+
+        subsection_entries: Dict[Optional[int], Dict[str, Any]] = primary_entry.get(
+            "subsections", {}
+        )
+        for subsection_number in sorted(
+            subsection_entries.keys(),
+            key=lambda s: (1, 0) if s is None else (0, s),
+        ):
+            subsection_entry = subsection_entries[subsection_number]
+            subsection_name = subsection_entry.get("subsection_name") or (
+                f"Subsection {subsection_number}"
+                if subsection_number is not None
+                else "Subsection"
+            )
+            subsection_attrs: List[str] = []
+            if subsection_entry.get("hierarchy_path"):
+                subsection_attrs.append(
+                    f'hierarchy_path="{subsection_entry["hierarchy_path"]}"'
+                )
+            if subsection_name:
+                subsection_attrs.append(f'name="{subsection_name}"')
+            subsection_attr_str = (
+                f" {' '.join(subsection_attrs)}" if subsection_attrs else ""
+            )
+
+            lines.append(f"    <subsection{subsection_attr_str}>")
+            for chunk in _dedup_chunks(subsection_entry.get("chunks", [])):
+                lines.extend(_format_chunk_xml(chunk, indent="      "))
+            lines.append("    </subsection>")
+
+        for chunk in _dedup_chunks(primary_entry.get("chunks", [])):
+            lines.extend(_format_chunk_xml(chunk, indent="    "))
+
+        lines.append("  </primary_section>")
+
+    lines.append("</document>")
+    return "\n".join(lines)
 
 
 def _build_llm_messages(
@@ -329,11 +1383,11 @@ def _build_llm_messages(
     Build message list for LLM call.
 
     Args:
-        system_prompt: The system prompt content.
-        user_prompt: The user prompt content from database.
+        system_prompt (str): The system prompt content.
+        user_prompt (str): The user prompt content from database.
 
     Returns:
-        List of message dicts for LLM.
+        List[Dict[str, str]]: Messages for the LLM call.
     """
     return [
         {"role": "system", "content": system_prompt},
@@ -349,11 +1403,11 @@ def _parse_tool_response(
     Parse LLM tool call response.
 
     Args:
-        result: The result from call_llm (may be tuple or response object).
-        file_name: File name for page research entries.
+        result (Any): Response from execute_llm_call (may be tuple or response object).
+        file_name (str): File name for page research entries.
 
     Returns:
-        Parsed arguments dict if tool call found, None otherwise.
+        Optional[Dict[str, Any]]: Parsed arguments if a tool call is present.
     """
     if isinstance(result, tuple) and len(result) == 2:
         response, _ = result
@@ -373,18 +1427,26 @@ def _parse_tool_response(
     if tool_call.function.name != "extract_page_research":
         return None
 
-    arguments = json.loads(tool_call.function.arguments)
+    try:
+        arguments = json.loads(tool_call.function.arguments)
+    except json.JSONDecodeError:
+        logger.error("Invalid tool arguments for %s", file_name)
+        return None
 
-    page_research: List[PageResearch] = []
-    for page_item in arguments.get("page_research", []):
-        page_research.append(
-            {
-                "page_number": page_item.get("page_number", 0),
-                "research_content": page_item.get("research_content", ""),
-                "file_link": file_name,
-                "file_name": file_name,
-            }
-        )
+    page_research: List[PageResearch] = [
+        {
+            "page_number": page_item.get("page_number", 0),
+            # LLM returns extracted_fact; map to research_content for internal consistency.
+            "research_content": (
+                page_item.get("extracted_fact")
+                or page_item.get("research_content")
+                or ""
+            ),
+            "file_link": file_name,
+            "file_name": file_name,
+        }
+        for page_item in arguments.get("page_research", [])
+    ]
 
     return {
         "page_research": page_research,
@@ -400,8 +1462,8 @@ def _track_llm_usage(
     Track LLM usage if process monitor available.
 
     Args:
-        result: The result from call_llm.
-        context: Synthesis context with process_monitor and stage_name.
+        result (Any): The result from execute_llm_call.
+        context (SynthesisContext): Contains process_monitor and stage_name.
     """
     process_monitor = context.get("process_monitor")
     stage_name = context.get("stage_name")
@@ -412,7 +1474,7 @@ def _track_llm_usage(
             process_monitor.add_llm_call_details_to_stage(stage_name, usage_details)
 
 
-def synthesize_single_document(
+def synthesize_document_research(
     research_statement: str,
     document: DocumentChunks,
     synthesis_context: Optional[SynthesisContext] = None,
@@ -421,16 +1483,16 @@ def synthesize_single_document(
     Synthesize research findings for a single document using LLM.
 
     Args:
-        research_statement: The research query.
-        document: Document with chunks to analyze.
-        synthesis_context: Optional context dict containing token, db_source,
-            process_monitor, and stage_name.
+        research_statement (str): The research query.
+        document (DocumentChunks): Document with chunks to analyze.
+        synthesis_context (SynthesisContext | None): Optional context containing token,
+            db_source, process_monitor, and stage_name.
 
     Returns:
-        DocumentResearch with page-level findings.
+        DocumentResearch: Page-level findings for the document.
 
     Raises:
-        FileResearchError: If synthesis fails or no valid response from LLM.
+        FileResearchError: Raised when synthesis fails or response is invalid.
     """
     ctx = synthesis_context or {}
     doc_name = document["document_name"]
@@ -445,8 +1507,8 @@ def synthesize_single_document(
         raise FileResearchError(f"No content available for document {doc_name}")
 
     try:
-        prompt_config = load_file_research_config()
-        document_content = format_document_for_llm(document)
+        prompt_config = load_file_research_prompt_config()
+        document_content = format_document_chunks_for_llm(document)
 
         system_prompt = (
             prompt_config.get("system_prompt", "")
@@ -462,9 +1524,9 @@ def synthesize_single_document(
             .replace("{{document_name}}", doc_name)
         )
 
-        model_config = config.get_model_config(MODEL_CAPABILITY)
+        model_config = config.get_model_settings(MODEL_CAPABILITY)
 
-        result = call_llm(
+        result = execute_llm_call(
             oauth_token=ctx.get("token") or "placeholder_token",
             model=model_config["name"],
             messages=_build_llm_messages(system_prompt, user_prompt),
@@ -503,34 +1565,34 @@ def synthesize_single_document(
         ) from exc
 
 
-def _build_structured_output(
+def _build_findings_from_research(
     document_results: List[DocumentResearch],
-) -> Tuple[Dict[str, Dict[str, PageResearch]], Dict[str, Dict[str, Any]]]:
+    document_id_lookup: Dict[str, str],
+    db_source: str,
+) -> FindingsList:
     """
-    Build structured output from document research results.
+    Build unified findings list from document research results.
 
     Args:
-        document_results: List of DocumentResearch dicts.
+        document_results: Per-document research results.
+        document_id_lookup: Mapping of document_name to document_id.
+        db_source: Database identifier.
 
     Returns:
-        Tuple of (structured_output, reference_index) dicts.
+        List of Finding objects in unified format.
     """
-    structured_output: Dict[str, Dict[str, PageResearch]] = {}
-    reference_index: Dict[str, Dict[str, Any]] = {}
-    ref_counter = 1
+    findings: FindingsList = []
 
     for result in document_results:
         doc_name = result["document_name"]
         page_research = result.get("page_research", [])
+        doc_id = document_id_lookup.get(doc_name, "")
 
         if page_research and not result["status_summary"].startswith("Error"):
-            doc_output: Dict[str, PageResearch] = {}
-
             for page_item in sorted(
                 page_research, key=lambda x: x.get("page_number", 0)
             ):
                 page_number = page_item.get("page_number", 0)
-                ref_key = str(ref_counter)
 
                 file_link = page_item.get("file_link", "") or result.get(
                     "file_link", ""
@@ -538,58 +1600,49 @@ def _build_structured_output(
                 file_name = page_item.get("file_name", "") or result.get(
                     "file_link", ""
                 )
-                content = page_item.get("research_content", "") or ""
-                research_content = (
-                    f"{content.rstrip()} [REF:{ref_key}]"
-                    if content
-                    else f"[REF:{ref_key}]"
+                content = (
+                    page_item.get("research_content")
+                    or page_item.get("extracted_fact")
+                    or ""
                 )
 
-                doc_output[f"page_{page_number}"] = {
-                    "page_number": page_number,
-                    "research_content": research_content,
-                    "file_link": file_link,
-                    "file_name": file_name,
-                }
+                if content:  # Only add findings with actual content
+                    findings.append({
+                        "document_id": doc_id,
+                        "document_name": doc_name,
+                        "file_name": file_name,
+                        "file_link": file_link,
+                        "page": page_number,
+                        "finding": content.strip(),
+                        "source": "file_research",
+                        "db_source": db_source,
+                    })
 
-                reference_index[ref_key] = {
-                    "doc_name": doc_name,
-                    "page": page_number,
-                    "file_link": file_link,
-                    "file_name": file_name,
-                    "source_filename": doc_name,
-                    "highlight_text": "",
-                }
-
-                ref_counter += 1
-
-            if doc_output:
-                structured_output[doc_name] = doc_output
-
-    return structured_output, reference_index
+    return findings
 
 
 def _build_status_summary(
-    structured_output: Dict[str, Dict[str, PageResearch]],
+    findings: FindingsList,
     db_source: str,
 ) -> str:
     """
-    Build status summary string.
+    Build status summary string from findings.
 
     Args:
-        structured_output: Dict of document research output.
+        findings: List of Finding objects.
         db_source: Database source identifier.
 
     Returns:
-        Human-readable status summary.
+        str: Human-readable status summary.
     """
-    if not structured_output:
+    if not findings:
         return f"No relevant information found in {db_source} documents"
 
-    total_pages = sum(len(doc_data) for doc_data in structured_output.values())
+    unique_docs = set(f["document_name"] for f in findings)
+    unique_pages = set((f["document_name"], f["page"]) for f in findings)
     return (
-        f"Found relevant information in {len(structured_output)} "
-        f"document(s) across {total_pages} page(s)"
+        f"Found {len(findings)} finding(s) in {len(unique_docs)} "
+        f"document(s) across {len(unique_pages)} page(s)"
     )
 
 
@@ -604,14 +1657,14 @@ def _process_documents_parallel(
     Process documents in parallel using ThreadPoolExecutor.
 
     Args:
-        research_statement: The research query.
-        documents: List of documents with chunks.
-        db_source: Database source identifier.
-        ctx: Research context with token, process_monitor, stage_name.
-        research_config: Research configuration dict.
+        research_statement (str): The research query.
+        documents (List[DocumentChunks]): Documents with chunks.
+        db_source (str): Database source identifier.
+        ctx (ResearchContext): Research context with token, process_monitor, stage_name.
+        research_config (Dict[str, Any]): Research configuration from registry.
 
     Returns:
-        List of DocumentResearch results.
+        List[DocumentResearch]: Research results for each document.
     """
     synthesis_ctx: SynthesisContext = {
         "token": ctx.get("token"),
@@ -620,13 +1673,13 @@ def _process_documents_parallel(
         "stage_name": ctx.get("stage_name"),
     }
 
-    max_parallel = research_config.get("max_parallel_files", DEFAULT_MAX_PARALLEL_FILES)
+    max_parallel = research_config["max_parallel_files"]
     results: List[DocumentResearch] = []
 
     with ThreadPoolExecutor(max_workers=min(len(documents), max_parallel)) as executor:
         future_to_doc = {
             executor.submit(
-                synthesize_single_document,
+                synthesize_document_research,
                 research_statement,
                 doc,
                 synthesis_ctx,
@@ -640,7 +1693,6 @@ def _process_documents_parallel(
                 results.append(future.result())
                 logger.info("Completed research for: %s", doc["document_name"])
             except Exception as exc:
-                # Re-raise - no fallback to degraded results
                 raise FileResearchError(
                     f"Failed to process document {doc.get('document_name')}: {exc}"
                 ) from exc
@@ -648,7 +1700,7 @@ def _process_documents_parallel(
     return results
 
 
-def query_file_research_sync(
+def execute_file_research_sync(
     research_statement: str,
     document_ids: List[str],
     db_source: str,
@@ -659,27 +1711,27 @@ def query_file_research_sync(
 
     This is the main entry point for the File Research Subagent.
 
-    Uses similarity-based chunk retrieval. The query_embedding MUST be provided
-    in the research_context. Chunks are fetched by embedding similarity,
-    then sorted by page order for coherent presentation.
+    Uses hierarchical chunk retrieval with similarity search for larger files,
+    and full-context retrieval for small documents. Retrieved chunks are
+    expanded by primary section, subsection, or neighbor ranges to provide
+    coherent context for the LLM.
 
     Args:
-        research_statement: The research query/statement.
-        document_ids: List of document UUIDs to research (from Stage 1).
-        db_source: Database source (e.g., 'internal_capm', 'external_ey').
-        research_context: Context dict containing:
+        research_statement (str): The research query/statement.
+        document_ids (List[str]): Document UUIDs to research (from Stage 1).
+        db_source (str): Database source (e.g., 'internal_capm', 'external_ey').
+        research_context (ResearchContext | None): Context containing:
             - token: OAuth token for API calls
             - process_monitor: For tracking
             - stage_name: For tracking
-            - query_embedding: REQUIRED embedding for similarity-based retrieval
+            - query_embedding: Embedding for similarity-based retrieval of
+                large documents
 
     Returns:
-        FileResearchResult containing documents, status_summary, reference_index,
-        and db_source.
+        FileResearchResult: Documents, status_summary, reference_index, and db_source.
 
     Raises:
-        FileResearchError: If document_ids is empty, query_embedding missing,
-            or any document fails to process.
+        FileResearchError: Raised when inputs are invalid or processing fails.
     """
     ctx = research_context or {}
     query_embedding = ctx.get("query_embedding")
@@ -687,49 +1739,46 @@ def query_file_research_sync(
     if not document_ids:
         raise FileResearchError("No document_ids provided for file research")
 
-    if not query_embedding:
-        raise FileResearchError(
-            "query_embedding is required in research_context for file research. "
-            "Similarity-based retrieval is mandatory."
-        )
-
     logger.info(
         "Starting file research for %d documents in %s",
         len(document_ids),
         db_source,
     )
 
-    research_config = DatabaseMetadataRepository().get_research_config(db_source)
+    research_config = DatabaseMetadataCache().get_research_config(db_source)
 
-    documents = fetch_document_chunks(
+    documents = fetch_chunks_with_hierarchical_expansion(
         document_ids=document_ids,
         db_source=db_source,
-        max_chunks_per_file=research_config.get(
-            "max_chunks_per_file", DEFAULT_MAX_CHUNKS_PER_FILE
-        ),
+        research_config=research_config,
         query_embedding=query_embedding,
     )
 
     if not documents:
         raise FileResearchError(
-            f"No content found for any of the {len(document_ids)} selected documents in {db_source}"
+            f"No content found for any of the {len(document_ids)} "
+            f"selected documents in {db_source}"
         )
 
     document_results = _process_documents_parallel(
         research_statement, documents, db_source, ctx, research_config
     )
 
-    structured_output, reference_index = _build_structured_output(document_results)
+    # Build document_id lookup from fetched documents
+    document_id_lookup: Dict[str, str] = {
+        doc["document_name"]: doc["document_id"] for doc in documents
+    }
 
-    logger.info(
-        "File research complete for %s: %s",
-        db_source,
-        _build_status_summary(structured_output, db_source),
+    # Convert to unified findings format
+    findings = _build_findings_from_research(
+        document_results, document_id_lookup, db_source
     )
+    status_summary = _build_status_summary(findings, db_source)
+
+    logger.info("File research complete for %s: %s", db_source, status_summary)
 
     return {
-        "documents": structured_output,
-        "status_summary": _build_status_summary(structured_output, db_source),
-        "reference_index": reference_index,
+        "findings": findings,
+        "status_summary": status_summary,
         "db_source": db_source,
     }

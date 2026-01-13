@@ -1,24 +1,12 @@
-"""
-Direct Response Agent Module.
-
-Handles direct response generation based solely on conversation context
-without requiring additional database research. Used when the router
-determines no research is needed.
-
-Functions:
-    response_from_conversation: Generate a direct response based on conversation
-
-Classes:
-    DirectResponseError: Exception for direct response errors
-"""
+"""Generate responses directly from conversation context."""
 
 import logging
 from typing import Any, Dict, Generator, Optional
 
-from ..connections.llm import call_llm
+from ..connections.llm import execute_llm_call
 from ..utils.env_config import config
-from ..utils.input_sanitizer import format_conversation_for_prompt
-from ..utils.prompt_loader import get_composed_prompt
+from ..utils.input_sanitizer import format_conversation_history_for_prompt
+from ..utils.prompt_loader import fetch_prompt_with_context
 
 MODEL_CAPABILITY = "large"
 MODEL_MAX_TOKENS = 16384
@@ -32,13 +20,12 @@ class DirectResponseError(Exception):
 
 
 def _get_model_settings() -> Dict[str, Any]:
-    """
-    Get model settings from config based on capability tier.
+    """Return model settings based on the configured capability tier.
 
     Returns:
-        Dictionary containing model name and token costs.
+        Dict[str, Any]: Model name and token costs.
     """
-    model_config = config.get_model_config(MODEL_CAPABILITY)
+    model_config = config.get_model_settings(MODEL_CAPABILITY)
     return {
         "name": model_config["name"],
         "prompt_token_cost": model_config["prompt_token_cost"],
@@ -51,19 +38,19 @@ def _build_messages(
     user_prompt_template: str,
     conversation: Dict[str, Any],
 ) -> list:
-    """
-    Build the messages list for the LLM call.
+    """Build messages payload for the LLM call.
 
     Args:
-        system_prompt: The system prompt content.
-        user_prompt_template: Template for user message with {{conversation}} placeholder.
-        conversation: Conversation dict with 'messages' key.
+        system_prompt (str): System prompt content.
+        user_prompt_template (str): User prompt template containing a
+            ``{{conversation}}`` placeholder.
+        conversation (Dict[str, Any]): Conversation payload with a ``messages`` key.
 
     Returns:
-        List of message dictionaries for the LLM.
+        list: Message dictionaries ready for the LLM call.
 
     Raises:
-        DirectResponseError: If user_prompt_template is not provided from database.
+        DirectResponseError: If no user prompt template is provided.
     """
     if not user_prompt_template:
         raise DirectResponseError(
@@ -71,52 +58,48 @@ def _build_messages(
             "Please ensure the prompt is configured in the prompts table."
         )
 
-    messages = [{"role": "system", "content": system_prompt}]
+    return [
+        {"role": "system", "content": system_prompt},
+        {
+            "role": "user",
+            "content": user_prompt_template.replace(
+                "{{conversation}}",
+                format_conversation_history_for_prompt(conversation),
+            ),
+        },
+    ]
 
-    conversation_context = format_conversation_for_prompt(conversation)
-    user_content = user_prompt_template.replace(
-        "{{conversation}}", conversation_context
-    )
 
-    messages.append({"role": "user", "content": user_content})
-    return messages
-
-
-def response_from_conversation(
+def stream_direct_response_from_conversation(
     conversation: Dict[str, Any],
     token: str,
     available_databases: Optional[Dict[str, Any]] = None,
 ) -> Generator[Any, None, None]:
-    """
-    Generate a direct response based solely on conversation context.
-
-    Streams content chunks to the caller, with usage details yielded as
-    the final item.
+    """Stream a direct response based solely on the conversation context.
 
     Args:
-        conversation: Conversation dict with 'messages' key containing message list.
-        token: Authentication token for API access (OAuth token in RBC,
-            API key in local environment).
-        available_databases: Dict of available database configurations
-            filtered by user selection. Provides context about available data sources.
+        conversation (Dict[str, Any]): Conversation payload with a ``messages`` list.
+        token (str): Authentication token for the LLM request.
+        available_databases (Optional[Dict[str, Any]]): User-selected database
+            configurations that shape the prompt context.
 
     Yields:
-        Content chunks (str) during streaming, then a final dict containing
-        usage details: {'usage_details': {...}}.
+        str: Content chunks during streaming.
+        Dict[str, Any]: Final dictionary containing usage details under the
+            ``usage_details`` key.
 
     Raises:
-        DirectResponseError: If there is an error generating the response.
+        DirectResponseError: If response generation fails.
     """
     final_usage_details = None
     try:
-        db_names = list(available_databases.keys()) if available_databases else None
-        system_prompt, _, user_prompt_template = get_composed_prompt(
-            "agent", "direct_response", filtered_database=True, db_names=db_names
+        system_prompt, _, user_prompt_template = fetch_prompt_with_context(
+            "agent", "direct_response", available_databases=available_databases
         )
         model_settings = _get_model_settings()
         messages = _build_messages(system_prompt, user_prompt_template, conversation)
 
-        response_stream = call_llm(
+        response_stream = execute_llm_call(
             oauth_token=token,
             model=model_settings["name"],
             messages=messages,
@@ -139,11 +122,12 @@ def response_from_conversation(
             ):
                 yield item.choices[0].delta.content
 
-        if final_usage_details:
-            yield final_usage_details
-        else:
+        if not final_usage_details:
             logger.warning("Usage details not found in direct response stream")
-            yield {"usage_details": {"error": "Usage data missing from stream"}}
+            final_usage_details = {
+                "usage_details": {"error": "Usage data missing from stream"}
+            }
+        yield final_usage_details
 
     except (ValueError, TypeError, KeyError, AttributeError, RuntimeError) as exc:
         logger.error("Error generating direct response: %s", str(exc), exc_info=True)

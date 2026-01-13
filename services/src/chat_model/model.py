@@ -1,30 +1,4 @@
-"""
-Model Initialization and Setup Module.
-
-This module serves as the main entry point for the IRIS application,
-handling conversation processing, agent orchestration, and response generation.
-Uses synchronous core with multi-threaded database queries for optimal performance.
-
-Functions:
-    model: Main entry point that processes conversations and yields streaming responses.
-    _model_generator: Core generator handling the agent workflow.
-    _execute_query_worker: Worker function for parallel database queries.
-    format_usage_summary: Formats token usage and timing information.
-    process_request_async: Async wrapper for FastAPI integration.
-
-Architecture:
-    - Router: Determines whether to use direct response or research path
-    - Clarifier: Refines research requirements and checks for missing context
-    - Planner: Selects which databases to query based on research needs
-    - Database Subagents: Execute queries using cascading retrieval architecture
-    - Summarizer: Synthesizes results from multiple databases into coherent response
-
-Dependencies:
-    - SSL certificate setup and OAuth authentication
-    - PostgreSQL for process monitoring and document storage
-    - OpenAI API for LLM interactions
-    - Cascading retrieval architecture (Metadata -> File Research)
-"""
+"""Chat model orchestration for routing, research, and summarization."""
 
 import concurrent.futures
 import json
@@ -32,33 +6,31 @@ import logging
 import time
 import uuid
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Union, Generator, Callable, Tuple
+from typing import Any, Callable, Dict, Generator, List, Optional
 
-from ..agent.tools.database_metadata import get_available_databases
-from ..agent.tools.database_router import route_query_cascading
-from ..utils.env_config import config
-from ..utils.reference_processor import (
-    build_master_reference_index,
-    process_final_references,
-    process_reference_buffer,
-)
 from sqlalchemy import text
-from ..connections.postgres import get_session
+
+from ..agent.tools.database_router import route_query_with_cascading_retrieval
+from ..agent.tools.research_types import Finding, FindingsList, IndexedFinding, IndexedFindingsList
+from ..connections.postgres import get_database_session
+from ..utils.reference_processor import (
+    finalize_reference_replacements,
+    process_streaming_reference_buffer,
+)
 
 
-def format_usage_summary(
+def format_usage_summary_markdown(
     agent_token_usage: Dict[str, Any], start_time: Optional[str] = None
 ) -> str:
-    """
-    Format token usage and timing information into a markdown summary.
+    """Return token usage and timing as markdown.
 
     Args:
-        agent_token_usage: Accumulated token usage dictionary with keys like
-            'prompt_tokens', 'completion_tokens', 'total_tokens', 'cost'.
-        start_time: ISO format timestamp of when processing started.
+        agent_token_usage (Dict[str, Any]): Accumulated token usage metrics with keys
+            such as prompt_tokens, completion_tokens, total_tokens, and cost.
+        start_time (Optional[str]): ISO 8601 timestamp marking when processing started.
 
     Returns:
-        Formatted usage summary as markdown string.
+        str: Markdown summary of usage and timing details.
     """
     duration = None
     if start_time:
@@ -68,7 +40,7 @@ def format_usage_summary(
             duration = (end_dt - start_dt).total_seconds()
         except ValueError:
             logging.getLogger().warning(
-                f"Could not parse start_time for duration calculation: {start_time}"
+                "Could not parse start_time for duration calculation: %s", start_time
             )
             duration = None
 
@@ -90,7 +62,108 @@ def format_usage_summary(
     return usage_summary
 
 
-def _execute_query_worker(
+def consolidate_findings_with_refs(
+    all_findings: FindingsList,
+) -> tuple[IndexedFindingsList, Dict[str, Dict[str, Any]]]:
+    """Consolidate findings from all databases and assign reference IDs.
+
+    Takes the combined findings from all database queries and:
+    1. Assigns sequential ref_ids starting from 1
+    2. Builds a master reference index for the streaming processor
+
+    Args:
+        all_findings: Combined list of Finding objects from all databases.
+
+    Returns:
+        Tuple of:
+        - IndexedFindingsList: Findings with ref_id assigned
+        - Dict: Master reference index for href link generation
+    """
+    indexed_findings: IndexedFindingsList = []
+    master_reference_index: Dict[str, Dict[str, Any]] = {}
+
+    ref_counter = 1
+    for finding in all_findings:
+        ref_id = str(ref_counter)
+
+        # Create IndexedFinding by adding ref_id
+        indexed_finding: IndexedFinding = {
+            **finding,
+            "ref_id": ref_id,
+        }
+        indexed_findings.append(indexed_finding)
+
+        # Build reference index entry for href generation
+        master_reference_index[ref_id] = {
+            "doc_name": finding["document_name"],
+            "file_link": finding["file_link"],
+            "file_name": finding["file_name"],
+            "page": finding["page"] or 1,
+            "page_reference": str(finding["page"] or 1),
+            "chapter_number": "",
+            "source_filename": finding["file_name"] or finding["document_name"],
+            "highlight_text": "",
+            "source_db": finding["db_source"],
+        }
+
+        ref_counter += 1
+
+    return indexed_findings, master_reference_index
+
+
+def format_findings_for_summarizer(
+    indexed_findings: IndexedFindingsList,
+) -> Dict[str, str]:
+    """Format indexed findings into research text for the summarizer.
+
+    Groups findings by database and formats them with [REF:X] markers
+    that will be replaced with clickable links during streaming.
+
+    Args:
+        indexed_findings: Findings with ref_ids assigned.
+
+    Returns:
+        Dict mapping db_source to formatted research text.
+    """
+    from collections import defaultdict
+
+    # Group findings by database
+    findings_by_db: Dict[str, List[IndexedFinding]] = defaultdict(list)
+    for finding in indexed_findings:
+        findings_by_db[finding["db_source"]].append(finding)
+
+    formatted_research: Dict[str, str] = {}
+
+    for db_source, db_findings in findings_by_db.items():
+        # Group by document within each database
+        findings_by_doc: Dict[str, List[IndexedFinding]] = defaultdict(list)
+        for finding in db_findings:
+            findings_by_doc[finding["document_name"]].append(finding)
+
+        parts = []
+        for doc_name, doc_findings in findings_by_doc.items():
+            parts.append(f"## {doc_name}\n")
+
+            # Sort by page number
+            sorted_findings = sorted(
+                doc_findings, key=lambda f: f["page"] or 0
+            )
+
+            for finding in sorted_findings:
+                page = finding["page"] or "N/A"
+                ref_id = finding["ref_id"]
+                content = finding["finding"]
+
+                parts.append(f"**Page {page}:** {content} [REF:{ref_id}]\n")
+
+            parts.append("")
+
+        formatted_research[db_source] = "\n".join(parts)
+
+    return formatted_research
+
+
+def _execute_database_query_task(
     db_name: str,
     query_text: str,
     token: str,
@@ -99,35 +172,33 @@ def _execute_query_worker(
     total_queries: int,
     query_context: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """
-    Execute a single database query in a thread pool worker.
+    """Execute a single database query in a thread pool worker.
 
     Uses unified cascading retrieval architecture where metadata subagent makes
-    3-way per-document decisions (answered/irrelevant/needs_deep_research),
-    triggering file research only for documents that need it.
+    per-document decisions (answered/irrelevant/needs_deep_research), triggering file
+    research only for documents that need it.
 
     Args:
-        db_name: Internal name of the database.
-        query_text: The search query to execute.
-        token: OAuth token for API authentication.
-        db_display_name: Human-readable database name for display.
-        query_index: Index of this query in the batch (0-based).
-        total_queries: Total number of queries being executed.
-        query_context: Context dict containing research_statement, query_embedding.
+        db_name (str): Internal name of the database.
+        query_text (str): The search query to execute.
+        token (str): OAuth token for API authentication.
+        db_display_name (str): Human-readable database name for display.
+        query_index (int): Index of this query in the batch (0-based).
+        total_queries (int): Total number of queries being executed.
+        query_context (Optional[Dict[str, Any]]): Context containing research_statement
+            and query_embedding.
 
     Returns:
-        Dictionary containing query results, exceptions, file links, references, and metadata.
-        Keys include: db_name, query_text, result, exception, file_links, page_section_refs,
-        section_content_map, reference_index.
+        Dict[str, Any]: Query results with findings, status_summary, path info.
     """
     logger = logging.getLogger(__name__)
     logger.setLevel(logging.INFO)
-    result = None
+    router_result = None
     task_exception = None
 
-    from ..utils.process_monitoring import get_process_monitor
+    from ..utils.process_monitoring import get_process_monitor_instance
 
-    process_monitor = get_process_monitor()
+    process_monitor = get_process_monitor_instance()
     query_stage_name = f"db_query_{db_name}_{query_index}"
 
     process_monitor.start_stage(query_stage_name)
@@ -142,14 +213,17 @@ def _execute_query_worker(
 
     try:
         logger.info(
-            f"Thread executing query {query_index + 1}/{total_queries} for database: {db_name}"
+            "Thread executing query %d/%d for database: %s",
+            query_index + 1,
+            total_queries,
+            db_name,
         )
         if query_context is None:
             query_context = {
                 "research_statement": query_text,
             }
 
-        result_tuple = route_query_cascading(
+        router_result = route_query_with_cascading_retrieval(
             database=db_name,
             token=token,
             process_monitor=process_monitor,
@@ -157,67 +231,20 @@ def _execute_query_worker(
             query_context=query_context,
         )
 
-        if len(result_tuple) == 6:
-            (
-                result,
-                doc_ids,
-                file_links,
-                page_section_refs,
-                section_content_map,
-                reference_index,
-            ) = result_tuple
-        elif len(result_tuple) == 5:
-            result, doc_ids, file_links, page_section_refs, section_content_map = (
-                result_tuple
-            )
-            reference_index = None
-        elif len(result_tuple) == 4:
-            result, doc_ids, file_links, page_section_refs = result_tuple
-            section_content_map = None
-            reference_index = None
-        elif len(result_tuple) == 3:
-            result, doc_ids, file_links = result_tuple
-            page_section_refs = None
-            section_content_map = None
-            reference_index = None
-        elif len(result_tuple) == 2:
-            result, doc_ids = result_tuple
-            file_links = None
-            page_section_refs = None
-            section_content_map = None
-            reference_index = None
-        else:
-            logger.error(
-                f"Unexpected tuple length {len(result_tuple)} from route_query_cascading for {db_name}"
-            )
-            if len(result_tuple) > 0:
-                result = result_tuple[0]
-            else:
-                result = {
-                    "detailed_research": f"Error: Invalid response format from {db_name}",
-                    "status_summary": f"❌ Error: Query failed for '{db_name}'.",
-                }
-            doc_ids = None
-            file_links = None
-            page_section_refs = None
-            section_content_map = None
-            reference_index = None
-        logger.info(f"Thread completed query for database: {db_name}")
+        logger.info("Thread completed query for database: %s", db_name)
         process_monitor.end_stage(query_stage_name)
 
-        if isinstance(result, dict):
-            process_monitor.add_stage_details(
-                query_stage_name,
-                status_summary=result.get("status_summary", "No status provided"),
-                has_detailed_research=bool(result.get("detailed_research")),
-            )
-        if doc_ids is not None:
-            process_monitor.add_stage_details(query_stage_name, document_ids=doc_ids)
+        process_monitor.add_stage_details(
+            query_stage_name,
+            status_summary=router_result.get("status_summary", "No status provided"),
+            findings_count=len(router_result.get("findings", [])),
+            path=router_result.get("path", "unknown"),
+        )
 
     except Exception as e:
         task_exception = e
         logger.error(
-            f"Thread error executing query for {db_name}: {str(e)}", exc_info=True
+            "Thread error executing query for %s: %s", db_name, e, exc_info=True
         )
         process_monitor.end_stage(query_stage_name, "error")
         process_monitor.add_stage_details(query_stage_name, error=str(e))
@@ -228,7 +255,7 @@ def _execute_query_worker(
 
             gc.collect()
         except Exception as cleanup_exc:
-            logger.warning(f"Error during worker cleanup: {cleanup_exc}")
+            logger.warning("Error during worker cleanup: %s", cleanup_exc)
 
     return {
         "db_name": db_name,
@@ -236,55 +263,48 @@ def _execute_query_worker(
         "db_display_name": db_display_name,
         "query_index": query_index,
         "total_queries": total_queries,
-        "result": result,
+        "router_result": router_result,
         "exception": task_exception,
-        "file_links": file_links if "file_links" in locals() else None,
-        "page_section_refs": (
-            page_section_refs if "page_section_refs" in locals() else None
-        ),
-        "section_content_map": (
-            section_content_map if "section_content_map" in locals() else None
-        ),
-        "reference_index": reference_index if "reference_index" in locals() else None,
     }
 
 
-def _model_generator(
+def _stream_model_workflow(
     conversation: Optional[Dict[str, Any]] = None,
-    html_callback: Optional[Callable] = None,
+    _html_callback: Optional[Callable] = None,
     debug_mode: bool = False,
     db_names: Optional[List[str]] = None,
 ) -> Generator[str, None, None]:
-    """
-    Core synchronous generator handling the complete agent workflow.
+    """Run the agent workflow synchronously and yield streaming chunks.
 
-    Orchestrates the full IRIS pipeline: conversation processing, routing decisions,
-    research planning, parallel database queries, and response generation. Implements
-    process monitoring for performance tracking and debugging.
+    Orchestrates conversation processing, routing decisions, research planning,
+    parallel database queries, and response generation. Implements process monitoring
+    for performance tracking and debugging.
 
     Args:
-        conversation: Dictionary with 'messages' key containing conversation history.
-        html_callback: Optional callback for HTML rendering (deprecated).
-        debug_mode: If True, yields legacy debug data at end of stream.
-        db_names: Optional list of database names to filter/restrict queries to.
+        conversation (Optional[Dict[str, Any]]): Conversation dictionary containing
+            a messages list.
+        html_callback (Optional[Callable]): Optional callback for HTML rendering
+            (deprecated).
+        debug_mode (bool): When True, yields legacy DEBUG_DATA JSON at the end.
+        db_names (Optional[List[str]]): Databases to restrict queries to.
 
     Yields:
-        String chunks of the streaming response, including research plans, status updates,
-        and final synthesized answers. If debug_mode is True, yields DEBUG_DATA JSON at end.
+        str: Streaming response chunks including research plans, status updates, and
+            final synthesized answers.
 
     Raises:
         Exception: Critical errors are caught, logged, and yielded as error messages.
     """
     from ..utils.process_monitoring import (
-        enable_monitoring,
-        get_process_monitor,
+        get_process_monitor_instance,
+        set_process_monitoring_enabled,
     )
 
     logger = logging.getLogger(__name__)
     logger.setLevel(logging.INFO)
 
-    enable_monitoring(True)
-    process_monitor = get_process_monitor()
+    set_process_monitoring_enabled(True)
+    process_monitor = get_process_monitor_instance()
     run_uuid_val = uuid.uuid4()
     process_monitor.set_run_uuid(run_uuid_val)
     process_monitor.start_monitoring()
@@ -305,29 +325,29 @@ def _model_generator(
             "completed": False,
         }
 
-    from ..agent.clarifier import clarify_research_needs
-    from ..agent.direct_response import response_from_conversation
-    from ..agent.planner import create_database_selection_plan
-    from ..agent.router import get_routing_decision
-    from ..agent.summarizer import generate_streaming_summary
-    from ..utils.input_sanitizer import process_conversation
-    from ..utils.logging_format import configure_logging
-    from ..connections.oauth import setup_oauth
-    from ..utils.rbc_security import setup_ssl
+    from ..agent.clarifier import generate_clarifier_decision
+    from ..agent.direct_response import stream_direct_response_from_conversation
+    from ..agent.planner import generate_database_selection_plan
+    from ..agent.router import generate_routing_decision
+    from ..agent.summarizer import stream_research_summary
+    from ..agent.tools.database_metadata import fetch_available_databases
+    from ..utils.input_sanitizer import sanitize_conversation_history
+    from ..utils.logging_format import configure_root_logger
+    from ..connections.oauth import fetch_oauth_token
+    from ..utils.rbc_security import configure_rbc_security_certs
 
-    SHOW_USAGE_SUMMARY = config.SHOW_USAGE_SUMMARY
-    logger = configure_logging()
+    logger = configure_root_logger()
 
     try:
         logger.info("Initializing model...")
 
         process_monitor.start_stage("ssl_setup")
-        cert_path = setup_ssl()
+        cert_path = configure_rbc_security_certs()
         process_monitor.end_stage("ssl_setup")
         process_monitor.add_stage_details("ssl_setup", cert_path=cert_path)
 
         process_monitor.start_stage("oauth_setup")
-        token = setup_oauth()
+        token = fetch_oauth_token()
         process_monitor.end_stage("oauth_setup")
         process_monitor.add_stage_details(
             "oauth_setup", token_length=len(token) if token else 0
@@ -340,21 +360,25 @@ def _model_generator(
 
         process_monitor.start_stage("conversation_processing")
         try:
-            processed_conversation = process_conversation(conversation)
+            processed_conversation = sanitize_conversation_history(conversation)
             logger.info(
-                f"Conversation processed: {len(processed_conversation['messages'])} messages"
+                "Conversation processed: %d messages",
+                len(processed_conversation["messages"]),
             )
         except ValueError as e:
-            logger.warning(f"Invalid conversation format: {str(e)}")
+            logger.warning("Invalid conversation format: %s", e)
+            process_monitor.end_stage("conversation_processing", "error")
             yield f"Model initialized, but conversation format is invalid: {str(e)}"
             return
         except Exception as e:
-            logger.error(f"Error processing conversation: {str(e)}")
+            logger.error("Error processing conversation: %s", e)
+            process_monitor.end_stage("conversation_processing", "error")
             yield f"Error processing conversation: {str(e)}"
             return
 
         if not processed_conversation["messages"]:
             logger.warning("Processed conversation is empty.")
+            process_monitor.end_stage("conversation_processing", "error")
             yield "Model initialized, but processed conversation is empty."
             return
 
@@ -364,18 +388,16 @@ def _model_generator(
             message_count=len(processed_conversation["messages"]),
         )
 
-        from ..agent.tools.database_metadata import get_available_databases
-
-        available_databases = get_available_databases()
+        available_databases = fetch_available_databases()
         if db_names is not None:
-            logger.info(f"Filtering databases to: {db_names}")
+            logger.info("Filtering databases to: %s", db_names)
             available_databases = {
                 k: v for k, v in available_databases.items() if k in db_names
             }
 
         process_monitor.start_stage("router")
         logger.info("Getting routing decision...")
-        routing_decision, router_usage_details = get_routing_decision(
+        routing_decision, router_usage_details = generate_routing_decision(
             processed_conversation, token, available_databases
         )
         process_monitor.end_stage("router")
@@ -389,11 +411,11 @@ def _model_generator(
             decision=routing_decision,
         )
 
-        if routing_decision["function_name"] == "response_from_conversation":
+        if routing_decision["function_name"] == "direct_response":
             logger.info("Using direct response path")
             process_monitor.start_stage("direct_response")
             direct_response_usage_details = None
-            stream_iterator = response_from_conversation(
+            stream_iterator = stream_direct_response_from_conversation(
                 processed_conversation, token, available_databases
             )
             for chunk in stream_iterator:
@@ -412,11 +434,11 @@ def _model_generator(
             logger.debug("Direct response completed, ending monitoring")
             process_monitor.end_monitoring()
 
-        elif routing_decision["function_name"] == "research_from_database":
+        elif routing_decision["function_name"] == "database_research":
             logger.info("Using research path")
             process_monitor.start_stage("clarifier")
             logger.info("Clarifying research needs...")
-            clarifier_decision, clarifier_usage_details = clarify_research_needs(
+            clarifier_decision, clarifier_usage_details = generate_clarifier_decision(
                 processed_conversation, token, available_databases
             )
             process_monitor.end_stage("clarifier")
@@ -430,7 +452,7 @@ def _model_generator(
                 decision=clarifier_decision,
             )
 
-            if clarifier_decision["action"] == "request_essential_context":
+            if clarifier_decision["action"] == "ask_clarification":
                 logger.info("Essential context needed")
                 questions = clarifier_decision["output"].strip()
                 yield "Before proceeding with research, please clarify:\n\n" + questions
@@ -447,7 +469,6 @@ def _model_generator(
                 process_monitor.end_monitoring()
 
             else:
-                # action == "create_research_statement"
                 research_statement = clarifier_decision.get("output", "")
                 is_db_wide = clarifier_decision.get("is_db_wide", False)
                 deep_research_approved = clarifier_decision.get(
@@ -455,13 +476,16 @@ def _model_generator(
                 )
 
                 logger.info(
-                    f"Research statement: {research_statement[:100]}... "
-                    f"(is_db_wide={is_db_wide}, deep_research_approved={deep_research_approved})"
+                    "Research statement: %s... (is_db_wide=%s, "
+                    "deep_research_approved=%s)",
+                    research_statement[:100],
+                    is_db_wide,
+                    deep_research_approved,
                 )
 
                 process_monitor.start_stage("planner")
                 logger.info("Creating database selection plan...")
-                db_selection_plan, planner_usage_list = create_database_selection_plan(
+                db_selection_plan, planner_usage_list = generate_database_selection_plan(
                     research_statement,
                     token,
                     available_databases,
@@ -469,7 +493,9 @@ def _model_generator(
                 selected_databases = db_selection_plan.get("databases", [])
                 query_embedding = db_selection_plan.get("query_embedding")
                 logger.info(
-                    f"Database selection plan created with {len(selected_databases)} databases: {selected_databases}"
+                    "Database selection plan created with %d databases: %s",
+                    len(selected_databases),
+                    selected_databases,
                 )
                 process_monitor.end_stage("planner")
                 for usage_details in planner_usage_list:
@@ -483,7 +509,7 @@ def _model_generator(
                     decision=db_selection_plan,
                 )
 
-                logger.info(f"Querying databases: {selected_databases}")
+                logger.info("Querying databases: %s", selected_databases)
                 yield "# 📋 Research Plan \n\n"
                 yield f"{research_statement}\n\n"
                 selected_db_display_names = [
@@ -494,15 +520,20 @@ def _model_generator(
                     if len(selected_db_display_names) == 1:
                         names_str = selected_db_display_names[0]
                     elif len(selected_db_display_names) == 2:
-                        names_str = f"{selected_db_display_names[0]} and {selected_db_display_names[1]}"
+                        names_str = (
+                            f"{selected_db_display_names[0]} and "
+                            f"{selected_db_display_names[1]}"
+                        )
                     else:
                         names_str = (
                             ", ".join(selected_db_display_names[:-1])
                             + f", and {selected_db_display_names[-1]}"
                         )
-                    yield "\n\n"
+                    yield f"Searching {names_str}.\n\n"
                 else:
                     yield "No databases selected for search.\n\n---\n"
+
+                all_findings: FindingsList = []
 
                 if not selected_databases:
                     logger.warning(
@@ -510,13 +541,8 @@ def _model_generator(
                     )
                 else:
                     logger.info(
-                        f"Starting {len(selected_databases)} parallel queries..."
+                        "Starting %d parallel queries...", len(selected_databases)
                     )
-                    aggregated_detailed_research = {}
-                    all_file_links = []
-                    all_page_section_refs = {}
-                    all_section_content_maps = {}
-                    all_reference_indices = {}
                     futures = []
 
                     with concurrent.futures.ThreadPoolExecutor() as executor:
@@ -534,7 +560,7 @@ def _model_generator(
                             if i > 0:
                                 time.sleep(1)
                             future = executor.submit(
-                                _execute_query_worker,
+                                _execute_database_query_task,
                                 db_name,
                                 query_text,
                                 token,
@@ -544,57 +570,32 @@ def _model_generator(
                                 query_context,
                             )
                             futures.append(future)
-                        logger.info(f"Submitted {len(futures)} queries to thread pool.")
+                        logger.info(
+                            "Submitted %d queries to thread pool.", len(futures)
+                        )
 
                         for future in concurrent.futures.as_completed(futures):
-                            result_data = future.result()  # Re-raise if exception
+                            result_data = future.result()
                             db_name = result_data["db_name"]
                             db_display_name = result_data["db_display_name"]
                             task_exception = result_data["exception"]
-                            result = result_data["result"]
-                            file_links = result_data.get("file_links", None)
-                            page_section_refs = result_data.get(
-                                "page_section_refs", None
-                            )
-                            section_content_map = result_data.get(
-                                "section_content_map", None
-                            )
-                            reference_index = result_data.get("reference_index", None)
+                            router_result = result_data.get("router_result")
 
                             status_summary = "❓ Unknown status (Processing error)."
                             if task_exception:
                                 status_summary = f"❌ Error: {str(task_exception)}"
-                                aggregated_detailed_research[db_name] = (
-                                    f"Error: {str(task_exception)}"
+                            elif router_result is not None:
+                                status_summary = router_result.get(
+                                    "status_summary", "No status"
                                 )
-                            elif result is not None:
-                                if (
-                                    isinstance(result, dict)
-                                    and "detailed_research" in result
-                                    and "status_summary" in result
-                                ):
-                                    status_summary = result["status_summary"]
-                                    aggregated_detailed_research[db_name] = result[
-                                        "detailed_research"
-                                    ]
-                                else:
-                                    status_summary = (
-                                        "❌ Error: Unexpected result format."
-                                    )
-                                    aggregated_detailed_research[db_name] = (
-                                        f"Error: {str(result)[:200]}..."
-                                    )
-
-                            if file_links:
-                                all_file_links.extend(file_links)
-
-                            if page_section_refs:
-                                all_page_section_refs[db_name] = page_section_refs
-                            if section_content_map:
-                                all_section_content_maps[db_name] = section_content_map
-
-                            if reference_index:
-                                all_reference_indices[db_name] = reference_index
+                                # Collect findings from this database
+                                db_findings = router_result.get("findings", [])
+                                all_findings.extend(db_findings)
+                                logger.info(
+                                    "Collected %d findings from %s",
+                                    len(db_findings),
+                                    db_name,
+                                )
 
                             status_summary = (
                                 status_summary.replace("✅", "•")
@@ -609,21 +610,25 @@ def _model_generator(
 
                     logger.info("All database queries completed")
 
-                if aggregated_detailed_research:
+                if all_findings:
                     yield "\n\n---\n"
                     yield "\n\n## 📊 Research Summary\n"
                     process_monitor.start_stage("summary")
-                    process_monitor.add_stage_details(
-                        "summary",
-                        num_results=len(aggregated_detailed_research),
-                        sources=list(aggregated_detailed_research.keys()),
+
+                    # Consolidate findings and assign ref_ids
+                    indexed_findings, master_reference_index = (
+                        consolidate_findings_with_refs(all_findings)
                     )
 
-                    master_reference_index, aggregated_detailed_research = (
-                        build_master_reference_index(
-                            all_reference_indices,
-                            aggregated_detailed_research,
-                        )
+                    # Format findings for summarizer
+                    aggregated_detailed_research = format_findings_for_summarizer(
+                        indexed_findings
+                    )
+
+                    process_monitor.add_stage_details(
+                        "summary",
+                        num_findings=len(indexed_findings),
+                        sources=list(aggregated_detailed_research.keys()),
                     )
 
                     try:
@@ -631,9 +636,10 @@ def _model_generator(
                         summary_usage_details = None
                         summary_context = {
                             "research_statement": research_statement,
+                            "indexed_findings": indexed_findings,
                             "reference_index": master_reference_index,
                         }
-                        summary_stream = generate_streaming_summary(
+                        summary_stream = stream_research_summary(
                             aggregated_detailed_research,
                             token,
                             available_databases,
@@ -646,12 +652,12 @@ def _model_generator(
                             if isinstance(chunk, dict) and "usage_details" in chunk:
                                 summary_usage_details = chunk["usage_details"]
                                 if buffer:
-                                    yield from process_final_references(
+                                    yield from finalize_reference_replacements(
                                         buffer, master_reference_index
                                     )
                             else:
                                 buffer += chunk
-                                processed, buffer = process_reference_buffer(
+                                processed, buffer = process_streaming_reference_buffer(
                                     buffer, master_reference_index
                                 )
                                 if processed:
@@ -667,10 +673,12 @@ def _model_generator(
                             )
                     except Exception as summary_exc:
                         logger.error(
-                            f"Error during summarization: {summary_exc}",
+                            "Error during summarization: %s",
+                            summary_exc,
                             exc_info=True,
                         )
-                        yield f"\n\n**Error during final summarization:** {str(summary_exc)}"
+                        err_msg = str(summary_exc)
+                        yield f"\n\n**Error during summarization:** {err_msg}"
                         process_monitor.end_stage("summary", "error")
                         process_monitor.add_stage_details(
                             "summary", error=str(summary_exc)
@@ -682,7 +690,7 @@ def _model_generator(
 
         else:
             logger.error(
-                f"Unknown routing function: {routing_decision['function_name']}"
+                "Unknown routing function: %s", routing_decision["function_name"]
             )
             yield "Error: Unable to process query due to internal routing error."
             logger.debug("Ending monitoring due to routing error")
@@ -708,10 +716,10 @@ def _model_generator(
         if process_monitor.enabled:
             try:
                 logger.info(
-                    f"Logging process monitor data for run {process_monitor.run_uuid}"
+                    "Logging process monitor data for run %s", process_monitor.run_uuid
                 )
 
-                with get_session() as session:
+                with get_database_session() as session:
                     result = session.execute(
                         text(
                             """
@@ -732,7 +740,8 @@ def _model_generator(
 
             except Exception as log_exc:
                 logger.error(
-                    f"Failed to log process monitor data: {log_exc}",
+                    "Failed to log process monitor data: %s",
+                    log_exc,
                     exc_info=True,
                 )
 
@@ -774,96 +783,64 @@ def _model_generator(
             yield f"\n\nDEBUG_DATA:{json.dumps(debug_data)}"
 
 
-def model(
+def stream_model_response(
     conversation: Optional[Dict[str, Any]] = None,
     html_callback: Optional[Callable] = None,
     debug_mode: bool = False,
     db_names: Optional[List[str]] = None,
 ) -> Generator[str, None, None]:
-    """
-    Main entry point for processing conversations and generating responses.
-
-    This is the primary synchronous interface for the IRIS system. It processes
-    conversation history, routes to appropriate agents, and yields streaming responses.
+    """Process conversations and yield streaming responses.
 
     Args:
-        conversation: Dictionary containing conversation history with 'messages' key.
-            Each message should have 'role' and 'content' fields.
-        html_callback: Optional callback for HTML rendering (deprecated, unused).
-        debug_mode: If True, appends DEBUG_DATA JSON with token usage at end of stream.
-        db_names: Optional list of database internal names to restrict queries to.
-            If provided, only these databases will be available to agents.
+        conversation (Optional[Dict[str, Any]]): Conversation history with a messages
+            list.
+        html_callback (Optional[Callable]): Deprecated HTML rendering callback.
+        debug_mode (bool): When True, appends DEBUG_DATA JSON at the end of the stream.
+        db_names (Optional[List[str]]): Databases to restrict queries to.
 
     Yields:
-        String chunks of the streaming response. For research queries, yields research
-        plan, database status updates, and final summary. For direct responses, yields
-        the conversational answer. If debug_mode is True, yields DEBUG_DATA JSON at end.
-
-    Example:
-        ```python
-        conversation = {
-            "messages": [
-                {"role": "user", "content": "What is the CCAR framework?"}
-            ]
-        }
-
-        for chunk in model(conversation, db_names=["internal_regulatory"]):
-            print(chunk, end="", flush=True)
-        ```
+        str: Streaming research plans, database status updates, and final answers.
     """
     logger = logging.getLogger(__name__)
     logger.setLevel(logging.INFO)
     try:
-        sync_gen = _model_generator(conversation, html_callback, debug_mode, db_names)
-        for chunk in sync_gen:
-            yield chunk
+        yield from _stream_model_workflow(
+            conversation, html_callback, debug_mode, db_names
+        )
     except Exception as e:
         error_msg = f"Error during model execution: {str(e)}"
         logger.error(error_msg, exc_info=True)
         yield f"**Error:** {error_msg}"
 
 
-async def process_request_async(
+async def process_conversation_request_async(
     conversation: List[Dict[str, str]],
     stream: bool = False,
     db_names: Optional[List[str]] = None,
+    **kwargs: Any,
 ) -> Dict[str, Any]:
-    """
-    Async wrapper for FastAPI that processes a conversation request.
+    """Async wrapper for FastAPI that processes a conversation request.
 
-    Runs the synchronous model in a thread pool executor to avoid blocking
-    the async event loop. Collects all streaming chunks and returns as a
-    complete response.
+    Runs the synchronous model in a thread pool executor to avoid blocking the event
+    loop. Collects all streaming chunks and returns a complete response.
 
     Args:
-        conversation: List of message dictionaries with 'role' and 'content'.
-        stream: Whether to enable streaming (currently unused, reserved for future).
-        db_names: Optional list of database internal names to restrict queries to.
+        conversation (List[Dict[str, str]]): Conversation messages with role/content.
+        stream (bool): Whether to enable streaming (reserved for future use).
+        db_names (Optional[List[str]]): Databases to restrict queries to.
 
     Returns:
-        Dictionary with keys:
-            - response: Complete response text
-            - agent_used: Which agent handled the request (if available)
-            - processing_time_ms: Total processing time in milliseconds
-            - token_usage: Token usage statistics (if available)
-            - run_uuid: Unique run identifier (if available)
-
-    Example:
-        ```python
-        result = await process_request_async(
-            conversation=[{"role": "user", "content": "What is CCAR?"}],
-            db_names=["internal_regulatory"]
-        )
-        print(result["response"])
-        print(f"Processed in {result['processing_time_ms']}ms")
-        ```
+        Dict[str, Any]: Response text, agent_used, processing_time_ms, token_usage,
+            and run_uuid when available.
     """
     import asyncio
-    import time
 
     logger = logging.getLogger(__name__)
     logger.setLevel(logging.INFO)
-    logger.info(f"Processing async request: {len(conversation)} messages")
+    if "_stream" in kwargs:
+        stream = kwargs.pop("_stream")
+
+    logger.info("Processing async request: %d messages", len(conversation))
 
     start_time = time.time()
 
@@ -875,7 +852,9 @@ async def process_request_async(
             run_uuid = None
             token_usage = None
 
-            for chunk in model(conversation_dict, debug_mode=False, db_names=db_names):
+            for chunk in stream_model_response(
+                conversation_dict, debug_mode=False, db_names=db_names
+            ):
                 if isinstance(chunk, str):
                     response_chunks.append(chunk)
                 elif isinstance(chunk, dict):
@@ -896,7 +875,7 @@ async def process_request_async(
             }
 
         except Exception as e:
-            logger.error(f"Error in sync model execution: {str(e)}", exc_info=True)
+            logger.error("Error in sync model execution: %s", e, exc_info=True)
             return {
                 "response": f"Error processing request: {str(e)}",
                 "agent_used": None,
@@ -904,12 +883,12 @@ async def process_request_async(
                 "token_usage": None,
             }
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     result = await loop.run_in_executor(None, run_sync_model)
 
     processing_time_ms = int((time.time() - start_time) * 1000)
     result["processing_time_ms"] = processing_time_ms
 
-    logger.info(f"Request completed: {processing_time_ms}ms")
+    logger.info("Request completed: %dms", processing_time_ms)
 
     return result

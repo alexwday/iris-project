@@ -1,0 +1,49 @@
+db_source: internal_aio
+db_name: Auditor Independence Office Policy Documents
+db_summary: RBC's internal policies, procedures, and FAQs focused on maintaining auditor independence, including guidelines
+  for business and financial relationships with external auditors.
+db_description: '**Content:** RBC''s internal policies, procedures, and FAQs focused on maintaining auditor independence,
+  including guidelines for business and financial relationships with external auditors.
+
+
+  **Tier/Priority:** DOMAIN EXPERT - Specialized guidance for auditor independence requirements and controls.
+
+
+  **Usage Guidance:** Use for determining permissible relationships, approvals, disclosures, and procedural steps that preserve
+  auditor independence for external auditor engagements.
+
+
+  **When to Select:** Queries mentioning auditor independence, external auditor engagements, restricted services, business/financial
+  relationship approvals, joint marketing/co-branding rules, or required documentation for independence.
+
+
+  **Query Tips:** Use RBC terms and reference AIO processes/workflows. Include terms like ''auditor independence'', ''external
+  auditor'', ''business relationship'', ''financial relationship'', ''restricted services''.
+
+
+  **Query Type:** semantic search'
+enabled: true
+search_modes:
+- catalog
+- semantic
+ad_groups:
+- all_users
+- local_dev
+batch_size: 10
+max_selected_files: 10
+top_chunks_in_catalog_selection: 1
+top_chunks_in_metadata_research: 3
+page_threshold_for_full_content: 150
+enable_db_wide_deep_research: true
+max_parallel_files: 5
+max_chunks_per_file: 20
+metadata_context_fields:
+- document_summary
+catalog_config: null
+semantic_config: null
+metadata_config: null
+sample_questions:
+- What type of business relationships are acceptable with an external auditor?
+- What types of financial information are required to be disclosed to external parties?
+- What arrangements are prohibited under joint marketing and co-branding with external auditors?
+- What are examples of external parties?

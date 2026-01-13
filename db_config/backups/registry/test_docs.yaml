@@ -1,0 +1,41 @@
+db_source: test_docs
+db_name: Test Documents
+db_summary: Test documents for doc_refresh pipeline testing
+db_description: '**Content:** Sample academic papers used to test the document refresh pipeline, including NLP and ML research
+  papers.
+
+
+  **Tier/Priority:** DOMAIN EXPERT - Specialized test content used only for pipeline validation.
+
+
+  **Usage Guidance:** Use solely to validate document refresh or retrieval behavior; not intended for production accounting
+  or policy research.
+
+
+  **When to Select:** Explicit testing requests referencing sample test documents, academic NLP/ML topics in the test set,
+  or verification of pipeline behavior; avoid selecting for real business questions.
+
+
+  **Query Type:** semantic search'
+enabled: true
+search_modes:
+- catalog
+- semantic
+ad_groups: null
+batch_size: 10
+max_selected_files: 10
+top_chunks_in_catalog_selection: 1
+top_chunks_in_metadata_research: 3
+page_threshold_for_full_content: 150
+enable_db_wide_deep_research: true
+max_parallel_files: 5
+max_chunks_per_file: 20
+metadata_context_fields:
+- document_summary
+catalog_config: null
+semantic_config: null
+metadata_config: null
+sample_questions:
+- Retrieve the sample NLP research paper used for doc_refresh validation.
+- Which test document discusses transformer architectures?
+- Provide the abstract of a sample ML paper from the test set.

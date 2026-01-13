@@ -1,0 +1,49 @@
+db_source: internal_capm
+db_name: Corporate Accounting Policy Manuals
+db_summary: RBC's comprehensive accounting policies, detailing recognition, measurement, disclosure, and compliance requirements
+  under IFRS and U.S. GAAP frameworks.
+db_description: '**Content:** RBC''s comprehensive accounting policies covering recognition, measurement, disclosure, and
+  compliance requirements under IFRS and U.S. GAAP frameworks. This is the official RBC policy manual.
+
+
+  **Tier/Priority:** PRIMARY SOURCE - Authoritative RBC accounting policy manual; default source for accounting determinations.
+
+
+  **Usage Guidance:** Use for definitive RBC-required accounting treatment, recognition thresholds, measurement rules, and
+  disclosure obligations; rely on this for policy wording, required controls, and governance. Always check US GAAP flags when
+  dual-GAAP treatment may apply.
+
+
+  **When to Select:** Queries asking for RBC policy, acceptable accounting treatment, required disclosures, IFRS/U.S. GAAP
+  application at RBC, or approval/exception conditions for accounting topics.
+
+
+  **Query Tips:** Use RBC terms and policy areas. Check US GAAP flags for dual-reporting considerations.
+
+
+  **Query Type:** semantic search'
+enabled: true
+search_modes:
+- catalog
+- semantic
+ad_groups:
+- all_users
+- local_dev
+batch_size: 10
+max_selected_files: 15
+top_chunks_in_catalog_selection: 1
+top_chunks_in_metadata_research: 3
+page_threshold_for_full_content: 150
+enable_db_wide_deep_research: true
+max_parallel_files: 5
+max_chunks_per_file: 20
+metadata_context_fields:
+- document_summary
+catalog_config: null
+semantic_config: null
+metadata_config: null
+sample_questions:
+- What is the IFRS and U.S. GAAP difference on firm commitment related to hedging?
+- Is a call option in a finanical instrument an embedded derivative?
+- What threshold is considered to be probable under IFRS?
+- What are the main criteria to derecognize a financial asset under IFRS?

@@ -1,0 +1,51 @@
+db_source: internal_process_and_controls
+db_name: Internal Process and Controls Policies
+db_summary: RBC's policies on general ledger naming conventions, intra-group account procedures, internal controls over financial
+  reporting (ICFR), and the Enterprise Internal Control Management Policy (ICMP) aligned with frameworks like COSO, SOX, and
+  NI 52-109.
+db_description: '**Content:** RBC''s policies on general ledger naming conventions, intra-group account procedures, internal
+  controls over financial reporting (ICFR), and the Enterprise Internal Control Management Policy (ICMP) aligned with COSO,
+  SOX, and NI 52-109 frameworks.
+
+
+  **Tier/Priority:** DOMAIN EXPERT - Specialized guidance for internal controls and process standards.
+
+
+  **Usage Guidance:** Use for control framework expectations, GL naming standards, intra-group reconciliation processes, and
+  ICFR/ICMP requirements tied to regulatory frameworks.
+
+
+  **When to Select:** Queries about GL naming conventions, intra-group account handling, ICFR testing or documentation under
+  SOX or NI 52-109, ICMP control activities, COSO alignment, or references to policies such as FIN-ACC-22 or FIN-ACC-201.
+
+
+  **Query Tips:** Use terms like ''GL naming convention'', ''intra-group accounts'', ''ICFR'', ''SOX'', ''NI 52-109'', ''ICMP'',
+  ''COSO framework'', ''FIN-ACC-22'', ''FIN-ACC-201''.
+
+
+  **Query Type:** semantic search'
+enabled: true
+search_modes:
+- catalog
+- semantic
+ad_groups:
+- all_users
+- local_dev
+batch_size: 10
+max_selected_files: 10
+top_chunks_in_catalog_selection: 1
+top_chunks_in_metadata_research: 3
+page_threshold_for_full_content: 150
+enable_db_wide_deep_research: true
+max_parallel_files: 5
+max_chunks_per_file: 20
+metadata_context_fields:
+- document_summary
+catalog_config: null
+semantic_config: null
+metadata_config: null
+sample_questions:
+- What are the requirements of RBC's internal controls policy?
+- What is the top down risk based approach in the ICFR policy?
+- What are the standardized abbreviations for the Chart of Accounts?
+- How does RBC apply it's ICMP policy for Control Activities?

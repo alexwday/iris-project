@@ -2,33 +2,30 @@
 Reference Processor Utility Module.
 
 Handles all reference-related processing for the IRIS system:
-- Building master reference indices from database query results
+- Building consolidated reference indices from database query results
 - Processing [REF:X] markers in streaming output
 - Replacing reference markers with clickable href links
 
 Functions:
-    build_master_reference_index: Consolidate reference indices from multiple databases
-    process_reference_buffer: Smart buffering for reference replacement during streaming
-    process_final_references: Replace all remaining [REF:X] markers in final output
+    build_consolidated_reference_index: Consolidate reference indices from multiple databases
+    process_streaming_reference_buffer: Smart buffering for reference replacement during streaming
+    finalize_reference_replacements: Replace all remaining [REF:X] markers in final output
 """
 
 import logging
 import re
-from typing import Any, Dict, Generator, List, Optional, Tuple
+from typing import Any, Dict, Generator, List, Tuple
 
 from .env_config import config
 
 logger = logging.getLogger(__name__)
 
-# Compiled regex patterns for better performance
-REF_INDIVIDUAL_PATTERN = re.compile(r"\[REF:(\d+)\]")
-REF_LEGACY_PATTERN = re.compile(r"\[REF:([\d,\s\-]+)\]")
-REF_INCOMPLETE_PATTERN = re.compile(r"\[REF:?\d*$")
+REF_PATTERN = re.compile(r"\[REF:([\d,\s\-]+)\]")
+REF_INCOMPLETE_PATTERN = re.compile(r"\[REF:?[0-9,\s\-]*$")
 
 
-def _is_structured_format(ref_index: Dict[str, Any]) -> bool:
-    """
-    Check if reference index uses structured format with research_content.
+def _is_structured_reference_format(ref_index: Dict[str, Any]) -> bool:
+    """Check if reference index uses structured format with research_content.
 
     Structured format: {doc_name: {page_key: {research_content, file_link, ...}}}
     Legacy format: {ref_id: {doc_name, file_link, ...}}
@@ -37,7 +34,7 @@ def _is_structured_format(ref_index: Dict[str, Any]) -> bool:
         ref_index: Reference index to check.
 
     Returns:
-        True if structured format, False if legacy format.
+        bool: True if structured format, False if legacy format.
     """
     if not isinstance(ref_index, dict):
         return False
@@ -51,14 +48,13 @@ def _is_structured_format(ref_index: Dict[str, Any]) -> bool:
     return False
 
 
-def _build_link_text(
+def _build_reference_link_text(
     source_filename: str,
     chapter_number: str,
     page_reference: str,
     page: int,
 ) -> str:
-    """
-    Build consistent link text for reference citations.
+    """Build consistent link text for reference citations.
 
     Args:
         source_filename: Display name for the source file.
@@ -67,7 +63,7 @@ def _build_link_text(
         page: Actual page number for PDF navigation.
 
     Returns:
-        Formatted link text like "Filename, Ch. 5, Pg. 10" or "Filename, Pg. 10".
+        str: Formatted link text like "Filename, Ch. 5, Pg. 10" or "Filename, Pg. 10".
     """
     display_page = (
         page_reference if page_reference and page_reference != "0" else str(page)
@@ -75,44 +71,48 @@ def _build_link_text(
 
     if chapter_number:
         return f"{source_filename}, Ch. {chapter_number}, Pg. {display_page}"
-    else:
-        return f"{source_filename}, Pg. {display_page}"
+
+    return f"{source_filename}, Pg. {display_page}"
 
 
-def _build_href(
+def _build_reference_href(
     ref_data: Dict[str, Any],
     s3_base_path: str,
 ) -> str:
-    """
-    Build HTML href link for a reference.
+    """Build HTML href link for a reference.
 
     Args:
         ref_data: Reference data containing file_name, page, highlight_text, etc.
         s3_base_path: Base path for S3 URLs.
 
     Returns:
-        HTML anchor tag with javascript:window.maven.openPdf() call.
+        str: HTML anchor tag with javascript:window.maven.openPdf() call.
     """
-    file_name = ref_data.get("file_name", "")
-    page = ref_data.get("page", 1)
-    highlight_text = ref_data.get("highlight_text", "")
-    doc_name = ref_data.get("doc_name", "Unknown Document")
-    page_reference = ref_data.get("page_reference", str(page))
-    chapter_number = ref_data.get("chapter_number", "")
-    source_filename = ref_data.get("source_filename", doc_name)
+    file_name = ref_data.get("file_name") or ""
+    try:
+        page = int(ref_data.get("page", 1))
+    except (TypeError, ValueError):
+        page = 1
+    highlight_text = ref_data.get("highlight_text") or ""
+    doc_name = ref_data.get("doc_name") or "Unknown Document"
+    page_reference = str(ref_data.get("page_reference") or page)
+    chapter_number = str(ref_data.get("chapter_number") or "")
+    source_filename = ref_data.get("source_filename") or doc_name
 
     s3_url = f"{s3_base_path}/{file_name}"
-    link_text = _build_link_text(source_filename, chapter_number, page_reference, page)
+    link_text = _build_reference_link_text(
+        source_filename, chapter_number, page_reference, page
+    )
 
     # Escape any quotes in highlight_text to prevent injection
     safe_highlight = highlight_text.replace('"', '\\"').replace("'", "\\'")
 
-    return f'<a href=\'javascript:window.maven.openPdf("{s3_url}", {page}, "{safe_highlight}")\'>{link_text}</a>'
+    js_call = f'javascript:window.maven.openPdf("{s3_url}", {page}, "{safe_highlight}")'
+    return f"<a href='{js_call}'>{link_text}</a>"
 
 
-def _parse_ref_ids(ref_text: str) -> List[str]:
-    """
-    Parse reference IDs from various formats.
+def _parse_reference_ids(ref_text: str) -> List[str]:
+    """Parse reference IDs from various formats.
 
     Handles:
     - Single ID: "5" -> ["5"]
@@ -124,7 +124,7 @@ def _parse_ref_ids(ref_text: str) -> List[str]:
         ref_text: Raw reference text from [REF:...] pattern.
 
     Returns:
-        List of individual reference ID strings.
+        list[str]: Individual reference ID strings.
     """
     ref_ids: List[str] = []
 
@@ -152,13 +152,12 @@ def _parse_ref_ids(ref_text: str) -> List[str]:
     return ref_ids
 
 
-def _generate_links_for_refs(
+def _generate_reference_links(
     ref_ids: List[str],
     reference_index: Dict[str, Dict[str, Any]],
     deduplicate_by_page: bool = True,
 ) -> Tuple[List[str], List[str]]:
-    """
-    Generate href links for a list of reference IDs.
+    """Generate href links for a list of reference IDs.
 
     Args:
         ref_ids: List of reference ID strings to process.
@@ -166,7 +165,7 @@ def _generate_links_for_refs(
         deduplicate_by_page: If True, only one link per (doc, page) combo.
 
     Returns:
-        Tuple of (list of href strings, list of found ref IDs).
+        tuple[list[str], list[str]]: Generated href strings and the found ref IDs.
     """
     page_links: Dict[Tuple[str, int], str] = {}
     found_refs: List[str] = []
@@ -186,25 +185,25 @@ def _generate_links_for_refs(
             page_key = (doc_name, page)
 
             if page_key not in page_links:
-                page_links[page_key] = _build_href(ref_data, config.S3_BASE_PATH)
+                page_links[page_key] = _build_reference_href(
+                    ref_data, config.S3_BASE_PATH
+                )
         else:
-            # Generate link even if duplicate page
-            href = _build_href(ref_data, config.S3_BASE_PATH)
-            page_key = (ref_id, 0)  # Unique key per ref
+            href = _build_reference_href(ref_data, config.S3_BASE_PATH)
+            page_key = (ref_id, 0)
             page_links[page_key] = href
 
     if missing_refs:
-        logger.warning(f"References not found in index: {missing_refs}")
+        logger.warning("References not found in index: %s", missing_refs)
 
     return list(page_links.values()), found_refs
 
 
-def build_master_reference_index(
+def build_consolidated_reference_index(
     all_reference_indices: Dict[str, Dict[str, Any]],
     aggregated_detailed_research: Dict[str, str],
 ) -> Tuple[Dict[str, Dict[str, Any]], Dict[str, str]]:
-    """
-    Build a master reference index from all database reference indices.
+    """Build a master reference index from all database reference indices.
 
     Consolidates reference indices from multiple databases, assigns sequential
     REF numbers, and updates the aggregated research text with the new REF tags.
@@ -217,10 +216,8 @@ def build_master_reference_index(
         aggregated_detailed_research: Dict mapping database names to research text.
 
     Returns:
-        Tuple containing:
-            - master_reference_index: Consolidated reference index with sequential IDs.
-                Maps ref_id -> {doc_name, file_link, page, chapter_number, etc.}
-            - updated_research: Updated aggregated_detailed_research with REF tags replaced.
+        tuple[dict[str, dict[str, Any]], dict[str, str]]: Consolidated reference index
+        with sequential IDs and updated research text with new REF tags.
     """
     master_reference_index: Dict[str, Dict[str, Any]] = {}
     structured_research_with_refs: Dict[str, Dict[str, Any]] = {}
@@ -232,7 +229,7 @@ def build_master_reference_index(
         if not ref_index:
             continue
 
-        if _is_structured_format(ref_index):
+        if _is_structured_reference_format(ref_index):
             db_research_with_refs: Dict[str, Any] = {}
 
             for doc_name in sorted(ref_index.keys()):
@@ -345,12 +342,11 @@ def build_master_reference_index(
     return master_reference_index, updated_research
 
 
-def _replace_refs_in_text(
+def _replace_reference_markers_in_text(
     text: str,
     reference_index: Dict[str, Dict[str, Any]],
 ) -> str:
-    """
-    Replace all [REF:X] markers in text with href links.
+    """Replace all [REF:X] markers in text with href links.
 
     Handles individual refs [REF:1], comma-separated [REF:1,2,3], and ranges [REF:1-5].
 
@@ -359,40 +355,31 @@ def _replace_refs_in_text(
         reference_index: Master reference index.
 
     Returns:
-        Text with markers replaced by HTML links.
+        str: Text with markers replaced by HTML links.
     """
-    processed_positions: set = set()
 
     def replace_match(match: re.Match) -> str:
-        # Skip if this position was already processed
-        if match.start() in processed_positions:
+        ref_ids = _parse_reference_ids(match.group(1))
+        links, found_refs = _generate_reference_links(ref_ids, reference_index)
+
+        if not links:
             return match.group(0)
 
-        processed_positions.add(match.start())
+        logger.debug(
+            "Replaced %s with %d link(s) for refs: %s",
+            match.group(0),
+            len(links),
+            found_refs,
+        )
+        return f"\n\n{' '.join(links)}\n\n"
 
-        ref_text = match.group(1)
-        ref_ids = _parse_ref_ids(ref_text)
-        links, found_refs = _generate_links_for_refs(ref_ids, reference_index)
-
-        if links:
-            logger.debug(
-                f"Replaced {match.group(0)} with {len(links)} link(s) for refs: {found_refs}"
-            )
-            return f"\n\n{' '.join(links)}\n\n"
-        else:
-            return match.group(0)
-
-    # Use a single comprehensive pattern that handles all formats
-    # This avoids the double-processing bug
-    combined_pattern = re.compile(r"\[REF:([\d,\s\-]+)\]")
-    return combined_pattern.sub(replace_match, text)
+    return REF_PATTERN.sub(replace_match, text)
 
 
-def process_final_references(
+def finalize_reference_replacements(
     buffer: str, reference_index: Dict[str, Dict[str, Any]]
 ) -> Generator[str, None, None]:
-    """
-    Process all remaining buffer content and replace [REF:X] markers with href links.
+    """Process all remaining buffer content and replace [REF:X] markers with href links.
 
     Called at the end of streaming to ensure all reference markers are converted
     to clickable links. Handles individual [REF:1], comma-separated [REF:1,2,3],
@@ -403,7 +390,7 @@ def process_final_references(
         reference_index: Master reference index mapping REF IDs to reference data.
 
     Yields:
-        Processed content with [REF:X] markers replaced by HTML href links.
+        str: Content with [REF:X] markers replaced by HTML href links.
     """
     if not buffer:
         return
@@ -412,15 +399,14 @@ def process_final_references(
         yield buffer
         return
 
-    processed = _replace_refs_in_text(buffer, reference_index)
+    processed = _replace_reference_markers_in_text(buffer, reference_index)
     yield processed
 
 
-def process_reference_buffer(
+def process_streaming_reference_buffer(
     buffer: str, reference_index: Dict[str, Dict[str, Any]], buffer_size: int = 80
 ) -> Tuple[str, str]:
-    """
-    Smart buffering for streaming reference replacement.
+    """Smart buffering for streaming reference replacement.
 
     Accumulates streaming chunks and processes complete reference patterns immediately,
     ensuring href links are sent before the UI displays [REF:X] tags. Handles incomplete
@@ -432,54 +418,41 @@ def process_reference_buffer(
         buffer_size: Maximum buffer size before forcing output (default: 80).
 
     Returns:
-        Tuple of (processed_content_to_output, remaining_buffer).
-            - processed_content_to_output: Content ready to yield with refs replaced
-            - remaining_buffer: Incomplete content to carry to next chunk
+        tuple[str, str]: Processed content ready to yield and incomplete content
+            to carry forward.
     """
     if not buffer:
         return "", ""
 
-    # Find all complete reference patterns
-    all_matches = list(REF_LEGACY_PATTERN.finditer(buffer))
+    all_matches = list(REF_PATTERN.finditer(buffer))
 
     if not all_matches:
-        # No complete references found
-        # Check for incomplete reference at the end
         incomplete_match = REF_INCOMPLETE_PATTERN.search(buffer)
 
         if incomplete_match:
-            # Keep the incomplete part for next chunk
             return (
                 buffer[: incomplete_match.start()],
                 buffer[incomplete_match.start() :],
             )
 
         if len(buffer) < buffer_size:
-            # Buffer not full and no incomplete refs - check for potential start
             if buffer.endswith("["):
                 return buffer[:-1], "["
             return buffer, ""
-        else:
-            # Buffer full, no refs - output most, keep small tail for safety
-            potential_ref_start = buffer.rfind("[")
-            if potential_ref_start != -1 and potential_ref_start > len(buffer) - 15:
-                return buffer[:potential_ref_start], buffer[potential_ref_start:]
-            else:
-                # Keep a small tail in case a ref is split across chunks
-                keep_chars = min(10, len(buffer) // 3)
-                if keep_chars > 0:
-                    return buffer[:-keep_chars], buffer[-keep_chars:]
-                return buffer, ""
+        potential_ref_start = buffer.rfind("[")
+        if potential_ref_start != -1 and potential_ref_start > len(buffer) - 15:
+            return buffer[:potential_ref_start], buffer[potential_ref_start:]
+        keep_chars = min(10, len(buffer) // 3)
+        if keep_chars > 0:
+            return buffer[:-keep_chars], buffer[-keep_chars:]
+        return buffer, ""
 
-    # Find the position after the last complete reference
     last_ref_end = max(m.end() for m in all_matches)
 
-    # Check if there's an incomplete reference after the last complete one
     trailing = buffer[last_ref_end:]
     incomplete_in_trailing = REF_INCOMPLETE_PATTERN.search(trailing)
 
     if incomplete_in_trailing:
-        # There's an incomplete reference starting in the trailing content
         split_point = last_ref_end + incomplete_in_trailing.start()
         content_to_process = buffer[:split_point]
         remaining = buffer[split_point:]
@@ -487,7 +460,8 @@ def process_reference_buffer(
         content_to_process = buffer
         remaining = ""
 
-    # Replace all complete references in the content to process
-    processed = _replace_refs_in_text(content_to_process, reference_index)
+    processed = _replace_reference_markers_in_text(
+        content_to_process, reference_index
+    )
 
     return processed, remaining

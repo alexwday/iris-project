@@ -1,0 +1,48 @@
+db_source: external_iasb
+db_name: International Accounting Standards Board (IASB)
+db_summary: The official IFRS standards, interpretations (IFRICs/SICs), guidance, illustrative examples, and the basis for
+  conclusions, serving as an authoritative source for IFRS-related queries.
+db_description: '**Content:** The official IFRS standards, interpretations (IFRICs/SICs), guidance, illustrative examples,
+  and the basis for conclusions, serving as the authoritative source for IFRS-related queries.
+
+
+  **Tier/Priority:** EXTERNAL AUTHORITATIVE - Official IFRS source text and interpretations.
+
+
+  **Usage Guidance:** Consult when the request needs exact IFRS wording, specific paragraphs, or authoritative external standard
+  text. Select when explicitly requested by user OR when internal sources are insufficient/unclear on the standard requirements.
+  Use for official standard text or interpretations. Prefer internal RBC guidance for policy questions.
+
+
+  **When to Select:** Explicit mentions of IFRS/IAS/IFRIC/SIC numbers, requests for official standard language, citations,
+  paragraph references, or when internal sources lack clarity on what the standard actually requires.
+
+
+  **Query Tips:** Use standard numbers (IFRS 15, IAS 38), interpretations (IFRIC/SIC), technical terms, specific paragraphs.
+
+
+  **Query Type:** semantic search'
+enabled: true
+search_modes:
+- catalog
+- semantic
+ad_groups:
+- all_users
+- local_dev
+batch_size: 10
+max_selected_files: 8
+top_chunks_in_catalog_selection: 2
+top_chunks_in_metadata_research: 3
+page_threshold_for_full_content: 100
+enable_db_wide_deep_research: true
+max_parallel_files: 5
+max_chunks_per_file: 20
+metadata_context_fields:
+- document_summary
+catalog_config: null
+semantic_config: null
+metadata_config: null
+sample_questions:
+- Under IFRS, what are examples of temporary differences that lead to a deferred tax liability?
+- Under IFRS, what are the presentation requirements for compound financial instruments? Please specify the relevant standard
+  and sections.

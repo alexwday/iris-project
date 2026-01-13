@@ -1,14 +1,4 @@
-"""
-Fiscal Calendar Utility.
-
-Generates a fiscal context statement based on the current date.
-Fiscal year runs from November 1 to October 31.
-
-Functions:
-    get_fiscal_period: Calculate current fiscal year and quarter
-    get_quarter_range_str: Get formatted date range string
-    get_fiscal_statement: Generate XML fiscal context statement
-"""
+"""Fiscal calendar utilities for generating fiscal context statements."""
 
 import logging
 from datetime import datetime
@@ -24,51 +14,46 @@ QUARTER_RANGES = {
 }
 
 
-def get_fiscal_period() -> Tuple[int, int]:
-    """
-    Calculate current fiscal year and quarter.
+def calculate_current_fiscal_period() -> Tuple[int, int]:
+    """Calculate the current fiscal year and quarter.
 
     Returns:
-        Tuple of (fiscal_year, fiscal_quarter).
+        Tuple[int, int]: Fiscal year and fiscal quarter.
     """
     current_date = datetime.now()
     current_month = current_date.month
     calendar_year = current_date.year
 
     fiscal_year = calendar_year + 1 if current_month >= 11 else calendar_year
-    month_adjusted = (current_month - 10) % 12
-    fiscal_quarter = (month_adjusted - 1) // 3 + 1
+    month_offset = (current_month - 11) % 12
+    fiscal_quarter = month_offset // 3 + 1
 
     return fiscal_year, fiscal_quarter
 
 
-def get_quarter_range_str(fiscal_quarter: int) -> str:
-    """
-    Get a formatted string describing the date range for a fiscal quarter.
+def format_fiscal_quarter_range(fiscal_quarter: int) -> str:
+    """Return the date range covered by a fiscal quarter.
 
     Args:
-        fiscal_quarter: The fiscal quarter (1-4).
+        fiscal_quarter (int): Fiscal quarter (1-4).
 
     Returns:
-        Formatted date range string like "November 1st to January 31st".
+        str: Formatted date range (e.g., "November 1st to January 31st").
     """
     return QUARTER_RANGES.get(fiscal_quarter, "Invalid quarter")
 
 
-def get_fiscal_statement() -> str:
-    """
-    Generate a natural language statement about the current fiscal period.
-
-    Uses XML-style delimiters for better sectioning in prompts.
+def generate_fiscal_context_statement() -> str:
+    """Generate an XML-formatted statement about the current fiscal period.
 
     Returns:
-        Formatted fiscal statement with XML tags.
+        str: Fiscal statement with XML tags.
     """
     try:
         current_date = datetime.now()
         formatted_date = current_date.strftime("%Y-%m-%d")
-        fiscal_year, fiscal_quarter = get_fiscal_period()
-        current_quarter_range = get_quarter_range_str(fiscal_quarter)
+        fiscal_year, fiscal_quarter = calculate_current_fiscal_period()
+        current_quarter_range = format_fiscal_quarter_range(fiscal_quarter)
 
         fy_definition = "Our fiscal year runs from November 1st through October 31st."
         statement = f"""<FISCAL_CONTEXT>
