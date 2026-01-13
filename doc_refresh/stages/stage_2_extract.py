@@ -20,7 +20,7 @@ from typing import List, Optional
 from ..connections.file_source import FileSource, get_file_source
 from ..stages.stage_1_scan import FileInfo
 from ..utils.content_extractor import extract_pages, clean_text
-from ..utils.env_config import Config
+from ..utils.env_config import config
 from ..utils.process_monitoring import get_process_monitor
 
 logger = logging.getLogger(__name__)
@@ -162,7 +162,7 @@ def extract_file(
 
     try:
         # Determine the local path to process
-        if Config.FILE_SOURCE_MODE == "nas":
+        if config.FILE_SOURCE_MODE == "nas":
             # Download from NAS to temp directory
             local_path = file_source.copy_to_local(file_info.file_path, temp_dir)
             logger.debug("Downloaded to temp: %s", local_path)
@@ -187,7 +187,7 @@ def extract_file(
         extracted.page_count = len(extracted.pages)
 
         # Clean up temp file if NAS mode
-        if Config.FILE_SOURCE_MODE == "nas" and os.path.exists(local_path):
+        if config.FILE_SOURCE_MODE == "nas" and os.path.exists(local_path):
             try:
                 os.remove(local_path)
             except OSError:

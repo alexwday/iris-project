@@ -1,52 +1,47 @@
-"""
-Centralized Logging Configuration Module.
-
-Provides consistent logging configuration for all modules in the application,
-preventing duplicate log messages and ensuring uniform log formatting.
-The logging level is configured via environment variables.
-
-Functions:
-    configure_logging: Set up the root logger with appropriate handlers
-"""
+"""Centralized logging configuration for the application."""
 
 import logging
 import sys
 from typing import Optional
 
-from .env_config import Config
+from .env_config import config
 
 
-def configure_logging(level: Optional[int] = None) -> logging.Logger:
-    """
-    Configure root logger with handlers for consistent logging across modules.
-
-    This function should be called once at application startup to establish
-    a unified logging configuration. It clears any existing handlers to avoid
-    duplicate log messages.
+def configure_root_logger(level: Optional[int] = None) -> logging.Logger:
+    """Configure the root logger with a stderr stream handler.
 
     Args:
-        level: The logging level to set. If None, uses environment config.
+        level (int | None): Log level to apply. When omitted, uses
+            `config.LOG_LEVEL` or INFO as fallback.
 
     Returns:
-        Configured root logger.
+        logging.Logger: Root logger after configuration.
     """
-    if level is None:
-        level = getattr(logging, Config.LOG_LEVEL.upper(), logging.INFO)
+    level = (
+        getattr(logging, config.LOG_LEVEL.upper(), logging.INFO)
+        if level is None
+        else level
+    )
 
     root_logger = logging.getLogger()
 
-    if root_logger.handlers:
-        for handler in root_logger.handlers:
-            root_logger.removeHandler(handler)
+    for handler in list(root_logger.handlers):
+        handler.close()
+        root_logger.removeHandler(handler)
 
     handler = logging.StreamHandler(sys.stderr)
-    formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    handler.setFormatter(
+        logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     )
-    handler.setFormatter(formatter)
     root_logger.addHandler(handler)
     root_logger.setLevel(level)
 
-    logging.info("Logging system initialized")
+    root_logger.info("Logging system initialized")
 
     return root_logger
+
+
+# Backwards compatibility
+def configure_logging(level: Optional[int] = None) -> logging.Logger:
+    """Alias maintained for doc_refresh entrypoints."""
+    return configure_root_logger(level)

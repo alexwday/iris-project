@@ -28,7 +28,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from ..utils.env_config import Config
+from ..utils.env_config import config
 
 logger = logging.getLogger(__name__)
 
@@ -226,16 +226,16 @@ class NASFileSource(FileSource):
                 "pysmb library not available. Install with: pip install pysmb"
             )
 
-        if not all([Config.NAS_IP, Config.NAS_SHARE, Config.NAS_USER]):
+        if not all([config.NAS_IP, config.NAS_SHARE, config.NAS_USER]):
             raise ValueError(
                 "Incomplete NAS configuration. Set NAS_IP, NAS_SHARE, NAS_USER, NAS_PASSWORD."
             )
 
-        self.ip = Config.NAS_IP
-        self.share = Config.NAS_SHARE
-        self.user = Config.NAS_USER
-        self.password = Config.NAS_PASSWORD
-        self.port = Config.NAS_PORT
+        self.ip = config.NAS_IP
+        self.share = config.NAS_SHARE
+        self.user = config.NAS_USER
+        self.password = config.NAS_PASSWORD
+        self.port = config.NAS_PORT
         self.client_hostname = socket.gethostname()
 
         logger.info(
@@ -444,10 +444,10 @@ def get_file_source() -> FileSource:
     Raises:
         ValueError: If FILE_SOURCE_MODE is invalid.
     """
-    mode = Config.FILE_SOURCE_MODE.lower()
+    mode = config.FILE_SOURCE_MODE.lower()
 
     if mode == "local":
-        base_path = Config.BASE_PATH if Config.BASE_PATH else None
+        base_path = config.BASE_PATH if config.BASE_PATH else None
         return LocalFileSource(base_path=base_path)
 
     elif mode == "nas":

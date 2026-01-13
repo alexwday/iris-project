@@ -17,12 +17,13 @@ Functions:
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from typing import Dict, List, Optional, Set, Tuple
 
+from sqlalchemy import text
+
 from ..connections.file_source import FileSource, get_file_source
-from ..connections.postgres import execute_query
-from ..utils.env_config import Config
+from ..connections.postgres import get_database_session
+from ..utils.env_config import config
 from ..utils.process_monitoring import get_process_monitor
 
 logger = logging.getLogger(__name__)
@@ -69,7 +70,7 @@ def run_stage(
     Args:
         file_source: Optional FileSource instance (uses default if None).
         database_names: Optional list of database names to process
-            (uses Config.get_database_names() if None).
+            (uses config.get_database_names() if None).
         force: If True, mark all files for processing regardless of hash.
 
     Returns:
@@ -84,11 +85,11 @@ def run_stage(
         # Get file source
         if file_source is None:
             file_source = get_file_source()
-            logger.info("Using file source mode: %s", Config.FILE_SOURCE_MODE)
+            logger.info("Using file source mode: %s", config.FILE_SOURCE_MODE)
 
         # Get database names to process
         if database_names is None:
-            database_names = Config.get_database_names()
+            database_names = config.get_database_names()
 
         if not database_names:
             raise ValueError(
@@ -198,7 +199,7 @@ def scan_folder(
         try:
             # Calculate file hash
             file_hash = file_source.get_file_hash(
-                f"{db_name}/{relative_path}" if Config.FILE_SOURCE_MODE == "local" else file_info["path"]
+                f"{db_name}/{relative_path}" if config.FILE_SOURCE_MODE == "local" else file_info["path"]
             )
 
             # Check if file exists in database (by file_name for 2-table design)
@@ -237,8 +238,26 @@ def scan_folder(
                 logger.debug("Force reprocess: %s", file_name)
 
             else:
-                # File exists, no force flag - skip (hash not available in 2-table design)
-                result.files_unchanged += 1
+                # Compare file hashes to detect changes
+                db_hash = db_file.get("file_hash", "")
+                if db_hash and file_hash == db_hash:
+                    # Hash matches - file unchanged
+                    result.files_unchanged += 1
+                else:
+                    # Hash differs or missing - needs update
+                    result.files_to_process.append(
+                        FileInfo(
+                            file_path=file_info["path"],
+                            relative_path=relative_path,
+                            file_name=file_name,
+                            file_hash=file_hash,
+                            file_size=file_info["size"],
+                            db_source=db_name,
+                            modified_time=file_info["modified_time"],
+                            action="update",
+                        )
+                    )
+                    logger.debug("Hash changed, needs update: %s", file_name)
 
         except Exception as exc:
             error_msg = f"Error processing file {relative_path}: {exc}"
@@ -279,19 +298,31 @@ def get_database_files(db_source: str) -> List[Dict]:
         db_source: Database source identifier.
 
     Returns:
-        List of dicts with 'document_id', 'file_path', 'file_name' keys.
-        Note: file_hash not available in 2-table design, use file_name for matching.
+        List of dicts with 'document_id', 'file_path', 'file_name', 'file_hash' keys.
+        Uses file_hash for change detection.
     """
-    query = """
-        SELECT id as document_id, file_path, document_name as file_name
+    query = text(
+        """
+        SELECT id AS document_id, file_path, document_name AS file_name, file_hash
         FROM iris_document_metadata
-        WHERE db_source = %s
-    """
+        WHERE db_source = :db_source
+        """
+    )
 
     try:
-        rows = execute_query(query, (db_source,), dict_cursor=True)
-        logger.debug("Found %d existing files in DB for %s", len(rows), db_source)
-        return rows
+        with get_database_session() as session:
+            rows = session.execute(query, {"db_source": db_source}).fetchall()
+            results = [
+                {
+                    "document_id": row._mapping.get("document_id"),
+                    "file_path": row._mapping.get("file_path"),
+                    "file_name": row._mapping.get("file_name"),
+                    "file_hash": row._mapping.get("file_hash"),
+                }
+                for row in rows
+            ]
+        logger.debug("Found %d existing files in DB for %s", len(results), db_source)
+        return results
     except Exception as exc:
         logger.warning("Could not query database files for %s: %s", db_source, exc)
         return []

@@ -16,14 +16,14 @@ Functions:
     insert_document: Insert a document with all chunks
 """
 
-import json
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
-from ..connections.postgres import execute_query, execute_one, get_cursor
+from sqlalchemy import text
+
+from ..connections.postgres import get_database_session
 from ..stages.stage_4_validate import ValidatedDocument
-from ..utils.env_config import Config
 from ..utils.process_monitoring import get_process_monitor
 
 logger = logging.getLogger(__name__)
@@ -167,40 +167,37 @@ def remove_document(db_source: str, document_name: str) -> bool:
     Returns:
         True if document was removed, False if not found.
     """
-    # Find document ID
-    result = execute_one(
+    find_query = text(
         f"""
         SELECT id FROM {METADATA_TABLE}
-        WHERE db_source = %s AND document_name = %s
-        """,
-        (db_source, document_name),
+        WHERE db_source = :db_source AND document_name = :document_name
+        """
+    )
+    delete_chunks = text(
+        f"DELETE FROM {CHUNKS_TABLE} WHERE document_id = :document_id"
+    )
+    delete_document = text(
+        f"DELETE FROM {METADATA_TABLE} WHERE id = :document_id"
     )
 
-    if not result:
-        logger.debug("Document not found in DB: %s/%s", db_source, document_name)
-        return False
+    with get_database_session() as session:
+        result = session.execute(
+            find_query, {"db_source": db_source, "document_name": document_name}
+        ).fetchone()
 
-    document_id = result[0]
+        if not result:
+            logger.debug("Document not found in DB: %s/%s", db_source, document_name)
+            return False
 
-    # Delete document (chunks cascade via FK)
-    with get_cursor() as cursor:
-        # Delete chunks first (explicit for logging)
-        cursor.execute(
-            f"DELETE FROM {CHUNKS_TABLE} WHERE document_id = %s",
-            (document_id,),
-        )
-        chunks_deleted = cursor.rowcount
+        document_id = result[0]
 
-        # Delete document
-        cursor.execute(
-            f"DELETE FROM {METADATA_TABLE} WHERE id = %s",
-            (document_id,),
-        )
+        chunk_result = session.execute(delete_chunks, {"document_id": document_id})
+        session.execute(delete_document, {"document_id": document_id})
 
     logger.info(
         "Removed document %s: %d chunks",
         document_name,
-        chunks_deleted,
+        chunk_result.rowcount if chunk_result else 0,
     )
 
     return True
@@ -220,80 +217,105 @@ def insert_document(doc: Any) -> Tuple[int, int]:
     Returns:
         Tuple of (sections_count, chunks_inserted).
     """
-    with get_cursor() as cursor:
-        # Format summary embedding as PostgreSQL array for HALFVEC
+    with get_database_session() as session:
         summary_embedding_str = None
-        if doc.summary_embedding:
-            summary_embedding_str = "[" + ",".join(str(x) for x in doc.summary_embedding) + "]"
+        if doc.summary_embedding and len(doc.summary_embedding) > 0:
+            summary_embedding_str = "[" + ",".join(
+                str(x) for x in doc.summary_embedding
+            ) + "]"
 
-        # Insert document metadata with all new fields
-        cursor.execute(
+        insert_metadata = text(
             f"""
             INSERT INTO {METADATA_TABLE} (
                 db_source, document_name, document_type,
                 document_summary, summary_embedding,
                 page_count, primary_section_count, subsection_count,
-                file_name, file_path, file_size, file_type,
-                document_description
-            ) VALUES (%s, %s, %s, %s, %s::halfvec, %s, %s, %s, %s, %s, %s, %s, %s)
+                file_name, file_path, file_size, file_hash, file_type,
+                document_description, document_usage
+            ) VALUES (
+                :db_source, :document_name, :document_type,
+                :document_summary, :summary_embedding::halfvec,
+                :page_count, :primary_section_count, :subsection_count,
+                :file_name, :file_path, :file_size, :file_hash, :file_type,
+                :document_description, :document_usage
+            )
             RETURNING id
-            """,
-            (
-                doc.file_info.db_source,
-                doc.file_info.file_name,  # document_name
-                doc.structure_type.value,  # document_type
-                doc.document_summary,
-                summary_embedding_str,
-                doc.page_count,
-                doc.primary_section_count,
-                doc.subsection_count,
-                doc.file_info.file_name,
-                doc.file_info.relative_path,
-                doc.file_info.file_size,
-                doc.file_info.file_name.rsplit(".", 1)[-1] if "." in doc.file_info.file_name else None,
-                doc.document_description,
-            ),
+            """
         )
-        document_id = cursor.fetchone()[0]
 
-        # Insert chunks with all new fields
+        metadata_result = session.execute(
+            insert_metadata,
+            {
+                "db_source": doc.file_info.db_source,
+                "document_name": doc.file_info.file_name,
+                "document_type": doc.structure_type.value,
+                "document_summary": doc.document_summary,
+                "summary_embedding": summary_embedding_str,
+                "page_count": doc.page_count,
+                "primary_section_count": doc.primary_section_count,
+                "subsection_count": doc.subsection_count,
+                "file_name": doc.file_info.file_name,
+                "file_path": doc.file_info.relative_path,
+                "file_size": doc.file_info.file_size,
+                "file_hash": doc.file_info.file_hash,
+                "file_type": doc.file_info.file_name.rsplit(".", 1)[-1]
+                if "." in doc.file_info.file_name
+                else None,
+                "document_description": doc.document_description,
+                "document_usage": doc.document_usage,
+            },
+        )
+        document_id = metadata_result.scalar_one()
+
+        insert_chunk = text(
+            f"""
+            INSERT INTO {CHUNKS_TABLE} (
+                document_id, db_source, chunk_number,
+                primary_section_number, primary_section_name,
+                subsection_number, subsection_name,
+                hierarchy_path,
+                chunk_content, chunk_embedding,
+                page_number,
+                primary_section_page_count, subsection_page_count,
+                file_name, source_filename
+            ) VALUES (
+                :document_id, :db_source, :chunk_number,
+                :primary_section_number, :primary_section_name,
+                :subsection_number, :subsection_name,
+                :hierarchy_path,
+                :chunk_content, :chunk_embedding::halfvec,
+                :page_number,
+                :primary_section_page_count, :subsection_page_count,
+                :file_name, :source_filename
+            )
+            """
+        )
+
         chunks_inserted = 0
         for chunk in doc.chunks:
-            # Format embedding as PostgreSQL array for HALFVEC
             embedding_str = None
-            if chunk.embedding:
+            if chunk.embedding and len(chunk.embedding) > 0:
                 embedding_str = "[" + ",".join(str(x) for x in chunk.embedding) + "]"
 
-            cursor.execute(
-                f"""
-                INSERT INTO {CHUNKS_TABLE} (
-                    document_id, db_source, chunk_number,
-                    primary_section_number, primary_section_name,
-                    subsection_number, subsection_name,
-                    hierarchy_path,
-                    chunk_content, chunk_embedding,
-                    page_number,
-                    primary_section_page_count, subsection_page_count,
-                    file_name, source_filename
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::halfvec, %s, %s, %s, %s, %s)
-                """,
-                (
-                    document_id,
-                    doc.file_info.db_source,
-                    chunk.chunk_number,
-                    chunk.primary_section_number,
-                    chunk.primary_section_name,
-                    chunk.subsection_number,
-                    chunk.subsection_name,
-                    chunk.hierarchy_path,
-                    chunk.raw_content,
-                    embedding_str,
-                    chunk.page_number,
-                    chunk.primary_section_page_count,
-                    chunk.subsection_page_count,
-                    doc.file_info.file_name,
-                    doc.file_info.file_name,
-                ),
+            session.execute(
+                insert_chunk,
+                {
+                    "document_id": document_id,
+                    "db_source": doc.file_info.db_source,
+                    "chunk_number": chunk.chunk_number,
+                    "primary_section_number": chunk.primary_section_number,
+                    "primary_section_name": chunk.primary_section_name,
+                    "subsection_number": chunk.subsection_number,
+                    "subsection_name": chunk.subsection_name,
+                    "hierarchy_path": chunk.hierarchy_path,
+                    "chunk_content": chunk.raw_content,
+                    "chunk_embedding": embedding_str,
+                    "page_number": chunk.page_number,
+                    "primary_section_page_count": chunk.primary_section_page_count,
+                    "subsection_page_count": chunk.subsection_page_count,
+                    "file_name": doc.file_info.file_name,
+                    "source_filename": doc.file_info.file_name,
+                },
             )
             chunks_inserted += 1
 

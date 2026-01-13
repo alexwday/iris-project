@@ -1,226 +1,155 @@
-"""
-PostgreSQL Database Connection Module for Document Refresh Pipeline.
-
-Provides database access using psycopg2 with connection pooling.
-Simplified version without SQLAlchemy dependency for standalone operation.
-
-Functions:
-    get_connection: Get a raw psycopg2 connection
-    execute_query: Execute a query and return results
-    execute_batch: Execute a batch of statements
-"""
+"""PostgreSQL database connections via SQLAlchemy with connection pooling."""
 
 import logging
 from contextlib import contextmanager
-from typing import Any, Dict, Generator, List, Optional, Tuple
+from typing import Any, Callable, Dict, Generator, Optional
+from urllib.parse import quote_plus
 
-import psycopg2
-from psycopg2 import pool
-from psycopg2.extras import RealDictCursor
+from sqlalchemy import create_engine
+from sqlalchemy.engine import Engine
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import QueuePool
 
-from ..utils.env_config import Config
+from ..utils.env_config import config
 
 logger = logging.getLogger(__name__)
 
 
-class ConnectionManager:
-    """Manages database connection pooling."""
+class _ConnectionManager:
+    """Manages singleton database connections."""
 
     def __init__(self) -> None:
         """Initialize connection manager."""
-        self._pool: Optional[pool.ThreadedConnectionPool] = None
+        self._engine: Optional[Engine] = None
+        self._factory: Optional[Callable[[], Session]] = None
 
-    def _get_pool(self) -> pool.ThreadedConnectionPool:
-        """Get or create the connection pool."""
-        if self._pool is None:
-            params = Config.get_db_params()
-            logger.info(
-                "Creating connection pool for database: %s on %s:%s",
-                params["dbname"],
-                params["host"],
-                params["port"],
+    def get_database_engine(self) -> Engine:
+        """Return a pooled SQLAlchemy engine.
+
+        Returns:
+            Engine: Shared engine instance.
+        """
+        if self._engine is None:
+            params = _get_database_params()
+            dsn = build_database_dsn(params)
+            logger.info("Creating SQLAlchemy engine with connection pooling")
+            self._engine = create_engine(
+                dsn,
+                poolclass=QueuePool,
+                pool_size=5,
+                max_overflow=10,
+                pool_pre_ping=True,
+                echo=False,
             )
-            self._pool = pool.ThreadedConnectionPool(
-                minconn=1,
-                maxconn=10,
-                host=params["host"],
-                port=params["port"],
-                dbname=params["dbname"],
-                user=params["user"],
-                password=params["password"],
-            )
-        return self._pool
+        return self._engine
 
-    def get_connection(self) -> psycopg2.extensions.connection:
-        """Get a connection from the pool."""
-        return self._get_pool().getconn()
+    def get_session_factory(self) -> Callable[[], Session]:
+        """Return a session factory bound to the engine.
 
-    def return_connection(self, conn: psycopg2.extensions.connection) -> None:
-        """Return a connection to the pool."""
-        if self._pool:
-            self._pool.putconn(conn)
-
-    def close_all(self) -> None:
-        """Close all connections in the pool."""
-        if self._pool:
-            self._pool.closeall()
-            self._pool = None
+        Returns:
+            Callable[[], Session]: Factory that yields sessions.
+        """
+        if self._factory is None:
+            engine = self.get_database_engine()
+            self._factory = sessionmaker(bind=engine, expire_on_commit=False)
+        return self._factory
 
 
-_connection_manager = ConnectionManager()
+_connection_manager = _ConnectionManager()
 
 
-@contextmanager
-def get_connection() -> Generator[psycopg2.extensions.connection, None, None]:
+def _get_database_params() -> Dict[str, Any]:
+    """Return database connection parameters from environment configuration.
+
+    Returns:
+        Dict[str, Any]: Raw database connection parameters.
     """
-    Context manager for database connections.
-
-    Provides automatic return to pool on completion.
-
-    Usage:
-        with get_connection() as conn:
-            with conn.cursor() as cursor:
-                cursor.execute("SELECT * FROM table")
-                rows = cursor.fetchall()
-
-    Yields:
-        psycopg2 connection object.
-    """
-    conn = _connection_manager.get_connection()
-    try:
-        yield conn
-    finally:
-        _connection_manager.return_connection(conn)
+    logger.debug("Getting database parameters from environment configuration")
+    return config.get_database_params()
 
 
-@contextmanager
-def get_cursor(
-    dict_cursor: bool = False,
-) -> Generator[psycopg2.extensions.cursor, None, None]:
-    """
-    Context manager for database cursors with automatic commit/rollback.
+def build_database_dsn(params: Dict[str, Any]) -> str:
+    """Build SQLAlchemy DSN from database parameters.
 
     Args:
-        dict_cursor: If True, use RealDictCursor for dict-like row access.
+        params: Database connection parameters.
 
-    Usage:
-        with get_cursor(dict_cursor=True) as cursor:
-            cursor.execute("SELECT * FROM table")
-            rows = cursor.fetchall()  # Returns list of dicts
+    Returns:
+        str: SQLAlchemy connection string.
+
+    Raises:
+        ValueError: If required parameters are missing or invalid.
+    """
+    raw_hosts = params.get("host", "")
+    raw_ports = str(params.get("port", "")).strip()
+    database = params.get("dbname")
+    user = params.get("user")
+    password = params.get("password")
+
+    if not raw_hosts:
+        raise ValueError("Host is not set or is empty.")
+    hosts = [host.strip() for host in raw_hosts.split(",") if host.strip()]
+    if not hosts:
+        raise ValueError("Host is not set or is empty.")
+
+    if not raw_ports:
+        raise ValueError("Port is not set or is empty.")
+    if "," in raw_ports:
+        ports = [port.strip() for port in raw_ports.split(",") if port.strip()]
+    else:
+        ports = [raw_ports] * len(hosts)
+    if len(ports) != len(hosts):
+        raise ValueError("The number of ports must match the number of hosts.")
+
+    if not database:
+        raise ValueError("Database name is not set.")
+    if not user:
+        raise ValueError("Database user is not set.")
+    if password is None:
+        raise ValueError("Database password is not set.")
+
+    host_port = ",".join(f"{host}:{port}" for host, port in zip(hosts, ports))
+    safe_user = quote_plus(str(user))
+    safe_password = quote_plus(str(password))
+    safe_database = quote_plus(str(database))
+
+    logger.info("Using database: %s", database)
+    logger.info("Using host(s): %s", host_port)
+    logger.info("Using port(s): %s", ports)
+
+    # Use sslmode=prefer for local development (localhost), require for production
+    is_local = all(h in ("localhost", "127.0.0.1") for h in hosts)
+    sslmode = "prefer" if is_local else "require"
+
+    return (
+        f"postgresql+psycopg2://{safe_user}:{safe_password}@{host_port}/{safe_database}"
+        f"?sslmode={sslmode}&target_session_attrs=read-write"
+    )
+
+
+@contextmanager
+def get_database_session() -> Generator[Session, None, None]:
+    """Yield a SQLAlchemy session with automatic commit/rollback handling.
 
     Yields:
-        psycopg2 cursor object.
+        Session: Active SQLAlchemy session.
     """
-    conn = _connection_manager.get_connection()
+    factory = _connection_manager.get_session_factory()
+    session = factory()
     try:
-        cursor_factory = RealDictCursor if dict_cursor else None
-        with conn.cursor(cursor_factory=cursor_factory) as cursor:
-            yield cursor
-            conn.commit()
+        yield session
+        session.commit()
     except Exception as exc:
-        conn.rollback()
+        session.rollback()
         raise exc
     finally:
-        _connection_manager.return_connection(conn)
+        session.close()
 
 
-def execute_query(
-    query: str,
-    params: Optional[Tuple] = None,
-    dict_cursor: bool = False,
-) -> List[Any]:
-    """
-    Execute a query and return all results.
-
-    Args:
-        query: SQL query string.
-        params: Query parameters (tuple).
-        dict_cursor: If True, return results as list of dicts.
+def get_database_engine() -> Engine:
+    """Return the shared SQLAlchemy engine for direct access.
 
     Returns:
-        List of rows (tuples or dicts depending on dict_cursor).
+        Engine: Shared SQLAlchemy engine.
     """
-    with get_cursor(dict_cursor=dict_cursor) as cursor:
-        cursor.execute(query, params)
-        return cursor.fetchall()
-
-
-def execute_one(
-    query: str,
-    params: Optional[Tuple] = None,
-    dict_cursor: bool = False,
-) -> Optional[Any]:
-    """
-    Execute a query and return the first result.
-
-    Args:
-        query: SQL query string.
-        params: Query parameters (tuple).
-        dict_cursor: If True, return result as dict.
-
-    Returns:
-        First row or None if no results.
-    """
-    with get_cursor(dict_cursor=dict_cursor) as cursor:
-        cursor.execute(query, params)
-        return cursor.fetchone()
-
-
-def execute_many(query: str, params_list: List[Tuple]) -> int:
-    """
-    Execute a query with multiple parameter sets.
-
-    Args:
-        query: SQL query string with placeholders.
-        params_list: List of parameter tuples.
-
-    Returns:
-        Number of rows affected.
-    """
-    with get_cursor() as cursor:
-        cursor.executemany(query, params_list)
-        return cursor.rowcount
-
-
-def execute_batch_insert(
-    table: str,
-    columns: List[str],
-    rows: List[Tuple],
-    page_size: int = 1000,
-) -> int:
-    """
-    Efficiently insert multiple rows using execute_values.
-
-    Args:
-        table: Target table name.
-        columns: List of column names.
-        rows: List of row tuples.
-        page_size: Number of rows per batch.
-
-    Returns:
-        Number of rows inserted.
-    """
-    from psycopg2.extras import execute_values
-
-    if not rows:
-        return 0
-
-    columns_str = ", ".join(columns)
-    query = f"INSERT INTO {table} ({columns_str}) VALUES %s"
-
-    total_inserted = 0
-    with get_cursor() as cursor:
-        for i in range(0, len(rows), page_size):
-            batch = rows[i : i + page_size]
-            execute_values(cursor, query, batch)
-            total_inserted += len(batch)
-            logger.debug("Inserted batch of %d rows into %s", len(batch), table)
-
-    logger.info("Total rows inserted into %s: %d", table, total_inserted)
-    return total_inserted
-
-
-def close_connections() -> None:
-    """Close all database connections."""
-    _connection_manager.close_all()
-    logger.info("All database connections closed")
+    return _connection_manager.get_database_engine()

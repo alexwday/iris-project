@@ -27,10 +27,8 @@ See documentation for full configuration options.
 import argparse
 import logging
 import sys
-from typing import Optional
 
 from .connections.file_source import get_file_source
-from .connections.postgres import close_connections
 from .stages import (
     stage_1_scan,
     stage_2_extract,
@@ -39,7 +37,8 @@ from .stages import (
     stage_5_database,
     stage_6_report,
 )
-from .utils.env_config import Config
+from .utils import backup
+from .utils.env_config import config
 from .utils.logging_format import configure_logging
 from .utils.process_monitoring import enable_monitoring, get_process_monitor
 from .utils.rbc_security import setup_ssl
@@ -76,21 +75,21 @@ Environment:
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        default=Config.REFRESH_DRY_RUN,
+        default=config.REFRESH_DRY_RUN,
         help="Don't modify database, just report what would happen",
     )
 
     parser.add_argument(
         "--force",
         action="store_true",
-        default=Config.REFRESH_FORCE,
+        default=config.REFRESH_FORCE,
         help="Process all files, ignore unchanged",
     )
 
     parser.add_argument(
         "--log-level",
         type=str,
-        default=Config.LOG_LEVEL,
+        default=config.LOG_LEVEL,
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
         help="Logging level (default: INFO)",
     )
@@ -98,7 +97,7 @@ Environment:
     parser.add_argument(
         "--output",
         type=str,
-        default=Config.REFRESH_LOG_PATH,
+        default=config.REFRESH_LOG_PATH,
         help="Path for JSON report output",
     )
 
@@ -132,14 +131,14 @@ def main() -> int:
     monitor.start_monitoring()
 
     # Validate configuration
-    if not Config.validate():
+    if not config.validate():
         logger.error("Configuration validation failed. Check environment variables.")
         return 1
 
     logger.info("Configuration:")
-    logger.info("  File Source Mode: %s", Config.FILE_SOURCE_MODE)
-    logger.info("  Base Path: %s", Config.BASE_PATH)
-    logger.info("  Database Names: %s", Config.get_database_names())
+    logger.info("  File Source Mode: %s", config.FILE_SOURCE_MODE)
+    logger.info("  Base Path: %s", config.BASE_PATH)
+    logger.info("  Database Names: %s", config.get_database_names())
     logger.info("  Dry Run: %s", args.dry_run)
     logger.info("  Force: %s", args.force)
 
@@ -200,6 +199,16 @@ def main() -> int:
                 validation_result.validated_documents if validation_result else []
             )
             if scan_result.files_to_remove or validated_docs:
+                if config.BACKUP_ENABLED and not args.dry_run:
+                    backup_success, backup_files = backup.run_backup(
+                        config.BACKUP_PATH
+                    )
+                    if backup_success:
+                        logger.info("Backup completed: %s", backup_files)
+                    else:
+                        logger.warning("Backup failed; continuing without backup")
+                elif config.BACKUP_ENABLED and args.dry_run:
+                    logger.info("DRY RUN: Skipping backup")
                 logger.info("-" * 60)
                 logger.info("Stage 5: Syncing database")
                 logger.info("-" * 60)
@@ -251,13 +260,6 @@ def main() -> int:
     except Exception as exc:
         logger.exception("Pipeline failed with unexpected error: %s", exc)
         return 1
-
-    finally:
-        # Cleanup
-        try:
-            close_connections()
-        except Exception:
-            pass
 
 
 if __name__ == "__main__":

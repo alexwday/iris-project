@@ -24,7 +24,7 @@ from ..stages.stage_2_extract import ExtractionResult
 from ..stages.stage_3_process import ProcessingResult
 from ..stages.stage_4_validate import ValidationResult
 from ..stages.stage_5_database import DatabaseResult
-from ..utils.env_config import Config
+from ..utils.env_config import config
 from ..utils.process_monitoring import get_process_monitor
 
 logger = logging.getLogger(__name__)
@@ -84,9 +84,9 @@ def run_stage(
         # Write JSON report if path specified
         if output_path:
             result.report_path = write_json_report(result.report_dict, output_path)
-        elif Config.REFRESH_LOG_PATH:
+        elif config.REFRESH_LOG_PATH:
             result.report_path = write_json_report(
-                result.report_dict, Config.REFRESH_LOG_PATH
+                result.report_dict, config.REFRESH_LOG_PATH
             )
 
         result.success = True
@@ -122,11 +122,11 @@ def generate_report(
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "run_uuid": monitor_summary.get("run_uuid"),
         "configuration": {
-            "file_source_mode": Config.FILE_SOURCE_MODE,
-            "base_path": Config.BASE_PATH,
-            "database_names": Config.get_database_names(),
-            "dry_run": Config.REFRESH_DRY_RUN,
-            "force": Config.REFRESH_FORCE,
+            "file_source_mode": config.FILE_SOURCE_MODE,
+            "base_path": config.BASE_PATH,
+            "database_names": config.get_database_names(),
+            "dry_run": config.REFRESH_DRY_RUN,
+            "force": config.REFRESH_FORCE,
         },
         "summary": {
             "total_duration_seconds": monitor_summary.get("total_duration_seconds"),
@@ -228,14 +228,14 @@ def print_summary(report: Dict[str, Any]) -> None:
     print("=" * 60)
 
     # Configuration
-    config = report.get("configuration", {})
+    config_section = report.get("configuration", {})
     print(f"\nConfiguration:")
-    print(f"  File Source: {config.get('file_source_mode', 'unknown')}")
-    print(f"  Base Path: {config.get('base_path', 'not set')}")
-    print(f"  Databases: {', '.join(config.get('database_names', []))}")
-    if config.get("dry_run"):
+    print(f"  File Source: {config_section.get('file_source_mode', 'unknown')}")
+    print(f"  Base Path: {config_section.get('base_path', 'not set')}")
+    print(f"  Databases: {', '.join(config_section.get('database_names', []))}")
+    if config_section.get("dry_run"):
         print("  Mode: DRY RUN (no database changes)")
-    if config.get("force"):
+    if config_section.get("force"):
         print("  Mode: FORCE (reprocessing all files)")
 
     # Summary
