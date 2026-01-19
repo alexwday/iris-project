@@ -1,11 +1,10 @@
 -- IRIS Database Registry Initial Data
--- Generated: 2026-01-19T10:33:07.916327
+-- Generated: 2026-01-19T10:36:44.178521
 -- 
 -- Import with: psql -f iris_database_registry.sql
 -- Or run in pgAdmin/DBeaver
 --
 -- Note: Uses ON CONFLICT to handle re-runs safely
--- Note: 'test_docs' is included for testing - remove if not needed
 
 BEGIN;
 
@@ -1049,70 +1048,6 @@ ON CONFLICT (db_source) DO UPDATE SET
     max_gap_fill_pages = EXCLUDED.max_gap_fill_pages,
     updated_at = CURRENT_TIMESTAMP;
 
--- TEST DATABASE: Remove this entry for production if not needed
-INSERT INTO iris_database_registry (db_source, db_name, db_summary, db_description, search_modes, catalog_config, semantic_config, metadata_config, sample_questions, enabled, ad_groups, batch_size, max_selected_files, top_chunks_in_catalog_selection, top_chunks_in_metadata_research, page_threshold_for_full_content, enable_db_wide_deep_research, metadata_context_fields, max_parallel_files, max_chunks_per_file, max_pages_for_full_context, max_primary_section_page_count, max_subsection_page_count, max_neighbour_chunks, max_gap_fill_pages)
-VALUES (
-    'test_docs',
-    'Test Documents',
-    'Test documents for doc_refresh pipeline testing',
-    '**Content:** Sample academic papers used to test the document refresh pipeline, including NLP and ML research papers.
-
-**Tier/Priority:** DOMAIN EXPERT - Specialized test content used only for pipeline validation.
-
-**Usage Guidance:** Use solely to validate document refresh or retrieval behavior; not intended for production accounting or policy research.
-
-**When to Select:** Explicit testing requests referencing sample test documents, academic NLP/ML topics in the test set, or verification of pipeline behavior; avoid selecting for real business questions.
-
-**Query Type:** semantic search',
-    ARRAY['catalog','semantic']::text[],
-    NULL,
-    NULL,
-    NULL,
-    '["Retrieve the sample NLP research paper used for doc_refresh validation.","Which test document discusses transformer architectures?","Provide the abstract of a sample ML paper from the test set."]'::jsonb,
-    true,
-    NULL,
-    10,
-    10,
-    1,
-    3,
-    150,
-    true,
-    ARRAY['document_summary']::text[],
-    5,
-    20,
-    6,
-    6,
-    3,
-    2,
-    2
-)
-ON CONFLICT (db_source) DO UPDATE SET
-    db_name = EXCLUDED.db_name,
-    db_summary = EXCLUDED.db_summary,
-    db_description = EXCLUDED.db_description,
-    search_modes = EXCLUDED.search_modes,
-    catalog_config = EXCLUDED.catalog_config,
-    semantic_config = EXCLUDED.semantic_config,
-    metadata_config = EXCLUDED.metadata_config,
-    sample_questions = EXCLUDED.sample_questions,
-    enabled = EXCLUDED.enabled,
-    ad_groups = EXCLUDED.ad_groups,
-    batch_size = EXCLUDED.batch_size,
-    max_selected_files = EXCLUDED.max_selected_files,
-    top_chunks_in_catalog_selection = EXCLUDED.top_chunks_in_catalog_selection,
-    top_chunks_in_metadata_research = EXCLUDED.top_chunks_in_metadata_research,
-    page_threshold_for_full_content = EXCLUDED.page_threshold_for_full_content,
-    enable_db_wide_deep_research = EXCLUDED.enable_db_wide_deep_research,
-    metadata_context_fields = EXCLUDED.metadata_context_fields,
-    max_parallel_files = EXCLUDED.max_parallel_files,
-    max_chunks_per_file = EXCLUDED.max_chunks_per_file,
-    max_pages_for_full_context = EXCLUDED.max_pages_for_full_context,
-    max_primary_section_page_count = EXCLUDED.max_primary_section_page_count,
-    max_subsection_page_count = EXCLUDED.max_subsection_page_count,
-    max_neighbour_chunks = EXCLUDED.max_neighbour_chunks,
-    max_gap_fill_pages = EXCLUDED.max_gap_fill_pages,
-    updated_at = CURRENT_TIMESTAMP;
-
 COMMIT;
 
--- Inserted/Updated 17 database registry entries
+-- Inserted/Updated 16 database registry entries

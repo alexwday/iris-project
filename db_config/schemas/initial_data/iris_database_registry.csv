@@ -175,12 +175,3 @@ internal_wiki,APG Wiki,"RBC-specific accounting compilations and guidance for un
 **Query Tips:** Focus on application scenarios, specific conclusions, and industry/scenario terms.
 
 **Query Type:** semantic search","[""catalog"",""semantic""]",,,,"[""How has APG answered questions about breakage fees on early mortgage repayments?"",""What's the APG guidance on loyalty point accruals for card reward programs?"",""Has APG addressed how to account for bundled wealth management service fees?"",""What does APG say about capitalizing vs expensing software development costs?""]",true,"[""all_users"",""local_dev""]",10,15,1,3,150,true,"[""document_summary""]",5,20,6,6,3,2,2
-test_docs,Test Documents,Test documents for doc_refresh pipeline testing,"**Content:** Sample academic papers used to test the document refresh pipeline, including NLP and ML research papers.
-
-**Tier/Priority:** DOMAIN EXPERT - Specialized test content used only for pipeline validation.
-
-**Usage Guidance:** Use solely to validate document refresh or retrieval behavior; not intended for production accounting or policy research.
-
-**When to Select:** Explicit testing requests referencing sample test documents, academic NLP/ML topics in the test set, or verification of pipeline behavior; avoid selecting for real business questions.
-
-**Query Type:** semantic search","[""catalog"",""semantic""]",,,,"[""Retrieve the sample NLP research paper used for doc_refresh validation."",""Which test document discusses transformer architectures?"",""Provide the abstract of a sample ML paper from the test set.""]",true,,10,10,1,3,150,true,"[""document_summary""]",5,20,6,6,3,2,2

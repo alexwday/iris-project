@@ -55,7 +55,7 @@ def fetch_iris_prompts(conn) -> List[Dict]:
 
 
 def fetch_registry(conn) -> List[Dict]:
-    """Fetch all database registry entries."""
+    """Fetch production database registry entries (excludes test_docs)."""
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute("""
             SELECT
@@ -69,6 +69,7 @@ def fetch_registry(conn) -> List[Dict]:
                 max_pages_for_full_context, max_primary_section_page_count,
                 max_subsection_page_count, max_neighbour_chunks, max_gap_fill_pages
             FROM iris_database_registry
+            WHERE db_source != 'test_docs'
             ORDER BY db_source
         """)
         return [dict(row) for row in cur.fetchall()]
@@ -231,8 +232,7 @@ def write_registry_sql(registry: List[Dict], filepath: str):
         f.write("-- Import with: psql -f iris_database_registry.sql\n")
         f.write("-- Or run in pgAdmin/DBeaver\n")
         f.write("--\n")
-        f.write("-- Note: Uses ON CONFLICT to handle re-runs safely\n")
-        f.write("-- Note: 'test_docs' is included for testing - remove if not needed\n\n")
+        f.write("-- Note: Uses ON CONFLICT to handle re-runs safely\n\n")
 
         f.write("BEGIN;\n\n")
 
@@ -260,10 +260,6 @@ def write_registry_sql(registry: List[Dict], filepath: str):
                     values.append(str(val))
                 else:
                     values.append(escape_sql_string(str(val)))
-
-            # Add comment for test_docs
-            if row.get("db_source") == "test_docs":
-                f.write("-- TEST DATABASE: Remove this entry for production if not needed\n")
 
             f.write(f"INSERT INTO iris_database_registry ({', '.join(columns)})\n")
             f.write(f"VALUES (\n    {',\n    '.join(values)}\n)\n")
@@ -359,8 +355,8 @@ def main():
             f.write("|------|-------------|---------------|\n")
             f.write("| `iris_prompts.sql` | 8 IRIS prompts (SQL INSERT) | `psql -f iris_prompts.sql` |\n")
             f.write("| `iris_prompts.csv` | 8 IRIS prompts (CSV) | pgAdmin Import or `\\copy` |\n")
-            f.write("| `iris_database_registry.sql` | 17 database configs (SQL INSERT) | `psql -f iris_database_registry.sql` |\n")
-            f.write("| `iris_database_registry.csv` | 17 database configs (CSV) | pgAdmin Import or `\\copy` |\n\n")
+            f.write(f"| `iris_database_registry.sql` | {len(registry)} database configs (SQL INSERT) | `psql -f iris_database_registry.sql` |\n")
+            f.write(f"| `iris_database_registry.csv` | {len(registry)} database configs (CSV) | pgAdmin Import or `\\copy` |\n\n")
             f.write("## Recommended Import Order\n\n")
             f.write("1. Create tables first using schema files in parent directory\n")
             f.write("2. Import `iris_database_registry.sql` (registry must exist before documents)\n")
@@ -386,7 +382,6 @@ def main():
             f.write("\\copy prompts(model,layer,name,version,description,system_prompt,user_prompt,tool_definition) FROM 'iris_prompts.csv' WITH (FORMAT csv, HEADER true)\n")
             f.write("```\n\n")
             f.write("## Notes\n\n")
-            f.write("- `test_docs` registry entry is included for testing - remove if not needed in production\n")
             f.write("- Prompts include only `model='iris'` entries (doc_refresh prompts excluded)\n")
             f.write("- JSONB columns are properly escaped in all formats\n")
             f.write("- Array columns use PostgreSQL array literal format `{val1,val2}`\n")

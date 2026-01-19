@@ -1,6 +1,6 @@
 # IRIS Initial Data
 
-Generated: 2026-01-19 10:33:07
+Generated: 2026-01-19 10:36:44
 
 ## Contents
 
@@ -8,8 +8,8 @@ Generated: 2026-01-19 10:33:07
 |------|-------------|---------------|
 | `iris_prompts.sql` | 8 IRIS prompts (SQL INSERT) | `psql -f iris_prompts.sql` |
 | `iris_prompts.csv` | 8 IRIS prompts (CSV) | pgAdmin Import or `\copy` |
-| `iris_database_registry.sql` | 17 database configs (SQL INSERT) | `psql -f iris_database_registry.sql` |
-| `iris_database_registry.csv` | 17 database configs (CSV) | pgAdmin Import or `\copy` |
+| `iris_database_registry.sql` | 16 database configs (SQL INSERT) | `psql -f iris_database_registry.sql` |
+| `iris_database_registry.csv` | 16 database configs (CSV) | pgAdmin Import or `\copy` |
 
 ## Recommended Import Order
 
@@ -45,7 +45,6 @@ For psql `\copy`:
 
 ## Notes
 
-- `test_docs` registry entry is included for testing - remove if not needed in production
 - Prompts include only `model='iris'` entries (doc_refresh prompts excluded)
 - JSONB columns are properly escaped in all formats
 - Array columns use PostgreSQL array literal format `{val1,val2}`
