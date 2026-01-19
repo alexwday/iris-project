@@ -1,0 +1,186 @@
+db_source,db_name,db_summary,db_description,search_modes,catalog_config,semantic_config,metadata_config,sample_questions,enabled,ad_groups,batch_size,max_selected_files,top_chunks_in_catalog_selection,top_chunks_in_metadata_research,page_threshold_for_full_content,enable_db_wide_deep_research,metadata_context_fields,max_parallel_files,max_chunks_per_file,max_pages_for_full_context,max_primary_section_page_count,max_subsection_page_count,max_neighbour_chunks,max_gap_fill_pages
+external_ey,EY IFRS Guidance,"External accounting guidance and interpretations from EY, including insights, disclosure checklists, and clarifications on the application of IFRS standards.","**Content:** External accounting guidance and interpretations from EY, including insights, disclosure checklists, and clarifications on the application of IFRS standards.
+
+**Tier/Priority:** EXTERNAL SUPPLEMENTARY - Third-party interpretations that support but do not replace official standards.
+
+**Usage Guidance:** Consult when explicitly requested by user OR when internal sources are insufficient and an external perspective would help. Use to supplement internal knowledge, fill gaps, or get external interpretation. Particularly useful for disclosure examples and checklists. Internal RBC guidance should remain preferred for policy questions.
+
+**When to Select:** Explicit requests for EY guidance, external/third-party interpretations, IFRS disclosure checklists, disclosure examples, or when internal sources lack sufficient detail on practical application.
+
+**Query Tips:** Use standard numbers (IFRS 15, IAS 38), technical terms, specific paragraphs.
+
+**Query Type:** semantic search","[""catalog"",""semantic""]",,,,"[""What does EY''s guidance say about lease modification accounting under IFRS 16?"",""Does the EY disclosure checklist include requirements for financial instrument classification?"",""How does EY interpret principal-versus-agent considerations in IFRS 15?"",""What EY perspective exists on recycling of OCI balances?""]",true,"[""all_users"",""local_dev""]",10,8,2,3,100,true,"[""document_summary""]",5,20,6,6,3,2,2
+external_iasb,International Accounting Standards Board (IASB),"The official IFRS standards, interpretations (IFRICs/SICs), guidance, illustrative examples, and the basis for conclusions, serving as an authoritative source for IFRS-related queries.","**Content:** The official IFRS standards, interpretations (IFRICs/SICs), guidance, illustrative examples, and the basis for conclusions, serving as the authoritative source for IFRS-related queries.
+
+**Tier/Priority:** EXTERNAL AUTHORITATIVE - Official IFRS source text and interpretations.
+
+**Usage Guidance:** Consult when the request needs exact IFRS wording, specific paragraphs, or authoritative external standard text. Select when explicitly requested by user OR when internal sources are insufficient/unclear on the standard requirements. Use for official standard text or interpretations. Prefer internal RBC guidance for policy questions.
+
+**When to Select:** Explicit mentions of IFRS/IAS/IFRIC/SIC numbers, requests for official standard language, citations, paragraph references, or when internal sources lack clarity on what the standard actually requires.
+
+**Query Tips:** Use standard numbers (IFRS 15, IAS 38), interpretations (IFRIC/SIC), technical terms, specific paragraphs.
+
+**Query Type:** semantic search","[""catalog"",""semantic""]",,,,"[""Under IFRS, what are examples of temporary differences that lead to a deferred tax liability?"",""Under IFRS, what are the presentation requirements for compound financial instruments? Please specify the relevant standard and sections.""]",true,"[""all_users"",""local_dev""]",10,8,2,3,100,true,"[""document_summary""]",5,20,6,6,3,2,2
+internal_aio,Auditor Independence Office Policy Documents,"RBC's internal policies, procedures, and FAQs focused on maintaining auditor independence, including guidelines for business and financial relationships with external auditors.","**Content:** RBC's internal policies, procedures, and FAQs focused on maintaining auditor independence, including guidelines for business and financial relationships with external auditors.
+
+**Tier/Priority:** DOMAIN EXPERT - Specialized guidance for auditor independence requirements and controls.
+
+**Usage Guidance:** Use for determining permissible relationships, approvals, disclosures, and procedural steps that preserve auditor independence for external auditor engagements.
+
+**When to Select:** Queries mentioning auditor independence, external auditor engagements, restricted services, business/financial relationship approvals, joint marketing/co-branding rules, or required documentation for independence.
+
+**Query Tips:** Use RBC terms and reference AIO processes/workflows. Include terms like 'auditor independence', 'external auditor', 'business relationship', 'financial relationship', 'restricted services'.
+
+**Query Type:** semantic search","[""catalog"",""semantic""]",,,,"[""What type of business relationships are acceptable with an external auditor?"",""What types of financial information are required to be disclosed to external parties?"",""What arrangements are prohibited under joint marketing and co-branding with external auditors?"",""What are examples of external parties?""]",true,"[""all_users"",""local_dev""]",10,10,1,3,150,true,"[""document_summary""]",5,20,6,6,3,2,2
+internal_capm,Corporate Accounting Policy Manuals,"RBC's comprehensive accounting policies, detailing recognition, measurement, disclosure, and compliance requirements under IFRS and U.S. GAAP frameworks.","**Content:** RBC's comprehensive accounting policies covering recognition, measurement, disclosure, and compliance requirements under IFRS and U.S. GAAP frameworks. This is the official RBC policy manual.
+
+**Tier/Priority:** PRIMARY SOURCE - Authoritative RBC accounting policy manual; default source for accounting determinations.
+
+**Usage Guidance:** Use for definitive RBC-required accounting treatment, recognition thresholds, measurement rules, and disclosure obligations; rely on this for policy wording, required controls, and governance. Always check US GAAP flags when dual-GAAP treatment may apply.
+
+**When to Select:** Queries asking for RBC policy, acceptable accounting treatment, required disclosures, IFRS/U.S. GAAP application at RBC, or approval/exception conditions for accounting topics.
+
+**Query Tips:** Use RBC terms and policy areas. Check US GAAP flags for dual-reporting considerations.
+
+**Query Type:** semantic search","[""catalog"",""semantic""]",,,,"[""What is the IFRS and U.S. GAAP difference on firm commitment related to hedging?"",""Is a call option in a finanical instrument an embedded derivative?"",""What threshold is considered to be probable under IFRS?"",""What are the main criteria to derecognize a financial asset under IFRS?""]",true,"[""all_users"",""local_dev""]",10,15,1,3,150,true,"[""document_summary""]",5,20,6,6,3,2,2
+internal_cheatsheets,APG Cheatsheets,"Concise, 1-2 page summaries and infographics on specific accounting topics, offering quick, visual guidance for key concepts and policies.","**Content:** APG Cheatsheets - concise 1-2 page summaries and infographics on specific accounting topics, offering quick visual guidance for key concepts and policies. Contains decision trees, checklists, flowcharts, and visual summaries that distill complex topics into scannable formats.
+
+**Tier/Priority:** SUPPLEMENTARY SOURCE (Visual Quick Reference) - APG infographics that supplement core policy with visual aids for common accounting topics.
+
+**Usage Guidance:** Contains visual quick references for frequently asked accounting topics. Use when a scannable visual format would be helpful - decision trees, checklists, or infographic summaries. Best for well-established topics where APG has created visual aids to provide definitions and overviews.
+
+**When to Select:** Questions seeking: visual decision aids, checklists for accounting determinations, flowcharts for classification or recognition decisions, or quick visual summaries of common accounting topics.
+
+**Query Tips:** Use concise, topic-focused queries suitable for semantic search.
+
+**Query Type:** semantic search","[""catalog"",""semantic""]",,,,"[""Is there a decision tree for determining lease classification?"",""Do we have a checklist for hedge accounting eligibility?"",""Is there a flowchart for financial asset derecognition?"",""Do we have a visual guide for impairment indicator assessment?""]",true,"[""all_users"",""local_dev""]",10,10,1,3,150,true,"[""document_summary""]",5,20,6,6,3,2,2
+internal_esg,Internal ESG Guidance,"RBC's policies and frameworks for ESG disclosures, including the ESG Materiality Framework and guidance on evaluating changes to prior period ESG information, aligned with global standards like ISSB and CSRD.","**Content:** RBC's policies and frameworks for ESG disclosures, including the ESG Materiality Framework and guidance on evaluating changes to prior period ESG information aligned with ISSB and CSRD expectations.
+
+**Tier/Priority:** DOMAIN EXPERT - Specialized ESG reporting policy and disclosure guidance.
+
+**Usage Guidance:** Use for ESG reporting requirements, materiality assessments, treatment of prior period changes, and alignment with external ESG frameworks.
+
+**When to Select:** Queries about ESG materiality thresholds, handling prior period ESG adjustments, required ESG metrics/disclosures, ISSB or CSRD alignment, or treatment of ESG measurement uncertainty.
+
+**Query Tips:** Use terms like 'ESG materiality', 'prior period ESG', 'ISSB alignment', 'CSRD', 'ESG metrics', 'sustainability report', 'measurement uncertainty'.
+
+**Query Type:** semantic search","[""catalog"",""semantic""]",,,,"[""If something isn't material should it still go into the Sustainability Report?"",""Is there a threshold for materiality?"",""How to treat measurement uncertainty in the ESG framework?"",""What are the ESG guidelines for revising materiality from prior reporting periods?""]",true,"[""all_users"",""local_dev""]",10,10,1,3,150,true,"[""document_summary""]",5,20,6,6,3,2,2
+internal_ext_reporting_and_disclosure,External Reporting and Disclosure Policies,"RBC's guidelines on material information disclosure, subsidiary reporting, trading revenue classification, and auditor independence, ensuring compliance with regulatory frameworks like OSFI, FRTB, and SEC standards.","**Content:** RBC's guidelines on material information disclosure, subsidiary reporting, trading revenue classification, and auditor independence to ensure compliance with regulatory frameworks such as OSFI, FRTB, and SEC standards.
+
+**Tier/Priority:** DOMAIN EXPERT - Specialized policies for external reporting and disclosure controls.
+
+**Usage Guidance:** Use for determining disclosure obligations, authorized spokesperson rules, trading revenue classification criteria, and requirements for engaging external auditors to maintain compliance.
+
+**When to Select:** Queries about material or non-material disclosure protocols, subsidiary or trading activity reporting, quiet period or spokesperson restrictions, trading revenue classification under FRTB/SEC expectations, auditor engagement and independence controls, or references to policies such as LAW-8, FIN-ACC-217, FIN-ACC-212, or FIN-ACC-213.
+
+**Query Tips:** Use terms like 'material information', 'disclosure policy', 'subsidiary reporting', 'trading revenue', 'FRTB', 'auditor engagement', 'auditor independence', 'FIN-ACC-217', 'FIN-ACC-212', 'FIN-ACC-213'.
+
+**Query Type:** semantic search","[""catalog"",""semantic""]",,,,"[""According to the disclosure policy: Who are authorized spokespersons?"",""What guidelines should be followed for announcements that are not material?"",""Can an RBC employee speak at a conference during quiet period?"",""Which teams must review forward-looking information before it's disclosed?""]",true,"[""all_users"",""local_dev""]",10,10,1,3,150,true,"[""document_summary""]",5,20,6,6,3,2,2
+internal_global_finance_standards,Global Financial Standards,"RBC's policies on currency reporting, resident/non-resident splits, foreign exchange (FX) position accounts, the Global Chart of Accounts structure, and the Global Rates policy, ensuring consistency and compliance in financial reporting across the organization.","**Content:** RBC's policies on currency reporting, resident/non-resident splits, foreign exchange (FX) position accounts, the Global Chart of Accounts structure, and the Global Rates policy to ensure consistent financial reporting.
+
+**Tier/Priority:** DOMAIN EXPERT - Specialized standards for global finance reporting consistency.
+
+**Usage Guidance:** Use for guidance on currency and residency reporting rules, FX position account setup, chart of accounts structure, and required FX rates used in reporting.
+
+**When to Select:** Queries about currency reporting standards, resident versus non-resident requirements, FX position account usage, chart of accounts design or abbreviations, mandated global FX rates, or references to standards such as FIN-ACC-14 or FIN-ACC-10.
+
+**Query Tips:** Use terms like 'currency reporting', 'resident reporting', 'FX position account', 'chart of accounts', 'global FX rates', 'FIN-ACC-14', 'FIN-ACC-10'.
+
+**Query Type:** semantic search","[""catalog"",""semantic""]",,,,"[""What are the minimum standards for Non-Interest Expenses in COA reporting?"",""What is RBC's global FX rate policy?"",""What are examples of regulatory reports RBC provides OSFI?"",""What are requirements for resident and non-resident transactions?""]",true,"[""all_users"",""local_dev""]",10,10,1,3,150,true,"[""document_summary""]",5,20,6,6,3,2,2
+internal_intragroup_memos,Intragroup Reconciliation Memos,"Documentation regarding the permanent material intergroup revenue breaks, including reconciliation analysis and entity-level break identification.","**Content:** Documentation of permanent material intergroup revenue breaks, including reconciliation analysis and entity-level break identification.
+
+**Tier/Priority:** DOMAIN EXPERT - Specialized guidance for intergroup reconciliation and permanent break handling.
+
+**Usage Guidance:** Use for questions on classifying, documenting, and explaining intergroup revenue discrepancies, including entity attribution and reconciliation procedures.
+
+**When to Select:** Queries mentioning intergroup/IG reconciliation, permanent revenue breaks, entity-level discrepancies, OU/CPOU/LE/CE codes, or procedures for analyzing and documenting revenue breaks.
+
+**Query Tips:** Use terms like 'IG', 'intergroup', 'breaks', 'revenue breaks', 'permanent breaks', 'insurance break', 'OU', 'CPOU', 'LE', 'CE', 'intergroup reconciliation'.
+
+**Query Type:** semantic search","[""catalog"",""semantic""]",,,,"[""What qualifies as a permanent break in the intergroup revenue reconciliation?"",""How should revenue breaks be attributed across legal entities and OUs/CPOUs?"",""What steps are recommended to investigate recurring intergroup revenue differences?"",""How are insurance-related intergroup breaks documented?""]",true,"[""all_users"",""local_dev""]",10,10,1,3,150,true,"[""document_summary""]",5,20,6,6,3,2,2
+internal_management_reporting,Management Reporting Policies & Guidance,"RBC's policies and guidelines on management reporting frameworks, including performance metrics (ROE, RORC), intra-group transactions, funds transfer pricing, tax allocation, and average balance reporting in compliance with SEC Regulation S-K.","**Content:** RBC's policies and guidelines on management reporting frameworks, including performance metrics (ROE, RORC), intra-group transactions, funds transfer pricing, tax allocation, and average balance reporting in compliance with SEC Regulation S-K.
+
+**Tier/Priority:** DOMAIN EXPERT - Specialized guidance for management reporting policies and metrics.
+
+**Usage Guidance:** Use for methodology and process details around management reporting metrics, intra-group treatment, funds transfer pricing, tax allocation, and average balance requirements.
+
+**When to Select:** Queries about ROE or RORC calculation, the management reporting framework, intra-group charge treatment, funds transfer pricing processes, tax allocation rules, or average balance reporting requirements under SEC Regulation S-K.
+
+**Query Tips:** Use terms like 'management reporting', 'performance metrics', 'ROE', 'RORC', 'intra-group', 'funds transfer pricing', 'tax allocation', 'average balance reporting', 'SEC Regulation S-K'.
+
+**Query Type:** semantic search","[""catalog"",""semantic""]",,,,"[""What are the major performance measurements for management reporting at RBC?"",""What are the processes for funds transfer pricing?"",""How are FTE numbers calculated?"",""How does RBC do rounding for management reporting purposes?""]",true,"[""all_users"",""local_dev""]",10,10,1,3,150,true,"[""document_summary""]",5,20,6,6,3,2,2
+internal_memos,APG Internal Accounting Memos,"Detailed technical analyses on complex accounting topics, written by RBC finance teams and approved by the Accounting Policy Group (APG), offering in-depth guidance on specific issues.","**Content:** Formal internal accounting memos written by RBC finance teams and approved by the Accounting Policy Group (APG). Each memo documents detailed technical analyses of specific accounting issues, capturing the question raised, alternatives considered, reasoning applied, and the final decision/resolution.
+
+**Tier/Priority:** SUPPLEMENTARY SOURCE (Formal Analysis) - APG-approved memos that supplement core policy with documented reasoning on specific accounting issues.
+
+**Usage Guidance:** Contains formal documented decisions on complex or judgmental accounting matters. Use when you need the reasoning behind an accounting treatment, precedent for similar situations, or understanding of alternatives that were considered and rejected. These represent formally approved APG positions with full technical analysis.
+
+**When to Select:** Questions seeking: documented rationale for accounting treatments, precedent on complex transactions, formal APG decisions on judgmental matters, analysis of why a particular approach was chosen, or historical decisions on accounting issues that required formal resolution.
+
+**Query Tips:** Focus on application scenarios, specific conclusions, and industry/scenario terms.
+
+**Query Type:** semantic search","[""catalog"",""semantic""]",,,,"[""What was APG's documented reasoning for the accounting treatment of cloud computing implementation costs?"",""Is there a memo explaining why RBC chose a particular approach for syndicated loan derecognition?"",""What alternatives were considered for expected credit loss modeling on off-balance-sheet commitments?"",""Has APG issued a formal position on embedded derivative assessment for structured products?""]",true,"[""all_users"",""local_dev""]",10,15,1,3,150,true,"[""document_summary""]",5,20,6,6,3,2,2
+internal_pafe,Planning Analytics for Excel (PAfE) User Guide,"Comprehensive user documentation for IBM's Planning Analytics for Excel add-in, covering connection management, report creation, data manipulation, and formula usage for accessing TM1/EPM multidimensional financial data within Microsoft Excel.","**Content:** Comprehensive user documentation for IBM's Planning Analytics for Excel add-in, covering connection management, report creation, data manipulation, and formula usage for accessing TM1/EPM multidimensional financial data within Microsoft Excel.
+
+**Tier/Priority:** DOMAIN EXPERT - Specialized guidance for Planning Analytics for Excel usage and support.
+
+**Usage Guidance:** Use for operational instructions, feature explanations, and troubleshooting when working with PAfE/TM1/EPM data connections, reports, and Excel-based analytics.
+
+**When to Select:** Queries referencing PAfE or Planning Analytics features, TM1/EPM connections, report types (Exploration/Quick/Dynamic/Custom), DBRW/TM1RPTVIEW/TM1RPTROW formulas, MDX queries, subset editor usage, sandbox features, or migration from Perspectives.
+
+**Query Tips:** Use terms like 'PAfE', 'Planning Analytics', 'TM1', 'EPM connection', 'Dynamic Report', 'Quick Report', 'Exploration Report', 'DBRW formula', 'MDX query', 'subset viewer', 'cube data', 'Perspectives migration', 'websheet', 'sandbox', 'Set Editor'.
+
+**Query Type:** semantic search","[""catalog"",""semantic""]",,,,"[""How do I configure an EPM connection to a TM1 server in PAfE?"",""What steps create a Dynamic Report from an Exploration view?"",""What is the DBRW formula syntax for retrieving cube data with multiple dimensions?"",""How can I migrate a Perspectives report to PAfE while preserving formatting?""]",true,"[""all_users"",""local_dev""]",10,10,1,3,150,true,"[""document_summary""]",5,20,6,6,3,2,2
+internal_par,Project Approval Request Guidance,"RBC's internal policies and interpretations specifically related to Project Approval Requests (PAR), including workflow, processes, and compliance requirements.","**Content:** RBC's internal policies and interpretations for Project Approval Requests (PAR), including workflow, processes, and compliance requirements.
+
+**Tier/Priority:** DOMAIN EXPERT - Specialized guidance for PAR governance and approvals.
+
+**Usage Guidance:** Use for approval level rules, required documentation, workflow steps, and governance expectations for PAR submissions.
+
+**When to Select:** Queries mentioning PAR approval thresholds, required meetings or governance steps, addendum requirements, workflow roles, or compliance obligations for project approvals.
+
+**Query Tips:** Use RBC terms and reference PAR processes/workflows. Include terms like 'PAR', 'project approval', 'approval level', 'addendum', 'GE meeting', 'GOCx meeting'.
+
+**Query Type:** semantic search","[""catalog"",""semantic""]",,,,"[""What would the approval level be if i had a Contract PAR greater than $200MM?"",""Who is responsible for the fulfillment of all monitoring, reporting, and follow up of the PAR?"",""According to RBC PAR when is an addendum required?"",""How do I know if my PAR requires a GE or GOCx meeting?""]",true,"[""all_users"",""local_dev""]",10,10,1,3,150,true,"[""document_summary""]",5,20,6,6,3,2,2
+internal_process_and_controls,Internal Process and Controls Policies,"RBC's policies on general ledger naming conventions, intra-group account procedures, internal controls over financial reporting (ICFR), and the Enterprise Internal Control Management Policy (ICMP) aligned with frameworks like COSO, SOX, and NI 52-109.","**Content:** RBC's policies on general ledger naming conventions, intra-group account procedures, internal controls over financial reporting (ICFR), and the Enterprise Internal Control Management Policy (ICMP) aligned with COSO, SOX, and NI 52-109 frameworks.
+
+**Tier/Priority:** DOMAIN EXPERT - Specialized guidance for internal controls and process standards.
+
+**Usage Guidance:** Use for control framework expectations, GL naming standards, intra-group reconciliation processes, and ICFR/ICMP requirements tied to regulatory frameworks.
+
+**When to Select:** Queries about GL naming conventions, intra-group account handling, ICFR testing or documentation under SOX or NI 52-109, ICMP control activities, COSO alignment, or references to policies such as FIN-ACC-22 or FIN-ACC-201.
+
+**Query Tips:** Use terms like 'GL naming convention', 'intra-group accounts', 'ICFR', 'SOX', 'NI 52-109', 'ICMP', 'COSO framework', 'FIN-ACC-22', 'FIN-ACC-201'.
+
+**Query Type:** semantic search","[""catalog"",""semantic""]",,,,"[""What are the requirements of RBC's internal controls policy?"",""What is the top down risk based approach in the ICFR policy?"",""What are the standardized abbreviations for the Chart of Accounts?"",""How does RBC apply it's ICMP policy for Control Activities?""]",true,"[""all_users"",""local_dev""]",10,10,1,3,150,true,"[""document_summary""]",5,20,6,6,3,2,2
+internal_sab_99,SAB 99 Memos,"Internal documents justifying the materiality assessment of financial statement errors, as guided by SEC Staff Accounting Bulletin No. 99. These memos are completed when financial statement errors exceed $120MM and include root cause analysis, control assessment, qualitative factor analysis, and remediation plans.","**Content:** Internal documents justifying the materiality assessment of financial statement errors under SEC Staff Accounting Bulletin No. 99, including root cause analysis, control assessment, qualitative factor analysis, and remediation plans for errors exceeding $120MM.
+
+**Tier/Priority:** DOMAIN EXPERT - Specialized documentation for SAB 99 materiality assessments.
+
+**Usage Guidance:** Use for evaluating materiality of financial statement errors, understanding qualitative and quantitative factors, and reviewing remediation or control assessment details associated with identified errors.
+
+**When to Select:** Queries about SAB 99 materiality evaluations, the $120MM threshold, qualitative factor analysis, remediation steps, root cause assessments, or documentation of immaterial versus material misstatements.
+
+**Query Tips:** Use terms like 'SAB 99', 'materiality assessment', 'financial statement error', '$120MM threshold', 'quantitative materiality', 'qualitative factors', 'root cause analysis', 'control deficiency', 'remediation plan', 'error correction', 'restatement assessment', 'immaterial misstatement', 'intentional misstatement', 'earnings management'.
+
+**Query Type:** semantic search","[""catalog"",""semantic""]",,,,"[""What is the most common root cause?"",""How many errors impacted Deposits?"",""How many have EUDA related issues?""]",true,"[""all_users"",""local_dev""]",10,10,1,3,150,true,"[""document_summary""]",5,20,6,6,3,2,2
+internal_wiki,APG Wiki,"RBC-specific accounting compilations and guidance for unique transactions, providing detailed interpretations and applications of accounting standards tailored to RBC's business scenarios.","**Content:** APG Wiki containing Q&A-style knowledge base entries - questions received by the Accounting Policy Group and their researched resolutions. Provides RBC-specific accounting compilations, detailed interpretations, and application guidance for unique transactions tailored to RBC's business scenarios. Covers a broad range of accounting questions from simple to moderately complex.
+
+**Tier/Priority:** SUPPLEMENTARY SOURCE (Q&A Knowledge Base) - APG Q&A entries that supplement core policy with practical answers to accounting questions.
+
+**Usage Guidance:** Contains practical answers to accounting questions that APG has addressed over time. Use when looking for how APG has resolved specific accounting questions. Provides concise Q&A-style resolutions rather than lengthy formal documentation. Especially useful for specific transaction types or application examples.
+
+**When to Select:** Questions about: how RBC/APG has handled specific accounting scenarios, practical resolutions to accounting questions, APG guidance on day-to-day accounting issues, or answers to common accounting questions.
+
+**Query Tips:** Focus on application scenarios, specific conclusions, and industry/scenario terms.
+
+**Query Type:** semantic search","[""catalog"",""semantic""]",,,,"[""How has APG answered questions about breakage fees on early mortgage repayments?"",""What's the APG guidance on loyalty point accruals for card reward programs?"",""Has APG addressed how to account for bundled wealth management service fees?"",""What does APG say about capitalizing vs expensing software development costs?""]",true,"[""all_users"",""local_dev""]",10,15,1,3,150,true,"[""document_summary""]",5,20,6,6,3,2,2
+test_docs,Test Documents,Test documents for doc_refresh pipeline testing,"**Content:** Sample academic papers used to test the document refresh pipeline, including NLP and ML research papers.
+
+**Tier/Priority:** DOMAIN EXPERT - Specialized test content used only for pipeline validation.
+
+**Usage Guidance:** Use solely to validate document refresh or retrieval behavior; not intended for production accounting or policy research.
+
+**When to Select:** Explicit testing requests referencing sample test documents, academic NLP/ML topics in the test set, or verification of pipeline behavior; avoid selecting for real business questions.
+
+**Query Type:** semantic search","[""catalog"",""semantic""]",,,,"[""Retrieve the sample NLP research paper used for doc_refresh validation."",""Which test document discusses transformer architectures?"",""Provide the abstract of a sample ML paper from the test set.""]",true,,10,10,1,3,150,true,"[""document_summary""]",5,20,6,6,3,2,2
