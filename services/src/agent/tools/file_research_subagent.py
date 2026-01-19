@@ -41,7 +41,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple, TypedDict, Literal, No
 from sqlalchemy import text
 
 from ...utils.env_config import config
-from ...utils.prompt_loader import fetch_prompt_with_context
+from ...utils.prompt_loader import get_prompt
 from ...connections.postgres import get_database_session
 from ...connections.llm import execute_llm_call
 from .database_metadata import DatabaseMetadataCache
@@ -54,7 +54,7 @@ class FileResearchError(Exception):
     """Exception raised for file research errors."""
 
 
-MODEL_CAPABILITY = "large"
+MODEL_CAPABILITY = "small"
 MODEL_MAX_TOKENS = 4096
 MODEL_TEMPERATURE = 0.2
 
@@ -840,7 +840,7 @@ def _fill_page_gaps(
     gap_chunks: List[ChunkData] = []
     gap_ranges_filled = 0
     gap_pages_filled = 0
-    existing_chunk_ids = set(c.get("id") for c in existing_chunks)
+    existing_chunk_ids = set(c.get("chunk_id") for c in existing_chunks)
 
     for i in range(len(existing_pages) - 1):
         current_page = existing_pages[i]
@@ -858,12 +858,12 @@ def _fill_page_gaps(
 
             # Only add chunks we don't already have
             new_chunks = [
-                c for c in fetched_chunks if c.get("id") not in existing_chunk_ids
+                c for c in fetched_chunks if c.get("chunk_id") not in existing_chunk_ids
             ]
 
             if new_chunks:
                 gap_chunks.extend(new_chunks)
-                existing_chunk_ids.update(c.get("id") for c in new_chunks)
+                existing_chunk_ids.update(c.get("chunk_id") for c in new_chunks)
                 gap_ranges_filled += 1
                 gap_pages_filled += gap_size
 
@@ -1215,8 +1215,8 @@ def load_file_research_prompt_config() -> Dict[str, Any]:
     Raises:
         ValueError: Raised when prompt is missing in the database.
     """
-    system_prompt, tools, user_prompt = fetch_prompt_with_context(
-        "subagent", "file_research"
+    system_prompt, tools, user_prompt = get_prompt(
+        "subagent", "file_research", inject_fiscal=True
     )
 
     if not user_prompt:
@@ -1429,6 +1429,11 @@ def _parse_tool_response(
 
     try:
         arguments = json.loads(tool_call.function.arguments)
+        logger.debug(
+            "RESEARCH_OUTPUT [file_research_%s]: Raw LLM tool arguments:\n%s",
+            file_name,
+            json.dumps(arguments, indent=2),
+        )
     except json.JSONDecodeError:
         logger.error("Invalid tool arguments for %s", file_name)
         return None
@@ -1436,9 +1441,10 @@ def _parse_tool_response(
     page_research: List[PageResearch] = [
         {
             "page_number": page_item.get("page_number", 0),
-            # LLM returns extracted_fact; map to research_content for internal consistency.
+            # LLM returns finding; map to research_content for internal consistency.
             "research_content": (
-                page_item.get("extracted_fact")
+                page_item.get("finding")
+                or page_item.get("extracted_fact")
                 or page_item.get("research_content")
                 or ""
             ),
@@ -1447,6 +1453,18 @@ def _parse_tool_response(
         }
         for page_item in arguments.get("page_research", [])
     ]
+
+    logger.debug(
+        "RESEARCH_OUTPUT [file_research_%s]: Parsed page findings:\n%s",
+        file_name,
+        json.dumps(
+            [
+                {"page": pr["page_number"], "finding": pr["research_content"]}
+                for pr in page_research
+            ],
+            indent=2,
+        ),
+    )
 
     return {
         "page_research": page_research,
@@ -1509,6 +1527,12 @@ def synthesize_document_research(
     try:
         prompt_config = load_file_research_prompt_config()
         document_content = format_document_chunks_for_llm(document)
+
+        logger.debug(
+            "RESEARCH_INPUT [file_research_%s]: Document content sent to LLM:\n%s",
+            doc_name,
+            document_content[:15000] if len(document_content) > 15000 else document_content,
+        )
 
         system_prompt = (
             prompt_config.get("system_prompt", "")
@@ -1769,6 +1793,14 @@ def execute_file_research_sync(
         doc["document_name"]: doc["document_id"] for doc in documents
     }
 
+    # Extract retrieval paths per document for logging
+    retrieval_paths = {
+        doc["document_name"]: doc.get("expansion_metrics", {}).get(
+            "retrieval_method", "unknown"
+        )
+        for doc in documents
+    }
+
     # Convert to unified findings format
     findings = _build_findings_from_research(
         document_results, document_id_lookup, db_source
@@ -1781,4 +1813,5 @@ def execute_file_research_sync(
         "findings": findings,
         "status_summary": status_summary,
         "db_source": db_source,
+        "retrieval_paths": retrieval_paths,
     }

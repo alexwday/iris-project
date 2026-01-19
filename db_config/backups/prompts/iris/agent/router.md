@@ -72,52 +72,33 @@ MUST NOT:
 
 <output>
 Call the route_query tool with:
-- function_name: Your routing decision
-- reasoning: 2-3 sentences explaining what you observed and why you chose this route
+- function_name: "direct_response" or "database_research"
 </output>
 
 <examples>
 EXAMPLE 1 - Follow-up question:
 User: "You mentioned IFRS 15 requires recognizing revenue when performance obligations are satisfied. Can you explain what counts as a performance obligation?"
-Analysis: User directly references information ("You mentioned IFRS 15...") from earlier in conversation and asks for elaboration.
-Decision: direct_response
-Reasoning: User is asking for clarification about IFRS 15 content that was already discussed. The conversation contains the relevant context.
+→ "direct_response" (references earlier conversation, asks for elaboration)
 
 EXAMPLE 2 - New policy question:
 User: "What is our policy on lease accounting under IFRS 16?"
-Analysis: Lease accounting has not been discussed in this conversation. This requires database lookup.
-Decision: database_research
-Reasoning: This is a new policy question about IFRS 16 lease accounting. The topic has not been covered in the conversation and requires database research.
+→ "database_research" (new topic not in conversation)
 
 EXAMPLE 3 - Mixed message:
 User: "Great, thanks for that explanation! One more thing - how do we handle goodwill impairment testing?"
-Analysis: "Great, thanks" is conversational, but the substantive question is about goodwill impairment - a new topic.
-Decision: database_research
-Reasoning: While the message includes thanks, the substantive question about goodwill impairment testing is a new topic requiring database research.
+→ "database_research" (substantive question is new topic)
 
 EXAMPLE 4 - Meta question about IRIS:
 User: "What databases do you have access to?"
-Analysis: This is a question about IRIS itself and its capabilities, not a policy research question.
-Decision: direct_response
-Reasoning: The user is asking about what sources/databases IRIS can access. This is a meta question about the system that can be answered directly without database research.
+→ "direct_response" (question about IRIS itself, not policy)
 
-EXAMPLE 5 - Meta question about sources:
-User: "What sources do you use for your answers?"
-Analysis: This asks about IRIS's information sources, not about specific policy content.
-Decision: direct_response
-Reasoning: Questions about how IRIS works or what it has access to are meta questions that should be answered directly.
+EXAMPLE 5 - Summarization request:
+User: "Can you summarize what we discussed?"
+→ "direct_response" (recap of existing conversation)
 
-EXAMPLE 6 - Summarization request:
-User: [after discussing leases] "Can you summarize what we discussed?"
-Analysis: User is asking to recap existing conversation content, not asking for new information.
-Decision: direct_response
-Reasoning: Summarization requests about the current conversation should use direct_response since all needed information is already in the conversation.
-
-EXAMPLE 7 - "You mentioned" follow-up:
-User: [after assistant mentioned hedge accounting] "You mentioned hedge accounting - what exactly is that?"
-Analysis: User explicitly references something from the conversation ("you mentioned") and asks for elaboration.
-Decision: direct_response
-Reasoning: When users reference what was already discussed using phrases like "you mentioned" or "you said", they want clarification on existing content, not new research.
+EXAMPLE 6 - "You mentioned" follow-up:
+User: "You mentioned hedge accounting - what exactly is that?"
+→ "direct_response" (references what was already discussed)
 </examples>
 ```
 
@@ -149,26 +130,16 @@ Analyze the following conversation and route the user's latest query.
     "name": "route_query",
     "parameters": {
       "type": "object",
-      "required": [
-        "function_name",
-        "reasoning"
-      ],
+      "required": ["function_name"],
       "properties": {
-        "reasoning": {
-          "type": "string",
-          "description": "2-3 sentences: What did you observe in the conversation? Why did you choose this route?"
-        },
         "function_name": {
-          "enum": [
-            "direct_response",
-            "database_research"
-          ],
           "type": "string",
-          "description": "The handler to route this query to"
+          "enum": ["direct_response", "database_research"],
+          "description": "Route to direct_response or database_research"
         }
       }
     },
-    "description": "Route the user's query to the appropriate handler.\n\nUSE direct_response when: follow-ups about existing conversation content, greetings, thanks, clarification requests.\n\nUSE database_research when: new policy questions, topics not in conversation, requests for documentation."
+    "description": "Route query: direct_response (follow-ups, greetings, meta questions), database_research (new policy questions)"
   }
 }
 ```

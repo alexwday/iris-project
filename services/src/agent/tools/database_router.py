@@ -29,6 +29,7 @@ Functions:
     route_query_with_cascading_retrieval: Route query using path-dependent cascading retrieval
 """
 
+import json
 import logging
 from typing import Any, Dict, List, Optional, TypedDict
 
@@ -130,17 +131,24 @@ def route_query_with_cascading_retrieval(
     try:
         logger.info("Stage 1: Metadata query for %s (mode=%s)", database, mode)
 
+        metadata_stage = f"{stage_name}_metadata"
+        if process_monitor:
+            process_monitor.start_stage(metadata_stage)
+
         unified_result = execute_unified_metadata_query(
             research_statement=research_statement,
             db_source=database,
             query_context={
                 "token": token,
                 "process_monitor": process_monitor,
-                "stage_name": f"{stage_name}_metadata",
+                "stage_name": metadata_stage,
                 "query_embedding": query_embedding,
             },
             mode=mode,
         )
+
+        if process_monitor:
+            process_monitor.end_stage(metadata_stage)
 
         # Get metadata findings and doc IDs needing deep research
         metadata_findings: FindingsList = unified_result.get("findings", [])
@@ -213,6 +221,10 @@ def route_query_with_cascading_retrieval(
                 database,
             )
 
+            file_research_stage = f"{stage_name}_file_research"
+            if process_monitor:
+                process_monitor.start_stage(file_research_stage)
+
             file_research_result = execute_file_research_sync(
                 research_statement=research_statement,
                 document_ids=needs_research_doc_ids,
@@ -220,16 +232,19 @@ def route_query_with_cascading_retrieval(
                 research_context={
                     "token": token,
                     "process_monitor": process_monitor,
-                    "stage_name": f"{stage_name}_file_research",
+                    "stage_name": file_research_stage,
                     "query_embedding": query_embedding,
                 },
             )
 
             if process_monitor:
+                process_monitor.end_stage(file_research_stage)
+                retrieval_paths = file_research_result.get("retrieval_paths", {})
                 process_monitor.add_stage_details(
-                    f"{stage_name}_file_research",
+                    file_research_stage,
                     documents_researched=len(needs_research_doc_ids),
                     research_type=research_label,
+                    retrieval_paths=retrieval_paths,
                 )
 
             # Add file research findings to combined list
@@ -242,6 +257,24 @@ def route_query_with_cascading_retrieval(
             )
         else:
             logger.info("No file research needed for %s", database)
+
+        logger.debug(
+            "RESEARCH_OUTPUT [database_router_%s]: Combined findings (Path %s):\n%s",
+            database,
+            path,
+            json.dumps(
+                [
+                    {
+                        "document": f["document_name"],
+                        "page": f.get("page"),
+                        "source": f.get("source"),
+                        "finding": f.get("finding", "")[:500],
+                    }
+                    for f in combined_findings
+                ],
+                indent=2,
+            ),
+        )
 
         # Build status summary
         status_parts = []

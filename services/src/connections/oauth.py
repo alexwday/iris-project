@@ -1,6 +1,16 @@
-"""OAuth helpers for retrieving RBC API tokens with retries."""
+"""
+Token Provider - API authentication for LLM access.
+
+This module provides authentication tokens for LLM API calls. It supports two
+modes: local development using OPENAI_API_KEY from environment, or RBC
+production using OAuth client credentials flow.
+
+If OPENAI_API_KEY is set in the environment, it is returned directly. Otherwise,
+OAuth credentials are used to fetch an access token from RBC's Azure endpoints.
+"""
 
 import logging
+import os
 import time
 
 import requests
@@ -9,59 +19,48 @@ from ..utils.env_config import config
 
 logger = logging.getLogger(__name__)
 
-CLIENT_ID = config.OAUTH_CLIENT_ID
-CLIENT_SECRET = config.OAUTH_CLIENT_SECRET
-MAX_RETRY_ATTEMPTS = config.MAX_RETRY_ATTEMPTS
-OAUTH_URL = config.OAUTH_URL
-REQUEST_TIMEOUT = config.REQUEST_TIMEOUT
-RETRY_DELAY_SECONDS = config.RETRY_DELAY_SECONDS
-TOKEN_PREVIEW_LENGTH = config.TOKEN_PREVIEW_LENGTH
+_REQUEST_TIMEOUT = 180
+_MAX_RETRY_ATTEMPTS = 3
+_RETRY_DELAY_SECONDS = 2
 
 
-def fetch_oauth_token() -> str:
-    """Get an OAuth token using the client credentials flow with retries.
+def fetch_oauth_token() -> tuple[str, dict]:
+    """Get API token - returns OPENAI_API_KEY if set, otherwise fetches OAuth token.
 
     Returns:
-        str: OAuth access token for RBC API access.
+        Tuple of (token, auth_info) where auth_info contains method and details.
 
     Raises:
-        ValueError: If OAuth settings are missing or invalid, or no token is returned.
-        requests.exceptions.RequestException: If the request fails after all retries.
+        ValueError: If neither OPENAI_API_KEY nor OAuth settings are configured.
+        requests.exceptions.RequestException: If OAuth request fails after retries.
     """
-    if not all([OAUTH_URL, CLIENT_ID, CLIENT_SECRET]):
-        error_msg = "Missing required OAuth settings: URL, client ID, or client secret"
-        logger.error(error_msg)
-        raise ValueError(error_msg)
+    api_key = os.getenv("OPENAI_API_KEY")
+    if api_key:
+        logger.debug("Using OPENAI_API_KEY from environment")
+        return api_key, {"method": "api_key_local", "source": "OPENAI_API_KEY"}
 
-    if MAX_RETRY_ATTEMPTS < 1:
-        raise ValueError("MAX_RETRY_ATTEMPTS must be at least 1")
-    if REQUEST_TIMEOUT <= 0:
-        raise ValueError("REQUEST_TIMEOUT must be greater than 0")
-    if RETRY_DELAY_SECONDS < 0:
-        raise ValueError("RETRY_DELAY_SECONDS cannot be negative")
+    oauth_url = config.OAUTH_URL
+    client_id = config.OAUTH_CLIENT_ID
+    client_secret = config.OAUTH_CLIENT_SECRET
+
+    if not all([oauth_url, client_id, client_secret]):
+        raise ValueError("Missing OPENAI_API_KEY or OAuth settings (URL, client ID, secret)")
 
     payload = {
         "grant_type": "client_credentials",
-        "client_id": CLIENT_ID,
-        "client_secret": CLIENT_SECRET,
+        "client_id": client_id,
+        "client_secret": client_secret,
     }
 
     start_time = time.time()
-    logger.debug(
-        "Starting OAuth flow endpoint=%s client=%s**** attempts=%d timeout=%ss",
-        OAUTH_URL,
-        CLIENT_ID[:4],
-        MAX_RETRY_ATTEMPTS,
-        REQUEST_TIMEOUT,
-    )
 
     with requests.Session() as session:
-        for attempt_num in range(1, MAX_RETRY_ATTEMPTS + 1):
+        for attempt_num in range(1, _MAX_RETRY_ATTEMPTS + 1):
             attempt_start = time.time()
 
             try:
                 response = session.post(
-                    OAUTH_URL, data=payload, timeout=REQUEST_TIMEOUT
+                    oauth_url, data=payload, timeout=_REQUEST_TIMEOUT
                 )
                 response.raise_for_status()
 
@@ -73,44 +72,35 @@ def fetch_oauth_token() -> str:
                 if not token:
                     raise ValueError("OAuth token not found in response")
 
-                token_str = str(token)
-                token_preview = (
-                    f"{token_str[:TOKEN_PREVIEW_LENGTH]}..."
-                    if len(token_str) > TOKEN_PREVIEW_LENGTH
-                    else token_str
-                )
                 logger.debug(
-                    "Received OAuth token in %.2fs (total %.2fs) attempt %d/%d: %s",
+                    "OAuth token acquired in %.2fs (attempt %d/%d)",
                     time.time() - attempt_start,
-                    time.time() - start_time,
                     attempt_num,
-                    MAX_RETRY_ATTEMPTS,
-                    token_preview,
+                    _MAX_RETRY_ATTEMPTS,
                 )
 
-                return token_str
+                return str(token), {
+                    "method": "oauth",
+                    "client_id": client_id,
+                }
 
             except (requests.exceptions.RequestException, ValueError) as exc:
-                attempt_elapsed = time.time() - attempt_start
                 logger.warning(
                     "OAuth attempt %d/%d failed after %.2f seconds: %s",
                     attempt_num,
-                    MAX_RETRY_ATTEMPTS,
-                    attempt_elapsed,
+                    _MAX_RETRY_ATTEMPTS,
+                    time.time() - attempt_start,
                     exc,
                 )
 
-                if attempt_num == MAX_RETRY_ATTEMPTS:
+                if attempt_num == _MAX_RETRY_ATTEMPTS:
                     logger.error(
-                        "OAuth token acquisition failed after %d attempts (%.2fs)",
-                        MAX_RETRY_ATTEMPTS,
+                        "OAuth failed after %d attempts (%.2fs total)",
+                        _MAX_RETRY_ATTEMPTS,
                         time.time() - start_time,
                     )
                     raise
 
-                if RETRY_DELAY_SECONDS:
-                    logger.debug("Retrying in %d seconds...", RETRY_DELAY_SECONDS)
-                    time.sleep(RETRY_DELAY_SECONDS)
+                time.sleep(_RETRY_DELAY_SECONDS)
 
-    # Should never reach here due to raise in final attempt, but for clarity:
     raise ValueError("OAuth token acquisition failed")

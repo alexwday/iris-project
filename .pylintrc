@@ -1,0 +1,36 @@
+[MASTER]
+# Use multiple processes to speed up Pylint
+jobs=4
+
+[MESSAGES CONTROL]
+# Disable the following checks:
+# R0801: duplicate-code (expected patterns across agent modules)
+# R0914: too-many-locals (complex functions need many locals)
+# R0912: too-many-branches (complex business logic)
+# R0915: too-many-statements (complex orchestration functions)
+# R0913: too-many-arguments (necessary for API signatures)
+# R0917: too-many-positional-arguments (necessary for API signatures)
+# C0415: import-outside-toplevel (intentional for circular import avoidance)
+# W0718: broad-exception-caught (intentional for top-level error handling)
+# W0632: unbalanced-tuple-unpacking (false positive - handled intentionally)
+disable=R0801,R0914,R0912,R0915,R0913,R0917,C0415,W0718,W0632
+
+[FORMAT]
+# Maximum number of characters on a single line (matches Black)
+max-line-length=88
+
+[DESIGN]
+# Maximum number of arguments for function / method
+max-args=10
+
+# Maximum number of locals for function / method body
+max-locals=30
+
+# Maximum number of return / yield for function / method body
+max-returns=10
+
+# Maximum number of branch for function / method body
+max-branches=30
+
+# Maximum number of statements in function / method body
+max-statements=100

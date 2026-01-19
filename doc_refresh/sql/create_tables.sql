@@ -8,8 +8,9 @@
 --   psql -d maven-finance -f doc_refresh/sql/create_tables.sql
 -- =============================================================================
 
--- Ensure pgvector extension exists
 CREATE EXTENSION IF NOT EXISTS vector;
+-- UUID generation for iris tables
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 -- =============================================================================
 -- Documents Table
@@ -94,6 +95,88 @@ CREATE TABLE IF NOT EXISTS chunks (
 CREATE INDEX IF NOT EXISTS idx_chunks_doc ON chunks(document_id);
 CREATE INDEX IF NOT EXISTS idx_chunks_section ON chunks(section_id);
 CREATE INDEX IF NOT EXISTS idx_chunks_page ON chunks(document_id, page_number);
+
+-- =============================================================================
+-- Iris Document Metadata (2-table design)
+-- Stores document-level metadata and summary embeddings
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS iris_document_metadata (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    db_source VARCHAR(100) NOT NULL,
+    document_name VARCHAR(500) NOT NULL,
+    document_type VARCHAR(100),
+    document_summary TEXT NOT NULL,
+    summary_embedding HALFVEC,
+    page_count INTEGER,
+    primary_section_count INTEGER,
+    subsection_count INTEGER,
+    file_name VARCHAR(500),
+    file_path TEXT,
+    file_size BIGINT,
+    file_hash VARCHAR(64),
+    file_type VARCHAR(50),
+    document_description TEXT,
+    document_usage TEXT,
+    created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_doc_metadata_source_name
+    ON iris_document_metadata(db_source, document_name);
+CREATE INDEX IF NOT EXISTS idx_doc_metadata_db_source
+    ON iris_document_metadata(db_source);
+CREATE INDEX IF NOT EXISTS idx_doc_metadata_doc_name
+    ON iris_document_metadata(document_name);
+CREATE INDEX IF NOT EXISTS idx_doc_metadata_summary_embedding
+    ON iris_document_metadata
+    USING ivfflat (summary_embedding halfvec_cosine_ops) WITH (lists = 10);
+
+-- Add file_hash column if not exists (for existing deployments)
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'iris_document_metadata' AND column_name = 'file_hash'
+    ) THEN
+        ALTER TABLE iris_document_metadata ADD COLUMN file_hash VARCHAR(64);
+    END IF;
+END $$;
+
+-- =============================================================================
+-- Iris Document Chunks (2-table design)
+-- Stores chunk-level content with embeddings
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS iris_document_chunks (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    document_id UUID NOT NULL,
+    db_source VARCHAR(100) NOT NULL,
+    chunk_number INTEGER NOT NULL,
+    primary_section_number INTEGER,
+    primary_section_name VARCHAR(500),
+    subsection_number INTEGER,
+    subsection_name VARCHAR(500),
+    hierarchy_path VARCHAR(1000),
+    chunk_content TEXT NOT NULL,
+    chunk_embedding HALFVEC,
+    page_number INTEGER,
+    file_name VARCHAR(500),
+    source_filename VARCHAR(500),
+    created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    primary_section_page_count INTEGER,
+    subsection_page_count INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_chunks_document_id
+    ON iris_document_chunks(document_id);
+CREATE INDEX IF NOT EXISTS idx_chunks_db_source
+    ON iris_document_chunks(db_source);
+CREATE INDEX IF NOT EXISTS idx_chunks_page_number
+    ON iris_document_chunks(page_number);
+CREATE INDEX IF NOT EXISTS idx_chunks_doc_id_chunk_num
+    ON iris_document_chunks(document_id, chunk_number);
+CREATE INDEX IF NOT EXISTS idx_iris_chunks_embedding
+    ON iris_document_chunks
+    USING ivfflat (chunk_embedding halfvec_cosine_ops) WITH (lists = 50);
 
 -- =============================================================================
 -- Vector Index

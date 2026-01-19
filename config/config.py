@@ -109,10 +109,10 @@ class Config:
         # Import here to avoid circular dependency
         try:
             from services.src.agent.tools.database_metadata import (
-                get_repository,
+                get_metadata_repository,
             )
 
-            repo = get_repository()
+            repo = get_metadata_repository()
             all_db_ids = list(repo.get_all_databases().keys())
 
             # Default mapping: "all_users" group has access to everything

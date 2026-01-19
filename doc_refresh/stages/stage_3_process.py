@@ -31,7 +31,7 @@ from ..connections.oauth import fetch_oauth_token
 from ..stages.stage_2_extract import ExtractedDocument
 from ..utils.env_config import config
 from ..utils.process_monitoring import get_process_monitor
-from ..utils.prompt_loader import fetch_prompt_raw
+from ..utils.prompt_loader import get_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -255,7 +255,12 @@ def _create_embedding(
 def _load_prompt(name: str) -> Tuple[str, Optional[Dict[str, Any]], str]:
     """Return system prompt, tool definition, and user prompt for stage 3."""
     try:
-        return fetch_prompt_raw("stage_3", name, model="doc_refresh")
+        system_prompt, tools, user_prompt = get_prompt(
+            "stage_3", name, model="doc_refresh"
+        )
+        # get_prompt returns tools as a list; extract first item or None
+        tool_def = tools[0] if tools else None
+        return system_prompt, tool_def, user_prompt
     except Exception as exc:
         logger.warning("Prompt not found for stage_3/%s: %s", name, exc)
         return "", None, ""

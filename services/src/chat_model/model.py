@@ -11,55 +11,12 @@ from typing import Any, Callable, Dict, Generator, List, Optional
 from sqlalchemy import text
 
 from ..agent.tools.database_router import route_query_with_cascading_retrieval
-from ..agent.tools.research_types import Finding, FindingsList, IndexedFinding, IndexedFindingsList
+from ..agent.tools.research_types import FindingsList, IndexedFinding, IndexedFindingsList
 from ..connections.postgres import get_database_session
 from ..utils.reference_processor import (
     finalize_reference_replacements,
     process_streaming_reference_buffer,
 )
-
-
-def format_usage_summary_markdown(
-    agent_token_usage: Dict[str, Any], start_time: Optional[str] = None
-) -> str:
-    """Return token usage and timing as markdown.
-
-    Args:
-        agent_token_usage (Dict[str, Any]): Accumulated token usage metrics with keys
-            such as prompt_tokens, completion_tokens, total_tokens, and cost.
-        start_time (Optional[str]): ISO 8601 timestamp marking when processing started.
-
-    Returns:
-        str: Markdown summary of usage and timing details.
-    """
-    duration = None
-    if start_time:
-        try:
-            end_dt = datetime.now()
-            start_dt = datetime.fromisoformat(start_time)
-            duration = (end_dt - start_dt).total_seconds()
-        except ValueError:
-            logging.getLogger().warning(
-                "Could not parse start_time for duration calculation: %s", start_time
-            )
-            duration = None
-
-    usage_summary = "\n\n---\n"
-    usage_summary += "## Agent Usage Statistics\n\n"
-    usage_summary += (
-        f"- Overall Input tokens: {agent_token_usage.get('prompt_tokens', 0)}\n"
-    )
-    usage_summary += (
-        f"- Overall Output tokens: {agent_token_usage.get('completion_tokens', 0)}\n"
-    )
-    usage_summary += (
-        f"- Overall Total tokens: {agent_token_usage.get('total_tokens', 0)}\n"
-    )
-    usage_summary += f"- Overall Cost: ${agent_token_usage.get('cost', 0.0):.6f}\n"
-    if duration is not None:
-        usage_summary += f"- Total Time: {duration:.2f} seconds\n"
-
-    return usage_summary
 
 
 def consolidate_findings_with_refs(
@@ -100,9 +57,7 @@ def consolidate_findings_with_refs(
             "file_name": finding["file_name"],
             "page": finding["page"] or 1,
             "page_reference": str(finding["page"] or 1),
-            "chapter_number": "",
             "source_filename": finding["file_name"] or finding["document_name"],
-            "highlight_text": "",
             "source_db": finding["db_source"],
         }
 
@@ -335,6 +290,7 @@ def _stream_model_workflow(
     from ..utils.logging_format import configure_root_logger
     from ..connections.oauth import fetch_oauth_token
     from ..utils.rbc_security import configure_rbc_security_certs
+    from ..utils.prompt_loader import load_all_prompts
 
     logger = configure_root_logger()
 
@@ -344,13 +300,27 @@ def _stream_model_workflow(
         process_monitor.start_stage("ssl_setup")
         cert_path = configure_rbc_security_certs()
         process_monitor.end_stage("ssl_setup")
-        process_monitor.add_stage_details("ssl_setup", cert_path=cert_path)
+        process_monitor.add_stage_details(
+            "ssl_setup",
+            rbc_security_enabled=cert_path is not None,
+        )
+
+        process_monitor.start_stage("prompt_cache")
+        prompt_count, loaded_prompts = load_all_prompts("iris")
+        process_monitor.end_stage("prompt_cache")
+        process_monitor.add_stage_details(
+            "prompt_cache",
+            prompts_loaded=prompt_count,
+            prompts=loaded_prompts,
+        )
 
         process_monitor.start_stage("oauth_setup")
-        token = fetch_oauth_token()
+        token, auth_info = fetch_oauth_token()
         process_monitor.end_stage("oauth_setup")
         process_monitor.add_stage_details(
-            "oauth_setup", token_length=len(token) if token else 0
+            "oauth_setup",
+            auth_method=auth_info.get("method"),
+            client_id=auth_info.get("client_id"),
         )
 
         if not conversation:
@@ -383,9 +353,20 @@ def _stream_model_workflow(
             return
 
         process_monitor.end_stage("conversation_processing")
+
+        # Extract user query for process monitor
+        user_messages = [
+            m["content"] for m in processed_conversation["messages"]
+            if m.get("role") == "user"
+        ]
+        user_query = user_messages[-1] if user_messages else "No user message"
+
         process_monitor.add_stage_details(
             "conversation_processing",
-            message_count=len(processed_conversation["messages"]),
+            user_query=user_query,
+            original_msg_count=processed_conversation.get("original_count"),
+            system_filtered=processed_conversation.get("system_filtered"),
+            final_msg_count=processed_conversation.get("final_count"),
         )
 
         available_databases = fetch_available_databases()
@@ -489,6 +470,7 @@ def _stream_model_workflow(
                     research_statement,
                     token,
                     available_databases,
+                    process_monitor=process_monitor,
                 )
                 selected_databases = db_selection_plan.get("databases", [])
                 query_embedding = db_selection_plan.get("query_embedding")
@@ -625,6 +607,15 @@ def _stream_model_workflow(
                         indexed_findings
                     )
 
+                    # Debug: Log findings being passed to summarizer
+                    logger.info("=" * 60)
+                    logger.info("FINDINGS PASSED TO SUMMARIZER:")
+                    logger.info("=" * 60)
+                    for db_name, research_text in aggregated_detailed_research.items():
+                        logger.info(f"--- {db_name} ---")
+                        logger.info(research_text[:2000] if len(research_text) > 2000 else research_text)
+                    logger.info("=" * 60)
+
                     process_monitor.add_stage_details(
                         "summary",
                         num_findings=len(indexed_findings),
@@ -636,7 +627,6 @@ def _stream_model_workflow(
                         summary_usage_details = None
                         summary_context = {
                             "research_statement": research_statement,
-                            "indexed_findings": indexed_findings,
                             "reference_index": master_reference_index,
                         }
                         summary_stream = stream_research_summary(

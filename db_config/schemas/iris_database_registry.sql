@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS iris_database_registry (
     max_primary_section_page_count INTEGER NOT NULL DEFAULT 6,
     max_subsection_page_count INTEGER NOT NULL DEFAULT 3,
     max_neighbour_chunks INTEGER NOT NULL DEFAULT 2,
+    max_gap_fill_pages INTEGER NOT NULL DEFAULT 2,
     CONSTRAINT iris_database_registry_pkey PRIMARY KEY (db_source)
 );
 
@@ -68,3 +69,4 @@ CREATE INDEX IF NOT EXISTS idx_iris_db_registry_search_modes ON iris_database_re
 -- max_primary_section_page_count: Maximum pages per primary section
 -- max_subsection_page_count: Maximum pages per subsection
 -- max_neighbour_chunks: Maximum neighboring chunks to include
+-- max_gap_fill_pages: Maximum pages to fill gaps between chunks

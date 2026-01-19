@@ -20,7 +20,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from doc_refresh.utils.logging_format import configure_logging
-from doc_refresh.utils.env_config import Config
 from doc_refresh.utils.process_monitoring import enable_monitoring, get_process_monitor
 
 # Configure logging

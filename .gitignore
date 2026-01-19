@@ -111,3 +111,6 @@ iris/src/initial_setup/oauth/local_auth_settings.py
 CLAUDE.md
 **/.claude/settings.local.json
 rbc-ca-bundle.cer
+
+# DB Config archives
+db_config/archive/

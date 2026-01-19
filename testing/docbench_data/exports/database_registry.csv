@@ -1,6 +1,0 @@
-db_source,db_name,db_summary,db_description
-test_docbench_academia,DocBench Academia,"NLP research papers from ACL, EMNLP, and other venues","Academic papers covering natural language processing, machine learning, and computational linguistics research."
-test_docbench_finance,DocBench Finance,"Financial reports, SEC filings, and earnings documents","Corporate financial documents including 10-K filings, annual reports, and quarterly earnings statements."
-test_docbench_government,DocBench Government,Federal agency reports and policy documents,"Government publications including agency reports, policy analyses, and regulatory documents."
-test_docbench_laws,DocBench Laws,Legal documents and court filings,"Legal materials including court decisions, legal briefs, and regulatory filings."
-test_docbench_news,DocBench News,News articles and press releases,Journalism and press materials covering various topics and events.

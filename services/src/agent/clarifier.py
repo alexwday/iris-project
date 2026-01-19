@@ -25,9 +25,9 @@ from typing import Any, Dict, Optional, Tuple
 from ..connections.llm import execute_llm_call
 from ..utils.env_config import config
 from ..utils.input_sanitizer import format_conversation_history_for_prompt
-from ..utils.prompt_loader import fetch_prompt_with_context
+from ..utils.prompt_loader import get_prompt
 
-MODEL_CAPABILITY = "large"
+MODEL_CAPABILITY = "small"
 MODEL_MAX_TOKENS = 4096
 MODEL_TEMPERATURE = 0.0
 
@@ -218,8 +218,12 @@ def generate_clarifier_decision(
         ClarifierError: If there is an error in the clarification process.
     """
     try:
-        system_prompt, tools, user_prompt_template = fetch_prompt_with_context(
-            "agent", "clarifier", available_databases=available_databases
+        system_prompt, tools, user_prompt_template = get_prompt(
+            "agent",
+            "clarifier",
+            inject_fiscal=True,
+            inject_database=True,
+            available_databases=available_databases,
         )
         model_settings = _get_clarifier_model_settings()
         messages = _build_clarifier_messages(

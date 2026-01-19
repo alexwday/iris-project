@@ -96,7 +96,6 @@ class HealthResponse(BaseModel):
     """Health check response payload."""
 
     status: str
-    environment: str
     version: str
 
 
@@ -306,9 +305,7 @@ async def health_check():
     try:
         config.validate_required_environment()
 
-        return HealthResponse(
-            status="healthy", environment=config.ENVIRONMENT, version=API_VERSION
-        )
+        return HealthResponse(status="healthy", version=API_VERSION)
     except (ValueError, RuntimeError, AttributeError) as exc:
         logger.error("Health check failed: %s", str(exc))
         raise HTTPException(
@@ -407,6 +404,95 @@ async def reset_server():
         ) from exc
 
 
+@app.get("/process-monitor/runs")
+async def get_process_monitor_runs(limit: int = 20):
+    """Get recent process monitor runs with their first user message."""
+    from .connections.postgres import get_database_session
+    from sqlalchemy import text
+
+    try:
+        with get_database_session() as session:
+            result = session.execute(
+                text("""
+                    SELECT
+                        run_uuid,
+                        MIN(stage_start_time) as start_time,
+                        SUM(duration_ms) as total_duration_ms,
+                        MAX(custom_metadata->>'user_query') as user_query
+                    FROM process_monitor_logs
+                    GROUP BY run_uuid
+                    ORDER BY MIN(stage_start_time) DESC
+                    LIMIT :limit
+                """),
+                {"limit": limit}
+            )
+            rows = result.mappings().all()
+
+            runs = []
+            for row in rows:
+                runs.append({
+                    "run_uuid": str(row["run_uuid"]),
+                    "start_time": row["start_time"].isoformat() if row["start_time"] else None,
+                    "total_duration_ms": row["total_duration_ms"],
+                    "user_query": row["user_query"] or "No query recorded"
+                })
+
+            return {"runs": runs}
+
+    except Exception as exc:
+        logger.error("Failed to get process monitor runs: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.get("/process-monitor/run/{run_uuid}")
+async def get_process_monitor_run(run_uuid: str):
+    """Get detailed stages for a specific run."""
+    from .connections.postgres import get_database_session
+    from sqlalchemy import text
+
+    try:
+        with get_database_session() as session:
+            result = session.execute(
+                text("""
+                    SELECT
+                        stage_name,
+                        stage_start_time,
+                        stage_end_time,
+                        duration_ms,
+                        total_tokens,
+                        total_cost,
+                        status,
+                        decision_details,
+                        custom_metadata
+                    FROM process_monitor_logs
+                    WHERE run_uuid = :run_uuid
+                    ORDER BY stage_start_time
+                """),
+                {"run_uuid": run_uuid}
+            )
+            rows = result.mappings().all()
+
+            stages = []
+            for row in rows:
+                stages.append({
+                    "stage_name": row["stage_name"],
+                    "start_time": row["stage_start_time"].isoformat() if row["stage_start_time"] else None,
+                    "end_time": row["stage_end_time"].isoformat() if row["stage_end_time"] else None,
+                    "duration_ms": row["duration_ms"],
+                    "total_tokens": row["total_tokens"],
+                    "total_cost": float(row["total_cost"]) if row["total_cost"] else None,
+                    "status": row["status"],
+                    "decision_details": row["decision_details"],
+                    "custom_metadata": row["custom_metadata"]
+                })
+
+            return {"run_uuid": run_uuid, "stages": stages}
+
+    except Exception as exc:
+        logger.error("Failed to get process monitor run: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
 @app.on_event("startup")
 async def startup_event():
     """
@@ -422,10 +508,7 @@ async def startup_event():
     if not config.validate_required_environment():
         raise ValueError("Configuration validation failed")
 
-    logger.info(
-        "IRIS Chat API started successfully in %s environment",
-        config.ENVIRONMENT,
-    )
+    logger.info("IRIS Chat API started successfully")
 
 
 @app.on_event("shutdown")

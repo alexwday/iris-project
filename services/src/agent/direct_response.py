@@ -6,7 +6,7 @@ from typing import Any, Dict, Generator, Optional
 from ..connections.llm import execute_llm_call
 from ..utils.env_config import config
 from ..utils.input_sanitizer import format_conversation_history_for_prompt
-from ..utils.prompt_loader import fetch_prompt_with_context
+from ..utils.prompt_loader import get_prompt
 
 MODEL_CAPABILITY = "large"
 MODEL_MAX_TOKENS = 16384
@@ -93,8 +93,12 @@ def stream_direct_response_from_conversation(
     """
     final_usage_details = None
     try:
-        system_prompt, _, user_prompt_template = fetch_prompt_with_context(
-            "agent", "direct_response", available_databases=available_databases
+        system_prompt, _, user_prompt_template = get_prompt(
+            "agent",
+            "direct_response",
+            inject_fiscal=True,
+            inject_database=True,
+            available_databases=available_databases,
         )
         model_settings = _get_model_settings()
         messages = _build_messages(system_prompt, user_prompt_template, conversation)

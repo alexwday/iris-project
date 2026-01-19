@@ -67,9 +67,106 @@ See `testing/local_data/README.md` for complete setup instructions.
 
 - 4-space indentation (Black formatter)
 - 88 character line limit
-- Google-style docstrings
 - Type hints where practical
 - snake_case for functions/variables, PascalCase for classes
+- No inline comments - code should be self-documenting through clear naming
+
+## Documentation Standard
+
+All Python files must follow this documentation format consistently.
+
+### Module Docstrings
+
+Every module starts with a paragraph-style docstring explaining:
+- What the module does (its responsibility)
+- Where it fits in the IRIS architecture (which components use it)
+- Key concepts, constants, or patterns worth noting
+
+Written from a developer's perspective for IT staff or future maintainers.
+
+```python
+"""
+Prompt Loader - Database-backed prompt management.
+
+This module provides prompt loading and caching for all IRIS agents. It connects
+to PostgreSQL to fetch versioned prompts at startup, caches them in memory, and
+supports runtime context injection for fiscal dates and database availability.
+Used by router, clarifier, planner, and summarizer agents during initialization.
+
+Key behavior: Prompts are lazy-loaded on first access if not pre-warmed via
+load_all_prompts() at application startup.
+"""
+```
+
+### Function Docstrings
+
+**Public functions** (no underscore prefix): Brief description + Args + Returns + Raises (if intentional).
+
+```python
+def get_prompt(layer: str, name: str, model: str = "iris") -> Tuple[str, List, str]:
+    """Retrieve a cached prompt with optional context injection.
+
+    Args:
+        layer: Prompt layer (e.g., "agent", "subagent").
+        name: Prompt identifier (e.g., "router", "clarifier").
+        model: Model namespace for prompt lookup.
+
+    Returns:
+        Tuple of (system_prompt, tools_list, user_prompt).
+
+    Raises:
+        ValueError: If the requested prompt is not found in cache.
+    """
+```
+
+**Internal functions** (underscore prefix `_`) and **nested functions**: Brief 1-2 line description only. No Args/Returns/Raises.
+
+```python
+def _inject_fiscal_context(prompt: str) -> str:
+    """Replace {{FISCAL_CONTEXT}} placeholder with current fiscal period."""
+```
+
+### Class Docstrings
+
+Classes get a 1-2 line description. Methods follow function rules (public vs internal).
+
+```python
+class ProcessMonitoringManager:
+    """Tracks timing, token usage, and stage metrics for pipeline execution."""
+
+    def start_stage(self, stage_name: str) -> None:
+        """Begin timing a named stage, creating it if necessary.
+
+        Args:
+            stage_name: Identifier for the pipeline stage.
+        """
+
+    def _prepare_records(self) -> List[Dict]:
+        """Convert stage metrics to database-ready record format."""
+```
+
+### Documentation Rules Summary
+
+| Element | Rule |
+|---------|------|
+| Module docstring | Paragraph: purpose, architecture context, key concepts |
+| Module constants | Mentioned in module docstring narrative |
+| Public functions | 1-2 lines + Args + Returns + Raises (if intentional) |
+| Internal functions (`_`) | 1-2 lines only |
+| Nested functions | 1-2 lines only |
+| Classes | 1-2 line description |
+| Public methods | Same as public functions |
+| Private methods (`_`) | Same as internal functions |
+| Inline comments | None - use clear naming instead |
+
+### Docstring Content Guidelines
+
+- **Args**: Describe semantic meaning, not type (type hints handle that)
+  - ✗ `layer: str - The layer string`
+  - ✓ `layer: Prompt layer (e.g., "agent", "subagent")`
+- **Returns**: Explain what the value represents, not just its type
+- **Raises**: Only document exceptions the function intentionally raises for callers to handle
+- **Brevity**: Public functions can exceed 1-2 lines when complexity demands clarity
 
 ## Current Enhancement Work
 

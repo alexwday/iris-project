@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from ..connections.llm import execute_llm_call
 from ..utils.env_config import config
 from ..utils.input_sanitizer import format_conversation_history_for_prompt
-from ..utils.prompt_loader import fetch_prompt_with_context
+from ..utils.prompt_loader import get_prompt
 
 MODEL_CAPABILITY = "large"
 MODEL_MAX_TOKENS = 4096
@@ -121,21 +121,29 @@ def _parse_router_tool_response(response: Any) -> Dict[str, Any]:
     return parsed_arguments
 
 
+VALID_ROUTES = {"direct_response", "database_research"}
+
+
 def _validate_routing_function_name(arguments: Dict[str, Any]) -> str:
-    """Validate and extract the function name from tool arguments.
+    """Validate the routing function name string.
 
     Args:
-        arguments: Parsed tool call arguments.
+        arguments: Parsed tool call arguments containing function_name string.
 
     Returns:
-        str: Validated function name.
+        str: Validated function name ("direct_response" or "database_research").
 
     Raises:
-        RouterError: If `function_name` is missing or empty.
+        RouterError: If function_name is missing or invalid.
     """
     function_name = arguments.get("function_name")
-    if not function_name or not isinstance(function_name, str):
+    if function_name is None:
         raise RouterError("Missing 'function_name' in tool arguments")
+    if function_name not in VALID_ROUTES:
+        raise RouterError(
+            f"Invalid function_name: {function_name}, "
+            f"expected 'direct_response' or 'database_research'"
+        )
     return function_name
 
 
@@ -163,8 +171,12 @@ def generate_routing_decision(
         RouterError: If the routing decision cannot be determined.
     """
     try:
-        system_prompt, tools, user_prompt_template = fetch_prompt_with_context(
-            "agent", "router", available_databases=available_databases
+        system_prompt, tools, user_prompt_template = get_prompt(
+            "agent",
+            "router",
+            inject_fiscal=True,
+            inject_database=True,
+            available_databases=available_databases,
         )
         model_settings = _get_router_model_settings()
         messages = _build_router_messages(

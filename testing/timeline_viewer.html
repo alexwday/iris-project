@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IRIS Process Timeline</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            line-height: 1.5;
+        }
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+        h1 { font-size: 24px; margin-bottom: 20px; color: #1a1a1a; }
+        h2 { font-size: 18px; margin: 20px 0 10px; color: #444; }
+
+        /* Run selector */
+        .run-list {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .run-item {
+            padding: 12px 16px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .run-item:hover { background: #f8f9fa; }
+        .run-item.selected { background: #e3f2fd; border-left: 3px solid #2196f3; }
+        .run-item:last-child { border-bottom: none; }
+        .run-uuid { font-family: monospace; font-size: 12px; color: #666; }
+        .run-query {
+            font-size: 14px;
+            margin-top: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .run-meta { font-size: 12px; color: #888; margin-top: 4px; }
+
+        /* Timeline */
+        .timeline-container {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .timeline-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        .total-time { font-size: 24px; font-weight: 600; color: #2196f3; }
+
+        /* Main timeline bar */
+        .timeline {
+            position: relative;
+            height: 50px;
+            background: #f0f0f0;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 8px;
+        }
+        .timeline-bar {
+            position: absolute;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 11px;
+            font-weight: 500;
+            overflow: hidden;
+            white-space: nowrap;
+            transition: opacity 0.2s;
+            cursor: pointer;
+        }
+        .timeline-bar:hover { opacity: 0.85; }
+        .timeline-bar span { padding: 0 4px; }
+
+        /* Substage breakdown bar */
+        .substage-timeline {
+            position: relative;
+            height: 24px;
+            background: #e8e8e8;
+            border-radius: 3px;
+            overflow: hidden;
+            margin-bottom: 15px;
+        }
+        .substage-bar {
+            position: absolute;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 10px;
+            font-weight: 500;
+            overflow: hidden;
+            white-space: nowrap;
+            cursor: pointer;
+            opacity: 0.85;
+        }
+        .substage-bar:hover { opacity: 1; }
+
+        /* Stage colors */
+        .stage-router { background: #4caf50; }
+        .stage-clarifier { background: #2196f3; }
+        .stage-planner { background: #9c27b0; }
+        .stage-db_query { background: #673ab7; }
+        .stage-metadata { background: #ff9800; }
+        .stage-file_research { background: #f44336; }
+        .stage-summary { background: #00bcd4; }
+        .stage-direct { background: #8bc34a; }
+        .stage-setup { background: #9e9e9e; }
+        .stage-other { background: #607d8b; }
+
+        /* Legend */
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+        }
+        .legend-color {
+            width: 14px;
+            height: 14px;
+            border-radius: 3px;
+        }
+
+        /* Details list */
+        .details-container {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            padding: 20px;
+        }
+        .stage-tree { list-style: none; }
+
+        /* Stage item - expandable */
+        .stage-item {
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .stage-item:last-child { border-bottom: none; }
+
+        .stage-header {
+            display: grid;
+            grid-template-columns: 24px 1fr 90px 70px 24px;
+            gap: 10px;
+            padding: 12px 8px;
+            align-items: center;
+            cursor: pointer;
+            transition: background 0.15s;
+            border-radius: 4px;
+        }
+        .stage-header:hover { background: #f8f9fa; }
+        .stage-header.expanded { background: #f0f7ff; }
+
+        .stage-indicator {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+            flex-shrink: 0;
+        }
+
+        .stage-info {
+            min-width: 0;
+        }
+        .stage-name {
+            font-weight: 500;
+            font-size: 14px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .stage-raw-name {
+            font-size: 11px;
+            color: #888;
+            font-family: monospace;
+        }
+
+        .stage-duration {
+            font-family: monospace;
+            text-align: right;
+            font-size: 13px;
+            font-weight: 500;
+        }
+        .stage-duration.fast { color: #4caf50; }
+        .stage-duration.medium { color: #ff9800; }
+        .stage-duration.slow { color: #f44336; }
+
+        .stage-tokens {
+            font-size: 11px;
+            color: #888;
+            text-align: right;
+        }
+
+        .expand-icon {
+            color: #888;
+            font-size: 12px;
+            transition: transform 0.2s;
+        }
+        .stage-header.expanded .expand-icon { transform: rotate(90deg); }
+
+        /* Expanded content */
+        .stage-content {
+            display: none;
+            padding: 0 8px 12px 34px;
+        }
+        .stage-content.visible { display: block; }
+
+        /* Substages - Tree visualization */
+        .substage-list {
+            list-style: none;
+            margin: 4px 0;
+            padding-left: 0;
+        }
+        .substage-row {
+            display: flex;
+            align-items: stretch;
+        }
+        .tree-line {
+            width: 24px;
+            flex-shrink: 0;
+            position: relative;
+        }
+        .tree-line::before {
+            content: '';
+            position: absolute;
+            left: 10px;
+            top: 0;
+            bottom: 50%;
+            width: 1px;
+            background: #ccc;
+        }
+        .tree-line::after {
+            content: '';
+            position: absolute;
+            left: 10px;
+            top: 50%;
+            width: 10px;
+            height: 1px;
+            background: #ccc;
+        }
+        .tree-line.has-siblings::before {
+            bottom: 0;
+        }
+        .substage-content-wrapper {
+            flex: 1;
+            min-width: 0;
+        }
+        .substage-item {
+            display: grid;
+            grid-template-columns: 18px 1fr 80px 60px;
+            gap: 8px;
+            padding: 8px 10px;
+            align-items: center;
+            background: #f8f9fa;
+            border-radius: 4px;
+            margin-bottom: 4px;
+            cursor: pointer;
+            border-left: 3px solid transparent;
+        }
+        .substage-item:hover { background: #f0f0f0; }
+        .substage-item.expanded { background: #e8f4ff; }
+        .substage-item.level-1 { border-left-color: #673ab7; }
+        .substage-item.level-2 { border-left-color: #ff9800; margin-left: 0; }
+        .substage-item.level-3 { border-left-color: #f44336; margin-left: 0; }
+        .substage-indicator {
+            width: 16px;
+            height: 16px;
+            border-radius: 3px;
+        }
+        .substage-name {
+            font-size: 13px;
+            color: #444;
+            font-weight: 500;
+        }
+        .substage-name small {
+            font-weight: 400;
+            color: #888;
+            font-size: 11px;
+            margin-left: 6px;
+        }
+        .substage-duration {
+            font-family: monospace;
+            font-size: 12px;
+            text-align: right;
+        }
+        .substage-tokens {
+            font-size: 10px;
+            color: #888;
+            text-align: right;
+        }
+        .nested-substages {
+            margin-top: 4px;
+            padding-left: 0;
+        }
+
+        /* Metadata panel */
+        .metadata-panel {
+            display: none;
+            margin-top: 8px;
+            padding: 12px;
+            background: #fafafa;
+            border-radius: 6px;
+            border: 1px solid #e8e8e8;
+        }
+        .metadata-panel.visible { display: block; }
+        .metadata-section {
+            margin-bottom: 12px;
+        }
+        .metadata-section:last-child { margin-bottom: 0; }
+        .metadata-label {
+            font-size: 11px;
+            font-weight: 600;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+        .metadata-value {
+            font-size: 12px;
+            font-family: monospace;
+            background: white;
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #eee;
+            white-space: pre-wrap;
+            word-break: break-word;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        /* Tooltip */
+        .tooltip {
+            position: fixed;
+            background: rgba(0,0,0,0.9);
+            color: white;
+            padding: 10px 14px;
+            border-radius: 6px;
+            font-size: 12px;
+            pointer-events: none;
+            z-index: 1000;
+            max-width: 350px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+        .tooltip strong { color: #fff; }
+
+        .loading { text-align: center; padding: 40px; color: #888; }
+        .error { color: #f44336; padding: 20px; text-align: center; }
+
+        /* Timing breakdown label */
+        .breakdown-label {
+            font-size: 11px;
+            color: #888;
+            margin-bottom: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>IRIS Process Timeline Viewer</h1>
+
+        <div class="run-list" id="runList">
+            <div class="loading">Loading runs...</div>
+        </div>
+
+        <div id="timelineSection" style="display: none;">
+            <div class="timeline-container">
+                <div class="timeline-header">
+                    <div>
+                        <h2 style="margin: 0;">Timeline</h2>
+                        <div id="selectedQuery" style="font-size: 13px; color: #666; margin-top: 4px;"></div>
+                    </div>
+                    <div class="total-time" id="totalTime">0s</div>
+                </div>
+                <div class="timeline" id="timeline"></div>
+                <div class="breakdown-label" id="breakdownLabel" style="display: none;">Substage breakdown:</div>
+                <div class="substage-timeline" id="substageTimeline" style="display: none;"></div>
+                <div class="legend">
+                    <div class="legend-item"><div class="legend-color stage-setup"></div> Setup</div>
+                    <div class="legend-item"><div class="legend-color stage-router"></div> Router</div>
+                    <div class="legend-item"><div class="legend-color stage-clarifier"></div> Clarifier</div>
+                    <div class="legend-item"><div class="legend-color stage-planner"></div> Planner</div>
+                    <div class="legend-item"><div class="legend-color stage-db_query"></div> DB Query</div>
+                    <div class="legend-item"><div class="legend-color stage-metadata"></div> Metadata</div>
+                    <div class="legend-item"><div class="legend-color stage-file_research"></div> File Research</div>
+                    <div class="legend-item"><div class="legend-color stage-summary"></div> Summary</div>
+                    <div class="legend-item"><div class="legend-color stage-direct"></div> Direct Response</div>
+                </div>
+            </div>
+
+            <div class="details-container">
+                <h2>Stage Details</h2>
+                <p style="font-size: 12px; color: #888; margin-bottom: 15px;">Click any stage to expand details and view metadata</p>
+                <ul class="stage-tree" id="stageTree"></ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="tooltip" id="tooltip" style="display: none;"></div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000';
+        let selectedRun = null;
+        let stageTree = null;
+
+        // Stage color mapping - returns class name
+        function getStageClass(name) {
+            const n = name.toLowerCase();
+            if (n.includes('ssl') || n.includes('oauth') || n.includes('prompt_cache') || n.includes('conversation_processing')) return 'stage-setup';
+            if (n === 'router' || n.endsWith('_router')) return 'stage-router';
+            if (n === 'clarifier' || n.endsWith('_clarifier')) return 'stage-clarifier';
+            if (n === 'planner' || n.endsWith('_planner')) return 'stage-planner';
+            if (n.includes('db_query') && !n.includes('metadata') && !n.includes('file_research')) return 'stage-db_query';
+            if (n.includes('metadata') || n.includes('selection') || n.includes('fetch')) return 'stage-metadata';
+            if (n.includes('file_research')) return 'stage-file_research';
+            if (n.includes('summary') || n.includes('summarizer')) return 'stage-summary';
+            if (n.includes('direct')) return 'stage-direct';
+            return 'stage-other';
+        }
+
+        // Get friendly name for stage (relative to parent if provided)
+        function getFriendlyName(name, parentName = null) {
+            // Handle db_query patterns: db_query_dbname_0 -> "DB Query: dbname"
+            const dbMatch = name.match(/^db_query_([^_]+)_(\d+)$/);
+            if (dbMatch) return `DB Query: ${dbMatch[1]}`;
+
+            // If we have a parent, show only the suffix (relative name)
+            if (parentName && name.startsWith(parentName + '_')) {
+                const suffix = name.slice(parentName.length + 1);
+                // Capitalize and clean up
+                const clean = suffix.replace(/_/g, ' ');
+                return clean.charAt(0).toUpperCase() + clean.slice(1);
+            }
+
+            // Handle db_query substages without parent context
+            const subMatch = name.match(/^db_query_[^_]+_\d+_(.+)$/);
+            if (subMatch) {
+                const sub = subMatch[1].replace(/_/g, ' ');
+                return sub.charAt(0).toUpperCase() + sub.slice(1);
+            }
+
+            // Standard transformations
+            const friendly = {
+                'ssl_setup': 'SSL Setup',
+                'oauth_setup': 'OAuth Setup',
+                'prompt_cache': 'Prompt Cache',
+                'conversation_processing': 'Conversation Processing',
+                'router': 'Router',
+                'clarifier': 'Clarifier',
+                'planner': 'Planner',
+                'summarizer': 'Summarizer',
+                'direct_response': 'Direct Response'
+            };
+
+            if (friendly[name]) return friendly[name];
+
+            // Generic: replace underscores, capitalize
+            return name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        }
+
+        // Format duration
+        function formatDuration(ms) {
+            if (ms === null || ms === undefined) return '-';
+            if (ms < 1) return '<1ms';
+            if (ms < 1000) return `${Math.round(ms)}ms`;
+            return `${(ms / 1000).toFixed(2)}s`;
+        }
+
+        // Get duration class
+        function getDurationClass(ms) {
+            if (ms === null || ms < 100) return 'fast';
+            if (ms < 3000) return 'medium';
+            return 'slow';
+        }
+
+        // Build hierarchical stage tree from flat list
+        function buildStageTree(stages) {
+            const stageMap = new Map();
+
+            // First pass: create nodes for all stages, preserving original index
+            stages.forEach((s, idx) => {
+                stageMap.set(s.stage_name, {
+                    ...s,
+                    originalIndex: idx,  // Preserve API order for tiebreaking
+                    stageClass: getStageClass(s.stage_name),
+                    children: [],
+                    parent: null,
+                    friendlyName: null  // Will be set after parent relationships
+                });
+            });
+
+            // Sort names by length (shorter = potential parents)
+            const sortedNames = [...stageMap.keys()].sort((a, b) => a.length - b.length);
+
+            const roots = [];
+
+            // Second pass: establish parent-child relationships
+            // Find the LONGEST matching parent (most specific ancestor)
+            for (const name of sortedNames) {
+                const node = stageMap.get(name);
+                let bestParent = null;
+                let bestParentLength = 0;
+
+                // Check all potential parents (shorter names)
+                for (const potentialParent of sortedNames) {
+                    if (potentialParent.length >= name.length) continue;
+
+                    // Child must start with parent name + underscore
+                    if (name.startsWith(potentialParent + '_')) {
+                        // Keep the longest (most specific) parent
+                        if (potentialParent.length > bestParentLength) {
+                            bestParent = potentialParent;
+                            bestParentLength = potentialParent.length;
+                        }
+                    }
+                }
+
+                if (bestParent) {
+                    const parent = stageMap.get(bestParent);
+                    parent.children.push(node);
+                    node.parent = parent;
+                } else {
+                    roots.push(node);
+                }
+            }
+
+            // Third pass: compute friendly names now that we know parents
+            for (const [name, node] of stageMap) {
+                const parentName = node.parent ? node.parent.stage_name : null;
+                node.friendlyName = getFriendlyName(name, parentName);
+            }
+
+            // Sort by start_time, using original API order as tiebreaker
+            const sortByStartTime = (a, b) => {
+                const timeA = a.start_time ? new Date(a.start_time).getTime() : 0;
+                const timeB = b.start_time ? new Date(b.start_time).getTime() : 0;
+                if (timeA !== timeB) return timeA - timeB;
+                // When timestamps are equal, preserve original API order
+                return (a.originalIndex || 0) - (b.originalIndex || 0);
+            };
+
+            // Sort children recursively by start_time
+            function sortChildrenRecursive(nodes) {
+                nodes.sort(sortByStartTime);
+                nodes.forEach(node => {
+                    if (node.children.length > 0) {
+                        sortChildrenRecursive(node.children);
+                    }
+                });
+            }
+
+            // Sort roots and all children by execution order
+            roots.sort(sortByStartTime);
+            roots.forEach(root => {
+                if (root.children.length > 0) {
+                    sortChildrenRecursive(root.children);
+                }
+            });
+
+            return roots;
+        }
+
+        // Calculate total duration from root stages only (children are already included)
+        function calculateTotalDuration(roots) {
+            return roots.reduce((sum, node) => sum + (node.duration_ms || 0), 0);
+        }
+
+        // Load runs
+        async function loadRuns() {
+            try {
+                const res = await fetch(`${API_BASE}/process-monitor/runs?limit=30`);
+                if (!res.ok) throw new Error('Failed to fetch runs');
+                const data = await res.json();
+                renderRuns(data.runs);
+            } catch (err) {
+                document.getElementById('runList').innerHTML =
+                    `<div class="error">Error loading runs: ${err.message}</div>`;
+            }
+        }
+
+        // Render runs list
+        function renderRuns(runs) {
+            const container = document.getElementById('runList');
+            if (!runs.length) {
+                container.innerHTML = '<div class="loading">No runs found</div>';
+                return;
+            }
+
+            container.innerHTML = runs.map(run => `
+                <div class="run-item" data-uuid="${run.run_uuid}" onclick="selectRun('${run.run_uuid}', this)">
+                    <div class="run-uuid">${run.run_uuid.substring(0, 8)}...</div>
+                    <div class="run-query">${escapeHtml(run.user_query || 'No query')}</div>
+                    <div class="run-meta">
+                        ${new Date(run.start_time).toLocaleString()} · ${formatDuration(run.total_duration_ms)}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Select a run
+        async function selectRun(uuid, element) {
+            document.querySelectorAll('.run-item').forEach(el => el.classList.remove('selected'));
+            element.classList.add('selected');
+
+            try {
+                const res = await fetch(`${API_BASE}/process-monitor/run/${uuid}`);
+                if (!res.ok) throw new Error('Failed to fetch run details');
+                const data = await res.json();
+
+                selectedRun = data;
+                stageTree = buildStageTree(data.stages);
+                renderTimeline(stageTree, data.stages);
+                document.getElementById('timelineSection').style.display = 'block';
+            } catch (err) {
+                console.error('Error loading run:', err);
+            }
+        }
+
+        // Render timeline
+        function renderTimeline(roots, allStages) {
+            const totalMs = calculateTotalDuration(roots);
+            document.getElementById('totalTime').textContent = formatDuration(totalMs);
+
+            // Get user query
+            const queryStage = allStages.find(s => s.custom_metadata?.user_query);
+            const query = queryStage?.custom_metadata?.user_query || 'Unknown query';
+            document.getElementById('selectedQuery').textContent = query.length > 100
+                ? query.substring(0, 100) + '...'
+                : query;
+
+            // Build main timeline bars (root stages only)
+            const timeline = document.getElementById('timeline');
+            let html = '';
+            let position = 0;
+
+            roots.filter(r => r.duration_ms > 0).forEach(stage => {
+                const width = (stage.duration_ms / totalMs) * 100;
+                const hasChildren = stage.children.length > 0;
+
+                if (width > 0.3) {
+                    html += `
+                        <div class="timeline-bar ${stage.stageClass}"
+                             style="left: ${position}%; width: ${width}%;"
+                             data-stage="${stage.stage_name}"
+                             data-duration="${stage.duration_ms}"
+                             data-tokens="${stage.total_tokens || 0}"
+                             data-has-children="${hasChildren}"
+                             onclick="showSubstageBreakdown('${stage.stage_name}')"
+                             onmouseenter="showTooltip(event, this)"
+                             onmouseleave="hideTooltip()">
+                            <span>${width > 6 ? (stage.friendlyName + ' ' + formatDuration(stage.duration_ms)) : (width > 3 ? formatDuration(stage.duration_ms) : '')}</span>
+                        </div>
+                    `;
+                }
+                position += width;
+            });
+
+            timeline.innerHTML = html;
+
+            // Hide substage breakdown initially
+            document.getElementById('substageTimeline').style.display = 'none';
+            document.getElementById('breakdownLabel').style.display = 'none';
+
+            // Render details tree
+            renderDetailsTree(roots);
+        }
+
+        // Show substage breakdown when clicking a timeline bar
+        function showSubstageBreakdown(stageName) {
+            const node = findNodeByName(stageTree, stageName);
+            if (!node || node.children.length === 0) {
+                document.getElementById('substageTimeline').style.display = 'none';
+                document.getElementById('breakdownLabel').style.display = 'none';
+                return;
+            }
+
+            const container = document.getElementById('substageTimeline');
+            const label = document.getElementById('breakdownLabel');
+
+            // Calculate total of children (may not equal parent if there's overhead)
+            const childrenTotal = node.children.reduce((sum, c) => sum + (c.duration_ms || 0), 0);
+            const parentDuration = node.duration_ms || childrenTotal;
+
+            let html = '';
+            let position = 0;
+
+            node.children.filter(c => c.duration_ms > 0).forEach(child => {
+                const width = (child.duration_ms / parentDuration) * 100;
+                if (width > 0.5) {
+                    html += `
+                        <div class="substage-bar ${child.stageClass}"
+                             style="left: ${position}%; width: ${width}%;"
+                             data-stage="${child.stage_name}"
+                             data-duration="${child.duration_ms}"
+                             data-tokens="${child.total_tokens || 0}"
+                             onmouseenter="showTooltip(event, this)"
+                             onmouseleave="hideTooltip()">
+                            ${width > 8 ? child.friendlyName : ''}
+                        </div>
+                    `;
+                }
+                position += width;
+            });
+
+            container.innerHTML = html;
+            container.style.display = 'block';
+            label.textContent = `Substage breakdown for ${node.friendlyName}:`;
+            label.style.display = 'block';
+
+            // Scroll to and highlight the corresponding detail item
+            const detailItem = document.querySelector(`[data-stage-name="${stageName}"]`);
+            if (detailItem) {
+                detailItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                detailItem.querySelector('.stage-header')?.click();
+            }
+        }
+
+        // Find node by name in tree
+        function findNodeByName(roots, name) {
+            for (const root of roots) {
+                if (root.stage_name === name) return root;
+                const found = findNodeByName(root.children, name);
+                if (found) return found;
+            }
+            return null;
+        }
+
+        // Render hierarchical details tree
+        function renderDetailsTree(roots) {
+            const container = document.getElementById('stageTree');
+            container.innerHTML = roots.map((node, idx) => renderStageNode(node, idx + 1)).join('');
+        }
+
+        // Render a single stage node (recursive)
+        function renderStageNode(node, num) {
+            const durationClass = getDurationClass(node.duration_ms);
+            const hasChildren = node.children.length > 0;
+            const hasMetadata = node.custom_metadata || node.decision_details;
+
+            const childrenHtml = hasChildren ? `
+                <div class="substage-list">
+                    ${node.children.map((child, idx) =>
+                        renderSubstageNode(child, 1, idx === node.children.length - 1, node.children.length)
+                    ).join('')}
+                </div>
+            ` : '';
+
+            const metadataHtml = renderMetadataPanel(node);
+
+            return `
+                <li class="stage-item" data-stage-name="${node.stage_name}">
+                    <div class="stage-header" onclick="toggleStageExpand(this)">
+                        <div class="stage-indicator ${node.stageClass}"></div>
+                        <div class="stage-info">
+                            <div class="stage-name">${node.friendlyName}</div>
+                            <div class="stage-raw-name">${node.stage_name}</div>
+                        </div>
+                        <div class="stage-duration ${durationClass}">${formatDuration(node.duration_ms)}</div>
+                        <div class="stage-tokens">${node.total_tokens ? node.total_tokens.toLocaleString() + ' tok' : ''}</div>
+                        <div class="expand-icon">${(hasChildren || hasMetadata) ? '▶' : ''}</div>
+                    </div>
+                    <div class="stage-content">
+                        ${childrenHtml}
+                        ${metadataHtml}
+                    </div>
+                </li>
+            `;
+        }
+
+        // Render substage node with tree visualization
+        function renderSubstageNode(node, level = 1, isLast = false, siblingCount = 1) {
+            const durationClass = getDurationClass(node.duration_ms);
+            const hasMetadata = node.custom_metadata || node.decision_details;
+            const hasChildren = node.children.length > 0;
+            const hasSiblings = siblingCount > 1 && !isLast;
+
+            // Render nested children inline (always visible)
+            const nestedChildrenHtml = hasChildren ? `
+                <div class="nested-substages">
+                    ${node.children.map((child, idx) =>
+                        renderSubstageNode(child, level + 1, idx === node.children.length - 1, node.children.length)
+                    ).join('')}
+                </div>
+            ` : '';
+
+            const metadataHtml = hasMetadata ? renderMetadataPanel(node, true) : '';
+
+            return `
+                <div class="substage-row">
+                    <div class="tree-line ${hasSiblings ? 'has-siblings' : ''}"></div>
+                    <div class="substage-content-wrapper">
+                        <div class="substage-item level-${level}" data-substage-name="${node.stage_name}" onclick="toggleSubstageExpand(this, event)">
+                            <div class="substage-indicator ${node.stageClass}"></div>
+                            <div class="substage-name">
+                                ${node.friendlyName}
+                                ${hasChildren ? '<small>(' + node.children.length + ' steps)</small>' : ''}
+                            </div>
+                            <div class="substage-duration ${durationClass}">${formatDuration(node.duration_ms)}</div>
+                            <div class="substage-tokens">${node.total_tokens ? node.total_tokens.toLocaleString() : ''}</div>
+                        </div>
+                        ${nestedChildrenHtml}
+                        <div class="substage-metadata" style="display: none; margin-left: 26px;">
+                            ${metadataHtml}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Render metadata panel
+        function renderMetadataPanel(node, isSubstage = false) {
+            const sections = [];
+
+            if (node.custom_metadata) {
+                sections.push(`
+                    <div class="metadata-section">
+                        <div class="metadata-label">Custom Metadata</div>
+                        <div class="metadata-value">${formatJson(node.custom_metadata)}</div>
+                    </div>
+                `);
+            }
+
+            if (node.decision_details) {
+                sections.push(`
+                    <div class="metadata-section">
+                        <div class="metadata-label">Decision Details</div>
+                        <div class="metadata-value">${formatJson(node.decision_details)}</div>
+                    </div>
+                `);
+            }
+
+            if (node.status && node.status !== 'completed') {
+                sections.push(`
+                    <div class="metadata-section">
+                        <div class="metadata-label">Status</div>
+                        <div class="metadata-value">${node.status}</div>
+                    </div>
+                `);
+            }
+
+            if (node.total_cost) {
+                sections.push(`
+                    <div class="metadata-section">
+                        <div class="metadata-label">Cost</div>
+                        <div class="metadata-value">$${node.total_cost.toFixed(6)}</div>
+                    </div>
+                `);
+            }
+
+            if (sections.length === 0) return '';
+
+            return `<div class="metadata-panel">${sections.join('')}</div>`;
+        }
+
+        // Format JSON for display
+        function formatJson(obj) {
+            if (typeof obj === 'string') {
+                try {
+                    obj = JSON.parse(obj);
+                } catch (e) {
+                    return escapeHtml(obj);
+                }
+            }
+            return escapeHtml(JSON.stringify(obj, null, 2));
+        }
+
+        // Toggle stage expansion
+        function toggleStageExpand(header) {
+            header.classList.toggle('expanded');
+            const content = header.nextElementSibling;
+            content.classList.toggle('visible');
+
+            // Also show metadata panel if present
+            const metadataPanel = content.querySelector('.metadata-panel');
+            if (metadataPanel) {
+                metadataPanel.classList.toggle('visible');
+            }
+        }
+
+        // Toggle substage expansion (shows metadata)
+        function toggleSubstageExpand(item, event) {
+            event.stopPropagation();
+            item.classList.toggle('expanded');
+            // Find the metadata div that's a sibling after nested-substages
+            const wrapper = item.closest('.substage-content-wrapper');
+            if (wrapper) {
+                const metadataDiv = wrapper.querySelector(':scope > .substage-metadata');
+                if (metadataDiv) {
+                    metadataDiv.style.display = metadataDiv.style.display === 'none' ? 'block' : 'none';
+                    const metadataPanel = metadataDiv.querySelector('.metadata-panel');
+                    if (metadataPanel) {
+                        metadataPanel.classList.toggle('visible');
+                    }
+                }
+            }
+        }
+
+        // Tooltip
+        function showTooltip(event, el) {
+            const tooltip = document.getElementById('tooltip');
+            const stage = el.dataset.stage;
+            const duration = el.dataset.duration;
+            const tokens = el.dataset.tokens;
+            const hasChildren = el.dataset.hasChildren === 'true';
+
+            let html = `<strong>${getFriendlyName(stage)}</strong><br>`;
+            html += `<span style="color: #aaa; font-size: 11px;">${stage}</span><br><br>`;
+            html += `Duration: <strong>${formatDuration(parseInt(duration))}</strong><br>`;
+            if (parseInt(tokens) > 0) {
+                html += `Tokens: <strong>${parseInt(tokens).toLocaleString()}</strong>`;
+            }
+            if (hasChildren) {
+                html += `<br><br><em style="color: #88c0ff;">Click to see substage breakdown</em>`;
+            }
+
+            tooltip.innerHTML = html;
+            tooltip.style.display = 'block';
+            tooltip.style.left = event.pageX + 15 + 'px';
+            tooltip.style.top = event.pageY + 15 + 'px';
+        }
+
+        function hideTooltip() {
+            document.getElementById('tooltip').style.display = 'none';
+        }
+
+        // Escape HTML
+        function escapeHtml(text) {
+            if (typeof text !== 'string') text = String(text);
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Init
+        loadRuns();
+    </script>
+</body>
+</html>

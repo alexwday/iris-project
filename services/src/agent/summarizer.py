@@ -1,11 +1,12 @@
 """Summarizer agent for generating final research summaries."""
 
+import json
 import logging
-from typing import Any, Dict, Generator, Optional
+from typing import Any, Dict, Generator, List, Optional
 
 from ..connections.llm import execute_llm_call
 from ..utils.env_config import config
-from ..utils.prompt_loader import fetch_prompt_with_context
+from ..utils.prompt_loader import get_prompt
 
 MODEL_CAPABILITY = "large"
 MODEL_MAX_TOKENS = 16384
@@ -141,11 +142,20 @@ def _build_messages(
     )
     messages.append({"role": "system", "content": research_context})
 
+    logger.debug(
+        "RESEARCH_INPUT [summarizer]: Aggregated research context:\n%s",
+        research_context[:20000] if len(research_context) > 20000 else research_context,
+    )
+
     if summary_context:
         reference_index = summary_context.get("reference_index")
         if reference_index:
             ref_context = _format_reference_index_context(reference_index)
             messages.append({"role": "system", "content": ref_context})
+            logger.debug(
+                "RESEARCH_INPUT [summarizer]: Reference index:\n%s",
+                json.dumps(reference_index, indent=2, default=str),
+            )
 
         research_statement = summary_context.get("research_statement")
     else:
@@ -183,8 +193,12 @@ def stream_research_summary(
 
     try:
         model_settings = _get_model_settings()
-        system_prompt, _, user_prompt_template = fetch_prompt_with_context(
-            "agent", "summarizer", available_databases=available_databases
+        system_prompt, _, user_prompt_template = get_prompt(
+            "agent",
+            "summarizer",
+            inject_fiscal=True,
+            inject_database=True,
+            available_databases=available_databases,
         )
 
         messages = _build_messages(
@@ -206,6 +220,8 @@ def stream_research_summary(
             completion_token_cost=model_settings["completion_token_cost"],
         )
 
+        collected_output: List[str] = []
+
         for item in llm_stream:
             if isinstance(item, dict) and "usage_details" in item:
                 final_usage_details = item
@@ -216,7 +232,13 @@ def stream_research_summary(
                 delta = getattr(choices[0], "delta", None)
                 content = getattr(delta, "content", None)
                 if content:
+                    collected_output.append(content)
                     yield content
+
+        logger.debug(
+            "RESEARCH_OUTPUT [summarizer]: Final summary output:\n%s",
+            "".join(collected_output),
+        )
 
         if final_usage_details:
             yield final_usage_details

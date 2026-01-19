@@ -22,7 +22,6 @@ CREATE TABLE IF NOT EXISTS prompts (
     system_prompt TEXT,
     user_prompt TEXT,
     tool_definition JSONB,
-    uses_global TEXT[],
     created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT prompts_pkey PRIMARY KEY (id)
@@ -45,11 +44,10 @@ CREATE INDEX IF NOT EXISTS idx_prompts_name ON prompts USING btree (name);
 -- =============================================================================
 -- id: Auto-incrementing unique identifier
 -- model: Model identifier (default: 'iris')
--- layer: Prompt layer: agent (main agents), subagent (cascading retrieval), global (shared context)
+-- layer: Prompt layer: agent (main agents), subagent (cascading retrieval)
 -- name: Name of the prompt
 -- version: Version string (default: '1.0.0')
 -- description: Description of the prompt's purpose
 -- system_prompt: System prompt content
 -- user_prompt: User prompt template
 -- tool_definition: Tool definitions as JSON
--- uses_global: Array of global prompt names to inject into system_prompt at {{CONTEXT_START}}

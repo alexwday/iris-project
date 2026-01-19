@@ -24,7 +24,7 @@ from sqlalchemy import text
 from ..connections.llm import execute_llm_call
 from ..connections.postgres import get_database_session
 from ..utils.env_config import config
-from ..utils.prompt_loader import fetch_prompt_with_context
+from ..utils.prompt_loader import get_ordered_database_keys, get_prompt
 
 MODEL_CAPABILITY = "large"
 MODEL_MAX_TOKENS = 4096
@@ -205,18 +205,18 @@ def _get_model_settings() -> Dict[str, Any]:
     }
 
 
-def _inject_database_enum_into_tool(
+def _inject_database_index_constraints(
     tool_definition: Dict[str, Any],
     available_databases: Dict[str, Any],
 ) -> Dict[str, Any]:
-    """Inject dynamic database enum into tool definition.
+    """Inject database count constraints into tool definition for index validation.
 
     Args:
-        tool_definition (Dict[str, Any]): Tool definition from the database.
-        available_databases (Dict[str, Any]): Available database configurations.
+        tool_definition: Tool definition from the database.
+        available_databases: Available database configurations.
 
     Returns:
-        Dict[str, Any]: Tool definition with dynamic enum injected.
+        Tool definition with maximum index constraint set.
 
     Raises:
         PlannerError: If tool definition structure is invalid.
@@ -225,11 +225,11 @@ def _inject_database_enum_into_tool(
 
     tool = copy.deepcopy(tool_definition)
     max_databases = config.MAX_DATABASES_PER_QUERY
-    db_keys = sorted(available_databases.keys())
+    db_count = len(available_databases)
 
     try:
         params = tool["function"]["parameters"]["properties"]["databases"]
-        params["items"]["enum"] = db_keys
+        params["items"]["maximum"] = db_count - 1
         params["maxItems"] = max_databases
     except (KeyError, TypeError) as exc:
         raise PlannerError(
@@ -241,48 +241,59 @@ def _inject_database_enum_into_tool(
 
 def _format_document_metadata_context(
     document_metadata_context: Optional[List[Dict[str, Any]]],
+    available_databases: Optional[Dict[str, Any]] = None,
 ) -> str:
     """Format document metadata context into a string for the user message.
 
     Args:
-        document_metadata_context (Optional[List[Dict[str, Any]]]): Relevant documents.
+        document_metadata_context: Relevant documents from similarity search.
+        available_databases: Database configs for index lookup.
 
     Returns:
-        str: Formatted document context, or empty string if none.
+        Formatted document context with database indices, or empty string if none.
     """
     if not document_metadata_context:
         return ""
 
+    db_to_index = {}
+    if available_databases:
+        ordered_keys = get_ordered_database_keys(available_databases)
+        db_to_index = {key: idx for idx, key in enumerate(ordered_keys)}
+
     context_parts = ["<RELEVANT_DOCUMENTS_CONTEXT>"]
-    context_parts.append(
-        "The following documents were found to be relevant to this research:\n"
-    )
 
     for i, doc in enumerate(document_metadata_context[:MAX_CONTEXT_DOCUMENTS], 1):
-        context_parts.append(f"{i}. **{doc.get('db_source', 'Unknown Source')}**")
-        context_parts.append(f"   Document: {doc.get('document_name', 'Unknown')}")
+        db_source = doc.get("db_source", "Unknown")
+        db_index = db_to_index.get(db_source, "?")
         summary = doc.get("document_summary", "No summary available")
-        context_parts.append(f"   Summary: {summary}")
-        context_parts.append(f"   Similarity: {doc.get('similarity_score', 0.0):.3f}\n")
+        similarity = doc.get("similarity_score", 0.0)
+        context_parts.append(
+            f"{i}. DATABASE: {db_source} (INDEX={db_index})\n"
+            f"   Document: {doc.get('document_name', 'Unknown')}\n"
+            f"   Summary: {summary}\n"
+            f"   Similarity: {similarity:.3f}"
+        )
 
     context_parts.append("</RELEVANT_DOCUMENTS_CONTEXT>")
-    return "\n".join(context_parts)
+    return "\n\n".join(context_parts)
 
 
 def _build_planner_user_message(
     user_prompt_template: str,
     research_statement: str,
     document_metadata_context: Optional[List[Dict[str, Any]]],
+    available_databases: Optional[Dict[str, Any]] = None,
 ) -> str:
     """Build the user message content for the planner LLM call.
 
     Args:
-        user_prompt_template (str): Template from database with placeholders.
-        research_statement (str): Research statement from the clarifier.
-        document_metadata_context (Optional[List[Dict[str, Any]]]): Relevant documents.
+        user_prompt_template: Template from database with placeholders.
+        research_statement: Research statement from the clarifier.
+        document_metadata_context: Relevant documents from similarity search.
+        available_databases: Database configs for index lookup in document context.
 
     Returns:
-        str: Formatted user message.
+        Formatted user message.
 
     Raises:
         PlannerError: If user_prompt_template is missing.
@@ -293,7 +304,9 @@ def _build_planner_user_message(
             "Please ensure the prompt is configured in the prompts table."
         )
 
-    doc_context = _format_document_metadata_context(document_metadata_context)
+    doc_context = _format_document_metadata_context(
+        document_metadata_context, available_databases
+    )
 
     user_content = user_prompt_template.replace(
         "{{research_statement}}", research_statement
@@ -354,30 +367,34 @@ def _validate_selected_database_list(
     arguments: Dict[str, Any],
     available_databases: Dict[str, Any],
 ) -> List[str]:
-    """Validate and extract selected databases from tool arguments.
+    """Validate database indices and map them back to database names.
 
     Args:
-        arguments (Dict[str, Any]): Parsed tool call arguments.
-        available_databases (Dict[str, Any]): Available database configurations.
+        arguments: Parsed tool call arguments containing integer indices.
+        available_databases: Available database configurations.
 
     Returns:
-        List[str]: Validated database names.
+        List of validated database names corresponding to the indices.
 
     Raises:
-        PlannerError: If databases are missing, empty, or invalid.
+        PlannerError: If indices are missing, empty, or out of range.
     """
-    selected_databases = arguments.get("databases", [])
+    selected_indices = arguments.get("databases", [])
 
-    if not selected_databases:
+    if not selected_indices:
         raise PlannerError("Missing or empty 'databases' in tool arguments")
 
+    db_keys = get_ordered_database_keys(available_databases)
+
     validated_databases = []
-    for i, db_name in enumerate(selected_databases):
-        if not isinstance(db_name, str):
-            raise PlannerError(f"Database entry {i + 1} is not a string: {db_name}")
-        if db_name not in available_databases:
-            raise PlannerError(f"Selected database {i + 1} is unknown: {db_name}")
-        validated_databases.append(db_name)
+    for i, idx in enumerate(selected_indices):
+        if not isinstance(idx, int):
+            raise PlannerError(f"Database index {i + 1} is not an integer: {idx}")
+        if idx < 0 or idx >= len(db_keys):
+            raise PlannerError(
+                f"Database index {i + 1} out of range: {idx} (valid: 0-{len(db_keys) - 1})"
+            )
+        validated_databases.append(db_keys[idx])
 
     return validated_databases
 
@@ -397,8 +414,12 @@ def _load_planner_prompt_components(
     Raises:
         PlannerError: If tool definition is not found.
     """
-    system_prompt, tools, user_prompt_template = fetch_prompt_with_context(
-        "agent", "planner", available_databases=available_databases
+    system_prompt, tools, user_prompt_template = get_prompt(
+        "agent",
+        "planner",
+        inject_fiscal=True,
+        inject_database=True,
+        available_databases=available_databases,
     )
 
     if not tools:
@@ -407,7 +428,7 @@ def _load_planner_prompt_components(
             "Please ensure the prompt is configured in the prompts table."
         )
 
-    tool_with_enum = _inject_database_enum_into_tool(tools[0], available_databases)
+    tool_with_enum = _inject_database_index_constraints(tools[0], available_databases)
 
     return system_prompt, [tool_with_enum], user_prompt_template
 
@@ -450,6 +471,7 @@ def generate_database_selection_plan(
     research_statement: str,
     token: str,
     available_databases: Dict[str, Any],
+    process_monitor: Optional[Any] = None,
 ) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
     """Create a plan of selected databases based on a research statement.
 
@@ -460,6 +482,7 @@ def generate_database_selection_plan(
         research_statement (str): Research statement from the clarifier.
         token (str): Authentication token for API access.
         available_databases (Dict[str, Any]): Database configurations filtered by user.
+        process_monitor: Optional process monitor for substage timing.
 
     Returns:
         Tuple[Dict[str, Any], List[Dict[str, Any]]]: Database selection plan (with
@@ -473,11 +496,27 @@ def generate_database_selection_plan(
     try:
         if not available_databases:
             raise PlannerError("No databases provided for planner selection.")
-        # Step 1: Search document metadata for relevant context
+
+        # Step 1: Generate embedding and search document metadata
+        if process_monitor:
+            process_monitor.start_stage("planner_embedding")
+
         logger.info("Searching document metadata for planner context...")
         metadata_results, embedding_usage, query_embedding = _search_document_metadata_by_embedding(
             research_statement, token, available_databases
         )
+
+        if process_monitor:
+            process_monitor.end_stage("planner_embedding")
+            if embedding_usage:
+                process_monitor.add_llm_call_details_to_stage(
+                    "planner_embedding", embedding_usage
+                )
+            process_monitor.add_stage_details(
+                "planner_embedding",
+                documents_found=len(metadata_results) if metadata_results else 0,
+            )
+
         if embedding_usage:
             usage_details_list.append(embedding_usage)
 
@@ -485,10 +524,20 @@ def generate_database_selection_plan(
             logger.info(
                 "Found %d relevant documents in metadata", len(metadata_results)
             )
+            for doc in metadata_results:
+                logger.info(
+                    "  -> [%s] %s (similarity: %.4f)",
+                    doc.get("db_source", "?"),
+                    doc.get("document_name", "?"),
+                    doc.get("similarity_score", 0.0),
+                )
         else:
             logger.info("No relevant documents found in metadata")
 
         # Step 2: Build prompts and call LLM for database selection
+        if process_monitor:
+            process_monitor.start_stage("planner_llm_selection")
+
         system_prompt, tool_definitions, user_prompt_template = _load_planner_prompt_components(
             available_databases
         )
@@ -497,6 +546,7 @@ def generate_database_selection_plan(
             user_prompt_template,
             research_statement,
             metadata_results,
+            available_databases,
         )
 
         messages = [
@@ -507,12 +557,29 @@ def generate_database_selection_plan(
         response, llm_usage = _execute_planner_llm_call(
             token, messages, tool_definitions, model_settings
         )
+
+        if process_monitor:
+            process_monitor.end_stage("planner_llm_selection")
+            if llm_usage:
+                process_monitor.add_llm_call_details_to_stage(
+                    "planner_llm_selection", llm_usage
+                )
+
         if llm_usage:
             usage_details_list.append(llm_usage)
 
         arguments = _parse_planner_tool_response(response)
         validated = _validate_selected_database_list(arguments, available_databases)
 
+        if process_monitor:
+            process_monitor.add_stage_details(
+                "planner_llm_selection",
+                databases_selected=validated,
+            )
+
+        db_keys = get_ordered_database_keys(available_databases)
+        logger.info("Database index mapping: %s", {i: k for i, k in enumerate(db_keys)})
+        logger.info("LLM selected indices: %s", arguments.get("databases", []))
         logger.info(
             "Database selection plan created with %d databases: %s",
             len(validated),

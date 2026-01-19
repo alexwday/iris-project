@@ -145,7 +145,7 @@ def fetch_all_prompts(conn, model_filter: Optional[str] = None) -> List[Dict]:
         cursor.execute(
             """
             SELECT model, layer, name, version, description,
-                   system_prompt, user_prompt, tool_definition, uses_global
+                   system_prompt, user_prompt, tool_definition
             FROM prompts
             WHERE model = %s
             ORDER BY model, layer, name, version DESC
@@ -156,14 +156,14 @@ def fetch_all_prompts(conn, model_filter: Optional[str] = None) -> List[Dict]:
         cursor.execute(
             """
             SELECT model, layer, name, version, description,
-                   system_prompt, user_prompt, tool_definition, uses_global
+                   system_prompt, user_prompt, tool_definition
             FROM prompts
             ORDER BY model, layer, name, version DESC
             """
         )
 
     columns = ['model', 'layer', 'name', 'version', 'description',
-               'system_prompt', 'user_prompt', 'tool_definition', 'uses_global']
+               'system_prompt', 'user_prompt', 'tool_definition']
 
     prompts = []
     seen = set()
@@ -192,8 +192,6 @@ def format_prompt_markdown(prompt: Dict) -> str:
     lines.append(f"**Version:** {prompt['version']}")
     if prompt['description']:
         lines.append(f"**Description:** {prompt['description']}")
-    if prompt['uses_global']:
-        lines.append(f"**Uses Global:** {json.dumps(prompt['uses_global'])}")
     lines.append("")
     lines.append("---")
     lines.append("")
@@ -283,7 +281,6 @@ def parse_prompt_markdown(file_path: str) -> Dict:
         'system_prompt': None,
         'user_prompt': None,
         'tool_definition': None,
-        'uses_global': None,
     }
 
     # Extract name from title
@@ -307,13 +304,6 @@ def parse_prompt_markdown(file_path: str) -> Dict:
     desc_match = re.search(r'\*\*Description:\*\* (.+)$', content, re.MULTILINE)
     if desc_match:
         prompt['description'] = desc_match.group(1).strip()
-
-    uses_global_match = re.search(r'\*\*Uses Global:\*\* (.+)$', content, re.MULTILINE)
-    if uses_global_match:
-        try:
-            prompt['uses_global'] = json.loads(uses_global_match.group(1).strip())
-        except json.JSONDecodeError:
-            prompt['uses_global'] = None
 
     # Extract sections
     prompt['system_prompt'] = extract_section_content(content, "System Prompt")
@@ -376,11 +366,11 @@ def upload_prompt(conn, prompt: Dict, dry_run: bool = False) -> str:
                 """
                 UPDATE prompts
                 SET description = %s, system_prompt = %s, user_prompt = %s,
-                    tool_definition = %s, uses_global = %s, version = %s
+                    tool_definition = %s, version = %s
                 WHERE model = %s AND layer = %s AND name = %s
                 """,
                 (prompt['description'], prompt['system_prompt'], prompt['user_prompt'],
-                 tool_def, prompt['uses_global'], prompt['version'],
+                 tool_def, prompt['version'],
                  prompt['model'], prompt['layer'], prompt['name'])
             )
     else:
@@ -389,12 +379,12 @@ def upload_prompt(conn, prompt: Dict, dry_run: bool = False) -> str:
             cursor.execute(
                 """
                 INSERT INTO prompts (model, layer, name, version, description,
-                                     system_prompt, user_prompt, tool_definition, uses_global)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                     system_prompt, user_prompt, tool_definition)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (prompt['model'], prompt['layer'], prompt['name'], prompt['version'],
                  prompt['description'], prompt['system_prompt'], prompt['user_prompt'],
-                 tool_def, prompt['uses_global'])
+                 tool_def)
             )
 
     cursor.close()
@@ -457,6 +447,8 @@ def fetch_all_registry(conn, source_filter: Optional[str] = None) -> List[Dict]:
                    top_chunks_in_catalog_selection, top_chunks_in_metadata_research,
                    page_threshold_for_full_content, enable_db_wide_deep_research,
                    max_parallel_files, max_chunks_per_file,
+                   max_pages_for_full_context, max_primary_section_page_count,
+                   max_subsection_page_count, max_neighbour_chunks, max_gap_fill_pages,
                    metadata_context_fields, search_modes, catalog_config,
                    semantic_config, metadata_config, sample_questions,
                    enabled, ad_groups
@@ -474,6 +466,8 @@ def fetch_all_registry(conn, source_filter: Optional[str] = None) -> List[Dict]:
                    top_chunks_in_catalog_selection, top_chunks_in_metadata_research,
                    page_threshold_for_full_content, enable_db_wide_deep_research,
                    max_parallel_files, max_chunks_per_file,
+                   max_pages_for_full_context, max_primary_section_page_count,
+                   max_subsection_page_count, max_neighbour_chunks, max_gap_fill_pages,
                    metadata_context_fields, search_modes, catalog_config,
                    semantic_config, metadata_config, sample_questions,
                    enabled, ad_groups
@@ -487,6 +481,8 @@ def fetch_all_registry(conn, source_filter: Optional[str] = None) -> List[Dict]:
                'top_chunks_in_catalog_selection', 'top_chunks_in_metadata_research',
                'page_threshold_for_full_content', 'enable_db_wide_deep_research',
                'max_parallel_files', 'max_chunks_per_file',
+               'max_pages_for_full_context', 'max_primary_section_page_count',
+               'max_subsection_page_count', 'max_neighbour_chunks', 'max_gap_fill_pages',
                'metadata_context_fields', 'search_modes', 'catalog_config',
                'semantic_config', 'metadata_config', 'sample_questions',
                'enabled', 'ad_groups']
@@ -520,6 +516,11 @@ def format_registry_yaml(entry: Dict) -> str:
         'enable_db_wide_deep_research': entry['enable_db_wide_deep_research'],
         'max_parallel_files': entry['max_parallel_files'],
         'max_chunks_per_file': entry['max_chunks_per_file'],
+        'max_pages_for_full_context': entry['max_pages_for_full_context'],
+        'max_primary_section_page_count': entry['max_primary_section_page_count'],
+        'max_subsection_page_count': entry['max_subsection_page_count'],
+        'max_neighbour_chunks': entry['max_neighbour_chunks'],
+        'max_gap_fill_pages': entry['max_gap_fill_pages'],
         'metadata_context_fields': entry['metadata_context_fields'],
         # Other configs
         'catalog_config': entry['catalog_config'],
@@ -582,6 +583,8 @@ def upload_registry_entry(conn, entry: Dict, dry_run: bool = False) -> str:
                     top_chunks_in_catalog_selection = %s, top_chunks_in_metadata_research = %s,
                     page_threshold_for_full_content = %s, enable_db_wide_deep_research = %s,
                     max_parallel_files = %s, max_chunks_per_file = %s,
+                    max_pages_for_full_context = %s, max_primary_section_page_count = %s,
+                    max_subsection_page_count = %s, max_neighbour_chunks = %s, max_gap_fill_pages = %s,
                     metadata_context_fields = %s,
                     search_modes = %s, catalog_config = %s,
                     semantic_config = %s, metadata_config = %s, sample_questions = %s,
@@ -593,6 +596,11 @@ def upload_registry_entry(conn, entry: Dict, dry_run: bool = False) -> str:
                  entry['top_chunks_in_catalog_selection'], entry['top_chunks_in_metadata_research'],
                  entry['page_threshold_for_full_content'], entry['enable_db_wide_deep_research'],
                  entry['max_parallel_files'], entry['max_chunks_per_file'],
+                 entry.get('max_pages_for_full_context', 6),
+                 entry.get('max_primary_section_page_count', 6),
+                 entry.get('max_subsection_page_count', 3),
+                 entry.get('max_neighbour_chunks', 2),
+                 entry.get('max_gap_fill_pages', 2),
                  entry.get('metadata_context_fields', ['document_summary']),
                  entry.get('search_modes'),
                  json.dumps(entry.get('catalog_config')) if entry.get('catalog_config') else None,
@@ -613,16 +621,23 @@ def upload_registry_entry(conn, entry: Dict, dry_run: bool = False) -> str:
                      top_chunks_in_catalog_selection, top_chunks_in_metadata_research,
                      page_threshold_for_full_content, enable_db_wide_deep_research,
                      max_parallel_files, max_chunks_per_file,
+                     max_pages_for_full_context, max_primary_section_page_count,
+                     max_subsection_page_count, max_neighbour_chunks, max_gap_fill_pages,
                      metadata_context_fields,
                      search_modes, catalog_config, semantic_config, metadata_config,
                      sample_questions, enabled, ad_groups)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (entry['db_source'], entry['db_name'], entry['db_summary'], entry['db_description'],
                  entry['batch_size'], entry['max_selected_files'],
                  entry['top_chunks_in_catalog_selection'], entry['top_chunks_in_metadata_research'],
                  entry['page_threshold_for_full_content'], entry['enable_db_wide_deep_research'],
                  entry['max_parallel_files'], entry['max_chunks_per_file'],
+                 entry.get('max_pages_for_full_context', 6),
+                 entry.get('max_primary_section_page_count', 6),
+                 entry.get('max_subsection_page_count', 3),
+                 entry.get('max_neighbour_chunks', 2),
+                 entry.get('max_gap_fill_pages', 2),
                  entry.get('metadata_context_fields', ['document_summary']),
                  entry.get('search_modes'),
                  json.dumps(entry.get('catalog_config')) if entry.get('catalog_config') else None,

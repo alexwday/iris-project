@@ -54,51 +54,50 @@ MUST DO:
 - Be selective - quality over quantity
 - Provide clear reasoning for selection choices
 - Consider document authority and detail level
-- Copy document_ids exactly as provided
+- Use exact index numbers from document index attribute
 
 MUST NOT:
 - Select obviously irrelevant documents
 - Select documents only tangentially related to the research topic
 - Select too many documents when fewer would suffice
-- Modify or abbreviate document_ids
 </constraints>
 
 <output>
 Call the select_relevant_files tool with:
-- document_ids: Array of selected document UUIDs (most relevant for deep research)
+- selected_indices: Array of document indices (integers) to select for deep research
 - reasoning: Brief explanation of selection criteria applied and why these documents were chosen
 </output>
 
 <examples>
 EXAMPLE 1 - Selective choice from mixed batch:
 Batch contents: 5 documents about leases
-- Doc 1: IFRS 16 standard text (authoritative, detailed)
-- Doc 2: IFRS 16 implementation guide (authoritative, procedural)
-- Doc 3: General accounting overview mentioning leases
-- Doc 4: Internal FAQ on lease questions (potentially useful)
-- Doc 5: Unrelated HR policy
+- Doc 0: IFRS 16 standard text (authoritative, detailed)
+- Doc 1: IFRS 16 implementation guide (authoritative, procedural)
+- Doc 2: General accounting overview mentioning leases
+- Doc 3: Internal FAQ on lease questions (potentially useful)
+- Doc 4: Unrelated HR policy
 
 Research Statement: "What are the measurement requirements for lease liabilities?"
 
-Selection: [Doc 1 UUID, Doc 2 UUID]
+Selection: selected_indices=[0, 1]
 Reasoning: "Selected IFRS 16 standard and implementation guide as primary authoritative sources with detailed measurement guidance. Excluded general overview (lacks detail), FAQ (summary-level), and unrelated HR document."
 
 EXAMPLE 2 - Narrow selection for focused question:
 Batch contents: 3 revenue recognition documents
-- Doc 1: IFRS 15 full standard
-- Doc 2: Contract modification guidance memo
-- Doc 3: General revenue policy overview
+- Doc 0: IFRS 15 full standard
+- Doc 1: Contract modification guidance memo
+- Doc 2: General revenue policy overview
 
 Research Statement: "How should contract modifications be accounted for under IFRS 15?"
 
-Selection: [Doc 2 UUID, Doc 1 UUID]
+Selection: selected_indices=[1, 0]
 Reasoning: "Selected contract modification memo as primary source (directly addresses topic) and IFRS 15 standard for authoritative backing. Excluded general overview as less specific."
 
 EXAMPLE 3 - No suitable documents:
 Batch contents: 3 documents about employee benefits
 Research Statement: "What are the hedge accounting requirements?"
 
-Selection: []
+Selection: selected_indices=[]
 Reasoning: "None of the documents in this batch relate to hedge accounting. All three cover employee benefits topics."
 </examples>
 ```
@@ -118,10 +117,10 @@ Batch {{batch_number}} of {{total_batches}}
 
 <instructions>
 1. Review each document's summary and excerpts
-2. Assess relevance and likely information depth
-3. Select documents most likely to contain valuable detailed information
-4. Call select_relevant_files with your selection and reasoning
-5. Copy document_ids exactly as shown
+2. Pay attention to documents marked with [TOP SUMMARY MATCH] - these have high overall document summary relevance
+3. Assess relevance and likely information depth
+4. Select documents most likely to contain valuable detailed information
+5. Call select_relevant_files with selected_indices (use index attribute from each document)
 </instructions>
 ```
 
@@ -134,25 +133,20 @@ Batch {{batch_number}} of {{total_batches}}
     "name": "select_relevant_files",
     "parameters": {
       "type": "object",
-      "required": [
-        "document_ids",
-        "reasoning"
-      ],
+      "required": ["selected_indices", "reasoning"],
       "properties": {
+        "selected_indices": {
+          "type": "array",
+          "items": { "type": "integer" },
+          "description": "Document indices (from index attribute) to select for deep research"
+        },
         "reasoning": {
           "type": "string",
-          "description": "Brief explanation of why these documents were selected (and others excluded). What criteria were applied?"
-        },
-        "document_ids": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "description": "UUIDs of documents selected for deep research - copy IDs exactly from the batch"
+          "description": "Brief explanation of selection criteria applied"
         }
       }
     },
-    "description": "Select documents from this batch for deep file research.\n\nBe selective - choose documents most likely to contain detailed, relevant information.\nPrioritize authoritative sources and documents with specific content.\nProvide reasoning for your selection choices."
+    "description": "Select documents by index for deep file research. Be selective - prioritize authoritative sources with detailed content."
   }
 }
 ```

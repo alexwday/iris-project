@@ -1,11 +1,11 @@
 """
 Prompt Loader Module.
 
-Loads prompts from PostgreSQL and injects context based on layer.
+Loads prompts from PostgreSQL with optional context injection.
 
 Functions:
-    fetch_prompt_from_database: Get raw prompt from database (internal)
-    fetch_prompt_with_context: Get prompt with context injected (main entry point)
+    load_all_prompts: Pre-load all prompts into cache (call at startup)
+    get_prompt: Get a prompt from cache with optional context injection
 """
 
 import logging
@@ -22,65 +22,131 @@ logger = logging.getLogger(__name__)
 _prompt_cache: Dict[str, Dict[str, Any]] = {}
 
 
-def fetch_prompt_from_database(
-    layer: str, name: str, model: str = "iris"
-) -> Optional[Dict[str, Any]]:
-    """Fetch a prompt from the database with caching.
+def load_all_prompts(model: str = "doc_refresh") -> int:
+    """Load all prompts for a model into the cache.
+
+    Call this at application startup to pre-warm the cache.
 
     Args:
-        layer (str): Prompt layer (agent, subagent, global).
-        name (str): Prompt name.
-        model (str): Model identifier.
+        model: Model identifier (e.g., "iris", "doc_refresh").
 
     Returns:
-        Optional[Dict[str, Any]]: Prompt fields if found, otherwise None.
+        Number of prompts loaded.
     """
-    cache_key = f"{model}/{layer}/{name}"
-
-    if cache_key in _prompt_cache:
-        return _prompt_cache[cache_key].copy()
-
     try:
         with get_database_session() as session:
             result = session.execute(
                 text(
                     """
-                    SELECT system_prompt, user_prompt, tool_definition,
-                           uses_global, description
+                    SELECT DISTINCT ON (layer, name)
+                        layer, name, system_prompt, user_prompt,
+                        tool_definition, description
                     FROM prompts
-                    WHERE model = :model AND layer = :layer AND name = :name
-                    ORDER BY version DESC
-                    LIMIT 1
-                """
+                    WHERE model = :model
+                    ORDER BY layer, name, version DESC
+                    """
                 ),
-                {"model": model, "layer": layer, "name": name},
+                {"model": model},
             )
-            row = result.fetchone()
+            rows = result.fetchall()
 
-            if not row:
-                logger.warning("Prompt not found: %s", cache_key)
-                return None
+            count = 0
+            for row in rows:
+                layer, name, system_prompt, user_prompt, tool_definition, description = row
+                cache_key = f"{model}/{layer}/{name}"
+                _prompt_cache[cache_key] = {
+                    "system_prompt": system_prompt,
+                    "user_prompt": user_prompt,
+                    "tool_definition": tool_definition,
+                    "description": description,
+                }
+                count += 1
 
-            prompt_data = {
-                "system_prompt": row[0],
-                "user_prompt": row[1],
-                "tool_definition": row[2],
-                "uses_global": row[3] or [],
-                "description": row[4],
-            }
-            _prompt_cache[cache_key] = prompt_data
-            return prompt_data.copy()
+            logger.info("Loaded %d prompts for model '%s' into cache", count, model)
+            return count
 
-    except (
-        SQLAlchemyError,
-        ValueError,
-        TypeError,
-        KeyError,
-        RuntimeError,
-        OSError,
-    ) as exc:
-        logger.error("Error loading prompt %s: %s", cache_key, exc)
-        return None
+    except SQLAlchemyError as exc:
+        logger.error("Error loading prompts for model %s: %s", model, exc)
+        return 0
+
+
+def get_prompt(
+    layer: str,
+    name: str,
+    model: str = "doc_refresh",
+    inject_fiscal: bool = False,
+    inject_database: bool = False,
+    available_databases: Optional[Dict[str, Any]] = None,
+) -> Tuple[str, List[Any], str]:
+    """Get a prompt from cache with optional context injection.
+
+    Args:
+        layer: Prompt layer (e.g., "agent", "subagent").
+        name: Prompt name (e.g., "router", "clarifier").
+        model: Model identifier.
+        inject_fiscal: If True, replace {{FISCAL_CONTEXT}} placeholder.
+        inject_database: If True, replace {{DATABASE_CONTEXT}} placeholder.
+        available_databases: Database configs for context injection.
+
+    Returns:
+        Tuple of (system_prompt, tools_list, user_prompt).
+
+    Raises:
+        ValueError: If prompt not found.
+    """
+    cache_key = f"{model}/{layer}/{name}"
+
+    # Try cache first; lazy-load if cache is empty for this model
+    if cache_key not in _prompt_cache:
+        if not any(k.startswith(f"{model}/") for k in _prompt_cache):
+            load_all_prompts(model)
+
+    if cache_key not in _prompt_cache:
+        raise ValueError(f"Prompt not found: {cache_key}")
+
+    prompt = _prompt_cache[cache_key].copy()
+
+    system_prompt = prompt.get("system_prompt", "")
+    tool_definition = prompt.get("tool_definition")
+    user_prompt = prompt.get("user_prompt", "")
+
+    # Inject context if requested
+    system_prompt = _inject_context(
+        system_prompt, inject_fiscal, inject_database, available_databases
+    )
+
+    tools = [tool_definition] if tool_definition else []
+
+    return system_prompt, tools, user_prompt
+
+
+def _inject_context(
+    system_prompt: str,
+    inject_fiscal: bool,
+    inject_database: bool,
+    available_databases: Optional[Dict[str, Any]],
+) -> str:
+    """Inject fiscal and database context into system prompt.
+
+    Args:
+        system_prompt: The raw system prompt text.
+        inject_fiscal: If True, replace {{FISCAL_CONTEXT}}.
+        inject_database: If True, replace {{DATABASE_CONTEXT}}.
+        available_databases: Database configs for database context.
+
+    Returns:
+        System prompt with context injected.
+    """
+    if inject_fiscal and "{{FISCAL_CONTEXT}}" in system_prompt:
+        system_prompt = system_prompt.replace(
+            "{{FISCAL_CONTEXT}}", generate_fiscal_context_statement()
+        )
+
+    if inject_database and "{{DATABASE_CONTEXT}}" in system_prompt:
+        db_statement = _format_database_context_block(available_databases)
+        system_prompt = system_prompt.replace("{{DATABASE_CONTEXT}}", db_statement)
+
+    return system_prompt
 
 
 def _format_database_context_block(
@@ -89,25 +155,12 @@ def _format_database_context_block(
     """Build an XML-like string describing available databases.
 
     Args:
-        available_databases (Optional[Dict[str, Any]]): Database configs keyed by
-            identifier. If None, a fallback loader is used.
+        available_databases: Database configs keyed by identifier.
 
     Returns:
-        str: Structured description of databases for prompt injection.
+        Structured description of databases for prompt injection.
     """
-    if available_databases is None:
-        try:
-            from ..agent.tools.database_metadata import fetch_available_databases
-
-            available_databases = fetch_available_databases()
-        except ImportError:
-            logger.warning("database_metadata module not available")
-            return (
-                "<AVAILABLE_DATABASES>\n"
-                "Database information not available.\n"
-                "</AVAILABLE_DATABASES>"
-            )
-
+    # doc_refresh doesn't have database_metadata, so just use what's provided
     if not available_databases:
         return (
             "<AVAILABLE_DATABASES>\n"
@@ -149,89 +202,3 @@ def _format_database_context_block(
 
     lines.append("</AVAILABLE_DATABASES>")
     return "\n".join(lines)
-
-
-def fetch_prompt_with_context(
-    layer: str,
-    name: str,
-    model: str = "iris",
-    available_databases: Optional[Dict[str, Any]] = None,
-) -> Tuple[str, List[Any], str]:
-    """Load a prompt and inject context appropriate for the given layer.
-
-    For agent layers the fiscal and database contexts are injected; subagents
-    only receive fiscal context; global layers are passed through unchanged.
-
-    Args:
-        layer (str): Prompt layer (agent, subagent, global).
-        name (str): Prompt name.
-        model (str): Model identifier.
-        available_databases (Optional[Dict[str, Any]]): Pre-filtered databases for
-            agent prompts. When None, all available databases are loaded.
-
-    Returns:
-        Tuple[str, List[Any], str]: System prompt (with context), list of tool
-        definitions (or an empty list), and the user prompt template.
-
-    Raises:
-        ValueError: If the requested prompt cannot be found.
-    """
-    prompt = fetch_prompt_from_database(layer, name, model)
-    if not prompt:
-        raise ValueError(f"Prompt not found: {model}/{layer}/{name}")
-
-    system_prompt = prompt.get("system_prompt", "")
-    tool_definition = prompt.get("tool_definition")
-    user_prompt = prompt.get("user_prompt", "")
-
-    inject_fiscal = layer in ("agent", "subagent")
-    inject_database = layer == "agent"
-
-    if inject_fiscal and "{{FISCAL_CONTEXT}}" in system_prompt:
-        system_prompt = system_prompt.replace(
-            "{{FISCAL_CONTEXT}}", generate_fiscal_context_statement()
-        )
-
-    if inject_database and "{{DATABASE_CONTEXT}}" in system_prompt:
-        db_statement = _format_database_context_block(available_databases)
-        system_prompt = system_prompt.replace("{{DATABASE_CONTEXT}}", db_statement)
-
-    if not inject_fiscal and "{{FISCAL_CONTEXT}}" in system_prompt:
-        logger.warning(
-            "Prompt %s/%s has {{FISCAL_CONTEXT}} but layer doesn't inject it",
-            layer,
-            name,
-        )
-    if not inject_database and "{{DATABASE_CONTEXT}}" in system_prompt:
-        logger.warning(
-            "Prompt %s/%s has {{DATABASE_CONTEXT}} but layer doesn't inject it",
-            layer,
-            name,
-        )
-
-    tools = [tool_definition] if tool_definition else []
-
-    return system_prompt, tools, user_prompt
-
-
-def fetch_prompt_raw(
-    layer: str,
-    name: str,
-    model: str = "doc_refresh",
-) -> Tuple[str, Optional[Dict], str]:
-    """Load a prompt without any context injection.
-
-    For doc_refresh pipeline - no fiscal or database context needed.
-
-    Returns:
-        Tuple[str, Optional[Dict], str]: System prompt, tool definition dict (or None), user prompt.
-    """
-    prompt = fetch_prompt_from_database(layer, name, model)
-    if not prompt:
-        raise ValueError(f"Prompt not found: {model}/{layer}/{name}")
-
-    return (
-        prompt.get("system_prompt", ""),
-        prompt.get("tool_definition"),
-        prompt.get("user_prompt", ""),
-    )

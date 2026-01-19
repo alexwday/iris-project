@@ -1,27 +1,32 @@
-"""Centralized logging configuration for the application."""
+"""
+Logging Format - Application-wide logging configuration.
+
+This module configures Python's root logger for consistent log output across
+all IRIS components. It sets up a stderr stream handler with timestamp, logger
+name, and level formatting. Called once during application startup before any
+agents or database connections are initialized.
+
+Log level defaults to the IRIS_LOG_LEVEL environment variable but can be
+overridden programmatically.
+"""
 
 import logging
 import sys
-from typing import Optional
 
 from .env_config import config
 
 
-def configure_root_logger(level: Optional[int] = None) -> logging.Logger:
-    """Configure the root logger with a stderr stream handler.
+def configure_root_logger(level: int | None = None) -> logging.Logger:
+    """Initialize the root logger with stderr output and standard formatting.
 
     Args:
-        level (int | None): Log level to apply. When omitted, uses
-            `config.LOG_LEVEL` or INFO as fallback.
+        level: Logging level constant (e.g., logging.INFO). Defaults to config.
 
     Returns:
-        logging.Logger: Root logger after configuration.
+        The configured root logger instance.
     """
-    level = (
-        getattr(logging, config.LOG_LEVEL.upper(), logging.INFO)
-        if level is None
-        else level
-    )
+    if level is None:
+        level = getattr(logging, config.LOG_LEVEL.upper(), logging.INFO)
 
     root_logger = logging.getLogger()
 
@@ -37,5 +42,4 @@ def configure_root_logger(level: Optional[int] = None) -> logging.Logger:
     root_logger.setLevel(level)
 
     root_logger.info("Logging system initialized")
-
     return root_logger

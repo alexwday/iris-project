@@ -27,8 +27,9 @@ from psycopg2.extras import RealDictCursor
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from doc_refresh.utils.logging_format import configure_logging
-from doc_refresh.utils.env_config import Config
-from doc_refresh.connections.llm import create_embedding, call_llm
+from doc_refresh.utils.env_config import config
+from doc_refresh.connections.llm import calculate_token_cost, execute_llm_call
+from doc_refresh.connections.oauth import fetch_oauth_token
 
 # Configure logging
 configure_logging(logging.INFO)
@@ -58,6 +59,70 @@ QA_DATA_MAP = {
     18: ("D18-1003.pdf", "testing/docbench_data/data/18/18_qa.jsonl"),
     19: ("D18-1034.pdf", "testing/docbench_data/data/19/19_qa.jsonl"),
 }
+
+
+def _get_auth_token() -> str:
+    """Return an auth token from environment or OAuth."""
+    return config.OPENAI_API_KEY or fetch_oauth_token()
+
+
+def _get_model_costs(model_name: str) -> Tuple[float, float]:
+    """Return prompt/completion costs for a given model."""
+    if model_name == config.MODEL_SMALL:
+        capability = "small"
+    elif model_name == config.MODEL_LARGE:
+        capability = "large"
+    else:
+        capability = "embedding"
+    settings = config.get_model_settings(capability)
+    return settings["prompt_token_cost"], settings["completion_token_cost"]
+
+
+def call_llm(
+    auth_token: str,
+    messages: List[Dict[str, str]],
+    model: Optional[str] = None,
+    **kwargs: Any,
+):
+    """Compatibility wrapper using the shared LLM connector."""
+    model_name = model or config.MODEL_LARGE
+    prompt_cost, completion_cost = _get_model_costs(model_name)
+    return execute_llm_call(
+        auth_token,
+        prompt_token_cost=prompt_cost,
+        completion_token_cost=completion_cost,
+        messages=messages,
+        model=model_name,
+        **kwargs,
+    )
+
+
+def create_embedding(
+    auth_token: str,
+    text: Any,
+    model: Optional[str] = None,
+) -> Tuple[List[List[float]], Dict[str, Any]]:
+    """Compatibility wrapper to generate embeddings."""
+    embedding_model = model or config.MODEL_EMBEDDING
+    response = execute_llm_call(
+        auth_token,
+        is_embedding=True,
+        input=text,
+        model=embedding_model,
+        timeout=config.REQUEST_TIMEOUT,
+    )
+    token_count = 0
+    if hasattr(response, "usage") and response.usage:
+        token_count = getattr(response.usage, "total_tokens", 0) or 0
+    prompt_cost, _ = _get_model_costs(config.MODEL_EMBEDDING)
+    cost = calculate_token_cost(token_count, 0, prompt_cost, 0)
+    embeddings = [item.embedding for item in response.data]
+    return embeddings, {
+        "model": embedding_model,
+        "token_count": token_count,
+        "cost": cost,
+        "embedding_count": len(embeddings),
+    }
 
 
 # --- Data Classes ---
@@ -319,11 +384,11 @@ def load_selected_qa_pairs() -> List[QAPair]:
 def get_db_connection():
     """Get PostgreSQL connection."""
     return psycopg2.connect(
-        host=Config.DB_HOST,
-        port=Config.DB_PORT,
-        database=Config.DB_NAME,
-        user=Config.DB_USER,
-        password=Config.DB_PASSWORD,
+        host=config.DB_HOST,
+        port=config.DB_PORT,
+        database=config.DB_NAME,
+        user=config.DB_USER,
+        password=config.DB_PASSWORD,
     )
 
 
@@ -1250,9 +1315,9 @@ Does the retrieved context contain evidence to answer the question?"""
 
     try:
         response, _ = call_llm(
-            oauth_token=auth_token,
+            auth_token,
             messages=messages,
-            model=Config.MODEL_SMALL,
+            model=config.MODEL_SMALL,
             temperature=0.0,
             response_format={"type": "json_object"},
         )
@@ -1485,19 +1550,19 @@ def print_results(results: Dict[str, Any]):
     print("DEEP RESEARCH RETRIEVAL TEST RESULTS")
     print("=" * 70)
 
-    config = results.get("config", {})
+    report_config = results.get("config", {})
     print(f"\nConfiguration:")
-    doc_limit = config.get('document_limit', 0)
+    doc_limit = report_config.get('document_limit', 0)
     doc_limit_str = f"Document limit: {doc_limit}" if doc_limit > 0 else "Document limit: disabled"
     print(
         f"  {doc_limit_str} | "
-        f"Section limit: {config.get('section_limit', 5)} | "
-        f"Subsection limit: {config.get('subsection_limit', 3)}"
+        f"Section limit: {report_config.get('section_limit', 5)} | "
+        f"Subsection limit: {report_config.get('subsection_limit', 3)}"
     )
     print(
-        f"  Top-K: {config.get('top_k', 5)} | "
-        f"Gap limit: {config.get('gap_limit', 3)} | "
-        f"Expansion: {'enabled' if config.get('use_expansion', True) else 'disabled'}"
+        f"  Top-K: {report_config.get('top_k', 5)} | "
+        f"Gap limit: {report_config.get('gap_limit', 3)} | "
+        f"Expansion: {'enabled' if report_config.get('use_expansion', True) else 'disabled'}"
     )
 
     print(f"\nTotal questions tested: {results['total_questions']}")
@@ -1639,9 +1704,10 @@ def main():
     print(f"  Use selected QAs: {args.use_selected}")
 
     # Get auth token from environment
-    auth_token = Config.OPENAI_API_KEY
-    if not auth_token:
-        print("ERROR: OPENAI_API_KEY not set. Please set the environment variable.")
+    try:
+        auth_token = _get_auth_token()
+    except Exception as exc:
+        print(f"ERROR: Could not obtain auth token: {exc}")
         sys.exit(1)
 
     results = run_retrieval_test(

@@ -1,12 +1,17 @@
-"""RBC Security certificate setup.
+"""
+RBC Security - SSL certificate configuration for RBC infrastructure.
 
-Uses optional ``rbc_security`` support for SSL; disabled when IRIS_DEV_MODE=true.
+This module handles SSL certificate setup required for HTTPS connections within
+RBC's network. It wraps the optional rbc_security package which is only available
+in RBC's deployment environment. Called during application startup to enable
+secure connections to Azure endpoints and internal services.
+
+When running locally (outside RBC infrastructure), the rbc_security import fails
+gracefully and the application continues without certificate configuration.
 """
 
 import logging
 from typing import Optional
-
-from .env_config import config
 
 try:
     import rbc_security
@@ -19,24 +24,13 @@ logger = logging.getLogger(__name__)
 
 
 def configure_rbc_security_certs() -> Optional[str]:
-    """Configure SSL certificates for the RBC environment.
-
-    Skips configuration when ``config.DEV_MODE`` is true. Logs a warning and
-    returns None if the optional ``rbc_security`` dependency is missing.
+    """Enable RBC SSL certificates if the rbc_security package is available.
 
     Returns:
-        Optional[str]: ``"rbc_security"`` when certificates are enabled; otherwise
-        None.
+        "rbc_security" if certificates were enabled, None if unavailable.
     """
-    if config.DEV_MODE:
-        logger.info("DEV_MODE: Skipping SSL setup")
-        return None
-
     if not _RBC_SECURITY_AVAILABLE:
-        logger.warning(
-            "rbc_security not available; install with `pip install rbc_security`. "
-            "Continuing without SSL certificates (may fail in RBC environment)."
-        )
+        logger.info("rbc_security not available, continuing without SSL certificates")
         return None
 
     logger.info("Enabling RBC Security certificates...")

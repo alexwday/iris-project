@@ -56,13 +56,13 @@ PROCESS FOR EACH DOCUMENT:
 MUST DO:
 - Return a decision for EVERY document in the batch - no skipping
 - Provide a finding for EVERY document - brief for irrelevant, substantive for answered/needs_deep_research
-- Copy the document_id EXACTLY as provided - do not modify or abbreviate
+- Use the index attribute from each document element (the integer shown in index="N")
 - Use "answered" whenever the summary/excerpts provide sufficient information
-- Include page_reference with the SINGLE most relevant page number when excerpts mention pages (only one page, not multiple)
+- Include page_number with the SINGLE most relevant page number when excerpts mention pages (only one page, not multiple)
 
 MUST NOT:
 - Skip any documents in the batch
-- Modify, truncate, or abbreviate document_ids
+- Use incorrect index values
 - Use "needs_deep_research" when metadata clearly answers the question
 - Mark irrelevant documents as "needs_deep_research" just to be safe
 - Make up information not present in the metadata
@@ -72,36 +72,39 @@ MUST NOT:
 Call the return_unified_decisions tool with an array of document_decisions.
 
 Each decision requires:
-- document_id: The EXACT UUID from the batch (copy precisely)
+- index: The integer from the document's index attribute (e.g., index="1" → 1)
 - status: One of "answered", "irrelevant", or "needs_deep_research"
 - finding: REQUIRED for every document. For answered: full substantive finding. For needs_deep_research: best-effort finding with a note about what the metadata is missing. For irrelevant: brief dismissal (one short sentence).
 
 Optional fields:
-- page_reference: The SINGLE most relevant page number from excerpts (choose only one page, even if multiple pages are mentioned)
+- page_number: The SINGLE most relevant page number from excerpts (choose only one page, even if multiple pages are mentioned)
 </output>
 
 <examples>
 EXAMPLE 1 - Answerable from metadata:
-Document ID: 550e8400-e29b-41d4-a716-446655440000
+Document index="1"
 Summary: "IFRS 15 Revenue from Contracts with Customers establishes a five-step model: (1) identify contract, (2) identify performance obligations, (3) determine transaction price, (4) allocate price, (5) recognize revenue when obligations satisfied."
 Research Statement: "What is the revenue recognition model under IFRS 15?"
 Decision:
+- index: 1
 - status: answered
 - finding: "IFRS 15 establishes a five-step revenue recognition model: identify the contract, identify performance obligations, determine transaction price, allocate the price to obligations, and recognize revenue when each obligation is satisfied."
 
 EXAMPLE 2 - Needs full document access:
-Document ID: 6ba7b810-9dad-11d1-80b4-00c04fd430c8
+Document index="2"
 Summary: "Comprehensive implementation guide for lease accounting under IFRS 16, covering recognition, measurement, and disclosure requirements."
 Research Statement: "What specific journal entries are required when a lease is modified?"
 Decision:
+- index: 2
 - status: needs_deep_research
 - finding: "Guide covers lease accounting broadly, but summary does not mention journal entries for lease modifications—full document likely contains the specific entries."
 
 EXAMPLE 3 - Irrelevant document:
-Document ID: f47ac10b-58cc-4372-a567-0e02b2c3d479
+Document index="3"
 Summary: "Employee benefits policy covering health insurance, retirement plans, and leave entitlements for Canadian operations."
 Research Statement: "What are the hedge accounting requirements under IFRS 9?"
 Decision:
+- index: 3
 - status: irrelevant
 - finding: "Employee benefits policy, not hedge accounting."
 
@@ -150,7 +153,7 @@ Batch {{batch_number}} of {{total_batches}} ({{document_count}} documents)
 2. Compare to the research statement
 3. Make a 3-way decision for each document
 4. Call return_unified_decisions with ALL {{document_count}} documents
-5. Use the EXACT document_id values shown - copy them precisely
+5. Use the index attribute from each document element (the integer in index="N")
 </instructions>
 ```
 
@@ -172,11 +175,15 @@ Batch {{batch_number}} of {{total_batches}} ({{document_count}} documents)
           "items": {
             "type": "object",
             "required": [
-              "document_id",
+              "index",
               "status",
               "finding"
             ],
             "properties": {
+              "index": {
+                "type": "integer",
+                "description": "The index attribute from the document element (e.g., index=\"1\" → 1)"
+              },
               "status": {
                 "enum": [
                   "answered",
@@ -190,11 +197,7 @@ Batch {{batch_number}} of {{total_batches}} ({{document_count}} documents)
                 "type": "string",
                 "description": "Required for all statuses. For answered: substantive finding. For needs_deep_research: best-effort finding with a note on missing detail. For irrelevant: brief dismissal."
               },
-              "document_id": {
-                "type": "string",
-                "description": "The EXACT document_id from the batch - copy the UUID precisely, do not modify"
-              },
-              "page_reference": {
+              "page_number": {
                 "type": "integer",
                 "description": "The SINGLE most relevant page number from excerpts. Choose only one page even if multiple are mentioned. Use for answered or needs_deep_research status."
               }

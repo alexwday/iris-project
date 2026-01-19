@@ -69,8 +69,8 @@ setup_environment()
 from services.src.connections import postgres as db_config
 
 
-def construct_dsn_no_ssl(params: dict, for_sqlalchemy=True):
-    """Modified DSN constructor that disables SSL for local postgres."""
+def build_database_dsn_no_ssl(params: dict, for_sqlalchemy=True):
+    """Modified DSN builder that disables SSL for local postgres."""
     host = params.get("host", "localhost")
     hosts = host.split(",") if "," in host else [host]
     port = params.get("port", "5432")
@@ -93,12 +93,12 @@ def construct_dsn_no_ssl(params: dict, for_sqlalchemy=True):
 
 
 # Apply monkey-patch
-db_config.construct_dsn = construct_dsn_no_ssl
+db_config.build_database_dsn = build_database_dsn_no_ssl
 
 # Now we can import iris modules
-from services.src.utils.logging_format import configure_logging
+from services.src.utils.logging_format import configure_root_logger
 
-configure_logging()
+configure_root_logger()
 
 logger = logging.getLogger(__name__)
 
@@ -301,11 +301,14 @@ def filter_by_tags(cases: List[TestCase], tags: List[str]) -> List[TestCase]:
 # =============================================================================
 
 
-def get_available_databases() -> Dict[str, Any]:
+def fetch_available_databases() -> Dict[str, Any]:
     """Get available databases from registry."""
     try:
-        from services.src.agent.tools.database_metadata import get_available_databases as get_dbs
-        return get_dbs()
+        from services.src.agent.tools.database_metadata import (
+            fetch_available_databases as fetch_dbs,
+        )
+
+        return fetch_dbs()
     except Exception as e:
         logger.warning("Could not load databases: %s", e)
         return {}
@@ -322,7 +325,7 @@ def parse_conversation(json_str: str) -> Dict[str, Any]:
 
 def run_router_test(case: TestCase, api_key: str) -> TestResult:
     """Execute Router agent test."""
-    from services.src.agent.router import get_routing_decision
+    from services.src.agent.router import generate_routing_decision
 
     start_time = time.time()
     error = None
@@ -334,9 +337,9 @@ def run_router_test(case: TestCase, api_key: str) -> TestResult:
             raise ValueError("Router test requires 'conversation' field")
 
         conversation = parse_conversation(case.conversation)
-        available_databases = get_available_databases()
+        available_databases = fetch_available_databases()
 
-        decision, usage = get_routing_decision(
+        decision, usage = generate_routing_decision(
             conversation=conversation,
             token=api_key,
             available_databases=available_databases,
@@ -374,7 +377,7 @@ def run_router_test(case: TestCase, api_key: str) -> TestResult:
 
 def run_clarifier_test(case: TestCase, api_key: str) -> TestResult:
     """Execute Clarifier agent test."""
-    from services.src.agent.clarifier import clarify_research_needs
+    from services.src.agent.clarifier import generate_clarifier_decision
 
     start_time = time.time()
     error = None
@@ -386,9 +389,9 @@ def run_clarifier_test(case: TestCase, api_key: str) -> TestResult:
             raise ValueError("Clarifier test requires 'conversation' field")
 
         conversation = parse_conversation(case.conversation)
-        available_databases = get_available_databases()
+        available_databases = fetch_available_databases()
 
-        decision, usage = clarify_research_needs(
+        decision, usage = generate_clarifier_decision(
             conversation=conversation,
             token=api_key,
             available_databases=available_databases,
@@ -429,7 +432,7 @@ def run_clarifier_test(case: TestCase, api_key: str) -> TestResult:
 
 def run_planner_test(case: TestCase, api_key: str) -> TestResult:
     """Execute Planner agent test."""
-    from services.src.agent.planner import create_database_selection_plan
+    from services.src.agent.planner import generate_database_selection_plan
 
     start_time = time.time()
     error = None
@@ -440,9 +443,9 @@ def run_planner_test(case: TestCase, api_key: str) -> TestResult:
         if not case.research_statement:
             raise ValueError("Planner test requires 'research_statement' field")
 
-        available_databases = get_available_databases()
+        available_databases = fetch_available_databases()
 
-        plan, usage_list = create_database_selection_plan(
+        plan, usage_list = generate_database_selection_plan(
             research_statement=case.research_statement,
             token=api_key,
             available_databases=available_databases,
@@ -487,7 +490,9 @@ def run_planner_test(case: TestCase, api_key: str) -> TestResult:
 
 def run_direct_response_test(case: TestCase, api_key: str) -> TestResult:
     """Execute DirectResponse agent test."""
-    from services.src.agent.direct_response import response_from_conversation
+    from services.src.agent.direct_response import (
+        stream_direct_response_from_conversation,
+    )
 
     start_time = time.time()
     error = None
@@ -501,11 +506,11 @@ def run_direct_response_test(case: TestCase, api_key: str) -> TestResult:
             raise ValueError("DirectResponse test requires 'conversation' field")
 
         conversation = parse_conversation(case.conversation)
-        available_databases = get_available_databases()
+        available_databases = fetch_available_databases()
 
         # Collect streaming response
         usage_details = {}
-        for chunk in response_from_conversation(
+        for chunk in stream_direct_response_from_conversation(
             conversation=conversation,
             token=api_key,
             available_databases=available_databases,
@@ -552,7 +557,7 @@ def run_direct_response_test(case: TestCase, api_key: str) -> TestResult:
 
 def run_summarizer_test(case: TestCase, api_key: str) -> TestResult:
     """Execute Summarizer agent test."""
-    from services.src.agent.summarizer import generate_streaming_summary
+    from services.src.agent.summarizer import stream_research_summary
 
     start_time = time.time()
     error = None
@@ -566,14 +571,14 @@ def run_summarizer_test(case: TestCase, api_key: str) -> TestResult:
             raise ValueError("Summarizer test requires 'aggregated_research' field")
 
         aggregated_research = json.loads(case.aggregated_research)
-        available_databases = get_available_databases()
+        available_databases = fetch_available_databases()
 
         summary_context = None
         if case.research_statement:
             summary_context = {"research_statement": case.research_statement}
 
         # Collect streaming response
-        for chunk in generate_streaming_summary(
+        for chunk in stream_research_summary(
             aggregated_detailed_research=aggregated_research,
             token=api_key,
             available_databases=available_databases,
@@ -621,7 +626,9 @@ def run_summarizer_test(case: TestCase, api_key: str) -> TestResult:
 
 def run_metadata_subagent_test(case: TestCase, api_key: str) -> TestResult:
     """Execute MetadataSubagent test."""
-    from services.src.agent.tools.metadata_subagent import query_metadata_unified
+    from services.src.agent.tools.metadata_subagent import (
+        execute_unified_metadata_query,
+    )
 
     start_time = time.time()
     error = None
@@ -640,21 +647,22 @@ def run_metadata_subagent_test(case: TestCase, api_key: str) -> TestResult:
             "query_embedding": None,  # Will be generated
         }
 
-        result = query_metadata_unified(
+        result = execute_unified_metadata_query(
             research_statement=case.research_statement,
             db_source=case.db_source,
             query_context=query_context,
         )
 
-        answered_count = len(result.get("answered_findings", []))
+        # findings contains all relevant results (answered + needs_deep_research)
+        findings_count = len(result.get("findings", []))
         needs_research_count = len(result.get("needs_research_doc_ids", []))
         irrelevant_count = result.get("irrelevant_count", 0)
 
-        actual = f"answered:{answered_count}, needs_research:{needs_research_count}, irrelevant:{irrelevant_count}"
+        actual = f"findings:{findings_count}, needs_research:{needs_research_count}, irrelevant:{irrelevant_count}"
 
         # Validate expected status
         expected_status = (case.expected_status or "success").lower()
-        has_results = answered_count > 0 or needs_research_count > 0
+        has_results = findings_count > 0 or needs_research_count > 0
 
         if expected_status == "success" and has_results:
             status = TestStatus.PASS
@@ -687,7 +695,7 @@ def run_metadata_subagent_test(case: TestCase, api_key: str) -> TestResult:
 
 def run_file_research_test(case: TestCase, api_key: str) -> TestResult:
     """Execute FileResearch subagent test."""
-    from services.src.agent.tools.file_research_subagent import query_file_research_sync
+    from services.src.agent.tools.file_research_subagent import execute_file_research_sync
 
     start_time = time.time()
     error = None
@@ -706,7 +714,7 @@ def run_file_research_test(case: TestCase, api_key: str) -> TestResult:
             "stage_name": "test",
         }
 
-        result = query_file_research_sync(
+        result = execute_file_research_sync(
             research_statement=case.research_statement,
             document_ids=document_ids,
             db_source=case.db_source,
@@ -773,7 +781,7 @@ def run_llm_judge(actual_response: str, golden_response: str, api_key: str) -> f
 
     Returns weighted score between 0.0 and 1.0.
     """
-    from services.src.connections.llm import call_llm
+    from services.src.connections.llm import execute_llm_call
 
     try:
         messages = [
@@ -784,7 +792,7 @@ def run_llm_judge(actual_response: str, golden_response: str, api_key: str) -> f
             },
         ]
 
-        response, _ = call_llm(
+        response, _ = execute_llm_call(
             oauth_token=api_key,
             model="gpt-4.1-mini",
             messages=messages,

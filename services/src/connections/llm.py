@@ -1,16 +1,13 @@
 """
-OpenAI Connector Module.
+LLM Connector - OpenAI API client with retry logic.
 
-Provides a single connector to the OpenAI API that handles all types of calls
-including streaming, non-streaming, and tool calls. Works in both RBC and local
-environments.
+This module provides the interface to OpenAI-compatible APIs (Azure or direct)
+for all IRIS LLM calls. It handles streaming and non-streaming completions,
+embeddings, tool calls, and token usage tracking. Used by all agents for
+their LLM interactions.
 
-Functions:
-    calculate_token_cost: Calculate token usage costs
-    execute_llm_call: Make a call to the OpenAI API with the given parameters
-
-Classes:
-    OpenAIConnectorError: Exception for OpenAI connector errors
+Includes automatic retry on transient failures with configurable attempts
+and backoff delay.
 """
 
 import logging
@@ -24,10 +21,9 @@ from ..utils.env_config import config
 logger = logging.getLogger(__name__)
 logging.getLogger("openai").setLevel(logging.INFO)
 
-BASE_URL = config.BASE_URL
-MAX_RETRY_ATTEMPTS = config.MAX_RETRY_ATTEMPTS
-REQUEST_TIMEOUT = config.REQUEST_TIMEOUT
-RETRY_DELAY_SECONDS = config.RETRY_DELAY_SECONDS
+_REQUEST_TIMEOUT = 180
+_MAX_RETRY_ATTEMPTS = 3
+_RETRY_DELAY_SECONDS = 2
 
 
 class OpenAIConnectorError(Exception):
@@ -96,20 +92,12 @@ def _build_usage_details_from_response(
 
 
 def _execute_embedding_request(client: OpenAI, params: dict) -> Any:
-    """Make an embedding API call.
-
-    Args:
-        client (OpenAI): OpenAI client instance.
-        params (dict): Parameters for the embedding call.
-
-    Returns:
-        Any: API response from `embeddings.create`.
-    """
+    """Execute an embedding API call with the given parameters."""
     embedding_params = {
         "input": params.get("input"),
         "model": params.get("model"),
         "dimensions": params.get("dimensions"),
-        "timeout": params.get("timeout", REQUEST_TIMEOUT),
+        "timeout": params.get("timeout", _REQUEST_TIMEOUT),
     }
     embedding_params = {k: v for k, v in embedding_params.items() if v is not None}
     return client.embeddings.create(**embedding_params)
@@ -121,32 +109,27 @@ def execute_llm_call(
     completion_token_cost: float = 0,
     **params,
 ) -> Any:
-    """Make a call to the OpenAI API with the given parameters.
-
-    For non-streaming calls, returns the API response and optional usage
-    details. For streaming calls, returns an iterator yielding response chunks
-    followed by a final usage dictionary.
+    """Execute an OpenAI API call with automatic retry on failure.
 
     Args:
-        oauth_token (str): OAuth token (RBC) or OpenAI API key (local).
-        prompt_token_cost (float): Cost per 1K prompt tokens in USD.
-        completion_token_cost (float): Cost per 1K completion tokens in USD.
-        **params: Parameters passed to the OpenAI API (model, messages, stream,
-            tools, tool_choice, temperature, max_tokens, etc.).
+        oauth_token: OAuth token (RBC) or OpenAI API key (local).
+        prompt_token_cost: Cost per 1K prompt tokens in USD.
+        completion_token_cost: Cost per 1K completion tokens in USD.
+        **params: OpenAI API parameters (model, messages, stream, tools, etc.).
 
     Returns:
-        Any: OpenAI API response object (non-streaming) or an iterator
-        (streaming).
+        API response and usage details (non-streaming) or chunk iterator (streaming).
 
     Raises:
-        OpenAIConnectorError: If the API call fails after all retry attempts.
+        OpenAIConnectorError: If the call fails after all retry attempts.
     """
     call_start_time = time.time()
-    client = OpenAI(api_key=oauth_token, base_url=BASE_URL)
-    logger.info("Connecting to OpenAI API at %s", BASE_URL)
+    base_url = config.BASE_URL
+    client = OpenAI(api_key=oauth_token, base_url=base_url)
+    logger.info("Connecting to OpenAI API at %s", base_url)
 
     if "timeout" not in params:
-        params["timeout"] = REQUEST_TIMEOUT
+        params["timeout"] = _REQUEST_TIMEOUT
 
     is_embedding = params.pop("is_embedding", False)
     is_streaming = params.get("stream", False) if not is_embedding else False
@@ -157,7 +140,7 @@ def execute_llm_call(
     model_name = params.get("model", "unknown")
     last_exception = None
 
-    for attempt_num in range(1, MAX_RETRY_ATTEMPTS + 1):
+    for attempt_num in range(1, _MAX_RETRY_ATTEMPTS + 1):
         start_time = time.time()
 
         try:
@@ -193,16 +176,17 @@ def execute_llm_call(
         ) as exc:
             last_exception = exc
             logger.warning(
-                "Call attempt %d failed after %.2f seconds: %s",
+                "LLM call attempt %d/%d failed after %.2f seconds: %s",
                 attempt_num,
+                _MAX_RETRY_ATTEMPTS,
                 time.time() - start_time,
                 type(exc).__name__,
             )
 
-            if attempt_num < MAX_RETRY_ATTEMPTS:
-                time.sleep(RETRY_DELAY_SECONDS)
+            if attempt_num < _MAX_RETRY_ATTEMPTS:
+                time.sleep(_RETRY_DELAY_SECONDS)
 
-    logger.error("Failed to complete call after %d attempts", MAX_RETRY_ATTEMPTS)
+    logger.error("LLM call failed after %d attempts", _MAX_RETRY_ATTEMPTS)
     raise OpenAIConnectorError(
         f"Failed to complete OpenAI API call: {last_exception}"
     ) from last_exception

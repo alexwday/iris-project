@@ -2,16 +2,24 @@
 
 The LLM makes per-document 3-way decisions (answered, irrelevant, needs_deep_research)
 so references can be built deterministically from metadata before any deep research.
+
+INDEXING CONVENTION (applies across IRIS pipeline):
+- Database selection (planner): 0-indexed (LLM tool call convention for arrays)
+- Document lists (metadata): 1-indexed (human-readable prompts shown to LLM)
+- User-facing references: 1-indexed (intuitive for end users, e.g., [REF:1])
+
+This module uses 1-indexed document_index values when presenting documents to the LLM.
 """
 
 import json
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Optional, Set, Tuple, TypedDict
 
 from sqlalchemy import text
 
 from ...utils.env_config import config
-from ...utils.prompt_loader import fetch_prompt_with_context
+from ...utils.prompt_loader import get_prompt
 from ...connections.postgres import get_database_session
 from ...connections.llm import execute_llm_call
 from .research_types import Finding, FindingsList
@@ -51,13 +59,13 @@ class DocumentDecision(TypedDict):
     - "answered": Finding from metadata is sufficient
     - "irrelevant": Document not relevant to query
     - "needs_deep_research": Document likely relevant but needs full content
-    Finding is required for all statuses; page_reference is optional.
+    Finding is required for all statuses; page_number is optional.
     """
 
     document_id: str
     status: str
     finding: str
-    page_reference: Optional[int]
+    page_number: Optional[int]
 
 
 class UnifiedBatchResult(TypedDict):
@@ -70,10 +78,8 @@ class UnifiedBatchResult(TypedDict):
 class UnifiedMetadataResult(TypedDict):
     """Result from unified metadata processing across all batches."""
 
-    answered_findings: List[DocumentDecision]
     needs_research_doc_ids: List[str]
     irrelevant_count: int
-    answered_response: str
     findings: FindingsList  # Unified finding format for summarizer
 
 
@@ -93,7 +99,6 @@ class ReferenceEntry(TypedDict):
     file_link: Optional[str]
     file_name: Optional[str]
     source_filename: str
-    highlight_text: str
     document_id: str
     finding: str
 
@@ -262,9 +267,67 @@ def fetch_all_document_metadata(
         ) from exc
 
 
+TOP_SUMMARY_DOCS_COUNT = 5
+
+
+def fetch_top_documents_by_summary(
+    db_source: str,
+    query_embedding: List[float],
+    limit: int = TOP_SUMMARY_DOCS_COUNT,
+) -> List[Dict[str, Any]]:
+    """Fetch top documents ranked by summary embedding similarity.
+
+    Args:
+        db_source: Database source to query.
+        query_embedding: Query embedding vector for similarity ranking.
+        limit: Maximum number of documents to return.
+
+    Returns:
+        List of top documents with name and similarity score.
+    """
+    try:
+        with get_database_session() as session:
+            embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
+
+            rows = (
+                session.execute(
+                    text(
+                        """
+                    SELECT
+                        document_name,
+                        1 - (summary_embedding <=> CAST(:embedding AS halfvec))
+                            AS similarity_score
+                    FROM iris_document_metadata
+                    WHERE db_source = :db_source
+                    AND summary_embedding IS NOT NULL
+                    ORDER BY similarity_score DESC
+                    LIMIT :limit
+                    """
+                    ),
+                    {"embedding": embedding_str, "db_source": db_source, "limit": limit},
+                )
+                .mappings()
+                .all()
+            )
+
+            return [
+                {
+                    "document_name": row["document_name"],
+                    "similarity_score": float(row["similarity_score"]),
+                }
+                for row in rows
+            ]
+    except Exception as exc:
+        logger.warning(
+            "Could not fetch top summary docs for %s: %s", db_source, exc
+        )
+        return []
+
+
 def _format_batch_documents(
     documents: List[DocumentMetadata],
     metadata_context_fields: Optional[List[str]] = None,
+    top_summary_doc_names: Optional[Set[str]] = None,
 ) -> str:
     """Format a batch of documents for LLM processing using XML.
 
@@ -273,19 +336,31 @@ def _format_batch_documents(
         metadata_context_fields: Which metadata fields to include. Valid values:
             'document_summary', 'document_description', 'document_usage'.
             Defaults to ['document_summary'] if not specified.
+        top_summary_doc_names: Set of document names that are in the top N by summary
+            similarity. These will be flagged with [TOP SUMMARY MATCH].
 
     Returns:
         XML formatted string for the LLM prompt.
     """
     if metadata_context_fields is None:
         metadata_context_fields = ["document_summary"]
+    if top_summary_doc_names is None:
+        top_summary_doc_names = set()
 
     parts: List[str] = []
 
-    for i, doc in enumerate(documents, 1):
-        parts.append(f"<document index=\"{i}\">")
+    for doc in documents:
+        idx = doc.get("document_index", 0)
+        doc_name = doc.get("document_name", "")
+
+        # Add [TOP SUMMARY MATCH] flag if document is in top summary matches
+        top_match_flag = ""
+        if doc_name in top_summary_doc_names:
+            top_match_flag = " [TOP SUMMARY MATCH]"
+
+        parts.append(f"<document index=\"{idx}\"{top_match_flag}>")
         parts.append(f"  <document_id>{doc['document_id']}</document_id>")
-        parts.append(f"  <document_name>{doc['document_name']}</document_name>")
+        parts.append(f"  <document_name>{doc_name}</document_name>")
         parts.append(f"  <type>{doc.get('document_type', 'Unknown')}</type>")
         parts.append(f"  <pages>{doc.get('page_count', 'Unknown')}</pages>")
 
@@ -334,6 +409,7 @@ def select_relevant_files_from_batch(
     total_batches: int,
     ctx: MetadataContext,
     metadata_context_fields: Optional[List[str]] = None,
+    top_summary_documents: Optional[List[Dict[str, Any]]] = None,
 ) -> Tuple[BatchSelection, Optional[Dict[str, Any]]]:
     """Select relevant files from a batch via LLM tool call.
 
@@ -344,6 +420,7 @@ def select_relevant_files_from_batch(
         total_batches: Total number of batches.
         ctx: Context with token, process_monitor, etc.
         metadata_context_fields: Which metadata fields to include in document context.
+        top_summary_documents: Top documents by summary similarity to highlight.
 
     Returns:
         Batch selection and optional usage details.
@@ -355,11 +432,20 @@ def select_relevant_files_from_batch(
     usage_details = None
 
     try:
-        system_prompt, tools, user_template = fetch_prompt_with_context(
-            "subagent", "catalog_batch_selection"
+        system_prompt, tools, user_template = get_prompt(
+            "subagent", "catalog_batch_selection", inject_fiscal=True
         )
 
-        formatted_docs = _format_batch_documents(batch_documents, metadata_context_fields)
+        # Build set of top summary doc names for flagging
+        top_summary_doc_names = set()
+        if top_summary_documents:
+            top_summary_doc_names = {
+                doc.get("document_name") for doc in top_summary_documents
+            }
+
+        formatted_docs = _format_batch_documents(
+            batch_documents, metadata_context_fields, top_summary_doc_names
+        )
 
         user_prompt = (
             user_template.replace("{{research_statement}}", research_statement)
@@ -418,10 +504,18 @@ def select_relevant_files_from_batch(
             )
 
         arguments = json.loads(tool_call.function.arguments)
+
+        # Map indices back to document_ids
+        index_to_id = {doc["document_index"]: doc["document_id"] for doc in batch_documents}
+        selected_indices = arguments.get("selected_indices", [])
+        selected_ids = [
+            index_to_id[idx] for idx in selected_indices if idx in index_to_id
+        ]
+
         selection: BatchSelection = {
             "batch_number": batch_number,
-            "selected_ids": arguments.get("document_ids", []),
-            "reasoning": arguments.get("reasoning", ""),
+            "selected_ids": selected_ids,
+            "reasoning": f"Selected indices: {selected_indices}",
         }
         return selection, usage_details
 
@@ -442,6 +536,7 @@ def process_catalog_file_selection(
     max_selected_files: int,
     ctx: MetadataContext,
     metadata_context_fields: Optional[List[str]] = None,
+    top_summary_documents: Optional[List[Dict[str, Any]]] = None,
 ) -> Tuple[List[str], str]:
     """Batch documents and select relevant files for deep research.
 
@@ -453,6 +548,7 @@ def process_catalog_file_selection(
         max_selected_files: Maximum number of files to select for deep research.
         ctx: Context with token, process_monitor, etc.
         metadata_context_fields: Which metadata fields to include in document context.
+        top_summary_documents: Top documents by summary similarity to highlight.
 
     Returns:
         Tuple of (list of selected document IDs, combined reasoning).
@@ -479,18 +575,28 @@ def process_catalog_file_selection(
     all_selected_ids: List[str] = []
     all_reasoning: List[str] = []
 
-    for batch_num, batch_docs in enumerate(batches, 1):
-        selection, _ = select_relevant_files_from_batch(
-            research_statement=research_statement,
-            batch_documents=batch_docs,
-            batch_number=batch_num,
-            total_batches=total_batches,
-            ctx=ctx,
-            metadata_context_fields=metadata_context_fields,
-        )
-        all_selected_ids.extend(selection["selected_ids"])
-        if selection["reasoning"]:
-            all_reasoning.append(f"Batch {batch_num}: {selection['reasoning']}")
+    # Process batches in parallel for faster catalog selection
+    with ThreadPoolExecutor(max_workers=min(total_batches, 5)) as executor:
+        future_to_batch = {
+            executor.submit(
+                select_relevant_files_from_batch,
+                research_statement=research_statement,
+                batch_documents=batch_docs,
+                batch_number=batch_num,
+                total_batches=total_batches,
+                ctx=ctx,
+                metadata_context_fields=metadata_context_fields,
+                top_summary_documents=top_summary_documents,
+            ): batch_num
+            for batch_num, batch_docs in enumerate(batches, 1)
+        }
+
+        for future in as_completed(future_to_batch):
+            batch_num = future_to_batch[future]
+            selection, _ = future.result()
+            all_selected_ids.extend(selection["selected_ids"])
+            if selection["reasoning"]:
+                all_reasoning.append(f"Batch {batch_num}: {selection['reasoning']}")
 
     deduped_ids: List[str] = []
     seen_ids: Set[str] = set()
@@ -541,8 +647,18 @@ def _validate_unified_decisions(
 
     valid_statuses = {"answered", "irrelevant", "needs_deep_research"}
 
+    # Build index-to-document mapping
+    index_to_doc = {doc["document_index"]: doc for doc in batch_documents}
+    valid_indices = set(index_to_doc.keys())
+
     for d in raw_decisions:
-        doc_id = d.get("document_id", "")
+        # Support both index-based (new) and document_id-based (legacy) responses
+        doc_index = d.get("index")
+        if doc_index is not None and doc_index in valid_indices:
+            doc_id = index_to_doc[doc_index]["document_id"]
+        else:
+            doc_id = d.get("document_id", "")
+
         status = d.get("status", "")
 
         if doc_id not in valid_doc_ids or doc_id in seen_ids:
@@ -561,7 +677,7 @@ def _validate_unified_decisions(
         seen_ids.add(doc_id)
 
         finding = d.get("finding")
-        page_reference = d.get("page_reference") if status == "answered" else None
+        page_number = d.get("page_number") if status == "answered" else None
 
         # If status is "answered" but no finding provided, switch to needs_deep_research
         if status == "answered" and not finding:
@@ -572,7 +688,7 @@ def _validate_unified_decisions(
             )
             status = "needs_deep_research"
             finding = "No finding provided - requires full document research"
-            page_reference = None
+            page_number = None
         elif status == "needs_deep_research" and not finding:
             finding = "No finding provided"
         elif status == "irrelevant" and not finding:
@@ -583,7 +699,7 @@ def _validate_unified_decisions(
                 "document_id": doc_id,
                 "status": status,
                 "finding": finding,
-                "page_reference": page_reference,
+                "page_number": page_number,
             }
         )
 
@@ -599,7 +715,7 @@ def _validate_unified_decisions(
                     "document_id": doc["document_id"],
                     "status": "needs_deep_research",
                     "finding": "No finding provided",
-                    "page_reference": None,
+                    "page_number": None,
                 }
             )
 
@@ -654,65 +770,13 @@ def _build_findings_from_decisions(
             "document_name": doc["document_name"],
             "file_name": doc.get("file_name") or doc["document_name"],
             "file_link": doc.get("file_name") or "",
-            "page": decision.get("page_reference"),
+            "page": decision.get("page_number"),
             "finding": decision.get("finding", ""),
             "source": "metadata",
             "db_source": db_source,
         })
 
     return findings
-
-
-def _format_unified_response(
-    decisions: List[DocumentDecision],
-    documents: List[DocumentMetadata],
-) -> str:
-    """Format decisions into structured research response text.
-
-    Args:
-        decisions: Per-document decisions.
-        documents: Full document metadata list.
-
-    Returns:
-        Formatted research response string.
-    """
-    doc_lookup = {doc["document_id"]: doc for doc in documents}
-    doc_order = {
-        doc["document_id"]: doc.get("document_index", idx)
-        for idx, doc in enumerate(documents, 1)
-    }
-
-    sorted_decisions = sorted(
-        decisions,
-        key=lambda d: doc_order.get(d.get("document_id", ""), float("inf")),
-    )
-
-    lines: List[str] = ["File # | Filename | Status | Finding | Page"]
-
-    for decision in sorted_decisions:
-        doc_id = decision.get("document_id")
-        doc = doc_lookup.get(doc_id)
-        if not doc:
-            logger.warning("Document not found for formatting: %s", doc_id)
-            continue
-
-        file_index = doc_order.get(doc_id)
-        index_label = str(file_index) if file_index is not None else "-"
-
-        filename = doc.get("file_name") or doc.get("document_name") or doc_id or "-"
-        status = decision.get("status", "")
-        finding = decision.get("finding") or ""
-        page_ref = decision.get("page_reference")
-        page_label = str(page_ref) if page_ref is not None else "-"
-
-        lines.append(
-            f"File {index_label} | {filename} | {status} | {finding} | {page_label}"
-        )
-
-    if len(lines) == 1:
-        return ""
-
-    return "\n".join(lines)
 
 
 def process_batch_unified(
@@ -749,8 +813,8 @@ def process_batch_unified(
     valid_doc_ids: Set[str] = {doc["document_id"] for doc in batch_documents}
 
     try:
-        system_prompt, tools, user_template = fetch_prompt_with_context(
-            "subagent", "metadata_unified_findings"
+        system_prompt, tools, user_template = get_prompt(
+            "subagent", "metadata_unified_findings", inject_fiscal=True
         )
 
         formatted_docs = _format_batch_documents(batch_documents, metadata_context_fields)
@@ -761,6 +825,12 @@ def process_batch_unified(
             .replace("{{total_batches}}", str(total_batches))
             .replace("{{document_count}}", str(len(batch_documents)))
             .replace("{{batch_documents}}", formatted_docs)
+        )
+
+        logger.debug(
+            "RESEARCH_INPUT [metadata_unified_batch_%d]: Documents sent to LLM:\n%s",
+            batch_number,
+            formatted_docs[:10000] if len(formatted_docs) > 10000 else formatted_docs,
         )
 
         model_config = config.get_model_settings(MODEL_CAPABILITY)
@@ -815,8 +885,20 @@ def process_batch_unified(
         arguments = json.loads(tool_call.function.arguments)
         raw_decisions = arguments.get("document_decisions", [])
 
+        logger.debug(
+            "RESEARCH_OUTPUT [metadata_unified_batch_%d]: Raw LLM decisions:\n%s",
+            batch_number,
+            json.dumps(raw_decisions, indent=2),
+        )
+
         validated_decisions = _validate_unified_decisions(
             raw_decisions, valid_doc_ids, batch_documents
+        )
+
+        logger.debug(
+            "RESEARCH_OUTPUT [metadata_unified_batch_%d]: Validated decisions:\n%s",
+            batch_number,
+            json.dumps(validated_decisions, indent=2),
         )
 
         return {
@@ -899,17 +981,29 @@ def execute_unified_metadata_query(
         metadata_context_fields,
     )
 
+    process_monitor = ctx.get("process_monitor")
+    stage_name = ctx.get("stage_name", f"metadata_{db_source}")
+
+    # Time the document fetch + similarity search
+    fetch_stage = f"{stage_name}_fetch"
+    if process_monitor:
+        process_monitor.start_stage(fetch_stage)
+
     all_documents = fetch_all_document_metadata(db_source, query_embedding, top_chunks)
+
+    if process_monitor:
+        process_monitor.end_stage(fetch_stage)
+        process_monitor.add_stage_details(
+            fetch_stage, documents_found=len(all_documents), top_chunks=top_chunks
+        )
 
     for idx, doc in enumerate(all_documents, 1):
         doc["document_index"] = doc.get("document_index", idx)
 
     if not all_documents:
         return {
-            "answered_findings": [],
             "needs_research_doc_ids": [],
             "irrelevant_count": 0,
-            "answered_response": f"No documents found in {db_source}.",
             "findings": [],
         }
 
@@ -919,15 +1013,50 @@ def execute_unified_metadata_query(
             len(all_documents),
         )
 
+        # Fetch top documents by summary similarity to highlight in catalog selection
+        top_summary_documents = fetch_top_documents_by_summary(
+            db_source, query_embedding, TOP_SUMMARY_DOCS_COUNT
+        )
+        if top_summary_documents:
+            logger.info(
+                "Top %d documents by summary similarity for %s: %s",
+                len(top_summary_documents),
+                db_source,
+                [d["document_name"] for d in top_summary_documents],
+            )
+
+        # Time the catalog selection LLM calls
+        selection_stage = f"{stage_name}_selection"
+        if process_monitor:
+            process_monitor.start_stage(selection_stage)
+
+        # Update ctx with selection stage name for proper token tracking
+        selection_ctx = {**ctx, "stage_name": selection_stage}
+
         selected_ids, _reasoning = process_catalog_file_selection(
             research_statement=research_statement,
             db_source=db_source,
             all_documents=all_documents,
             batch_size=batch_size,
             max_selected_files=max_selected_files,
-            ctx=ctx,
+            ctx=selection_ctx,
             metadata_context_fields=metadata_context_fields,
+            top_summary_documents=top_summary_documents,
         )
+
+        # Build selected filenames for logging
+        id_to_name = {doc["document_id"]: doc["document_name"] for doc in all_documents}
+        selected_filenames = [id_to_name.get(doc_id, doc_id) for doc_id in selected_ids]
+
+        if process_monitor:
+            process_monitor.end_stage(selection_stage)
+            process_monitor.add_stage_details(
+                selection_stage,
+                documents_processed=len(all_documents),
+                files_selected=len(selected_ids),
+                selected_files=selected_filenames,
+                batch_size=batch_size,
+            )
 
         logger.info(
             "File selection complete for %s: %d files selected for deep research",
@@ -936,10 +1065,8 @@ def execute_unified_metadata_query(
         )
 
         return {
-            "answered_findings": [],
             "needs_research_doc_ids": selected_ids,
             "irrelevant_count": len(all_documents) - len(selected_ids),
-            "answered_response": "",
             "findings": [],  # File selection mode has no metadata findings
         }
 
@@ -953,37 +1080,59 @@ def execute_unified_metadata_query(
         for i in range(0, len(all_documents), batch_size)
     ]
     total_batches = len(batches)
-    logger.info("Created %d batches for sequential processing", total_batches)
+    logger.info("Created %d batches for parallel processing", total_batches)
+
+    # Time the 3-way decision LLM calls
+    decision_stage = f"{stage_name}_decisions"
+    if process_monitor:
+        process_monitor.start_stage(decision_stage)
 
     all_decisions: List[DocumentDecision] = []
 
-    for batch_num, batch_docs in enumerate(batches, 1):
-        try:
-            batch_result, _ = process_batch_unified(
+    # Process batches in parallel for faster metadata research
+    with ThreadPoolExecutor(max_workers=min(total_batches, 5)) as executor:
+        future_to_batch = {
+            executor.submit(
+                process_batch_unified,
                 research_statement,
                 batch_docs,
                 batch_num,
                 total_batches,
                 ctx,
-                metadata_context_fields=metadata_context_fields,
-            )
-            all_decisions.extend(batch_result["document_decisions"])
-            logger.info(
-                "Metadata research batch %d/%d complete: %d decisions",
-                batch_num,
-                total_batches,
-                len(batch_result["document_decisions"]),
-            )
-        except Exception as exc:
-            logger.error(
-                "Metadata research batch %d failed: %s",
-                batch_num,
-                exc,
-                exc_info=True,
-            )
-            raise
+                metadata_context_fields,
+            ): batch_num
+            for batch_num, batch_docs in enumerate(batches, 1)
+        }
 
-    answered_findings = [d for d in all_decisions if d.get("status") == "answered"]
+        for future in as_completed(future_to_batch):
+            batch_num = future_to_batch[future]
+            try:
+                batch_result, _ = future.result()
+                all_decisions.extend(batch_result["document_decisions"])
+                logger.info(
+                    "Metadata research batch %d/%d complete: %d decisions",
+                    batch_num,
+                    total_batches,
+                    len(batch_result["document_decisions"]),
+                )
+            except Exception as exc:
+                logger.error(
+                    "Metadata research batch %d failed: %s",
+                    batch_num,
+                    exc,
+                    exc_info=True,
+                )
+                raise
+
+    if process_monitor:
+        process_monitor.end_stage(decision_stage)
+        process_monitor.add_stage_details(
+            decision_stage,
+            documents_processed=len(all_documents),
+            batches_processed=total_batches,
+        )
+
+    answered = [d for d in all_decisions if d.get("status") == "answered"]
     needs_research = [
         d for d in all_decisions if d.get("status") == "needs_deep_research"
     ]
@@ -995,20 +1144,17 @@ def execute_unified_metadata_query(
         "Metadata research complete for %s: "
         "%d answered, %d need research, %d irrelevant",
         db_source,
-        len(answered_findings),
+        len(answered),
         len(needs_research),
         len(irrelevant),
     )
 
-    answered_response = _format_unified_response(all_decisions, all_documents)
     findings = _build_findings_from_decisions(
         all_decisions, all_documents, db_source
     )
 
     return {
-        "answered_findings": answered_findings,
         "needs_research_doc_ids": needs_research_doc_ids,
         "irrelevant_count": len(irrelevant),
-        "answered_response": answered_response,
         "findings": findings,
     }
