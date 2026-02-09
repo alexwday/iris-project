@@ -121,11 +121,41 @@ def step_prompts(conn, dry_run: bool) -> None:
     sql = read_sql_file(PROMPTS_SQL)
 
     if dry_run:
+        print("  [DRY RUN] Would ensure unique constraint on (model, layer, name, version)")
+        print("  [DRY RUN] Would clean up any duplicate IRIS prompts from prior failed runs")
         print(f"  [DRY RUN] Would execute {PROMPTS_SQL} ({len(sql)} bytes)")
         print("  [DRY RUN] Uses ON CONFLICT upsert - won't affect non-IRIS prompts")
         return
 
     cur = conn.cursor()
+
+    cur.execute("""
+        DELETE FROM prompts a USING prompts b
+        WHERE a.id > b.id
+          AND a.model = b.model AND a.layer = b.layer
+          AND a.name = b.name AND a.version = b.version
+          AND a.model = 'iris'
+    """)
+    dupes_removed = cur.rowcount
+    if dupes_removed > 0:
+        print(f"  Cleaned up {dupes_removed} duplicate IRIS prompt rows")
+    conn.commit()
+
+    cur.execute("""
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'uq_prompts_model_layer_name_version'
+    """)
+    if cur.fetchone() is None:
+        cur.execute("""
+            ALTER TABLE prompts
+            ADD CONSTRAINT uq_prompts_model_layer_name_version
+            UNIQUE (model, layer, name, version)
+        """)
+        conn.commit()
+        print("  Created unique constraint on (model, layer, name, version)")
+    else:
+        print("  Unique constraint already exists")
+
     cur.execute("SELECT COUNT(*) FROM prompts WHERE model = 'iris'")
     before = cur.fetchone()[0]
 
