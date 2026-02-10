@@ -287,7 +287,7 @@ def _get_model_costs(model_name: str) -> Tuple[float, float]:
     return settings["prompt_token_cost"], settings["completion_token_cost"]
 
 
-MAX_OUTPUT_TOKENS = 100000
+MAX_OUTPUT_TOKENS = 32768
 
 
 def _call_llm(
