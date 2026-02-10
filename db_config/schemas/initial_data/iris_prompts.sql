@@ -1,5 +1,5 @@
 -- IRIS Prompts Initial Data
--- Generated: 2026-02-10T17:37:52.180527
+-- Generated: 2026-02-10T18:23:11.152544
 -- 
 -- Import with: psql -f iris_prompts.sql
 -- Or run in pgAdmin/DBeaver

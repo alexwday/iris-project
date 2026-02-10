@@ -1,5 +1,5 @@
 -- Doc Refresh Prompts Initial Data
--- Generated: 2026-02-10T17:37:52.181292
+-- Generated: 2026-02-10T18:23:11.153388
 -- 
 -- Import with: psql -f doc_refresh_prompts.sql
 -- Or run in pgAdmin/DBeaver
@@ -302,7 +302,7 @@ Call the detect_section_breaks tool with:
 4. Find all level-1 section/chapter breaks
 5. Record exact titles and page numbers
 6. Call the detect_section_breaks tool
-</instructions>', '{"type":"function","function":{"name":"detect_section_breaks","parameters":{"type":"object","required":["sections"],"properties":{"sections":{"type":"array","items":{"type":"object","required":["title","page_number","level"],"properties":{"level":{"type":"integer","description":"Section level (always 1 for primary sections)"},"title":{"type":"string","description":"Exact section title as it appears in the document"},"reasoning":{"type":"string","description":"Brief explanation of why this is a section break"},"page_number":{"type":"integer","description":"Page number where section starts"}}},"description":"Detected level-1 section breaks in this batch"},"continued_section_title":{"type":"string","description":"Title of section continued from previous batch, or null if first batch"}}},"description":"Report level-1 section breaks found in this batch of pages."}}'::jsonb)
+</instructions>', '{"type":"function","function":{"name":"detect_section_breaks","parameters":{"type":"object","required":["sections"],"properties":{"sections":{"type":"array","items":{"type":"object","required":["title","page_number","level"],"properties":{"level":{"type":"integer","description":"Section level (always 1 for primary sections)"},"title":{"type":"string","description":"Exact section title as it appears in the document"},"reasoning":{"type":"string","description":"Brief explanation of why this is a section break"},"page_number":{"type":"integer","description":"Page number where section starts"}}},"description":"Detected level-1 section breaks in this batch"},"no_sections_reason":{"type":"string","description":"Required when sections array is empty. Explain why no section breaks were found (e.g., ''Short single-topic document with no structural or thematic divisions'')"},"continued_section_title":{"type":"string","description":"Title of section continued from previous batch, or null if first batch"}}},"description":"Report level-1 section breaks found in this batch of pages."}}'::jsonb)
 ON CONFLICT (model, layer, name, version) DO UPDATE SET
     description = EXCLUDED.description,
     system_prompt = EXCLUDED.system_prompt,
