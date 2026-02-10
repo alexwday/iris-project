@@ -24,10 +24,9 @@ from ..utils.env_config import config
 logger = logging.getLogger(__name__)
 logging.getLogger("openai").setLevel(logging.INFO)
 
-BASE_URL = config.BASE_URL or None
-MAX_RETRY_ATTEMPTS = config.MAX_RETRY_ATTEMPTS
-REQUEST_TIMEOUT = config.REQUEST_TIMEOUT
-RETRY_DELAY_SECONDS = config.RETRY_DELAY_SECONDS
+def _get_base_url() -> str | None:
+    """Return configured base URL, reading at call time."""
+    return config.BASE_URL or None
 
 
 class OpenAIConnectorError(Exception):
@@ -35,6 +34,16 @@ class OpenAIConnectorError(Exception):
 
 
 UsageDetails = Optional[dict[str, Any]]
+
+_client_cache: dict[tuple[str, str | None], OpenAI] = {}
+
+
+def _get_client(api_key: str, base_url: str | None) -> OpenAI:
+    """Return a cached OpenAI client for the given credentials."""
+    cache_key = (api_key, base_url)
+    if cache_key not in _client_cache:
+        _client_cache[cache_key] = OpenAI(api_key=api_key, base_url=base_url)
+    return _client_cache[cache_key]
 
 
 def calculate_token_cost(
@@ -81,8 +90,16 @@ def _build_usage_details_from_response(
     if not hasattr(api_response, "usage") or not api_response.usage:
         return None
 
-    prompt_tokens = api_response.usage.prompt_tokens or 0
-    completion_tokens = api_response.usage.completion_tokens or 0
+    prompt_tokens = api_response.usage.prompt_tokens
+    completion_tokens = api_response.usage.completion_tokens
+    if prompt_tokens is None or completion_tokens is None:
+        logger.warning(
+            "Token counts missing from API response (prompt=%s, completion=%s)",
+            prompt_tokens,
+            completion_tokens,
+        )
+    prompt_tokens = prompt_tokens or 0
+    completion_tokens = completion_tokens or 0
     cost = calculate_token_cost(
         prompt_tokens, completion_tokens, prompt_token_cost, completion_token_cost
     )
@@ -109,7 +126,7 @@ def _execute_embedding_request(client: OpenAI, params: dict) -> Any:
         "input": params.get("input"),
         "model": params.get("model"),
         "dimensions": params.get("dimensions"),
-        "timeout": params.get("timeout", REQUEST_TIMEOUT),
+        "timeout": params.get("timeout", config.REQUEST_TIMEOUT),
     }
     embedding_params = {k: v for k, v in embedding_params.items() if v is not None}
     return client.embeddings.create(**embedding_params)
@@ -142,11 +159,16 @@ def execute_llm_call(
         OpenAIConnectorError: If the API call fails after all retry attempts.
     """
     call_start_time = time.time()
-    client = OpenAI(api_key=oauth_token, base_url=BASE_URL)
-    logger.info("Connecting to OpenAI API at %s", BASE_URL)
+    base_url = _get_base_url()
+    max_retry_attempts = config.MAX_RETRY_ATTEMPTS
+    request_timeout = config.REQUEST_TIMEOUT
+    retry_delay_seconds = config.RETRY_DELAY_SECONDS
+
+    client = _get_client(oauth_token, base_url)
+    logger.info("Connecting to OpenAI API at %s", base_url)
 
     if "timeout" not in params:
-        params["timeout"] = REQUEST_TIMEOUT
+        params["timeout"] = request_timeout
 
     is_embedding = params.pop("is_embedding", False)
     is_streaming = params.get("stream", False) if not is_embedding else False
@@ -157,7 +179,7 @@ def execute_llm_call(
     model_name = params.get("model", "unknown")
     last_exception = None
 
-    for attempt_num in range(1, MAX_RETRY_ATTEMPTS + 1):
+    for attempt_num in range(1, max_retry_attempts + 1):
         start_time = time.time()
 
         try:
@@ -183,14 +205,19 @@ def execute_llm_call(
                 int((time.time() - start_time) * 1000),
             )
 
-        except (
-            ValueError,
-            TypeError,
-            KeyError,
-            RuntimeError,
-            OSError,
-            OpenAIError,
-        ) as exc:
+        except (ValueError, TypeError, KeyError) as exc:
+            logger.error(
+                "Non-retryable error on attempt %d after %.2f seconds: %s: %s",
+                attempt_num,
+                time.time() - start_time,
+                type(exc).__name__,
+                exc,
+            )
+            raise OpenAIConnectorError(
+                f"Non-retryable error in OpenAI API call: {exc}"
+            ) from exc
+
+        except (OSError, OpenAIError, RuntimeError) as exc:
             last_exception = exc
             logger.warning(
                 "Call attempt %d failed after %.2f seconds: %s",
@@ -199,10 +226,10 @@ def execute_llm_call(
                 type(exc).__name__,
             )
 
-            if attempt_num < MAX_RETRY_ATTEMPTS:
-                time.sleep(RETRY_DELAY_SECONDS)
+            if attempt_num < max_retry_attempts:
+                time.sleep(retry_delay_seconds)
 
-    logger.error("Failed to complete call after %d attempts", MAX_RETRY_ATTEMPTS)
+    logger.error("Failed to complete call after %d attempts", max_retry_attempts)
     raise OpenAIConnectorError(
         f"Failed to complete OpenAI API call: {last_exception}"
     ) from last_exception

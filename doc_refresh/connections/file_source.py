@@ -98,13 +98,13 @@ class FileSource(ABC):
     @abstractmethod
     def get_file_hash(self, path: str) -> str:
         """
-        Calculate MD5 hash of a file.
+        Calculate SHA-256 hash of a file.
 
         Args:
             path: Path to the file.
 
         Returns:
-            MD5 hash string.
+            SHA-256 hash string.
         """
         pass
 
@@ -118,6 +118,19 @@ class FileSource(ABC):
 
         Returns:
             File size in bytes.
+        """
+        pass
+
+    @abstractmethod
+    def list_subfolders(self, folder_path: str = "") -> List[str]:
+        """
+        List immediate subdirectories of a folder, skipping hidden directories.
+
+        Args:
+            folder_path: Path to the folder (empty string for base path root).
+
+        Returns:
+            List of subfolder names.
         """
         pass
 
@@ -154,15 +167,15 @@ class LocalFileSource(FileSource):
             logger.warning("Folder does not exist: %s", resolved)
             return []
 
+        ext_set = {ext.lower() for ext in extensions} if extensions else None
+
         files = []
         for item in resolved.rglob("*"):
             if not item.is_file():
                 continue
 
-            # Filter by extension if specified
-            if extensions:
-                if item.suffix.lower() not in [ext.lower() for ext in extensions]:
-                    continue
+            if ext_set and item.suffix.lower() not in ext_set:
+                continue
 
             stat = item.stat()
             files.append(
@@ -192,25 +205,38 @@ class LocalFileSource(FileSource):
         return resolved.exists()
 
     def get_file_hash(self, path: str) -> str:
-        """Calculate MD5 hash of a local file."""
+        """Calculate SHA-256 hash of a local file."""
         resolved = self._resolve_path(path)
-        hash_md5 = hashlib.md5()
+        hash_sha256 = hashlib.sha256()
         with open(resolved, "rb") as f:
             for chunk in iter(lambda: f.read(8192), b""):
-                hash_md5.update(chunk)
-        return hash_md5.hexdigest()
+                hash_sha256.update(chunk)
+        return hash_sha256.hexdigest()
 
     def get_file_size(self, path: str) -> int:
         """Get size of a local file."""
         resolved = self._resolve_path(path)
         return resolved.stat().st_size
 
+    def list_subfolders(self, folder_path: str = "") -> List[str]:
+        """List immediate subdirectories, skipping hidden dirs."""
+        resolved = self._resolve_path(folder_path) if folder_path else self.base_path
+        if resolved is None or not resolved.exists():
+            return []
+        return sorted(
+            item.name
+            for item in resolved.iterdir()
+            if item.is_dir() and not item.name.startswith(".")
+        )
+
 
 class NASFileSource(FileSource):
     """
     NAS (Network Attached Storage) implementation of FileSource.
 
-    Uses pysmb library for SMB/CIFS protocol access.
+    Uses pysmb library for SMB/CIFS protocol access. Maintains a
+    persistent SMB connection that is reused across operations and
+    automatically reconnects on failure.
     """
 
     def __init__(self) -> None:
@@ -237,6 +263,7 @@ class NASFileSource(FileSource):
         self.password = config.NAS_PASSWORD
         self.port = config.NAS_PORT
         self.client_hostname = socket.gethostname()
+        self._conn: Optional["SMBConnection"] = None
 
         logger.info(
             "Initialized NASFileSource (ip=%s, share=%s, port=%d)",
@@ -261,24 +288,44 @@ class NASFileSource(FileSource):
         logger.debug("Connected to NAS: %s:%d", self.ip, self.port)
         return conn
 
+    def _get_connection(self) -> "SMBConnection":
+        """Return the cached connection, creating or reconnecting as needed."""
+        if self._conn is not None:
+            try:
+                self._conn.echo(b"ping")
+                return self._conn
+            except Exception:
+                logger.debug("NAS connection stale, reconnecting")
+                try:
+                    self._conn.close()
+                except Exception:
+                    pass
+                self._conn = None
+
+        self._conn = self._create_connection()
+        return self._conn
+
+    def close(self) -> None:
+        """Close the cached SMB connection."""
+        if self._conn is not None:
+            try:
+                self._conn.close()
+            except Exception:
+                pass
+            self._conn = None
+
     def list_files(
         self, folder_path: str, extensions: Optional[List[str]] = None
     ) -> List[Dict]:
         """List files recursively in a NAS folder."""
-        conn = None
-        files = []
-
         try:
-            conn = self._create_connection()
+            conn = self._get_connection()
             files = self._list_files_recursive(conn, folder_path, extensions)
             logger.info("Found %d files in NAS path %s/%s", len(files), self.share, folder_path)
+            return files
         except Exception as exc:
             logger.error("Error listing NAS files in %s: %s", folder_path, exc)
-        finally:
-            if conn:
-                conn.close()
-
-        return files
+            raise
 
     def _list_files_recursive(
         self,
@@ -298,8 +345,8 @@ class NASFileSource(FileSource):
         try:
             entries = conn.listPath(self.share, path)
         except Exception as exc:
-            logger.warning("Could not list path %s/%s: %s", self.share, path, exc)
-            return files
+            logger.error("Could not list path %s/%s: %s", self.share, path, exc)
+            raise
 
         for entry in entries:
             # Skip . and ..
@@ -339,19 +386,18 @@ class NASFileSource(FileSource):
 
     def copy_to_local(self, remote_path: str, local_dir: str) -> str:
         """Download a file from NAS to local directory."""
-        conn = None
         remote_path = remote_path.replace("\\", "/")
+        path_hash = hashlib.md5(remote_path.encode()).hexdigest()[:8]
         filename = os.path.basename(remote_path)
-        local_path = os.path.join(local_dir, filename)
+        name, ext = os.path.splitext(filename)
+        local_path = os.path.join(local_dir, f"{name}_{path_hash}{ext}")
 
         try:
-            conn = self._create_connection()
+            conn = self._get_connection()
             file_obj = io.BytesIO()
 
-            # Retrieve file from NAS
             _, filesize = conn.retrieveFile(self.share, remote_path, file_obj)
 
-            # Write to local file
             file_obj.seek(0)
             with open(local_path, "wb") as f:
                 f.write(file_obj.read())
@@ -370,55 +416,46 @@ class NASFileSource(FileSource):
                 "Error downloading from NAS %s/%s: %s", self.share, remote_path, exc
             )
             raise
-        finally:
-            if conn:
-                conn.close()
 
     def path_exists(self, path: str) -> bool:
         """Check if a path exists on NAS."""
-        conn = None
         path = path.replace("\\", "/")
 
         try:
-            conn = self._create_connection()
+            conn = self._get_connection()
             conn.getAttributes(self.share, path)
             return True
-        except Exception:
+        except smb_structs.OperationFailure:
             return False
-        finally:
-            if conn:
-                conn.close()
+        except Exception as exc:
+            logger.warning("NAS path_exists failed for %s/%s: %s", self.share, path, exc)
+            raise
 
     def get_file_hash(self, path: str) -> str:
-        """Calculate MD5 hash of a NAS file."""
-        conn = None
+        """Calculate SHA-256 hash of a NAS file."""
         path = path.replace("\\", "/")
 
         try:
-            conn = self._create_connection()
+            conn = self._get_connection()
             file_obj = io.BytesIO()
             conn.retrieveFile(self.share, path, file_obj)
             file_obj.seek(0)
 
-            hash_md5 = hashlib.md5()
+            hash_sha256 = hashlib.sha256()
             for chunk in iter(lambda: file_obj.read(8192), b""):
-                hash_md5.update(chunk)
-            return hash_md5.hexdigest()
+                hash_sha256.update(chunk)
+            return hash_sha256.hexdigest()
 
         except Exception as exc:
             logger.error("Error hashing NAS file %s/%s: %s", self.share, path, exc)
             raise
-        finally:
-            if conn:
-                conn.close()
 
     def get_file_size(self, path: str) -> int:
         """Get size of a NAS file."""
-        conn = None
         path = path.replace("\\", "/")
 
         try:
-            conn = self._create_connection()
+            conn = self._get_connection()
             attrs = conn.getAttributes(self.share, path)
             return attrs.file_size
         except Exception as exc:
@@ -426,9 +463,26 @@ class NASFileSource(FileSource):
                 "Error getting size of NAS file %s/%s: %s", self.share, path, exc
             )
             raise
-        finally:
-            if conn:
-                conn.close()
+
+    def list_subfolders(self, folder_path: str = "") -> List[str]:
+        """List immediate subdirectories on NAS, skipping hidden dirs."""
+        path = folder_path.replace("\\", "/").strip("/") if folder_path else ""
+
+        try:
+            conn = self._get_connection()
+            entries = conn.listPath(self.share, path or "/")
+            return sorted(
+                entry.filename
+                for entry in entries
+                if entry.isDirectory
+                and entry.filename not in (".", "..")
+                and not entry.filename.startswith(".")
+            )
+        except Exception as exc:
+            logger.error(
+                "Error listing NAS subfolders %s/%s: %s", self.share, path, exc
+            )
+            raise
 
 
 def get_file_source() -> FileSource:
