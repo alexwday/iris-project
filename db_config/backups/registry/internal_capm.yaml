@@ -44,11 +44,13 @@ max_neighbour_chunks: 2
 max_gap_fill_pages: 2
 metadata_context_fields:
 - document_summary
+- document_description
+- document_usage
 catalog_config: null
 semantic_config: null
 metadata_config: null
 sample_questions:
 - What is the IFRS and U.S. GAAP difference on firm commitment related to hedging?
-- Is a call option in a finanical instrument an embedded derivative?
+- Is a call option in a financial instrument an embedded derivative?
 - What threshold is considered to be probable under IFRS?
 - What are the main criteria to derecognize a financial asset under IFRS?

@@ -2,8 +2,8 @@
 
 **Model:** doc_refresh
 **Layer:** stage_3
-**Version:** 1.0.0
-**Description:** Guidance for detecting sections in topic-based documents
+**Version:** 2.0.0
+**Description:** Guidance text for detecting topic-based structure
 
 ---
 
@@ -15,11 +15,10 @@
 
 ```
 For TOPIC_BASED structure:
-- Look for clear major topic transitions in the content
-- Create meaningful titles that describe each major topic
-- Aim for sections of roughly 20-50 pages each (but max 100 pages)
-- If content naturally divides into fewer sections, that's fine
-- Use semantic cues like introductions of new subjects or concepts
+- What to look for: Clear major topic transitions — introductions of new subjects, concepts, or policy areas
+- Only capture: Top-level topic shifts (not subtopic variations within the same subject)
+- Target section size: Roughly 20-50 pages each (max 100 pages); if content naturally divides into fewer sections, that is fine
+- Naming convention: Create meaningful titles that describe each major topic (e.g., "Revenue Recognition Policy", "Disclosure Requirements")
 ```
 
 ## Tool Definition

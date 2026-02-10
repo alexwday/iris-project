@@ -2,8 +2,8 @@
 
 **Model:** doc_refresh
 **Layer:** stage_3
-**Version:** 1.0.0
-**Description:** Guidance for detecting sections in section-structured documents
+**Version:** 2.0.0
+**Description:** Guidance text for detecting section-based structure
 
 ---
 
@@ -15,10 +15,10 @@
 
 ```
 For SECTIONS structure (academic papers, reports):
-- Find ONLY top-level numbered sections: "1 Introduction", "2 Methods", "3 Results"
-- Do NOT include subsections like "1.1", "2.1", "2.2" - those will be detected later
-- Also find standalone headers: "Abstract", "References", "Appendix", "Acknowledgments"
-- Example level 1 sections: Abstract, 1 Introduction, 2 Background, 3 Methods, 4 Experiments, 5 Results, 6 Conclusion, References
+- What to look for: Top-level numbered sections ("1 Introduction", "2 Methods") and standalone headers ("Abstract", "References", "Appendix", "Acknowledgments")
+- Only capture: Level-1 sections (NOT subsections like "1.1", "2.1" - those will be detected later)
+- Target section size: Varies by document (no fixed target, but max 100 pages per section)
+- Naming convention: Use exact section titles as written (e.g., "Abstract", "1 Introduction", "2 Background", "References")
 ```
 
 ## Tool Definition

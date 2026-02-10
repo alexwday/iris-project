@@ -48,10 +48,13 @@ max_neighbour_chunks: 2
 max_gap_fill_pages: 2
 metadata_context_fields:
 - document_summary
+- document_description
+- document_usage
 catalog_config: null
 semantic_config: null
 metadata_config: null
 sample_questions:
-- What is the most common root cause?
-- How many errors impacted Deposits?
-- How many have EUDA related issues?
+- What qualitative factors are assessed when determining materiality of a financial statement error under SAB 99?
+- What remediation steps are required when a financial statement error exceeds the $120MM threshold?
+- How does the SAB 99 assessment distinguish between intentional and unintentional misstatements?
+- What documentation is required to support an immaterial misstatement conclusion under SAB 99?

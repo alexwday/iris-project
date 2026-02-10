@@ -1,5 +1,5 @@
 -- IRIS Database Registry Initial Data
--- Generated: 2026-02-10T12:16:47.014417
+-- Generated: 2026-02-10T17:37:52.182293
 -- 
 -- Import with: psql -f iris_database_registry.sql
 -- Or run in pgAdmin/DBeaver
@@ -145,7 +145,7 @@ VALUES (
     'RBC''s internal policies, procedures, and FAQs focused on maintaining auditor independence, including guidelines for business and financial relationships with external auditors.',
     '**Content:** RBC''s internal policies, procedures, and FAQs focused on maintaining auditor independence, including guidelines for business and financial relationships with external auditors.
 
-**Tier/Priority:** NARROW SPECIALIST - Only for auditor independence requirements, restricted services, and external auditor relationship controls.
+**Tier/Priority:** DOMAIN EXPERT - Specialized guidance for auditor independence requirements and controls.
 
 **Usage Guidance:** Use for determining permissible relationships, approvals, disclosures, and procedural steps that preserve auditor independence for external auditor engagements.
 
@@ -340,7 +340,7 @@ VALUES (
     'RBC''s policies and frameworks for ESG disclosures, including the ESG Materiality Framework and guidance on evaluating changes to prior period ESG information, aligned with global standards like ISSB and CSRD.',
     '**Content:** RBC''s policies and frameworks for ESG disclosures, including the ESG Materiality Framework and guidance on evaluating changes to prior period ESG information aligned with ISSB and CSRD expectations.
 
-**Tier/Priority:** NARROW SPECIALIST - Only for ESG reporting, materiality frameworks, and ISSB/CSRD alignment.
+**Tier/Priority:** DOMAIN EXPERT - Specialized ESG reporting policy and disclosure guidance.
 
 **Usage Guidance:** Use for ESG reporting requirements, materiality assessments, treatment of prior period changes, and alignment with external ESG frameworks.
 
@@ -535,7 +535,7 @@ VALUES (
     'Documentation regarding the permanent material intergroup revenue breaks, including reconciliation analysis and entity-level break identification.',
     '**Content:** Documentation of permanent material intergroup revenue breaks, including reconciliation analysis and entity-level break identification.
 
-**Tier/Priority:** NARROW SPECIALIST - Only for intergroup reconciliation, permanent revenue breaks, and entity-level discrepancy documentation.
+**Tier/Priority:** DOMAIN EXPERT - Specialized guidance for intergroup reconciliation and permanent break handling.
 
 **Usage Guidance:** Use for questions on classifying, documenting, and explaining intergroup revenue discrepancies, including entity attribution and reconciliation procedures.
 
@@ -730,7 +730,7 @@ VALUES (
     'Comprehensive user documentation for IBM''s Planning Analytics for Excel add-in, covering connection management, report creation, data manipulation, and formula usage for accessing TM1/EPM multidimensional financial data within Microsoft Excel.',
     '**Content:** Comprehensive user documentation for IBM''s Planning Analytics for Excel add-in, covering connection management, report creation, data manipulation, and formula usage for accessing TM1/EPM multidimensional financial data within Microsoft Excel.
 
-**Tier/Priority:** NARROW SPECIALIST - Only for Planning Analytics for Excel (PAfE), TM1/EPM connections, and related Excel formulas.
+**Tier/Priority:** DOMAIN EXPERT - Specialized guidance for Planning Analytics for Excel usage and support.
 
 **Usage Guidance:** Use for operational instructions, feature explanations, and troubleshooting when working with PAfE/TM1/EPM data connections, reports, and Excel-based analytics.
 
@@ -795,7 +795,7 @@ VALUES (
     'RBC''s internal policies and interpretations specifically related to Project Approval Requests (PAR), including workflow, processes, and compliance requirements.',
     '**Content:** RBC''s internal policies and interpretations for Project Approval Requests (PAR), including workflow, processes, and compliance requirements.
 
-**Tier/Priority:** NARROW SPECIALIST - Only for Project Approval Request (PAR) workflows, thresholds, and governance.
+**Tier/Priority:** DOMAIN EXPERT - Specialized guidance for PAR governance and approvals.
 
 **Usage Guidance:** Use for approval level rules, required documentation, workflow steps, and governance expectations for PAR submissions.
 
@@ -925,7 +925,7 @@ VALUES (
     'Internal documents justifying the materiality assessment of financial statement errors, as guided by SEC Staff Accounting Bulletin No. 99. These memos are completed when financial statement errors exceed $120MM and include root cause analysis, control assessment, qualitative factor analysis, and remediation plans.',
     '**Content:** Internal documents justifying the materiality assessment of financial statement errors under SEC Staff Accounting Bulletin No. 99, including root cause analysis, control assessment, qualitative factor analysis, and remediation plans for errors exceeding $120MM.
 
-**Tier/Priority:** NARROW SPECIALIST - Only for SAB 99 materiality assessments, the $120MM threshold, and error remediation documentation.
+**Tier/Priority:** DOMAIN EXPERT - Specialized documentation for SAB 99 materiality assessments.
 
 **Usage Guidance:** Use for evaluating materiality of financial statement errors, understanding qualitative and quantitative factors, and reviewing remediation or control assessment details associated with identified errors.
 

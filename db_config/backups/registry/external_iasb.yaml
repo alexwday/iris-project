@@ -44,6 +44,8 @@ max_neighbour_chunks: 2
 max_gap_fill_pages: 2
 metadata_context_fields:
 - document_summary
+- document_description
+- document_usage
 catalog_config: null
 semantic_config: null
 metadata_config: null
@@ -51,3 +53,5 @@ sample_questions:
 - Under IFRS, what are examples of temporary differences that lead to a deferred tax liability?
 - Under IFRS, what are the presentation requirements for compound financial instruments? Please specify the relevant standard
   and sections.
+- What does IFRS 16 require for lease modification accounting?
+- What are the recognition criteria for intangible assets under IAS 38?

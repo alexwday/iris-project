@@ -47,6 +47,8 @@ max_neighbour_chunks: 2
 max_gap_fill_pages: 2
 metadata_context_fields:
 - document_summary
+- document_description
+- document_usage
 catalog_config: null
 semantic_config: null
 metadata_config: null

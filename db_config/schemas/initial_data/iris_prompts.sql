@@ -1,5 +1,5 @@
 -- IRIS Prompts Initial Data
--- Generated: 2026-02-10T12:16:47.013134
+-- Generated: 2026-02-10T17:37:52.180527
 -- 
 -- Import with: psql -f iris_prompts.sql
 -- Or run in pgAdmin/DBeaver
@@ -530,7 +530,7 @@ Analyze the following conversation and route the user''s latest query.
 2. Check if this topic has already been discussed in the conversation
 3. Apply the routing decision framework from your instructions
 4. Call the route_query tool with your decision and reasoning
-</instructions>', '{"type":"function","function":{"name":"route_query","parameters":{"type":"object","required":["reasoning","function_name"],"properties":{"reasoning":{"type":"string","description":"Brief explanation of why this route was chosen based on the decision framework"},"function_name":{"enum":["direct_response","database_research"],"type":"string","description":"Route to direct_response or database_research"}}},"description":"Route query: direct_response (follow-ups, greetings, meta questions), database_research (new policy questions)"}}'::jsonb)
+</instructions>', '{"type":"function","function":{"name":"route_query","parameters":{"type":"object","required":["function_name"],"properties":{"function_name":{"enum":["direct_response","database_research"],"type":"string","description":"Route to direct_response or database_research"}}},"description":"Route query: direct_response (follow-ups, greetings, meta questions), database_research (new policy questions)"}}'::jsonb)
 ON CONFLICT (model, layer, name, version) DO UPDATE SET
     description = EXCLUDED.description,
     system_prompt = EXCLUDED.system_prompt,

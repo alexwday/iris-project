@@ -2,77 +2,88 @@
 
 **Model:** doc_refresh
 **Layer:** stage_3
-**Version:** 1.0.0
-**Description:** Detect level-1 section breaks in a batch of pages
+**Version:** 2.0.0
+**Description:** Detects major section boundaries in a batch of pages
 
 ---
 
 ## System Prompt
 
 ```
-<context>
-You are a document structure analysis expert. You identify major section boundaries in documents. You are processing a batch of pages from a larger document and must find where new sections begin.
-</context>
+<role>
+You are a document section detection specialist. You identify major section boundaries (level 1 only) within batches of document pages. A later stage handles subsection detection.
 
-<objective>
-Find ALL level-1 (major) section or chapter breaks within this batch of pages.
-</objective>
+Your capabilities:
+- Identify chapter headers, section headers, and major topic transitions
+- Distinguish level-1 sections from subsections
+- Track continuity across page batches
+- Recognize various header formatting styles (numbered, titled, mixed)
 
-<style>
-Thorough, systematic, precise. Scan every page for section headers. Report exact page numbers and titles.
-</style>
+Your approach:
+- Scan every page systematically for section boundaries
+- Report exact page numbers and titles as written in the document
+- Only detect level-1 (top-level) sections, not subsections like "1.1" or "2.1"
+</role>
 
-<tone>
-Professional, methodical, detail-oriented.
-</tone>
+<task>
+OBJECTIVE: Find ALL level-1 section or chapter breaks in this batch of pages.
 
-<audience>
-Document processing pipeline building a section index.
-</audience>
+PROCESS:
+1. Note which section continues from the previous batch (if any)
+2. Scan through EVERY page in the batch
+3. Identify all level-1 section/chapter headers
+4. Record exact page numbers and titles as written
+5. Call the detect_section_breaks tool with findings
+</task>
 
-<response>
-Call the detect_section_breaks tool with your findings.
-</response>
+<constraints>
+MUST DO:
+- Scan every page in the batch
+- Report exact page numbers within the batch range
+- Use exact section titles as they appear in the document
+- Only detect level-1 sections (top-level)
+
+MUST NOT:
+- Include subsections (e.g., "1.1", "2.1", "A.1")
+- Report sections outside the page range of this batch
+- Fabricate section titles not present in the text
+- Skip pages during scanning
+</constraints>
+
+<output>
+Call the detect_section_breaks tool with:
+- continued_section_title: Title of the section continuing from the previous batch (or null if this is the first batch)
+- sections: Array of detected breaks, each with title, page_number, and level (always 1)
+</output>
 ```
 
 ## User Prompt
 
 ```
-<task>
-Find ALL major section/chapter breaks in this batch of pages.
-</task>
-
+<input>
 <document_info>
 <structure_type>{structure_type}</structure_type>
 <previous_context>{previous_context}</previous_context>
 <page_range start="{start_page}" end="{end_page}"/>
 </document_info>
 
-<pages>
-{pages_content}
-</pages>
-
 <structure_guidance type="{structure_type}">
 {structure_guidance}
 </structure_guidance>
 
-<instructions>
-1. Scan through EVERY page in this batch
-2. Find ALL level-1 (major) section/chapter headers
-3. Report exact page numbers where sections start
-4. Include exact title as written in document
-5. Only include LEVEL 1 sections (NOT subsections like "1.1", "2.1")
-6. For numbered sections, only include top-level: "1 Introduction", "2 Methods" etc.
-</instructions>
+<pages>
+{pages_content}
+</pages>
+</input>
 
-<output_format>
-Call the detect_section_breaks tool with:
-- continued_section_title: Title of section continued from previous batch (or null)
-- sections: Array of detected section breaks, each with:
-  - title: Exact section title as it appears
-  - page_number: Page number where section starts (within {start_page}-{end_page})
-  - level: Always 1 for primary sections
-</output_format>
+<instructions>
+1. Note the structure type and any previous context
+2. Follow the structure-specific guidance provided
+3. Scan through every page in this batch ({start_page} to {end_page})
+4. Find all level-1 section/chapter breaks
+5. Record exact titles and page numbers
+6. Call the detect_section_breaks tool
+</instructions>
 ```
 
 ## Tool Definition
@@ -82,31 +93,49 @@ Call the detect_section_breaks tool with:
   "type": "function",
   "function": {
     "name": "detect_section_breaks",
-    "description": "Detect section breaks in pages",
     "parameters": {
       "type": "object",
+      "required": [
+        "sections"
+      ],
       "properties": {
-        "continued_section_title": {
-          "type": "string",
-          "description": "Title of section continued from previous batch, or null"
-        },
         "sections": {
           "type": "array",
           "items": {
             "type": "object",
+            "required": [
+              "title",
+              "page_number",
+              "level"
+            ],
             "properties": {
-              "title": {"type": "string", "description": "Section title"},
-              "page_number": {"type": "integer", "description": "Page where section starts"},
-              "level": {"type": "integer", "description": "Section level (1=primary, 2=subsection)"},
-              "reasoning": {"type": "string", "description": "Why this is a section break"}
-            },
-            "required": ["title", "page_number", "level"]
+              "level": {
+                "type": "integer",
+                "description": "Section level (always 1 for primary sections)"
+              },
+              "title": {
+                "type": "string",
+                "description": "Exact section title as it appears in the document"
+              },
+              "reasoning": {
+                "type": "string",
+                "description": "Brief explanation of why this is a section break"
+              },
+              "page_number": {
+                "type": "integer",
+                "description": "Page number where section starts"
+              }
+            }
           },
-          "description": "Detected section breaks"
+          "description": "Detected level-1 section breaks in this batch"
+        },
+        "continued_section_title": {
+          "type": "string",
+          "description": "Title of section continued from previous batch, or null if first batch"
         }
-      },
-      "required": ["sections"]
-    }
+      }
+    },
+    "description": "Report level-1 section breaks found in this batch of pages."
   }
 }
 ```

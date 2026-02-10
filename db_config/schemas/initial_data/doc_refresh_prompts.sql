@@ -1,5 +1,5 @@
 -- Doc Refresh Prompts Initial Data
--- Generated: 2026-02-10T12:16:47.013840
+-- Generated: 2026-02-10T17:37:52.181292
 -- 
 -- Import with: psql -f doc_refresh_prompts.sql
 -- Or run in pgAdmin/DBeaver
@@ -279,32 +279,7 @@ MUST NOT:
 Call the detect_section_breaks tool with:
 - continued_section_title: Title of the section continuing from the previous batch (or null if this is the first batch)
 - sections: Array of detected breaks, each with title, page_number, and level (always 1)
-</output>
-
-<examples>
-Example 1 - Academic paper (sections structure):
-Input text contains:
-  Page 1: Title, authors, abstract
-  Page 3: "2 Related Work" header followed by literature review
-  Page 7: "3 Methodology" header
-Expected output:
-  - title: "2 Related Work", page_number: 3, level: 1
-  - title: "3 Methodology", page_number: 7, level: 1
-Note: "2.1 Prior Approaches" on page 4 is a SUBSECTION — do NOT include it.
-
-Example 2 - Chapter-based document:
-Input text contains:
-  Page 15: "Chapter 3: Risk Management Framework" header
-  Page 38: "Chapter 4: Implementation Guidelines" header
-Expected output:
-  - title: "Chapter 3: Risk Management Framework", page_number: 15, level: 1
-  - title: "Chapter 4: Implementation Guidelines", page_number: 38, level: 1
-
-Example 3 - Topic-based document with no explicit headers:
-Pages 1-12 discuss regulatory requirements, then page 13 shifts abruptly to compliance testing procedures.
-Expected output:
-  - title: "Compliance Testing Procedures", page_number: 13, level: 1
-</examples>', '<input>
+</output>', '<input>
 <document_info>
 <structure_type>{structure_type}</structure_type>
 <previous_context>{previous_context}</previous_context>
@@ -384,8 +359,6 @@ Call the extract_metadata tool with:
 - publication_date: Date string if found
 - publication_venue: Publisher, journal, or issuing organization
 - abstract: Executive summary or abstract text
-- doi: Digital Object Identifier if present (e.g., "10.1234/example")
-- page_range: Page numbers in the publication if present (e.g., "3003-3008")
 </output>', '<input>
 <document_excerpt>
 {page_excerpt}
@@ -398,8 +371,7 @@ Call the extract_metadata tool with:
 3. Find the publication or effective date
 4. Note the publication venue or issuing organization
 5. Extract the abstract or executive summary if present
-6. Look for a DOI identifier and publication page range if present
-7. Call the extract_metadata tool with your findings
+6. Call the extract_metadata tool with your findings
 </instructions>', NULL)
 ON CONFLICT (model, layer, name, version) DO UPDATE SET
     description = EXCLUDED.description,
