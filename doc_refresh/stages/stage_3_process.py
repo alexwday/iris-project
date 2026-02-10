@@ -12,7 +12,8 @@ Processing steps:
 5. Document Summary - Build complete summary with metadata header
 6. Document Description/Usage - Generate catalog fields describing purpose and applicability
 7. Context Generation - Add hierarchy prefixes to chunks
-8. Embedding Generation - Generate embeddings for chunks and summary
+8. Chunk Summary Prefixes - Generate concise summaries and prepend to chunk content
+9. Embedding Generation - Generate embeddings for chunks and summary
 
 Functions:
     run_stage: Execute the processing stage
@@ -20,18 +21,24 @@ Functions:
 
 import json
 import logging
+import os
+import re
 import time
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from ..connections.llm import calculate_token_cost, execute_llm_call
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+from ..connections.llm import OpenAIConnectorError, calculate_token_cost, execute_llm_call
 from ..connections.oauth import fetch_oauth_token
 from ..stages.stage_2_extract import ExtractedDocument
 from ..utils.env_config import config
 from ..utils.process_monitoring import get_process_monitor
 from ..utils.prompt_loader import get_prompt
+from ..utils.token_utils import count_tokens, truncate_to_tokens
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +52,18 @@ class StructureType(str, Enum):
     SEMANTIC = "semantic"
 
 
+def _normalize_structure_type(value: str) -> StructureType:
+    """Normalize and validate a structure_type string to a StructureType enum."""
+    normalized = value.lower().strip() if value else "semantic"
+    valid_values = {e.value for e in StructureType}
+    if normalized not in valid_values:
+        logger.error(
+            "Invalid structure_type '%s', falling back to SEMANTIC", value
+        )
+        return StructureType.SEMANTIC
+    return StructureType(normalized)
+
+
 @dataclass
 class SectionBreak:
     """A detected section break in the document."""
@@ -55,15 +74,86 @@ class SectionBreak:
     inferred: bool = False
 
 
-@dataclass
-class DocumentMetadata:
-    """Extracted document metadata."""
+_DEFAULT_METADATA_FIELDS = [
+    {"name": "title", "description": "Document title", "type": "string", "required": True},
+    {"name": "authors", "description": "List of authors", "type": "list", "required": True},
+    {"name": "publication_date", "description": "Publication or effective date", "type": "string", "required": False},
+    {"name": "publication_venue", "description": "Publisher, journal, or issuing organization", "type": "string", "required": False},
+    {"name": "abstract", "description": "Executive summary or abstract from the document", "type": "string", "required": False},
+]
 
-    title: str = ""
-    authors: List[str] = field(default_factory=list)
-    publication_date: str = ""
-    publication_venue: str = ""
-    abstract: str = ""
+_metadata_fields_cache: Optional[List[Dict[str, Any]]] = None
+
+
+def _load_metadata_fields_config() -> List[Dict[str, Any]]:
+    """Load and cache metadata fields configuration from JSON file."""
+    global _metadata_fields_cache
+    if _metadata_fields_cache is not None:
+        return _metadata_fields_cache
+
+    config_path = Path(__file__).resolve().parent.parent / "config" / "metadata_fields.json"
+    try:
+        with open(config_path) as f:
+            data = json.load(f)
+        _metadata_fields_cache = data.get("fields", _DEFAULT_METADATA_FIELDS)
+        logger.info("Loaded metadata fields config: %d fields from %s", len(_metadata_fields_cache), config_path)
+    except (FileNotFoundError, json.JSONDecodeError) as exc:
+        logger.warning("Could not load metadata fields config (%s), using defaults", exc)
+        _metadata_fields_cache = _DEFAULT_METADATA_FIELDS
+
+    return _metadata_fields_cache
+
+
+def _build_metadata_tool_schema(fields_config: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Build an OpenAI tool call function schema from metadata fields config."""
+    properties = {}
+    required = []
+
+    for field_def in fields_config:
+        name = field_def["name"]
+        desc = field_def.get("description", name)
+        field_type = field_def.get("type", "string")
+
+        if field_type == "list":
+            properties[name] = {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": desc,
+            }
+        else:
+            properties[name] = {
+                "type": "string",
+                "description": desc,
+            }
+
+        if field_def.get("required", False):
+            required.append(name)
+
+    return {
+        "type": "function",
+        "function": {
+            "name": "extract_metadata",
+            "description": "Extract document metadata fields from the provided pages.",
+            "parameters": {
+                "type": "object",
+                "properties": properties,
+                "required": required,
+            },
+        },
+    }
+
+
+def _build_metadata_user_prompt(fields_config: List[Dict[str, Any]], page_excerpt: str) -> str:
+    """Build user prompt listing the metadata fields to extract."""
+    field_descriptions = "\n".join(
+        f"- {f['name']}: {f.get('description', f['name'])} ({'required' if f.get('required') else 'optional'})"
+        for f in fields_config
+    )
+    return (
+        f"Extract the following metadata fields from this document excerpt:\n\n"
+        f"{field_descriptions}\n\n"
+        f"Document excerpt:\n{page_excerpt}"
+    )
 
 
 @dataclass
@@ -118,6 +208,7 @@ class Chunk:
     subsection_name: Optional[str]
     primary_section_page_count: Optional[int]
     subsection_page_count: Optional[int]
+    embedding_prefix: Optional[str] = None
     embedding: Optional[List[float]] = None
 
 
@@ -129,7 +220,7 @@ class ProcessedDocument:
     structure_type: StructureType
     structure_confidence: str
     page_count: int
-    metadata: DocumentMetadata = field(default_factory=DocumentMetadata)
+    metadata: Dict[str, Any] = field(default_factory=dict)
     sections: List[Section] = field(default_factory=list)
     chunks: List[Chunk] = field(default_factory=list)
     document_summary: str = ""
@@ -171,9 +262,13 @@ CLASSIFICATION_PAGES = 100
 BATCH_SIZE = 50
 MAX_SECTION_PAGES = 100
 EMBEDDING_BATCH_SIZE = 100
+CHUNK_SUMMARY_BATCH_SIZE = 10
+CHUNK_SUMMARY_MAX_CONTENT_TOKENS = 1500
+CHUNK_SUMMARY_CONTEXT_TOKENS = 800
+MAX_LLM_WORKERS = 4
 
 
-def _resolve_auth_token() -> str:
+def resolve_auth_token() -> str:
     """Return an auth token using OPENAI key when available, otherwise OAuth."""
     if config.OPENAI_API_KEY:
         return config.OPENAI_API_KEY
@@ -236,7 +331,10 @@ def _create_embedding(
 
     token_count = 0
     if hasattr(response, "usage") and response.usage:
-        token_count = getattr(response.usage, "total_tokens", 0) or 0
+        raw_token_count = getattr(response.usage, "total_tokens", None)
+        if raw_token_count is None:
+            logger.warning("Embedding response missing total_tokens in usage data")
+        token_count = raw_token_count or 0
 
     prompt_cost, _ = _get_model_costs(config.MODEL_EMBEDDING)
     cost = calculate_token_cost(token_count, 0, prompt_cost, 0)
@@ -252,18 +350,78 @@ def _create_embedding(
     return embeddings, usage_details
 
 
+def _call_llm_tracked(
+    auth_token: str,
+    messages: List[Dict[str, str]],
+    model: str,
+    temperature: float = 0.0,
+    max_tokens: Optional[int] = None,
+    response_format: Optional[Dict[str, Any]] = None,
+    tools: Optional[List[Dict[str, Any]]] = None,
+    tool_choice: Optional[Any] = None,
+) -> Tuple[Any, Optional[dict[str, Any]]]:
+    """Wrapper around _call_llm that records usage to process monitor."""
+    start_time = time.time()
+    response, usage = _call_llm(
+        auth_token,
+        messages,
+        model,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        response_format=response_format,
+        tools=tools,
+        tool_choice=tool_choice,
+    )
+    response_time_ms = int((time.time() - start_time) * 1000)
+
+    if usage:
+        call_details = {
+            "model": model,
+            "prompt_tokens": usage.get("prompt_tokens", 0),
+            "completion_tokens": usage.get("completion_tokens", 0),
+            "cost": usage.get("cost", 0.0),
+            "response_time_ms": response_time_ms,
+        }
+        monitor = get_process_monitor()
+        monitor.add_llm_call_details_to_stage("stage_3_process", call_details)
+
+    return response, usage
+
+
+def _create_embedding_tracked(
+    auth_token: str,
+    text_input: List[str],
+    model: Optional[str] = None,
+) -> Tuple[List[List[float]], Dict[str, Any]]:
+    """Wrapper around _create_embedding that records usage to process monitor."""
+    start_time = time.time()
+    embeddings, usage_details = _create_embedding(auth_token, text_input, model)
+    response_time_ms = int((time.time() - start_time) * 1000)
+
+    call_details = {
+        "model": usage_details.get("model", config.MODEL_EMBEDDING),
+        "prompt_tokens": usage_details.get("token_count", 0),
+        "completion_tokens": 0,
+        "cost": usage_details.get("cost", 0.0),
+        "response_time_ms": response_time_ms,
+    }
+    monitor = get_process_monitor()
+    monitor.add_llm_call_details_to_stage("stage_3_process", call_details)
+
+    return embeddings, usage_details
+
+
 def _load_prompt(name: str) -> Tuple[str, Optional[Dict[str, Any]], str]:
-    """Return system prompt, tool definition, and user prompt for stage 3."""
-    try:
-        system_prompt, tools, user_prompt = get_prompt(
-            "stage_3", name, model="doc_refresh"
-        )
-        # get_prompt returns tools as a list; extract first item or None
-        tool_def = tools[0] if tools else None
-        return system_prompt, tool_def, user_prompt
-    except Exception as exc:
-        logger.warning("Prompt not found for stage_3/%s: %s", name, exc)
-        return "", None, ""
+    """Return system prompt, tool definition, and user prompt for stage 3.
+
+    Raises:
+        ValueError: If the prompt is not found in the database.
+    """
+    system_prompt, tools, user_prompt = get_prompt(
+        "stage_3", name, model="doc_refresh"
+    )
+    tool_def = tools[0] if tools else None
+    return system_prompt, tool_def, user_prompt
 
 
 def _parse_tool_arguments(message: Any) -> Optional[Dict[str, Any]]:
@@ -274,9 +432,178 @@ def _parse_tool_arguments(message: Any) -> Optional[Dict[str, Any]]:
 
     try:
         return json.loads(tool_calls[0].function.arguments)
-    except (ValueError, TypeError, AttributeError) as exc:
-        logger.warning("Failed to parse tool arguments: %s", exc)
+    except json.JSONDecodeError as exc:
+        logger.warning("Failed to parse tool arguments (malformed JSON): %s", exc)
         return None
+
+
+def _find_section_title_position(page_text: str, title: str) -> Optional[int]:
+    """Find the start-of-line position where a section title appears in page text."""
+    words = title.split()
+    if not words:
+        return None
+
+    md_chars = r'[\*_#\s]*'
+    pattern = md_chars + md_chars.join(re.escape(w) for w in words)
+    match = re.search(r'(?:^|\n)' + r'[\*_#\d.\s]*' + pattern, page_text, re.IGNORECASE)
+    if match:
+        pos = match.start()
+        if page_text[pos] == '\n':
+            pos += 1
+        return pos
+
+    plain_pos = page_text.lower().find(title.lower())
+    if plain_pos != -1:
+        line_start = page_text.rfind('\n', 0, plain_pos)
+        return line_start + 1 if line_start != -1 else 0
+
+    return None
+
+
+def _get_section_page_items(
+    pages: List[str], sections: List[Section], section_index: int
+) -> List[Tuple[int, str]]:
+    """Extract per-page content for a section as (page_number, text) tuples."""
+    section = sections[section_index]
+    result = []
+
+    for page_num in range(section.page_start, section.page_end + 1):
+        page_idx = page_num - 1
+        if page_idx < 0 or page_idx >= len(pages):
+            continue
+        page_text = pages[page_idx]
+
+        if page_num == section.page_start:
+            pos = _find_section_title_position(page_text, section.title)
+            if pos is not None and pos > 0:
+                page_text = page_text[pos:]
+
+        if page_num == section.page_end and section_index + 1 < len(sections):
+            next_section = sections[section_index + 1]
+            if next_section.page_start == page_num:
+                pos = _find_section_title_position(page_text, next_section.title)
+                if pos is not None:
+                    page_text = page_text[:pos]
+
+        if page_text.strip():
+            result.append((page_num, page_text))
+
+    return result
+
+
+def _get_section_pages(
+    pages: List[str], sections: List[Section], section_index: int
+) -> List[str]:
+    """Extract per-page content for a section, splitting at title boundaries on shared pages."""
+    return [text for _, text in _get_section_page_items(pages, sections, section_index)]
+
+
+def _validate_section_page_numbers(
+    pages: List[str], section_breaks: List[SectionBreak]
+) -> List[SectionBreak]:
+    """Validate and correct section break page numbers by searching for titles in page text."""
+    corrected = []
+    for sb in section_breaks:
+        if sb.inferred:
+            corrected.append(sb)
+            continue
+
+        search_start = max(0, sb.page_number - 2)
+        search_end = min(len(pages), sb.page_number + 1)
+
+        found_page = None
+        for page_idx in range(search_start, search_end):
+            if _find_section_title_position(pages[page_idx], sb.title) is not None:
+                found_page = page_idx + 1
+                break
+
+        if found_page is not None and found_page != sb.page_number:
+            logger.info(
+                "Corrected page number for '%s': %d -> %d",
+                sb.title, sb.page_number, found_page,
+            )
+            corrected.append(
+                SectionBreak(
+                    page_number=found_page,
+                    title=sb.title,
+                    level=sb.level,
+                    inferred=sb.inferred,
+                )
+            )
+        else:
+            corrected.append(sb)
+
+    return corrected
+
+
+def _strip_markdown_for_embedding(text: str) -> str:
+    """Remove markdown formatting for cleaner embedding input."""
+    text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)
+    text = re.sub(r'(?<!\w)_([^_]+)_(?!\w)', r'\1', text)
+    text = re.sub(r'^#{1,6}\s+', '', text, flags=re.MULTILINE)
+    text = re.sub(r'\|', ' ', text)
+    text = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', text)
+    text = re.sub(r'-{3,}', '', text)
+    text = re.sub(r' {2,}', ' ', text)
+    return text.strip()
+
+
+_BOILERPLATE_SECTIONS = {
+    "abstract": {
+        "overview": "This section contains the paper's abstract.",
+        "key_topics": [],
+        "key_metrics": {},
+        "key_findings": [],
+        "notable_facts": [],
+        "not_fully_covered": [],
+    },
+    "references": {
+        "overview": "This section contains the bibliography/references cited in the document.",
+        "key_topics": [],
+        "key_metrics": {},
+        "key_findings": [],
+        "notable_facts": [],
+        "not_fully_covered": [],
+    },
+    "bibliography": {
+        "overview": "This section contains the bibliography/references cited in the document.",
+        "key_topics": [],
+        "key_metrics": {},
+        "key_findings": [],
+        "notable_facts": [],
+        "not_fully_covered": [],
+    },
+    "acknowledgements": {
+        "overview": "This section contains acknowledgements of funding and support.",
+        "key_topics": [],
+        "key_metrics": {},
+        "key_findings": [],
+        "notable_facts": [],
+        "not_fully_covered": [],
+    },
+    "acknowledgments": {
+        "overview": "This section contains acknowledgements of funding and support.",
+        "key_topics": [],
+        "key_metrics": {},
+        "key_findings": [],
+        "notable_facts": [],
+        "not_fully_covered": [],
+    },
+    "acknowledgement": {
+        "overview": "This section contains acknowledgements of funding and support.",
+        "key_topics": [],
+        "key_metrics": {},
+        "key_findings": [],
+        "notable_facts": [],
+        "not_fully_covered": [],
+    },
+}
+
+
+def _is_boilerplate_section(title: str) -> Optional[Dict[str, Any]]:
+    """Return a minimal summary dict if the section title is boilerplate, else None."""
+    normalized = re.sub(r'^[\d.\s]+', '', title).strip().lower()
+    return _BOILERPLATE_SECTIONS.get(normalized)
 
 
 def run_stage(
@@ -303,9 +630,6 @@ def run_stage(
         monitor.end_stage("stage_3_process", "completed")
         return result
 
-    # Get auth token once for all API calls
-    auth_token = _resolve_auth_token()
-
     logger.info("Processing %d extracted documents", len(extracted_documents))
 
     for i, extracted in enumerate(extracted_documents, 1):
@@ -318,6 +642,7 @@ def run_stage(
         )
 
         try:
+            auth_token = resolve_auth_token()
             start_time = time.time()
             processed = process_document(extracted, auth_token)
             duration = time.time() - start_time
@@ -407,14 +732,17 @@ def process_document(
     )
 
     try:
-        # Step 1: Extract document metadata (title, authors, etc.)
-        metadata = extract_document_metadata(pages, auth_token)
-        processed.metadata = metadata
+        # Steps 1+2 are independent — run in parallel
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            metadata_future = executor.submit(
+                extract_document_metadata, pages, auth_token
+            )
+            structure_future = executor.submit(detect_structure, pages, auth_token)
 
-        # Step 2: Detect structure and primary sections
-        structure_type, confidence, section_breaks, _ = detect_structure(
-            pages, auth_token
-        )
+            metadata = metadata_future.result()
+            structure_type, confidence, section_breaks, _ = structure_future.result()
+
+        processed.metadata = metadata
         processed.structure_type = structure_type
         processed.structure_confidence = confidence
 
@@ -432,24 +760,56 @@ def process_document(
         document_summary = build_document_summary(metadata, sections, len(pages))
         processed.document_summary = document_summary
 
-        # Step 7: Generate document description and usage
-        document_description, document_usage = generate_document_fields(
-            metadata, sections, auth_token
-        )
+        # Steps 7+8 are independent — run in parallel
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            fields_future = executor.submit(
+                generate_document_fields, metadata, sections, document_summary, auth_token
+            )
+            embedding_future = executor.submit(
+                generate_summary_embedding, document_summary, auth_token
+            )
+
+            document_description, document_usage = fields_future.result()
+            summary_embedding = embedding_future.result()
+
         processed.document_description = document_description
         processed.document_usage = document_usage
-
-        # Step 8: Generate summary embedding
-        summary_embedding = generate_summary_embedding(document_summary, auth_token)
         processed.summary_embedding = summary_embedding
 
         # Step 9: Generate chunks with proper section/subsection linkage
         chunks = generate_chunks(pages, sections)
         processed.chunks = chunks
 
+        # Step 9.5: Generate and prepend chunk summary prefixes
+        chunks = generate_chunk_summaries(chunks, sections, auth_token)
+        processed.chunks = chunks
+
         # Step 10: Generate chunk embeddings
         chunks = generate_embeddings(chunks, auth_token)
         processed.chunks = chunks
+
+        # Degradation check: if multiple sub-steps produced empty/fallback results,
+        # flag the document as degraded even though no single step raised an exception
+        degradation_signals = []
+        if not processed.metadata:
+            degradation_signals.append("empty metadata")
+        if processed.structure_type == StructureType.SEMANTIC and processed.structure_confidence == "low":
+            if len(pages) > 5:
+                degradation_signals.append("default structure classification")
+        if processed.summary_embedding is None:
+            degradation_signals.append("missing summary embedding")
+        if not processed.document_description or processed.document_description == (processed.metadata.get("title", "") or "Unknown"):
+            degradation_signals.append("fallback document description")
+
+        if len(degradation_signals) >= 3:
+            processed.processing_error = (
+                f"Degraded processing: {', '.join(degradation_signals)}"
+            )
+            logger.error(
+                "Document processing degraded for %s: %s",
+                processed.file_info.file_name,
+                processed.processing_error,
+            )
 
         return processed
 
@@ -462,71 +822,65 @@ def process_document(
 def extract_document_metadata(
     pages: List[str],
     auth_token: str,
-) -> DocumentMetadata:
+) -> Dict[str, Any]:
     """
     Extract document metadata from first pages using LLM.
+
+    Fields are driven by the metadata_fields.json config file.
 
     Args:
         pages: List of page texts.
         auth_token: Authentication token.
 
     Returns:
-        DocumentMetadata with extracted information.
+        Dict with metadata fields from config (e.g. title, authors, etc.).
     """
     if not pages:
-        return DocumentMetadata()
+        return {}
 
-    # Use first 2 pages for metadata extraction
-    first_pages = "\\n\\n---PAGE BREAK---\\n\\n".join(pages[:2])
-    first_pages = first_pages[:15000]  # Token limit
+    fields_config = _load_metadata_fields_config()
 
-    system_prompt, tool_def, user_template = _load_prompt("extract_document_metadata")
-    if not user_template:
-        logger.warning("Metadata prompt missing, returning default metadata")
-        return DocumentMetadata()
+    first_pages = "\n\n---PAGE BREAK---\n\n".join(pages[:5])
+    first_pages = truncate_to_tokens(first_pages, 9000)
+
+    system_prompt, _, user_template = _load_prompt("extract_document_metadata")
+
+    tool_def = _build_metadata_tool_schema(fields_config)
 
     try:
         user_prompt = user_template.format(page_excerpt=first_pages)
-    except Exception as exc:
-        logger.warning("Metadata prompt formatting failed: %s", exc)
-        return DocumentMetadata()
+    except (KeyError, IndexError):
+        user_prompt = _build_metadata_user_prompt(fields_config, first_pages)
 
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_prompt},
     ]
 
-    tools = [tool_def] if tool_def else []
-    tool_choice = (
-        {"type": "function", "function": {"name": "extract_metadata"}}
-        if tool_def
-        else None
-    )
-
     try:
-        response, _ = _call_llm(
+        response, _ = _call_llm_tracked(
             auth_token,
             messages,
-            model=config.MODEL_SMALL,
+            model=config.MODEL_LARGE,
             temperature=0.1,
-            tools=tools,
-            tool_choice=tool_choice,
+            tools=[tool_def],
+            tool_choice={"type": "function", "function": {"name": "extract_metadata"}},
         )
         message = response.choices[0].message
         args = _parse_tool_arguments(message)
         if args:
-            return DocumentMetadata(
-                title=args.get("title", ""),
-                authors=args.get("authors", []),
-                publication_date=args.get("publication_date", ""),
-                publication_venue=args.get("publication_venue", ""),
-                abstract=str(args.get("abstract", ""))[:500],
-            )
+            return args
 
         logger.warning("Metadata extraction returned no tool call")
+    except (OpenAIConnectorError, ConnectionError, OSError) as exc:
+        logger.warning(
+            "Metadata extraction failed due to network/API error, "
+            "continuing with empty metadata: %s",
+            exc,
+        )
     except Exception as exc:
         logger.warning("Metadata extraction failed: %s", exc)
-    return DocumentMetadata()
+    return {}
 
 
 def detect_structure(
@@ -550,7 +904,7 @@ def detect_structure(
     classification_pages = pages[:CLASSIFICATION_PAGES]
     classification = classify_document(classification_pages, auth_token)
 
-    structure_type = StructureType(classification.get("structure_type", "semantic"))
+    structure_type = _normalize_structure_type(classification.get("structure_type", "semantic"))
     confidence = classification.get("confidence", "low")
     has_toc = classification.get("has_toc", False)
     toc_sections = classification.get("toc_sections", [])
@@ -614,12 +968,14 @@ def detect_structure(
         auth_token,
     )
 
-    # Fallback to simple consolidation if LLM fails
     if not final_sections:
-        logger.warning(
-            "LLM consolidation returned no sections, using simple consolidation"
+        raise RuntimeError(
+            "LLM section consolidation returned no sections. "
+            "Cannot proceed without valid document structure."
         )
-        final_sections = consolidate_sections_simple(all_sections, len(pages))
+
+    # Validate section page numbers against actual page text
+    final_sections = _validate_section_page_numbers(pages, final_sections)
 
     # Ensure first section starts at page 1
     if not final_sections or final_sections[0].page_number > 1:
@@ -652,11 +1008,7 @@ def classify_document(pages: List[str], auth_token: str) -> Dict[str, Any]:
     }
     pages_content = format_pages_for_prompt(pages)
 
-    # Load prompts from database
     system_prompt, tool_def, user_template = _load_prompt("classify_document")
-    if not user_template:
-        logger.warning("Classification prompt missing, using defaults")
-        return default_result
 
     try:
         user_content = user_template.format(
@@ -680,7 +1032,7 @@ def classify_document(pages: List[str], auth_token: str) -> Dict[str, Any]:
     )
 
     try:
-        response, _ = _call_llm(
+        response, _ = _call_llm_tracked(
             auth_token,
             messages,
             model=config.MODEL_SMALL,
@@ -694,8 +1046,10 @@ def classify_document(pages: List[str], auth_token: str) -> Dict[str, Any]:
             return args
 
         logger.warning("Classification returned no tool call")
+    except (OpenAIConnectorError, ConnectionError, OSError):
+        raise
     except Exception as exc:
-        logger.warning("Classification failed: %s", exc)
+        logger.warning("Classification failed (malformed response): %s", exc)
         return default_result
     return default_result
 
@@ -711,13 +1065,7 @@ def detect_sections_batch(
     """Detect section breaks in a batch of pages using prompts from database."""
     pages_content = format_pages_for_prompt(pages, start_page)
 
-    # Load prompts from database
     system_prompt, tool_def, user_template = _load_prompt("detect_sections_batch")
-    if not user_template:
-        logger.warning(
-            "Section detection prompt missing for pages %d-%d", start_page, end_page
-        )
-        return [], None
 
     # Get structure-specific guidance from database
     guidance_name = f"structure_guidance_{structure_type.value}"
@@ -757,7 +1105,7 @@ def detect_sections_batch(
     )
 
     try:
-        response, _ = _call_llm(
+        response, _ = _call_llm_tracked(
             auth_token,
             messages,
             model=config.MODEL_SMALL,
@@ -787,9 +1135,14 @@ def detect_sections_batch(
         logger.warning(
             "Section detection returned no tool call for pages %d-%d", start_page, end_page
         )
+    except (OpenAIConnectorError, ConnectionError, OSError):
+        raise
     except Exception as exc:
         logger.warning(
-            "Section detection failed for pages %d-%d: %s", start_page, end_page, exc
+            "Section detection failed for pages %d-%d (malformed response): %s",
+            start_page,
+            end_page,
+            exc,
         )
         return [], None
     return [], None
@@ -808,11 +1161,7 @@ def consolidate_sections_llm(
     if not sections:
         return []
 
-    # Load prompts from database
     system_prompt, tool_def, user_template = _load_prompt("consolidate_structure")
-    if not user_template:
-        logger.warning("Consolidation prompt missing")
-        return []
 
     # Format sections for prompt
     sections_text = "\n".join(
@@ -829,7 +1178,8 @@ def consolidate_sections_llm(
             + "\n</toc_sections>"
         )
 
-    # Format user prompt
+    fallback_sections = sorted(sections, key=lambda s: s.page_number)
+
     try:
         user_content = user_template.format(
             structure_type=structure_type.value,
@@ -840,8 +1190,11 @@ def consolidate_sections_llm(
             all_sections=sections_text,
         )
     except Exception as exc:
-        logger.warning("Consolidation prompt formatting failed: %s", exc)
-        return []
+        logger.warning(
+            "Consolidation prompt formatting failed: %s — using unconsolidated sections",
+            exc,
+        )
+        return fallback_sections
 
     messages = [
         {"role": "system", "content": system_prompt},
@@ -856,10 +1209,10 @@ def consolidate_sections_llm(
     )
 
     try:
-        response, _ = _call_llm(
+        response, _ = _call_llm_tracked(
             auth_token,
             messages,
-            model=config.MODEL_SMALL,
+            model=config.MODEL_LARGE,
             temperature=0.1,
             tools=tools,
             tool_choice=tool_choice,
@@ -868,13 +1221,22 @@ def consolidate_sections_llm(
         args = _parse_tool_arguments(message)
 
         if args:
+            raw_sections = args.get("sections", [])
+            dropped = [s for s in raw_sections if s.get("page_number") is None]
+            if dropped:
+                logger.warning(
+                    "Dropped %d sections with missing page_number from consolidation: %s",
+                    len(dropped),
+                    [s.get("title", "<no title>") for s in dropped],
+                )
+
             consolidated = [
                 SectionBreak(
                     page_number=s.get("page_number"),
                     title=s.get("title", ""),
                     level=s.get("level", 1),
                 )
-                for s in args.get("sections", [])
+                for s in raw_sections
                 if s.get("page_number") is not None
             ]
 
@@ -888,70 +1250,30 @@ def consolidate_sections_llm(
 
             return sorted(consolidated, key=lambda s: s.page_number)
 
-        logger.warning("LLM consolidation returned no tool call")
+        raise RuntimeError(
+            "LLM consolidation returned no tool call. "
+            "Check the consolidate_structure prompt and tool_definition in database."
+        )
 
+    except (OpenAIConnectorError, ConnectionError, OSError):
+        raise
     except Exception as exc:
-        logger.warning("LLM consolidation failed: %s", exc)
-        return []
-    return []
-
-
-def consolidate_sections_simple(
-    sections: List[SectionBreak],
-    total_pages: int,
-) -> List[SectionBreak]:
-    """Simple consolidation - deduplicate and enforce max section size (fallback)."""
-    if not sections:
-        return []
-
-    # Sort by page number
-    sorted_sections = sorted(sections, key=lambda s: s.page_number)
-
-    # Remove duplicates
-    seen = set()
-    unique = []
-    for s in sorted_sections:
-        key = (s.page_number, s.title)
-        if key not in seen:
-            seen.add(key)
-            unique.append(s)
-
-    # Enforce max section size by adding splits if needed
-    final = []
-    for i, section in enumerate(unique):
-        final.append(section)
-
-        # Check distance to next section
-        if i + 1 < len(unique):
-            next_page = unique[i + 1].page_number
-        else:
-            next_page = total_pages + 1
-
-        section_size = next_page - section.page_number
-        if section_size > MAX_SECTION_PAGES:
-            # Add inferred splits
-            for split_page in range(
-                section.page_number + MAX_SECTION_PAGES,
-                next_page,
-                MAX_SECTION_PAGES,
-            ):
-                final.append(
-                    SectionBreak(
-                        page_number=split_page,
-                        title=f"{section.title} (continued)",
-                        level=1,
-                        inferred=True,
-                    )
-                )
-
-    return sorted(final, key=lambda s: s.page_number)
+        raise RuntimeError(
+            f"LLM consolidation failed: {exc}. "
+            "Check the consolidate_structure prompt and tool_definition in database."
+        ) from exc
 
 
 def build_primary_sections(
     pages: List[str],
     section_breaks: List[SectionBreak],
 ) -> List[Section]:
-    """Build Section objects with page ranges (no summaries yet)."""
+    """Build Section objects with page ranges derived from section break positions.
+
+    Page ranges extend each section from its start page through to the page
+    where the next section begins (inclusive), so sections sharing a page both
+    claim that page. The last section extends to the final page.
+    """
     if not section_breaks:
         return []
 
@@ -959,10 +1281,9 @@ def build_primary_sections(
     total_pages = len(pages)
 
     for i, sb in enumerate(section_breaks):
-        # Calculate page range
         page_start = sb.page_number
         if i + 1 < len(section_breaks):
-            page_end = section_breaks[i + 1].page_number - 1
+            page_end = section_breaks[i + 1].page_number
         else:
             page_end = total_pages
         page_end = max(page_end, page_start)
@@ -990,6 +1311,7 @@ def analyze_subsections(
     Analyze each primary section and identify subsections.
 
     Creates Subsection objects for each level-2 section found.
+    Eligible sections are analyzed in parallel using a thread pool.
     """
     if not sections:
         return sections
@@ -997,88 +1319,104 @@ def analyze_subsections(
     logger.info("Analyzing subsections for %d primary sections", len(sections))
 
     system_prompt, tool_def, user_template = _load_prompt("analyze_subsections")
-    if not user_template or not tool_def:
-        logger.warning("Subsection prompt missing, skipping analysis")
-        return sections
+
+    if not tool_def:
+        raise ValueError(
+            "analyze_subsections prompt has no tool_definition in database"
+        )
 
     tools = [tool_def]
     tool_choice = {"type": "function", "function": {"name": "analyze_subsections"}}
 
-    for section in sections:
-        # Skip very short sections (3 pages or less)
-        section_length = section.page_end - section.page_start + 1
-        if section_length <= 3:
-            logger.debug(
-                "Skipping subsection analysis for short section: %s (%d pages)",
-                section.title,
-                section_length,
-            )
-            continue
+    eligible = [
+        (idx, section)
+        for idx, section in enumerate(sections)
+        if section.page_end - section.page_start + 1 > 1
+    ]
 
-        # Get section content
-        section_pages = pages[section.page_start - 1 : section.page_end]
+    def _analyze_one(idx: int, section: Section) -> List[Subsection]:
+        """Analyze subsections for a single section."""
+        section_pages = _get_section_pages(pages, sections, idx)
         section_content = "\n\n---PAGE BREAK---\n\n".join(section_pages)
-        section_content = section_content[:50000]  # Token limit
+        section_content = truncate_to_tokens(section_content, 12000)
 
-        try:
-            user_prompt = user_template.format(
-                section_title=section.title,
-                page_start=section.page_start,
-                page_end=section.page_end,
-                section_content=section_content,
-            )
-        except Exception as exc:
-            logger.warning(
-                "Subsection prompt formatting failed for %s: %s", section.title, exc
-            )
-            continue
+        user_prompt = user_template.format(
+            section_title=section.title,
+            page_start=section.page_start,
+            page_end=section.page_end,
+            section_content=section_content,
+        )
 
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ]
 
-        try:
-            response, _ = _call_llm(
-                auth_token,
-                messages,
-                model=config.MODEL_SMALL,
-                temperature=0.2,
-                tools=tools,
-                tool_choice=tool_choice,
+        response, _ = _call_llm_tracked(
+            auth_token,
+            messages,
+            model=config.MODEL_SMALL,
+            temperature=0.2,
+            tools=tools,
+            tool_choice=tool_choice,
+        )
+        message = response.choices[0].message
+        args = _parse_tool_arguments(message)
+        if not args:
+            logger.warning(
+                "Subsection analysis returned no tool call for %s", section.title
             )
-            message = response.choices[0].message
-            args = _parse_tool_arguments(message)
-            if not args:
+            return []
+
+        subsections_data = args.get("subsections", [])
+        logger.debug(
+            "Found %d subsections in %s", len(subsections_data), section.title
+        )
+
+        subsections = []
+        for seq_num, sub_data in enumerate(subsections_data, 1):
+            subsection = Subsection(
+                id=str(uuid.uuid4()),
+                parent_section_id=section.id,
+                sequence_number=seq_num,
+                title=sub_data.get("title", f"Subsection {seq_num}"),
+                page_start=max(
+                    sub_data.get("page_start", section.page_start),
+                    section.page_start,
+                ),
+                page_end=min(
+                    sub_data.get("page_end", section.page_end),
+                    section.page_end,
+                ),
+            )
+            subsections.append(subsection)
+
+        return subsections
+
+    failed_count = 0
+
+    with ThreadPoolExecutor(max_workers=MAX_LLM_WORKERS) as executor:
+        futures = {
+            executor.submit(_analyze_one, idx, section): section
+            for idx, section in eligible
+        }
+        for future in as_completed(futures):
+            section = futures[future]
+            try:
+                subsections = future.result()
+                section.subsections = subsections
+            except (OpenAIConnectorError, ConnectionError, OSError):
+                raise
+            except Exception as exc:
                 logger.warning(
-                    "Subsection analysis returned no tool call for %s", section.title
+                    "Subsection analysis failed for %s: %s", section.title, exc
                 )
-                continue
+                failed_count += 1
 
-            subsections_data = args.get("subsections", [])
-            logger.debug(
-                "Found %d subsections in %s", len(subsections_data), section.title
-            )
-
-            # Create Subsection objects
-            for seq_num, sub_data in enumerate(subsections_data, 1):
-                subsection = Subsection(
-                    id=str(uuid.uuid4()),
-                    parent_section_id=section.id,
-                    sequence_number=seq_num,
-                    title=sub_data.get("title", f"Subsection {seq_num}"),
-                    page_start=sub_data.get("page_start", section.page_start),
-                    page_end=sub_data.get("page_end", section.page_end),
-                )
-                # Validate page ranges
-                subsection.page_start = max(
-                    subsection.page_start, section.page_start
-                )
-                subsection.page_end = min(subsection.page_end, section.page_end)
-                section.subsections.append(subsection)
-
-        except Exception as exc:
-            logger.warning("Subsection analysis failed for %s: %s", section.title, exc)
+    if len(eligible) > 0 and failed_count == len(eligible):
+        logger.error(
+            "Subsection analysis failed for ALL %d eligible sections", len(eligible)
+        )
 
     total_subsections = sum(len(s.subsections) for s in sections)
     logger.info("Identified %d subsections across all primary sections", total_subsections)
@@ -1093,35 +1431,54 @@ def generate_enhanced_summaries(
     """
     Generate enhanced JSON summaries for sections and subsections.
 
-    Each summary includes:
-    - overview: What the section covers
-    - key_topics: Main concepts/themes
-    - key_metrics: Numbers, statistics, measurements
-    - key_findings: Important conclusions/results
-    - notable_facts: Specific facts that might answer questions
+    Non-boilerplate sections are summarized in parallel using a thread pool.
+    Each summary includes overview, key_topics, key_metrics, key_findings,
+    and notable_facts.
     """
     if not sections:
         return sections
 
     logger.info("Generating enhanced summaries for %d sections", len(sections))
 
-    for section in sections:
-        # Generate summary for primary section
-        section_pages = pages[section.page_start - 1 : section.page_end]
-        section.summary = generate_section_summary_json(
+    llm_indices = []
+    for i, section in enumerate(sections):
+        boilerplate = _is_boilerplate_section(section.title)
+        if boilerplate is not None:
+            logger.info("Using boilerplate summary for section: %s", section.title)
+            section.summary = boilerplate
+        else:
+            llm_indices.append(i)
+
+    if not llm_indices:
+        return sections
+
+    def _summarize_one(idx: int) -> Tuple[int, Dict[str, Any]]:
+        """Generate summary for a single section."""
+        section = sections[idx]
+        section_pages = _get_section_pages(pages, sections, idx)
+        summary = generate_section_summary_json(
             section_pages, section.title, section.page_start, section.page_end, auth_token
         )
+        return idx, summary
 
-        # Generate summaries for subsections
-        for subsection in section.subsections:
-            sub_pages = pages[subsection.page_start - 1 : subsection.page_end]
-            subsection.summary = generate_section_summary_json(
-                sub_pages,
-                subsection.title,
-                subsection.page_start,
-                subsection.page_end,
-                auth_token,
-            )
+    with ThreadPoolExecutor(max_workers=MAX_LLM_WORKERS) as executor:
+        futures = {
+            executor.submit(_summarize_one, idx): idx
+            for idx in llm_indices
+        }
+        for future in as_completed(futures):
+            try:
+                idx, summary = future.result()
+                sections[idx].summary = summary
+            except (OpenAIConnectorError, ConnectionError, OSError):
+                raise
+            except Exception as exc:
+                idx = futures[future]
+                logger.error(
+                    "Summary generation failed for section %s: %s",
+                    sections[idx].title,
+                    exc,
+                )
 
     return sections
 
@@ -1138,20 +1495,24 @@ def generate_section_summary_json(
 
     Returns dict with overview, key_topics, key_metrics, key_findings, notable_facts.
     """
-    section_content = "\n\n---PAGE BREAK---\n\n".join(pages[:20])
-    section_content = section_content[:40000]  # Token limit
+    section_content = "\n\n---PAGE BREAK---\n\n".join(pages)
 
     system_prompt, tool_def, user_template = _load_prompt("generate_section_summary_json")
+
+    if not tool_def:
+        raise ValueError(
+            "generate_section_summary_json prompt has no tool_definition in database"
+        )
+
     default_summary = {
         "overview": f"Summary of {title}",
         "key_topics": [],
         "key_metrics": {},
         "key_findings": [],
         "notable_facts": [],
+        "not_fully_covered": [],
+        "is_fallback": True,
     }
-    if not user_template or not tool_def:
-        logger.warning("Summary prompt missing, using default summary for %s", title)
-        return default_summary
 
     try:
         user_prompt = user_template.format(
@@ -1161,7 +1522,7 @@ def generate_section_summary_json(
             section_content=section_content,
         )
     except Exception as exc:
-        logger.warning("Summary prompt formatting failed for %s: %s", title, exc)
+        logger.error("Summary prompt formatting failed for %s: %s", title, exc)
         return default_summary
 
     messages = [
@@ -1170,10 +1531,10 @@ def generate_section_summary_json(
     ]
 
     try:
-        response, _ = _call_llm(
+        response, _ = _call_llm_tracked(
             auth_token,
             messages,
-            model=config.MODEL_SMALL,
+            model=config.MODEL_LARGE,
             temperature=0.2,
             tools=[tool_def],
             tool_choice={
@@ -1185,14 +1546,16 @@ def generate_section_summary_json(
         args = _parse_tool_arguments(message)
         if args:
             return args
-        logger.warning("Summary generation returned no tool call for %s", title)
+        logger.error("Summary generation returned no tool call for %s", title)
+    except (OpenAIConnectorError, ConnectionError, OSError):
+        raise
     except Exception as exc:
-        logger.warning("Summary generation failed for %s: %s", title, exc)
+        logger.error("Summary generation failed for %s: %s", title, exc)
     return default_summary
 
 
 def build_document_summary(
-    metadata: DocumentMetadata,
+    metadata: Dict[str, Any],
     sections: List[Section],
     page_count: int,
 ) -> str:
@@ -1201,23 +1564,24 @@ def build_document_summary(
     """
     parts = []
 
-    # Metadata header
+    # Metadata header - iterate over whatever keys exist in the dict
     parts.append("# Document Metadata")
-    if metadata.title:
-        parts.append(f"Title: {metadata.title}")
-    if metadata.authors:
-        parts.append(f"Authors: {', '.join(metadata.authors)}")
-    if metadata.publication_date:
-        parts.append(f"Date: {metadata.publication_date}")
-    if metadata.publication_venue:
-        parts.append(f"Venue: {metadata.publication_venue}")
+    skip_keys = {"abstract"}
+    for key, value in metadata.items():
+        if key in skip_keys or not value:
+            continue
+        if isinstance(value, list):
+            parts.append(f"{key.replace('_', ' ').title()}: {', '.join(str(v) for v in value)}")
+        else:
+            parts.append(f"{key.replace('_', ' ').title()}: {value}")
     parts.append(f"Pages: {page_count}")
     parts.append("")
 
     # Abstract if available
-    if metadata.abstract:
+    abstract = metadata.get("abstract", "")
+    if abstract:
         parts.append("# Abstract")
-        parts.append(metadata.abstract)
+        parts.append(str(abstract))
         parts.append("")
 
     # Section summaries
@@ -1240,7 +1604,11 @@ def build_document_summary(
                 parts.append(f"**Key Topics:** {topics}")
 
             if section.summary.get("key_metrics"):
-                metrics = "; ".join(section.summary["key_metrics"])
+                raw = section.summary["key_metrics"]
+                if isinstance(raw, dict):
+                    metrics = "; ".join(f"{k}: {v}" for k, v in raw.items())
+                else:
+                    metrics = "; ".join(str(m) for m in raw)
                 parts.append(f"**Key Metrics:** {metrics}")
 
             if section.summary.get("key_findings"):
@@ -1252,27 +1620,18 @@ def build_document_summary(
                 for fact in section.summary["notable_facts"]:
                     parts.append(f"- {fact}")
 
-        # Subsection summaries
-        for sub in section.subsections:
-            parts.append(
-                f"\n### {section.sequence_number}.{sub.sequence_number} {sub.title} (pages {sub.page_start}-{sub.page_end})"
-            )
+            if section.summary.get("not_fully_covered"):
+                parts.append("**Not Fully Covered:**")
+                for item in section.summary["not_fully_covered"]:
+                    parts.append(f"- {item}")
 
-            if sub.summary:
-                if sub.summary.get("overview"):
-                    parts.append(f"**Overview:** {sub.summary['overview']}")
-
-                if sub.summary.get("key_topics"):
-                    topics = ", ".join(sub.summary["key_topics"])
-                    parts.append(f"**Key Topics:** {topics}")
-
-                if sub.summary.get("key_metrics"):
-                    metrics = "; ".join(sub.summary["key_metrics"])
-                    parts.append(f"**Key Metrics:** {metrics}")
-
-                if sub.summary.get("key_findings"):
-                    for finding in sub.summary["key_findings"]:
-                        parts.append(f"- {finding}")
+        # Subsection listing (titles and page ranges only)
+        if section.subsections:
+            parts.append("**Subsections:**")
+            for sub in section.subsections:
+                parts.append(
+                    f"- {section.sequence_number}.{sub.sequence_number} {sub.title} (pages {sub.page_start}-{sub.page_end})"
+                )
 
         parts.append("")
 
@@ -1280,94 +1639,58 @@ def build_document_summary(
 
 
 def generate_document_fields(
-    metadata: DocumentMetadata,
+    metadata: Dict[str, Any],
     sections: List[Section],
+    document_summary: str,
     auth_token: str,
 ) -> Tuple[str, str]:
     """
-    Generate document description and usage fields using tool calling.
+    Generate document description and usage fields using LLM.
+
+    Args:
+        metadata: Extracted document metadata dict.
+        sections: List of processed sections with summaries.
+        document_summary: Complete document summary for LLM context.
+        auth_token: Authentication token for API calls.
 
     Returns:
-        Tuple of (document_description, document_usage)
-        - description: Brief 2-3 sentence description of what the document is
-        - usage: Comprehensive paragraph with all details for LLM document selection
+        Tuple of (document_description, document_usage).
     """
-    # Build context for the LLM
-    section_titles = [s.title for s in sections]
-    topics = []
-    for s in sections:
-        if s.summary and s.summary.get("key_topics"):
-            topics.extend(s.summary["key_topics"])
-    unique_topics = list(set(topics))[:15]
+    title = metadata.get("title", "") or "Unknown"
+    fallback_description = title
+    fallback_usage = ""
 
-    # Build section summaries for usage field
-    section_summaries = []
-    for s in sections:
-        if s.summary:
-            summary_parts = []
-            if s.summary.get("overview"):
-                summary_parts.append(s.summary["overview"])
-            if s.summary.get("key_findings"):
-                summary_parts.append(
-                    f"Key findings: {', '.join(s.summary['key_findings'][:3])}"
-                )
-            if summary_parts:
-                section_summaries.append(f"{s.title}: {' '.join(summary_parts)}")
+    system_prompt, tool_def, user_template = _load_prompt("generate_document_fields")
 
-    # Load prompt from database
-    system_prompt, tool_def, user_template = _load_prompt("generate_catalog_fields")
-    if not user_template or not tool_def:
-        logger.warning("Catalog fields prompt missing, using fallback")
-        return f"Document: {metadata.title or 'Unknown'}", ""
-
-    # Format user prompt
-    try:
-        user_prompt = user_template.format(
-            title=metadata.title or "Unknown",
-            authors=", ".join(metadata.authors) if metadata.authors else "Unknown",
-            publication_date=metadata.publication_date or "Unknown",
-            venue=metadata.publication_venue or "Unknown",
-            section_count=len(sections),
-            section_titles="\n".join(f"- {t}" for t in section_titles[:20]),
-            topics=", ".join(unique_topics),
-            section_summaries="\n".join(section_summaries[:10]),
-        )
-    except Exception as exc:
-        logger.warning("Catalog fields prompt formatting failed: %s", exc)
-        return f"Document: {metadata.title or 'Unknown'}", ""
-
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_prompt},
-    ]
+    truncated_summary = truncate_to_tokens(document_summary, 6000)
+    user_prompt = user_template.format(document_summary=truncated_summary)
 
     try:
-        response, _ = _call_llm(
+        response, _ = _call_llm_tracked(
             auth_token,
-            messages,
+            [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
             model=config.MODEL_SMALL,
-            temperature=0.3,
+            temperature=0.2,
             tools=[tool_def],
-            tool_choice={"type": "function", "function": {"name": "generate_catalog_fields"}},
+            tool_choice={"type": "function", "function": {"name": "generate_document_fields"}},
         )
-
-        # Extract tool call arguments
         message = response.choices[0].message
         args = _parse_tool_arguments(message)
         if args:
-            description = args.get("description", "").strip()
-            usage = args.get("usage", "").strip()
-            return description, usage
-
-        # Fallback if no tool call
-        logger.warning("No tool call in response, using content as description")
-        content = message.content or ""
-        return content.strip(), ""
-
+            return (
+                args.get("document_description", fallback_description),
+                args.get("document_usage", fallback_usage),
+            )
+        logger.error("Document fields generation returned no tool call")
+    except (OpenAIConnectorError, ConnectionError, OSError):
+        raise
     except Exception as exc:
-        logger.warning("Document fields generation failed: %s", exc)
-        fallback_desc = f"Document: {metadata.title or 'Unknown'}"
-        return fallback_desc, ""
+        logger.error("Document fields generation failed, using fallback: %s", exc)
+
+    return fallback_description, fallback_usage
 
 
 def generate_summary_embedding(
@@ -1379,70 +1702,297 @@ def generate_summary_embedding(
         return None
 
     try:
-        # Truncate if needed
-        text = document_summary[:32000]
-        embeddings, _ = _create_embedding(
+        clean_summary = _strip_markdown_for_embedding(document_summary)
+        token_count = count_tokens(clean_summary)
+        if token_count > 8000:
+            logger.warning(
+                "Document summary exceeds 8000 tokens (%d tokens), "
+                "embedding may be truncated by the model",
+                token_count,
+            )
+        embeddings, _ = _create_embedding_tracked(
             auth_token,
-            [text],
+            [clean_summary],
             model=config.MODEL_EMBEDDING,
         )
         return embeddings[0]
+    except (OpenAIConnectorError, ConnectionError, OSError):
+        raise
     except Exception as exc:
-        logger.warning("Summary embedding generation failed: %s", exc)
+        logger.error("Summary embedding generation failed: %s", exc)
         return None
 
 
 def generate_chunks(pages: List[str], sections: List[Section]) -> List[Chunk]:
-    """Generate chunks with proper section/subsection linkage and page counts."""
+    """Generate one chunk per page, annotated with section and subsection metadata.
+
+    Each page within a section becomes its own chunk with an independent
+    embedding. On shared boundary pages the content is trimmed at section
+    title positions so each chunk contains only its section's text. Subsection
+    assignment is determined by page range overlap.
+    """
     if not pages:
         return []
 
-    # Build page-to-section/subsection maps
-    page_section_map: Dict[int, Section] = {}
-    page_subsection_map: Dict[int, Subsection] = {}
-
-    for section in sections:
-        for page_num in range(section.page_start, section.page_end + 1):
-            page_section_map[page_num] = section
-
-        for subsection in section.subsections:
-            for page_num in range(subsection.page_start, subsection.page_end + 1):
-                page_subsection_map[page_num] = subsection
-
     chunks = []
-    for page_num, content in enumerate(pages, start=1):
-        if not content.strip():
-            continue
+    chunk_index = 0
+    blank_page_count = 0
+    total_page_count = 0
 
-        section = page_section_map.get(page_num)
-        subsection = page_subsection_map.get(page_num)
+    for i, section in enumerate(sections):
+        page_items = _get_section_page_items(pages, sections, i)
 
-        # Build hierarchy path
-        if section and subsection:
-            hierarchy_path = f"{section.title} > {subsection.title}"
-        elif section:
-            hierarchy_path = section.title
+        for page_num, page_content in page_items:
+            total_page_count += 1
+            if not page_content.strip():
+                blank_page_count += 1
+                continue
+
+            subsection = None
+            for sub in section.subsections:
+                if sub.page_start <= page_num <= sub.page_end:
+                    subsection = sub
+                    break
+
+            if subsection:
+                hierarchy_path = f"{section.title} > {subsection.title}"
+            else:
+                hierarchy_path = section.title
+
+            chunk = Chunk(
+                id=str(uuid.uuid4()),
+                primary_section_id=section.id,
+                subsection_id=subsection.id if subsection else None,
+                chunk_number=chunk_index,
+                page_number=page_num,
+                raw_content=page_content,
+                hierarchy_path=hierarchy_path,
+                primary_section_number=section.sequence_number,
+                primary_section_name=section.title,
+                subsection_number=subsection.sequence_number if subsection else None,
+                subsection_name=subsection.title if subsection else None,
+                primary_section_page_count=section.page_count,
+                subsection_page_count=subsection.page_count if subsection else None,
+            )
+            chunks.append(chunk)
+            chunk_index += 1
+
+    if blank_page_count > 0:
+        blank_ratio = blank_page_count / total_page_count if total_page_count else 0
+        if blank_ratio >= 0.5:
+            logger.warning(
+                "High blank page ratio: %d/%d pages (%.0f%%) were blank — possible extraction issue",
+                blank_page_count,
+                total_page_count,
+                blank_ratio * 100,
+            )
         else:
-            hierarchy_path = ""
-
-        chunk = Chunk(
-            id=str(uuid.uuid4()),
-            primary_section_id=section.id if section else None,
-            subsection_id=subsection.id if subsection else None,
-            chunk_number=page_num - 1,  # 0-indexed
-            page_number=page_num,
-            raw_content=content,
-            hierarchy_path=hierarchy_path,
-            primary_section_number=section.sequence_number if section else None,
-            primary_section_name=section.title if section else None,
-            subsection_number=subsection.sequence_number if subsection else None,
-            subsection_name=subsection.title if subsection else None,
-            primary_section_page_count=section.page_count if section else None,
-            subsection_page_count=subsection.page_count if subsection else None,
-        )
-        chunks.append(chunk)
+            logger.info(
+                "Skipped %d blank pages out of %d total", blank_page_count, total_page_count
+            )
 
     logger.info("Generated %d chunks", len(chunks))
+    return chunks
+
+
+def _build_section_context(sections: List[Section]) -> str:
+    """Build a compact document outline from section titles and overview summaries."""
+    min_per_section_tokens = 50
+    per_section_budget = max(
+        min_per_section_tokens,
+        CHUNK_SUMMARY_CONTEXT_TOKENS // max(len(sections), 1),
+    )
+    lines = []
+    for section in sections:
+        overview = section.summary.get("overview", "") if section.summary else ""
+        overview_snippet = truncate_to_tokens(overview, per_section_budget)
+        line = f"- Section {section.sequence_number}: {section.title}"
+        if overview_snippet:
+            line += f" — {overview_snippet}"
+        lines.append(line)
+
+        for sub in section.subsections:
+            lines.append(f"  - {section.sequence_number}.{sub.sequence_number}: {sub.title}")
+
+    result = "\n".join(lines)
+    return truncate_to_tokens(result, CHUNK_SUMMARY_CONTEXT_TOKENS)
+
+
+def _generate_chunk_summary_batch(
+    chunks: List[Chunk],
+    section_context: str,
+    auth_token: str,
+) -> Dict[int, str]:
+    """Send a batch of chunks to MODEL_SMALL and return chunk_number-to-summary mapping."""
+    system_prompt, tool_def, user_template = _load_prompt("generate_chunk_summaries")
+
+    chunk_blocks_list = []
+    for chunk in chunks:
+        content = truncate_to_tokens(chunk.raw_content, CHUNK_SUMMARY_MAX_CONTENT_TOKENS)
+        section_name = chunk.primary_section_name or "Unknown"
+        chunk_blocks_list.append(
+            f"<chunk chunk_number=\"{chunk.chunk_number}\" "
+            f"section=\"{section_name}\" page=\"{chunk.page_number}\">\n"
+            f"{content}\n</chunk>"
+        )
+    chunk_blocks_text = "\n\n".join(chunk_blocks_list)
+
+    user_prompt = user_template.format(
+        section_context=section_context,
+        chunk_blocks=chunk_blocks_text,
+    )
+
+    response, _ = _call_llm_tracked(
+        auth_token,
+        [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        model=config.MODEL_SMALL,
+        temperature=0.2,
+        tools=[tool_def],
+        tool_choice={"type": "function", "function": {"name": "provide_chunk_summaries"}},
+    )
+
+    message = response.choices[0].message
+    args = _parse_tool_arguments(message)
+    if not args:
+        logger.warning("Chunk summary batch returned no tool call")
+        return {}
+
+    result = {}
+    dropped_count = 0
+    for item in args.get("summaries", []):
+        cn = item.get("chunk_number")
+        summary = item.get("summary", "")
+        if cn is not None and summary:
+            result[cn] = summary.strip()
+        else:
+            dropped_count += 1
+
+    if dropped_count > 0:
+        logger.warning(
+            "Dropped %d chunk summaries from LLM response (missing chunk_number or empty summary)",
+            dropped_count,
+        )
+
+    return result
+
+
+def generate_chunk_summaries(
+    chunks: List[Chunk],
+    sections: List[Section],
+    auth_token: str,
+) -> List[Chunk]:
+    """Generate concise summaries and prefix them to chunk content for better embeddings.
+
+    Batches non-boilerplate chunks, sends each batch to the LLM in parallel,
+    and prepends the summary in square brackets to raw_content. Boilerplate chunks
+    (Abstract, References, Acknowledgements) are skipped. On failure, chunks keep
+    their original content.
+
+    Args:
+        chunks: List of Chunk objects from generate_chunks.
+        sections: List of Section objects with summaries.
+        auth_token: Authentication token for API calls.
+
+    Returns:
+        The same list of Chunk objects with embedding_prefix set where applicable.
+    """
+    if not chunks:
+        return chunks
+
+    section_context = _build_section_context(sections)
+
+    eligible_chunks = [
+        c for c in chunks
+        if not _is_boilerplate_section(c.primary_section_name or "")
+    ]
+
+    if not eligible_chunks:
+        logger.info("No eligible chunks for summary prefixes (all boilerplate)")
+        return chunks
+
+    logger.info(
+        "Generating summary prefixes for %d/%d chunks (%d boilerplate skipped)",
+        len(eligible_chunks),
+        len(chunks),
+        len(chunks) - len(eligible_chunks),
+    )
+
+    batches = [
+        eligible_chunks[i : i + CHUNK_SUMMARY_BATCH_SIZE]
+        for i in range(0, len(eligible_chunks), CHUNK_SUMMARY_BATCH_SIZE)
+    ]
+    total_batches = len(batches)
+    failed_batches = 0
+    summaries: Dict[int, str] = {}
+
+    with ThreadPoolExecutor(max_workers=MAX_LLM_WORKERS) as executor:
+        futures = {
+            executor.submit(
+                _generate_chunk_summary_batch, batch, section_context, auth_token
+            ): batch_idx
+            for batch_idx, batch in enumerate(batches)
+        }
+        for future in as_completed(futures):
+            batch_idx = futures[future]
+            try:
+                batch_result = future.result()
+                summaries.update(batch_result)
+            except (OpenAIConnectorError, ConnectionError, OSError):
+                raise
+            except Exception as exc:
+                failed_batches += 1
+                logger.warning(
+                    "Chunk summary batch %d failed, skipping %d chunks: %s",
+                    batch_idx + 1,
+                    len(batches[batch_idx]),
+                    exc,
+                )
+
+    missing = [c for c in eligible_chunks if c.chunk_number not in summaries]
+    if missing:
+        logger.info("Retrying %d chunks that were missed in initial pass", len(missing))
+        retry_batches = [
+            missing[i : i + CHUNK_SUMMARY_BATCH_SIZE]
+            for i in range(0, len(missing), CHUNK_SUMMARY_BATCH_SIZE)
+        ]
+        with ThreadPoolExecutor(max_workers=MAX_LLM_WORKERS) as executor:
+            futures = {
+                executor.submit(
+                    _generate_chunk_summary_batch, batch, section_context, auth_token
+                ): batch_idx
+                for batch_idx, batch in enumerate(retry_batches)
+            }
+            for future in as_completed(futures):
+                batch_idx = futures[future]
+                try:
+                    batch_result = future.result()
+                    summaries.update(batch_result)
+                except (OpenAIConnectorError, ConnectionError, OSError):
+                    raise
+                except Exception as exc:
+                    logger.warning(
+                        "Retry batch failed, %d chunks remain without summaries: %s",
+                        len(retry_batches[batch_idx]),
+                        exc,
+                    )
+
+    if failed_batches == total_batches and total_batches > 0:
+        raise RuntimeError(
+            f"All {total_batches} chunk summary batches failed — "
+            "LLM may be unavailable"
+        )
+
+    prefixed_count = 0
+    for chunk in chunks:
+        summary = summaries.get(chunk.chunk_number)
+        if summary:
+            chunk.embedding_prefix = f"[{summary}]\n\n"
+            prefixed_count += 1
+
+    logger.info("Set embedding prefixes for %d/%d chunks", prefixed_count, len(eligible_chunks))
     return chunks
 
 
@@ -1453,23 +2003,37 @@ def generate_embeddings(chunks: List[Chunk], auth_token: str) -> List[Chunk]:
 
     logger.info("Generating embeddings for %d chunks", len(chunks))
 
-    # Batch embedding
     for i in range(0, len(chunks), EMBEDDING_BATCH_SIZE):
         batch = chunks[i : i + EMBEDDING_BATCH_SIZE]
-        texts = [c.raw_content[:32000] for c in batch]  # Truncate long texts
+        texts = [
+            truncate_to_tokens(
+                (c.embedding_prefix or "") + _strip_markdown_for_embedding(c.raw_content),
+                8000,
+            )
+            for c in batch
+        ]
 
         try:
-            embeddings, _ = _create_embedding(
+            embeddings, _ = _create_embedding_tracked(
                 auth_token,
                 texts,
                 model=config.MODEL_EMBEDDING,
             )
+
+            if len(embeddings) != len(batch):
+                raise ValueError(
+                    f"Embedding count mismatch: got {len(embeddings)} "
+                    f"for {len(batch)} chunks"
+                )
 
             for j, embedding in enumerate(embeddings):
                 batch[j].embedding = embedding
 
         except Exception as exc:
             logger.error("Embedding batch %d failed: %s", i // EMBEDDING_BATCH_SIZE, exc)
+            raise RuntimeError(
+                f"Embedding generation failed for batch {i // EMBEDDING_BATCH_SIZE}: {exc}"
+            ) from exc
 
     embedded_count = sum(1 for c in chunks if c.embedding is not None)
     logger.info("Generated %d/%d embeddings", embedded_count, len(chunks))
@@ -1482,6 +2046,5 @@ def format_pages_for_prompt(pages: List[str], start_page: int = 1) -> str:
     formatted = []
     for i, page in enumerate(pages):
         page_num = start_page + i
-        content = page[:8000] if len(page) > 8000 else page
-        formatted.append(f"--- PAGE {page_num} ---\n{content}\n")
+        formatted.append(f"--- PAGE {page_num} ---\n{page}\n")
     return "\n".join(formatted)
