@@ -298,8 +298,19 @@ def _call_llm(
     tool_choice: Optional[Any] = None,
 ) -> Tuple[Any, Optional[dict[str, Any]]]:
     """Wrapper around execute_llm_call with model-specific costs."""
+    tool_name = "none"
+    if tool_choice and isinstance(tool_choice, dict):
+        tool_name = tool_choice.get("function", {}).get("name", "auto")
+    logger.info(
+        "LLM call: model=%s, tool=%s, max_tokens=%s, messages=%d",
+        model,
+        tool_name,
+        max_tokens or "default",
+        len(messages),
+    )
+
     prompt_cost, completion_cost = _get_model_costs(model)
-    return execute_llm_call(
+    response, usage = execute_llm_call(
         auth_token,
         prompt_token_cost=prompt_cost,
         completion_token_cost=completion_cost,
@@ -311,6 +322,30 @@ def _call_llm(
         tools=tools,
         tool_choice=tool_choice,
     )
+
+    finish_reason = "unknown"
+    if hasattr(response, "choices") and response.choices:
+        finish_reason = str(response.choices[0].finish_reason)
+
+    if usage:
+        logger.info(
+            "LLM response: tool=%s, finish=%s, prompt_tokens=%s, completion_tokens=%s, cost=$%.4f",
+            tool_name,
+            finish_reason,
+            usage.get("prompt_tokens"),
+            usage.get("completion_tokens"),
+            usage.get("cost", 0),
+        )
+
+    if finish_reason not in ("stop", "tool_calls"):
+        logger.warning(
+            "LLM finish_reason=%s (expected stop or tool_calls) for tool=%s — "
+            "response may be truncated",
+            finish_reason,
+            tool_name,
+        )
+
+    return response, usage
 
 
 def _create_embedding(
@@ -362,17 +397,63 @@ def _load_prompt(name: str) -> Tuple[str, Optional[Dict[str, Any]], str]:
     return system_prompt, tool_def, user_prompt
 
 
+def _safe_format(template: str, **kwargs: Any) -> str:
+    """Replace {key} placeholders in template without disturbing other braces.
+
+    Unlike str.format(), this leaves unknown {placeholders} and literal JSON
+    braces intact, which is critical for DB prompts that contain JSON examples.
+    """
+    for key, value in kwargs.items():
+        template = template.replace(f"{{{key}}}", str(value))
+    return template
+
+
 def _parse_tool_arguments(message: Any) -> Optional[Dict[str, Any]]:
     """Extract tool call arguments from a response message."""
     tool_calls = getattr(message, "tool_calls", None) or []
     if not tool_calls:
         return None
 
+    fn = tool_calls[0].function
+    raw = fn.arguments
+    logger.info(
+        "Tool call: %s (%d chars of arguments)",
+        fn.name,
+        len(raw) if raw else 0,
+    )
     try:
-        return json.loads(tool_calls[0].function.arguments)
+        return json.loads(raw)
     except json.JSONDecodeError as exc:
-        logger.warning("Failed to parse tool arguments (malformed JSON): %s", exc)
+        logger.warning(
+            "Failed to parse tool arguments for %s: %s — raw (first 500 chars): %s",
+            fn.name,
+            exc,
+            (raw or "")[:500],
+        )
+        repaired = _try_repair_json(raw)
+        if repaired is not None:
+            logger.info("Recovered tool arguments via JSON repair for %s", fn.name)
+            return repaired
         return None
+
+
+def _try_repair_json(raw: str) -> Optional[Dict[str, Any]]:
+    """Attempt to fix truncated JSON from tool call arguments."""
+    if not raw or not raw.strip():
+        return None
+
+    text = raw.rstrip()
+
+    for suffix in ['"}]}', '"}]', '"}', '"}'  , '}]}'  , '}]', '}}', '}']:
+        candidate = text + suffix
+        try:
+            parsed = json.loads(candidate)
+            if isinstance(parsed, dict):
+                return parsed
+        except json.JSONDecodeError:
+            continue
+
+    return None
 
 
 def _find_section_title_position(page_text: str, title: str) -> Optional[int]:
@@ -772,7 +853,7 @@ def extract_document_metadata(
     tool_def = _build_metadata_tool_schema(fields_config)
 
     try:
-        user_prompt = user_template.format(page_excerpt=first_pages)
+        user_prompt = _safe_format(user_template, page_excerpt=first_pages)
     except (KeyError, IndexError):
         user_prompt = _build_metadata_user_prompt(fields_config, first_pages)
 
@@ -934,8 +1015,14 @@ def classify_document(pages: List[str], auth_token: str) -> Dict[str, Any]:
 
     system_prompt, tool_def, user_template = _load_prompt("classify_document")
 
+    if not tool_def:
+        raise ValueError(
+            "classify_document prompt has no tool_definition in database"
+        )
+
     try:
-        user_content = user_template.format(
+        user_content = _safe_format(
+            user_template,
             page_count=len(pages),
             pages_content=pages_content,
         )
@@ -948,12 +1035,8 @@ def classify_document(pages: List[str], auth_token: str) -> Dict[str, Any]:
         {"role": "user", "content": user_content},
     ]
 
-    tools = [tool_def] if tool_def else []
-    tool_choice = (
-        {"type": "function", "function": {"name": "classify_document_structure"}}
-        if tool_def
-        else None
-    )
+    tools = [tool_def]
+    tool_choice = {"type": "function", "function": {"name": "classify_document_structure"}}
 
     try:
         response, _ = _call_llm(
@@ -991,15 +1074,19 @@ def detect_sections_batch(
 
     system_prompt, tool_def, user_template = _load_prompt("detect_sections_batch")
 
-    # Get structure-specific guidance from database
+    if not tool_def:
+        raise ValueError(
+            "detect_sections_batch prompt has no tool_definition in database"
+        )
+
     guidance_name = f"structure_guidance_{structure_type.value}"
     _, _, structure_guidance = _load_prompt(guidance_name)
     if not structure_guidance:
         _, _, structure_guidance = _load_prompt("structure_guidance_semantic")
 
-    # Format user prompt
     try:
-        user_content = user_template.format(
+        user_content = _safe_format(
+            user_template,
             structure_type=structure_type.value,
             previous_context=previous_context or "First batch - no previous sections",
             start_page=start_page,
@@ -1021,12 +1108,8 @@ def detect_sections_batch(
         {"role": "user", "content": user_content},
     ]
 
-    tools = [tool_def] if tool_def else []
-    tool_choice = (
-        {"type": "function", "function": {"name": "detect_section_breaks"}}
-        if tool_def
-        else None
-    )
+    tools = [tool_def]
+    tool_choice = {"type": "function", "function": {"name": "detect_section_breaks"}}
 
     try:
         response, _ = _call_llm(
@@ -1087,13 +1170,16 @@ def consolidate_sections_llm(
 
     system_prompt, tool_def, user_template = _load_prompt("consolidate_structure")
 
-    # Format sections for prompt
+    if not tool_def:
+        raise ValueError(
+            "consolidate_structure prompt has no tool_definition in database"
+        )
+
     sections_text = "\n".join(
         f"- Page {s.page_number}: {s.title}"
         for s in sorted(sections, key=lambda x: x.page_number)
     )
 
-    # Format ToC info
     toc_info = ""
     if toc_sections:
         toc_info = (
@@ -1105,7 +1191,8 @@ def consolidate_sections_llm(
     fallback_sections = sorted(sections, key=lambda s: s.page_number)
 
     try:
-        user_content = user_template.format(
+        user_content = _safe_format(
+            user_template,
             structure_type=structure_type.value,
             confidence=confidence,
             total_pages=total_pages,
@@ -1125,12 +1212,8 @@ def consolidate_sections_llm(
         {"role": "user", "content": user_content},
     ]
 
-    tools = [tool_def] if tool_def else []
-    tool_choice = (
-        {"type": "function", "function": {"name": "consolidate_sections"}}
-        if tool_def
-        else None
-    )
+    tools = [tool_def]
+    tool_choice = {"type": "function", "function": {"name": "consolidate_sections"}}
 
     try:
         response, _ = _call_llm(
@@ -1172,20 +1255,28 @@ def consolidate_sections_llm(
                     corrections[:3],
                 )
 
-            return sorted(consolidated, key=lambda s: s.page_number)
+            if consolidated:
+                return sorted(consolidated, key=lambda s: s.page_number)
 
-        raise RuntimeError(
-            "LLM consolidation returned no tool call. "
-            "Check the consolidate_structure prompt and tool_definition in database."
+            logger.warning(
+                "LLM consolidation returned empty sections — "
+                "using unconsolidated sections"
+            )
+            return fallback_sections
+
+        logger.warning(
+            "LLM consolidation returned no tool call — "
+            "using unconsolidated sections"
         )
+        return fallback_sections
 
     except (OpenAIConnectorError, ConnectionError, OSError):
         raise
     except Exception as exc:
-        raise RuntimeError(
-            f"LLM consolidation failed: {exc}. "
-            "Check the consolidate_structure prompt and tool_definition in database."
-        ) from exc
+        logger.warning(
+            "LLM consolidation failed: %s — using unconsolidated sections", exc
+        )
+        return fallback_sections
 
 
 def build_primary_sections(
@@ -1264,7 +1355,8 @@ def analyze_subsections(
         section_content = "\n\n---PAGE BREAK---\n\n".join(section_pages)
         section_content = truncate_to_tokens(section_content, 12000)
 
-        user_prompt = user_template.format(
+        user_prompt = _safe_format(
+            user_template,
             section_title=section.title,
             page_start=section.page_start,
             page_end=section.page_end,
@@ -1380,8 +1472,23 @@ def generate_enhanced_summaries(
         """Generate summary for a single section."""
         section = sections[idx]
         section_pages = _get_section_pages(pages, sections, idx)
+        logger.info(
+            "Summarizing section %d/%d: '%s' (%d pages)",
+            idx + 1,
+            len(sections),
+            section.title,
+            len(section_pages),
+        )
         summary = generate_section_summary_json(
             section_pages, section.title, section.page_start, section.page_end, auth_token
+        )
+        is_fallback = summary.get("is_fallback", False)
+        logger.info(
+            "Summary for '%s': %d topics, %d findings%s",
+            section.title,
+            len(summary.get("key_topics", [])),
+            len(summary.get("key_findings", [])),
+            " (FALLBACK)" if is_fallback else "",
         )
         return idx, summary
 
@@ -1403,6 +1510,15 @@ def generate_enhanced_summaries(
                     sections[idx].title,
                     exc,
                 )
+
+    fallback_count = sum(
+        1 for s in sections
+        if s.summary and s.summary.get("is_fallback")
+    )
+    if fallback_count > 0:
+        logger.warning(
+            "%d/%d sections used fallback summaries", fallback_count, len(sections)
+        )
 
     return sections
 
@@ -1439,7 +1555,8 @@ def generate_section_summary_json(
     }
 
     try:
-        user_prompt = user_template.format(
+        user_prompt = _safe_format(
+            user_template,
             title=title,
             page_start=page_start,
             page_end=page_end,
@@ -1587,7 +1704,7 @@ def generate_document_fields(
     system_prompt, tool_def, user_template = _load_prompt("generate_document_fields")
 
     truncated_summary = truncate_to_tokens(document_summary, 6000)
-    user_prompt = user_template.format(document_summary=truncated_summary)
+    user_prompt = _safe_format(user_template, document_summary=truncated_summary)
 
     try:
         response, _ = _call_llm(
@@ -1750,6 +1867,11 @@ def _generate_chunk_summary_batch(
     """Send a batch of chunks to MODEL_SMALL and return chunk_number-to-summary mapping."""
     system_prompt, tool_def, user_template = _load_prompt("generate_chunk_summaries")
 
+    if not tool_def:
+        raise ValueError(
+            "generate_chunk_summaries prompt has no tool_definition in database"
+        )
+
     chunk_blocks_list = []
     for chunk in chunks:
         content = truncate_to_tokens(chunk.raw_content, CHUNK_SUMMARY_MAX_CONTENT_TOKENS)
@@ -1761,7 +1883,8 @@ def _generate_chunk_summary_batch(
         )
     chunk_blocks_text = "\n\n".join(chunk_blocks_list)
 
-    user_prompt = user_template.format(
+    user_prompt = _safe_format(
+        user_template,
         section_context=section_context,
         chunk_blocks=chunk_blocks_text,
     )
@@ -1774,6 +1897,7 @@ def _generate_chunk_summary_batch(
         ],
         model=config.MODEL_SMALL,
         temperature=0.2,
+        max_tokens=4096,
         tools=[tool_def],
         tool_choice={"type": "function", "function": {"name": "provide_chunk_summaries"}},
     )
@@ -1781,7 +1905,10 @@ def _generate_chunk_summary_batch(
     message = response.choices[0].message
     args = _parse_tool_arguments(message)
     if not args:
-        logger.warning("Chunk summary batch returned no tool call")
+        logger.warning(
+            "Chunk summary batch returned no tool call for %d chunks",
+            len(chunks),
+        )
         return {}
 
     result = {}
@@ -1800,6 +1927,11 @@ def _generate_chunk_summary_batch(
             dropped_count,
         )
 
+    logger.info(
+        "Chunk summary batch: %d/%d chunks got summaries",
+        len(result),
+        len(chunks),
+    )
     return result
 
 
