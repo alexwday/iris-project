@@ -54,10 +54,9 @@ from .stages.stage_5_database import (
 )
 from .utils import backup
 from .utils.env_config import config
-from .utils.logging_format import configure_logging
-from .utils.process_monitoring import enable_monitoring, get_process_monitor
+from .utils.logging_format import configure_root_logger
 from .utils.prompt_loader import load_all_prompts
-from .utils.rbc_security import setup_ssl
+from .utils.rbc_security import configure_rbc_security_certs
 
 logger = logging.getLogger(__name__)
 
@@ -132,19 +131,14 @@ def main() -> int:
 
     # Configure logging
     log_level = getattr(logging, args.log_level.upper(), logging.INFO)
-    configure_logging(log_level)
+    configure_root_logger(log_level)
 
     logger.info("=" * 60)
     logger.info("Document Refresh Pipeline Starting")
     logger.info("=" * 60)
 
     # Setup SSL certificates if needed
-    setup_ssl()
-
-    # Enable process monitoring
-    enable_monitoring(enabled=True)
-    monitor = get_process_monitor()
-    monitor.start_monitoring()
+    configure_rbc_security_certs()
 
     # Validate configuration
     if not config.validate():
@@ -240,11 +234,6 @@ def main() -> int:
                 logger.info("-" * 60)
                 logger.info("Processing %d files (per-file pipeline)", total)
                 logger.info("-" * 60)
-
-                monitor.start_stage("stage_2_extract")
-                monitor.start_stage("stage_3_process")
-                monitor.start_stage("stage_4_validate")
-                monitor.start_stage("stage_5_database")
 
                 with tempfile.TemporaryDirectory() as temp_dir:
                     for i, file_info in enumerate(files_to_process, 1):
@@ -385,16 +374,10 @@ def main() -> int:
                             file_info.file_name,
                         )
 
-                monitor.end_stage("stage_2_extract", "completed")
-                monitor.end_stage("stage_3_process", "completed")
-                monitor.end_stage("stage_4_validate", "completed")
-                monitor.end_stage("stage_5_database", "completed")
-
         # Stage 6: Report
         logger.info("-" * 60)
         logger.info("Stage 6: Generating report")
         logger.info("-" * 60)
-        monitor.end_monitoring()
 
         report_result = stage_6_report.run_stage(
             scan_result=scan_result,

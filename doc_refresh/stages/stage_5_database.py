@@ -29,7 +29,6 @@ from sqlalchemy.orm import Session
 
 from ..connections.postgres import get_database_session
 from ..stages.stage_4_validate import ValidatedDocument
-from ..utils.process_monitoring import get_process_monitor
 
 logger = logging.getLogger(__name__)
 
@@ -75,9 +74,6 @@ def run_stage(
     Returns:
         DatabaseResult with operation counts and any errors.
     """
-    monitor = get_process_monitor()
-    monitor.start_stage("stage_5_database")
-
     result = DatabaseResult()
 
     if dry_run:
@@ -175,17 +171,6 @@ def run_stage(
         len(result.errors),
     )
 
-    monitor.add_stage_details(
-        "stage_5_database",
-        documents_removed=result.documents_removed,
-        documents_inserted=result.documents_inserted,
-        sections_inserted=result.sections_inserted,
-        chunks_inserted=result.chunks_inserted,
-        errors=len(result.errors),
-        dry_run=dry_run,
-    )
-
-    monitor.end_stage("stage_5_database", "completed")
     return result
 
 

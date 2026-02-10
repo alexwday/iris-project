@@ -25,7 +25,6 @@ from sqlalchemy.exc import ProgrammingError
 from ..connections.file_source import FileSource, get_file_source
 from ..connections.postgres import get_database_session
 from ..utils.env_config import config
-from ..utils.process_monitoring import get_process_monitor
 
 logger = logging.getLogger(__name__)
 
@@ -77,9 +76,6 @@ def run_stage(
     Returns:
         ScanResult with files to process, remove, and statistics.
     """
-    monitor = get_process_monitor()
-    monitor.start_stage("stage_1_scan")
-
     result = ScanResult()
 
     try:
@@ -124,22 +120,10 @@ def run_stage(
             len(result.scan_errors),
         )
 
-        monitor.add_stage_details(
-            "stage_1_scan",
-            files_to_process=len(result.files_to_process),
-            files_to_remove=len(result.files_to_remove),
-            files_unchanged=result.files_unchanged,
-            databases_scanned=result.databases_scanned,
-            errors=len(result.scan_errors),
-        )
-
-        monitor.end_stage("stage_1_scan", "completed")
         return result
 
     except Exception as exc:
         logger.error("Stage 1 scan failed: %s", exc)
-        monitor.add_stage_details("stage_1_scan", error=str(exc))
-        monitor.end_stage("stage_1_scan", "error")
         raise
 
 

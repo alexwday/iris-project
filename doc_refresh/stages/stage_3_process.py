@@ -36,7 +36,6 @@ from ..connections.llm import OpenAIConnectorError, calculate_token_cost, execut
 from ..connections.oauth import fetch_oauth_token
 from ..stages.stage_2_extract import ExtractedDocument
 from ..utils.env_config import config
-from ..utils.process_monitoring import get_process_monitor
 from ..utils.prompt_loader import get_prompt
 from ..utils.token_utils import count_tokens, truncate_to_tokens
 
@@ -350,67 +349,6 @@ def _create_embedding(
     return embeddings, usage_details
 
 
-def _call_llm_tracked(
-    auth_token: str,
-    messages: List[Dict[str, str]],
-    model: str,
-    temperature: float = 0.0,
-    max_tokens: Optional[int] = None,
-    response_format: Optional[Dict[str, Any]] = None,
-    tools: Optional[List[Dict[str, Any]]] = None,
-    tool_choice: Optional[Any] = None,
-) -> Tuple[Any, Optional[dict[str, Any]]]:
-    """Wrapper around _call_llm that records usage to process monitor."""
-    start_time = time.time()
-    response, usage = _call_llm(
-        auth_token,
-        messages,
-        model,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        response_format=response_format,
-        tools=tools,
-        tool_choice=tool_choice,
-    )
-    response_time_ms = int((time.time() - start_time) * 1000)
-
-    if usage:
-        call_details = {
-            "model": model,
-            "prompt_tokens": usage.get("prompt_tokens", 0),
-            "completion_tokens": usage.get("completion_tokens", 0),
-            "cost": usage.get("cost", 0.0),
-            "response_time_ms": response_time_ms,
-        }
-        monitor = get_process_monitor()
-        monitor.add_llm_call_details_to_stage("stage_3_process", call_details)
-
-    return response, usage
-
-
-def _create_embedding_tracked(
-    auth_token: str,
-    text_input: List[str],
-    model: Optional[str] = None,
-) -> Tuple[List[List[float]], Dict[str, Any]]:
-    """Wrapper around _create_embedding that records usage to process monitor."""
-    start_time = time.time()
-    embeddings, usage_details = _create_embedding(auth_token, text_input, model)
-    response_time_ms = int((time.time() - start_time) * 1000)
-
-    call_details = {
-        "model": usage_details.get("model", config.MODEL_EMBEDDING),
-        "prompt_tokens": usage_details.get("token_count", 0),
-        "completion_tokens": 0,
-        "cost": usage_details.get("cost", 0.0),
-        "response_time_ms": response_time_ms,
-    }
-    monitor = get_process_monitor()
-    monitor.add_llm_call_details_to_stage("stage_3_process", call_details)
-
-    return embeddings, usage_details
-
-
 def _load_prompt(name: str) -> Tuple[str, Optional[Dict[str, Any]], str]:
     """Return system prompt, tool definition, and user prompt for stage 3.
 
@@ -620,14 +558,10 @@ def run_stage(
     Returns:
         ProcessingResult with processed documents and statistics.
     """
-    monitor = get_process_monitor()
-    monitor.start_stage("stage_3_process")
-
     result = ProcessingResult()
 
     if not extracted_documents:
         logger.info("No documents to process")
-        monitor.end_stage("stage_3_process", "completed")
         return result
 
     logger.info("Processing %d extracted documents", len(extracted_documents))
@@ -694,16 +628,6 @@ def run_stage(
         result.total_chunks,
     )
 
-    monitor.add_stage_details(
-        "stage_3_process",
-        documents_processed=len(result.processed_documents),
-        documents_failed=len(result.failed_documents),
-        total_sections=result.total_sections,
-        total_subsections=result.total_subsections,
-        total_chunks=result.total_chunks,
-    )
-
-    monitor.end_stage("stage_3_process", "completed")
     return result
 
 
@@ -858,7 +782,7 @@ def extract_document_metadata(
     ]
 
     try:
-        response, _ = _call_llm_tracked(
+        response, _ = _call_llm(
             auth_token,
             messages,
             model=config.MODEL_LARGE,
@@ -1032,7 +956,7 @@ def classify_document(pages: List[str], auth_token: str) -> Dict[str, Any]:
     )
 
     try:
-        response, _ = _call_llm_tracked(
+        response, _ = _call_llm(
             auth_token,
             messages,
             model=config.MODEL_SMALL,
@@ -1105,7 +1029,7 @@ def detect_sections_batch(
     )
 
     try:
-        response, _ = _call_llm_tracked(
+        response, _ = _call_llm(
             auth_token,
             messages,
             model=config.MODEL_SMALL,
@@ -1209,7 +1133,7 @@ def consolidate_sections_llm(
     )
 
     try:
-        response, _ = _call_llm_tracked(
+        response, _ = _call_llm(
             auth_token,
             messages,
             model=config.MODEL_LARGE,
@@ -1352,7 +1276,7 @@ def analyze_subsections(
             {"role": "user", "content": user_prompt},
         ]
 
-        response, _ = _call_llm_tracked(
+        response, _ = _call_llm(
             auth_token,
             messages,
             model=config.MODEL_SMALL,
@@ -1531,7 +1455,7 @@ def generate_section_summary_json(
     ]
 
     try:
-        response, _ = _call_llm_tracked(
+        response, _ = _call_llm(
             auth_token,
             messages,
             model=config.MODEL_LARGE,
@@ -1666,7 +1590,7 @@ def generate_document_fields(
     user_prompt = user_template.format(document_summary=truncated_summary)
 
     try:
-        response, _ = _call_llm_tracked(
+        response, _ = _call_llm(
             auth_token,
             [
                 {"role": "system", "content": system_prompt},
@@ -1710,7 +1634,7 @@ def generate_summary_embedding(
                 "embedding may be truncated by the model",
                 token_count,
             )
-        embeddings, _ = _create_embedding_tracked(
+        embeddings, _ = _create_embedding(
             auth_token,
             [clean_summary],
             model=config.MODEL_EMBEDDING,
@@ -1842,7 +1766,7 @@ def _generate_chunk_summary_batch(
         chunk_blocks=chunk_blocks_text,
     )
 
-    response, _ = _call_llm_tracked(
+    response, _ = _call_llm(
         auth_token,
         [
             {"role": "system", "content": system_prompt},
@@ -2014,7 +1938,7 @@ def generate_embeddings(chunks: List[Chunk], auth_token: str) -> List[Chunk]:
         ]
 
         try:
-            embeddings, _ = _create_embedding_tracked(
+            embeddings, _ = _create_embedding(
                 auth_token,
                 texts,
                 model=config.MODEL_EMBEDDING,

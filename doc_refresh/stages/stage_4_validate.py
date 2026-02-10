@@ -22,7 +22,6 @@ from dataclasses import dataclass, field
 from typing import List, Optional
 
 from ..stages.stage_3_process import ProcessedDocument, Section, Chunk
-from ..utils.process_monitoring import get_process_monitor
 
 logger = logging.getLogger(__name__)
 
@@ -71,14 +70,10 @@ def run_stage(
     Returns:
         ValidationResult with validated and failed documents.
     """
-    monitor = get_process_monitor()
-    monitor.start_stage("stage_4_validate")
-
     result = ValidationResult()
 
     if not processed_documents:
         logger.info("No documents to validate")
-        monitor.end_stage("stage_4_validate", "completed")
         return result
 
     logger.info("Validating %d processed documents", len(processed_documents))
@@ -135,15 +130,6 @@ def run_stage(
         result.total_warnings,
     )
 
-    monitor.add_stage_details(
-        "stage_4_validate",
-        documents_validated=len(result.validated_documents),
-        documents_failed=len(result.failed_documents),
-        total_warnings=result.total_warnings,
-        total_errors=len([e for e in result.all_errors if e.severity == "error"]),
-    )
-
-    monitor.end_stage("stage_4_validate", "completed")
     return result
 
 

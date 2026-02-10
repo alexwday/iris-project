@@ -117,9 +117,9 @@ def build_database_dsn(params: Dict[str, Any]) -> str:
     logger.info("Using host(s): %s", host_port)
     logger.info("Using port(s): %s", ports)
 
-    # Use sslmode=prefer for local development (localhost), require for production
     is_local = all(h in ("localhost", "127.0.0.1") for h in hosts)
     sslmode = "prefer" if is_local else "require"
+    logger.info("Using SSL mode: %s (local=%s)", sslmode, is_local)
 
     return (
         f"postgresql+psycopg2://{safe_user}:{safe_password}@{host_port}/{safe_database}"

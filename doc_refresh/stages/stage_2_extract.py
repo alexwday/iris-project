@@ -27,7 +27,6 @@ from ..connections.file_source import FileSource, get_file_source
 from ..stages.stage_1_scan import FileInfo
 from ..utils.content_extractor import extract_pages
 from ..utils.env_config import config
-from ..utils.process_monitoring import get_process_monitor
 
 logger = logging.getLogger(__name__)
 
@@ -72,14 +71,10 @@ def run_stage(
     Returns:
         ExtractionResult with extracted documents and statistics.
     """
-    monitor = get_process_monitor()
-    monitor.start_stage("stage_2_extract")
-
     result = ExtractionResult()
 
     if not files_to_process:
         logger.info("No files to extract")
-        monitor.end_stage("stage_2_extract", "completed")
         return result
 
     # Get file source
@@ -134,14 +129,6 @@ def run_stage(
         len(result.failed_documents),
     )
 
-    monitor.add_stage_details(
-        "stage_2_extract",
-        documents_extracted=len(result.extracted_documents),
-        documents_failed=len(result.failed_documents),
-        total_pages=result.total_pages,
-    )
-
-    monitor.end_stage("stage_2_extract", "completed")
     return result
 
 

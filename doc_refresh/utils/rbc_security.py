@@ -1,6 +1,13 @@
-"""RBC Security certificate setup.
+"""
+RBC Security - SSL certificate configuration for RBC infrastructure.
 
-Uses optional ``rbc_security`` support for SSL when available.
+This module handles SSL certificate setup required for HTTPS connections within
+RBC's network. It wraps the optional rbc_security package which is only available
+in RBC's deployment environment. Called during application startup to enable
+secure connections to Azure endpoints and internal services.
+
+When running locally (outside RBC infrastructure), the rbc_security import fails
+gracefully and the application continues without certificate configuration.
 """
 
 import logging
@@ -17,14 +24,10 @@ logger = logging.getLogger(__name__)
 
 
 def configure_rbc_security_certs() -> Optional[str]:
-    """Configure SSL certificates for the RBC environment.
-
-    Enables certificates if ``rbc_security`` is available; logs and continues
-    otherwise.
+    """Enable RBC SSL certificates if the rbc_security package is available.
 
     Returns:
-        Optional[str]: ``"rbc_security"`` when certificates are enabled; otherwise
-        None.
+        "rbc_security" if certificates were enabled, None if unavailable.
     """
     if not _RBC_SECURITY_AVAILABLE:
         logger.info("rbc_security not available, continuing without SSL certificates")
@@ -34,9 +37,3 @@ def configure_rbc_security_certs() -> Optional[str]:
     rbc_security.enable_certs()
     logger.info("RBC Security certificates enabled")
     return "rbc_security"
-
-
-# Backwards compatibility
-def setup_ssl() -> Optional[str]:
-    """Alias for legacy doc_refresh callers."""
-    return configure_rbc_security_certs()

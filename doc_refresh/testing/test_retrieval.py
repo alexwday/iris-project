@@ -26,13 +26,13 @@ from psycopg2.extras import RealDictCursor
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from doc_refresh.utils.logging_format import configure_logging
+from doc_refresh.utils.logging_format import configure_root_logger
 from doc_refresh.utils.env_config import config
 from doc_refresh.connections.llm import calculate_token_cost, execute_llm_call
 from doc_refresh.connections.oauth import fetch_oauth_token
 
 # Configure logging
-configure_logging(logging.INFO)
+configure_root_logger(logging.INFO)
 logger = logging.getLogger(__name__)
 
 

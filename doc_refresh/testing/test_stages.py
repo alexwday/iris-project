@@ -19,11 +19,10 @@ from pathlib import Path
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from doc_refresh.utils.logging_format import configure_logging
-from doc_refresh.utils.process_monitoring import enable_monitoring, get_process_monitor
+from doc_refresh.utils.logging_format import configure_root_logger
 
 # Configure logging
-configure_logging(logging.INFO)
+configure_root_logger(logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -301,11 +300,6 @@ def test_all_stages(dry_run=True):
         stage_6_report,
     )
 
-    # Enable monitoring
-    enable_monitoring(True)
-    monitor = get_process_monitor()
-    monitor.start_monitoring()
-
     file_source = LocalFileSource(base_path=str(TEST_DIR.parent))
 
     # Stage 1
@@ -355,7 +349,6 @@ def test_all_stages(dry_run=True):
 
     # Stage 6
     print("\n--- Stage 6: Report ---")
-    monitor.end_monitoring()
     report_result = stage_6_report.run_stage(
         scan_result=scan_result,
         extraction_result=extraction_result,

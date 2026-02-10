@@ -25,7 +25,6 @@ from ..stages.stage_3_process import ProcessingResult
 from ..stages.stage_4_validate import ValidationResult
 from ..stages.stage_5_database import DatabaseResult
 from ..utils.env_config import config
-from ..utils.process_monitoring import get_process_monitor
 
 logger = logging.getLogger(__name__)
 
@@ -63,9 +62,6 @@ def run_stage(
     Returns:
         ReportResult with report dict and optional file path.
     """
-    monitor = get_process_monitor()
-    monitor.start_stage("stage_6_report")
-
     result = ReportResult()
 
     try:
@@ -95,7 +91,6 @@ def run_stage(
         logger.error("Report generation failed: %s", exc)
         result.success = False
 
-    monitor.end_stage("stage_6_report", "completed")
     return result
 
 
@@ -115,23 +110,15 @@ def generate_report(
     Returns:
         Complete report dictionary.
     """
-    monitor = get_process_monitor()
-    monitor_summary = monitor.get_summary()
-
     report = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "run_uuid": monitor_summary.get("run_uuid"),
+        "run_uuid": None,
         "configuration": {
             "file_source_mode": config.FILE_SOURCE_MODE,
             "base_path": config.BASE_PATH,
             "database_names": config.get_database_names(),
             "dry_run": config.REFRESH_DRY_RUN,
             "force": config.REFRESH_FORCE,
-        },
-        "summary": {
-            "total_duration_seconds": monitor_summary.get("total_duration_seconds"),
-            "total_cost": monitor_summary.get("total_cost"),
-            "total_tokens": monitor_summary.get("total_tokens"),
         },
         "stages": {},
         "errors": [],
@@ -202,17 +189,6 @@ def generate_report(
         }
         report["errors"].extend(database_result.errors)
 
-    # Add stage timing from monitor
-    if monitor_summary.get("stages"):
-        for stage_name, stage_data in monitor_summary["stages"].items():
-            if stage_name.startswith("stage_"):
-                simple_name = stage_name.replace("stage_", "").split("_")[-1]
-                if simple_name in report["stages"]:
-                    report["stages"][simple_name]["duration_seconds"] = stage_data.get(
-                        "duration_seconds"
-                    )
-                    report["stages"][simple_name]["cost"] = stage_data.get("total_cost")
-
     return report
 
 
@@ -237,18 +213,6 @@ def print_summary(report: Dict[str, Any]) -> None:
         print("  Mode: DRY RUN (no database changes)")
     if config_section.get("force"):
         print("  Mode: FORCE (reprocessing all files)")
-
-    # Summary
-    summary = report.get("summary", {})
-    duration = summary.get("total_duration_seconds")
-    if duration:
-        print(f"\nDuration: {duration:.1f} seconds")
-    cost = summary.get("total_cost")
-    if cost:
-        print(f"Total Cost: ${cost:.4f}")
-    tokens = summary.get("total_tokens")
-    if tokens:
-        print(f"Total Tokens: {tokens:,}")
 
     # Stages
     stages = report.get("stages", {})
