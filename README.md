@@ -122,13 +122,15 @@ The doc_refresh pipeline processes PDF/DOCX files into structured, searchable ch
 
 ### Configuration
 
-Set these additional environment variables:
+Set the doc_refresh variables in your `.env` file (see the "Doc Refresh Pipeline Variables" section in `.env.example`). The key ones:
 
 | Variable | Description | Example |
 |----------|-------------|---------|
 | `BASE_PATH` | Root folder containing document subfolders | `/path/to/documents` |
 | `DATABASE_NAMES` | Comma-separated folder names to process | `internal_wiki,policies` |
 | `FILE_SOURCE_MODE` | File access mode | `local` or `nas` |
+| `NAS_IP`, `NAS_SHARE`, etc. | NAS connection (only if `FILE_SOURCE_MODE=nas`) | |
+| `BACKUP_ENABLED` | Back up data before inserts | `false` |
 
 If `DATABASE_NAMES` is empty, the pipeline auto-discovers subfolders under `BASE_PATH`.
 
