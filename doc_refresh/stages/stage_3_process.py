@@ -287,12 +287,15 @@ def _get_model_costs(model_name: str) -> Tuple[float, float]:
     return settings["prompt_token_cost"], settings["completion_token_cost"]
 
 
+MAX_OUTPUT_TOKENS = 100000
+
+
 def _call_llm(
     auth_token: str,
     messages: List[Dict[str, str]],
     model: str,
     temperature: float = 0.0,
-    max_tokens: Optional[int] = None,
+    max_tokens: int = MAX_OUTPUT_TOKENS,
     response_format: Optional[Dict[str, Any]] = None,
     tools: Optional[List[Dict[str, Any]]] = None,
     tool_choice: Optional[Any] = None,
@@ -302,10 +305,10 @@ def _call_llm(
     if tool_choice and isinstance(tool_choice, dict):
         tool_name = tool_choice.get("function", {}).get("name", "auto")
     logger.info(
-        "LLM call: model=%s, tool=%s, max_tokens=%s, messages=%d",
+        "LLM call: model=%s, tool=%s, max_tokens=%d, messages=%d",
         model,
         tool_name,
-        max_tokens or "default",
+        max_tokens,
         len(messages),
     )
 
@@ -979,10 +982,8 @@ def detect_structure(
             "Cannot proceed without valid document structure."
         )
 
-    # Validate section page numbers against actual page text
     final_sections = _validate_section_page_numbers(pages, final_sections)
 
-    # Ensure first section starts at page 1
     if not final_sections or final_sections[0].page_number > 1:
         final_sections.insert(
             0,
@@ -1255,28 +1256,26 @@ def consolidate_sections_llm(
                     corrections[:3],
                 )
 
-            if consolidated:
-                return sorted(consolidated, key=lambda s: s.page_number)
+            if not consolidated:
+                raise RuntimeError(
+                    "LLM consolidation returned sections but all had missing "
+                    "page_number. Check consolidate_structure tool_definition."
+                )
 
-            logger.warning(
-                "LLM consolidation returned empty sections — "
-                "using unconsolidated sections"
-            )
-            return fallback_sections
+            return sorted(consolidated, key=lambda s: s.page_number)
 
-        logger.warning(
-            "LLM consolidation returned no tool call — "
-            "using unconsolidated sections"
+        raise RuntimeError(
+            "LLM consolidation returned no tool call. "
+            "Check the consolidate_structure prompt and tool_definition in database."
         )
-        return fallback_sections
 
     except (OpenAIConnectorError, ConnectionError, OSError):
         raise
     except Exception as exc:
-        logger.warning(
-            "LLM consolidation failed: %s — using unconsolidated sections", exc
-        )
-        return fallback_sections
+        raise RuntimeError(
+            f"LLM consolidation failed: {exc}. "
+            "Check the consolidate_structure prompt and tool_definition in database."
+        ) from exc
 
 
 def build_primary_sections(
@@ -1897,7 +1896,6 @@ def _generate_chunk_summary_batch(
         ],
         model=config.MODEL_SMALL,
         temperature=0.2,
-        max_tokens=4096,
         tools=[tool_def],
         tool_choice={"type": "function", "function": {"name": "provide_chunk_summaries"}},
     )
