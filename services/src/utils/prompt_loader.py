@@ -215,7 +215,7 @@ def _format_database_context_block(
             db_info = available_databases[db_key]
             idx = key_to_index[db_key]
             name = db_info.get("name", db_key)
-            description = db_info.get("description", "")
+            description = db_info.get("db_description") or db_info.get("description", "")
             lines.extend(
                 [
                     f'<DATABASE index="{idx}" id="{db_key}">',

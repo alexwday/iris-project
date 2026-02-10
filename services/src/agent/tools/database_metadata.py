@@ -91,12 +91,19 @@ class DatabaseMetadataCache:
                     .all()
                 )
 
-            databases = {
-                row["db_source"]: {
+            databases = {}
+            for row in rows:
+                ad_groups = row["ad_groups"] or []
+                if not ad_groups:
+                    logger.warning(
+                        "Database '%s' has no ad_groups configured; "
+                        "it will be treated as unrestricted",
+                        row["db_source"],
+                    )
+                databases[row["db_source"]] = {
                     "name": row["db_name"],
                     "description": row["db_summary"],
                     "db_description": row["db_description"],
-                    # Individual research config fields
                     "batch_size": row["batch_size"],
                     "max_selected_files": row["max_selected_files"],
                     "top_chunks_in_catalog_selection": row["top_chunks_in_catalog_selection"],
@@ -112,11 +119,9 @@ class DatabaseMetadataCache:
                     "max_gap_fill_pages": row["max_gap_fill_pages"],
                     "metadata_context_fields": row["metadata_context_fields"] or ["document_summary"],
                     "sample_questions": row["sample_questions"] or [],
-                    "ad_groups": row["ad_groups"] or [],
+                    "ad_groups": ad_groups,
                     "enabled": row["enabled"],
                 }
-                for row in rows
-            }
 
             logger.info(
                 "Loaded %d databases from iris_database_registry", len(databases)

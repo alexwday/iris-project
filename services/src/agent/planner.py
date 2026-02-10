@@ -61,13 +61,16 @@ def _generate_query_embedding_vector(
     usage_details = None
 
     try:
+        if not token:
+            raise ValueError("OAuth token required for embedding API call")
+
         model_config = config.get_model_settings("embedding")
         model_name = model_config["name"]
         prompt_cost = model_config["prompt_token_cost"]
         completion_cost = model_config.get("completion_token_cost", 0.0)
 
         call_params = {
-            "oauth_token": token or "placeholder_token",
+            "oauth_token": token,
             "prompt_token_cost": prompt_cost,
             "completion_token_cost": completion_cost,
             "model": model_name,
@@ -104,8 +107,13 @@ def _generate_query_embedding_vector(
         )
         return None, usage_details
 
-    except Exception as e:
-        logger.error("Failed to generate embedding: %s", e, exc_info=True)
+    except (ValueError, TypeError, KeyError) as e:
+        logger.error(
+            "Embedding generation failed (non-retryable): %s: %s",
+            type(e).__name__,
+            e,
+            exc_info=True,
+        )
         return None, usage_details
 
 

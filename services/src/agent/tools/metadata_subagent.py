@@ -175,6 +175,8 @@ def fetch_all_document_metadata(
                         m.id,
                         m.document_name,
                         m.document_summary,
+                        m.document_description,
+                        m.document_usage,
                         m.document_type,
                         m.page_count,
                         m.file_name,
@@ -249,6 +251,8 @@ def fetch_all_document_metadata(
                         "document_name": row["document_name"],
                         "document_index": idx,
                         "document_summary": row["document_summary"] or "",
+                        "document_description": row["document_description"] or "",
+                        "document_usage": row["document_usage"] or "",
                         "document_type": row["document_type"],
                         "page_count": row["page_count"],
                         "chunk_count": row["chunk_count"] or 0,
@@ -317,7 +321,7 @@ def fetch_top_documents_by_summary(
                 }
                 for row in rows
             ]
-    except Exception as exc:
+    except (KeyError, ValueError, TypeError) as exc:
         logger.warning(
             "Could not fetch top summary docs for %s: %s", db_source, exc
         )
@@ -454,10 +458,16 @@ def select_relevant_files_from_batch(
             .replace("{{batch_documents}}", formatted_docs)
         )
 
+        token = ctx.get("token")
+        if not token:
+            raise MetadataSubagentError(
+                "OAuth token required for LLM call in catalog batch selection"
+            )
+
         model_config = config.get_model_settings(MODEL_CAPABILITY)
 
         result = execute_llm_call(
-            oauth_token=ctx.get("token") or "placeholder_token",
+            oauth_token=token,
             model=model_config["name"],
             messages=[
                 {"role": "system", "content": system_prompt},
@@ -505,12 +515,20 @@ def select_relevant_files_from_batch(
 
         arguments = json.loads(tool_call.function.arguments)
 
-        # Map indices back to document_ids
         index_to_id = {doc["document_index"]: doc["document_id"] for doc in batch_documents}
         selected_indices = arguments.get("selected_indices", [])
-        selected_ids = [
-            index_to_id[idx] for idx in selected_indices if idx in index_to_id
-        ]
+        selected_ids = []
+        for idx in selected_indices:
+            if idx in index_to_id:
+                selected_ids.append(index_to_id[idx])
+            else:
+                logger.warning(
+                    "LLM returned invalid document index %s in batch %d "
+                    "(valid indices: %s)",
+                    idx,
+                    batch_number,
+                    sorted(index_to_id.keys()),
+                )
 
         selection: BatchSelection = {
             "batch_number": batch_number,
@@ -667,9 +685,12 @@ def _validate_unified_decisions(
             continue
 
         if status not in valid_statuses:
-            logger.warning(
-                "Invalid status '%s' for doc %s, defaulting to needs_deep_research",
+            doc_name = index_to_doc[doc_index]["document_name"] if doc_index in valid_indices else doc_id
+            logger.error(
+                "Invalid status '%s' for document '%s' (id=%s), "
+                "defaulting to needs_deep_research",
                 status,
+                doc_name,
                 doc_id,
             )
             status = "needs_deep_research"
@@ -703,13 +724,13 @@ def _validate_unified_decisions(
             }
         )
 
-    for doc in batch_documents:
-        if doc["document_id"] not in seen_ids:
-            logger.warning(
-                "Document %s missing from LLM response, "
-                "defaulting to needs_deep_research",
-                doc["document_id"],
-            )
+    missing_docs = [doc for doc in batch_documents if doc["document_id"] not in seen_ids]
+
+    if missing_docs:
+        missing_count = len(missing_docs)
+        batch_count = len(batch_documents)
+
+        for doc in missing_docs:
             validated.append(
                 {
                     "document_id": doc["document_id"],
@@ -717,6 +738,23 @@ def _validate_unified_decisions(
                     "finding": "No finding provided",
                     "page_number": None,
                 }
+            )
+
+        if missing_count > batch_count / 2:
+            logger.error(
+                "%d of %d batch documents missing from LLM response "
+                "(likely truncated response or prompt issue): %s",
+                missing_count,
+                batch_count,
+                [doc["document_name"] for doc in missing_docs],
+            )
+        else:
+            logger.warning(
+                "%d of %d batch documents missing from LLM response, "
+                "defaulting to needs_deep_research: %s",
+                missing_count,
+                batch_count,
+                [doc["document_name"] for doc in missing_docs],
             )
 
     return validated
@@ -833,10 +871,16 @@ def process_batch_unified(
             formatted_docs[:10000] if len(formatted_docs) > 10000 else formatted_docs,
         )
 
+        token = ctx.get("token")
+        if not token:
+            raise MetadataSubagentError(
+                "OAuth token required for LLM call in unified metadata processing"
+            )
+
         model_config = config.get_model_settings(MODEL_CAPABILITY)
 
         result = execute_llm_call(
-            oauth_token=ctx.get("token") or "placeholder_token",
+            oauth_token=token,
             model=model_config["name"],
             messages=[
                 {"role": "system", "content": system_prompt},

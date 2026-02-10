@@ -686,6 +686,12 @@ def _expand_chunks_for_document(
                 session, document_id, db_source, primary_number
             )
             if not section_chunks:
+                logger.warning(
+                    "Primary section expansion returned no chunks for document %s, "
+                    "section_number=%s; falling back to seed chunks",
+                    document_id,
+                    primary_number,
+                )
                 section_chunks = primary_chunks
 
             chunk_groups.append(
@@ -726,6 +732,14 @@ def _expand_chunks_for_document(
                     subsection_number,
                 )
                 if not expanded_subsection:
+                    logger.warning(
+                        "Subsection expansion returned no chunks for document %s, "
+                        "section_number=%s, subsection_number=%s; "
+                        "falling back to seed chunks",
+                        document_id,
+                        primary_number,
+                        subsection_number,
+                    )
                     expanded_subsection = subsection_chunks
 
                 chunk_groups.append(
@@ -778,6 +792,12 @@ def _expand_chunks_for_document(
             )
 
         if not neighbor_chunks:
+            logger.warning(
+                "Neighbor expansion returned no chunks for document %s, "
+                "section_number=%s; falling back to candidate chunks",
+                document_id,
+                primary_number,
+            )
             neighbor_chunks = candidate_chunks
 
         chunk_groups.append(
@@ -1118,6 +1138,12 @@ def fetch_chunks_with_hierarchical_expansion(
                     session, doc_id, db_source, seed_chunks, research_config
                 )
                 if not expanded_groups:
+                    logger.warning(
+                        "Hierarchical expansion returned no groups for document '%s' "
+                        "in %s; falling back to seed chunks as single group",
+                        metadata["document_name"],
+                        db_source,
+                    )
                     expanded_groups = [
                         {
                             "primary_section_number": seed_chunks[0].get(
@@ -1257,10 +1283,11 @@ def format_document_chunks_for_llm(document: DocumentChunks) -> str:
 def _format_chunk_xml(chunk: ChunkData, indent: str = "  ") -> List[str]:
     """Render a single chunk as XML with content markers."""
 
-    page_number = chunk.get("page_number") or 0
+    page_number = chunk.get("page_number")
+    page_attr = page_number if page_number is not None else "unknown"
     content_lines = (chunk.get("chunk_content") or "").splitlines() or [""]
     lines = [
-        f'{indent}<chunk page="{page_number}">',
+        f'{indent}<chunk page="{page_attr}">',
         f"{indent}  <content_start/>",
     ]
     for line in content_lines:
@@ -1440,7 +1467,7 @@ def _parse_tool_response(
 
     page_research: List[PageResearch] = [
         {
-            "page_number": page_item.get("page_number", 0),
+            "page_number": page_item.get("page_number"),
             # LLM returns finding; map to research_content for internal consistency.
             "research_content": (
                 page_item.get("finding")
@@ -1548,10 +1575,16 @@ def synthesize_document_research(
             .replace("{{document_name}}", doc_name)
         )
 
+        token = ctx.get("token")
+        if not token:
+            raise FileResearchError(
+                "OAuth token required for LLM call in file research synthesis"
+            )
+
         model_config = config.get_model_settings(MODEL_CAPABILITY)
 
         result = execute_llm_call(
-            oauth_token=ctx.get("token") or "placeholder_token",
+            oauth_token=token,
             model=model_config["name"],
             messages=_build_llm_messages(system_prompt, user_prompt),
             max_tokens=MODEL_MAX_TOKENS,

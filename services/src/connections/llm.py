@@ -166,21 +166,25 @@ def execute_llm_call(
                 int((time.time() - start_time) * 1000),
             )
 
-        except (
-            ValueError,
-            TypeError,
-            KeyError,
-            RuntimeError,
-            OSError,
-            OpenAIError,
-        ) as exc:
+        except (ValueError, TypeError, KeyError) as exc:
+            logger.error(
+                "LLM call failed with non-retryable error: %s: %s",
+                type(exc).__name__,
+                exc,
+            )
+            raise OpenAIConnectorError(
+                f"Non-retryable error in OpenAI API call: {exc}"
+            ) from exc
+
+        except (OSError, RuntimeError, OpenAIError) as exc:
             last_exception = exc
             logger.warning(
-                "LLM call attempt %d/%d failed after %.2f seconds: %s",
+                "LLM call attempt %d/%d failed after %.2f seconds: %s: %s",
                 attempt_num,
                 _MAX_RETRY_ATTEMPTS,
                 time.time() - start_time,
                 type(exc).__name__,
+                exc,
             )
 
             if attempt_num < _MAX_RETRY_ATTEMPTS:
@@ -243,7 +247,11 @@ def _stream_response_with_usage(
             }
         }
     else:
-        logger.warning("Stream finished but no usage data found in final chunk")
+        logger.warning(
+            "Stream for model '%s' finished without usage data after %dms",
+            model_name,
+            total_response_time_ms,
+        )
         yield {
             "usage_details": {
                 "model": model_name,
@@ -251,6 +259,6 @@ def _stream_response_with_usage(
                 "completion_tokens": 0,
                 "cost": 0.0,
                 "response_time_ms": total_response_time_ms,
-                "error": "Usage data missing from stream",
+                "warning": "usage_data_missing",
             }
         }
