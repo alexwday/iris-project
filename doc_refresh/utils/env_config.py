@@ -80,7 +80,7 @@ class Config:
     MAX_RETRY_ATTEMPTS: int = _int("MAX_RETRY_ATTEMPTS", 3)
     RETRY_DELAY_SECONDS: int = _int("RETRY_DELAY_SECONDS", 5)
 
-    MAX_HISTORY_LENGTH: int = _int("IRIS_MAX_HISTORY_LENGTH")
+    MAX_HISTORY_LENGTH: int = _int("IRIS_MAX_HISTORY_LENGTH")  # 0 = unlimited
     INCLUDE_SYSTEM_MESSAGES: bool = _bool("IRIS_INCLUDE_SYSTEM_MESSAGES")
     MAX_DATABASES_PER_QUERY: int = _int("IRIS_MAX_DATABASES_PER_QUERY")
     SHOW_USAGE_SUMMARY: bool = _bool("IRIS_SHOW_USAGE_SUMMARY")
@@ -100,6 +100,8 @@ class Config:
     NAS_PASSWORD: str = os.getenv("NAS_PASSWORD", "")
     NAS_PORT: int = _int("NAS_PORT", 445)
 
+    OUTPUT_PATH: str = os.getenv("OUTPUT_PATH", "")
+
     BACKUP_ENABLED: bool = _bool("BACKUP_ENABLED")
     BACKUP_PATH: str = os.getenv("BACKUP_PATH", "")
     REFRESH_DRY_RUN: bool = _bool("REFRESH_DRY_RUN")
@@ -117,14 +119,41 @@ class Config:
         return [n.strip() for n in cls.DATABASE_NAMES.split(",") if n.strip()]
 
     @classmethod
+    def discover_database_names(cls, file_source: "Any") -> "list[str]":
+        """
+        Discover database names from file source subfolders.
+
+        When DATABASE_NAMES is set, uses it as a filter against discovered folders.
+        When DATABASE_NAMES is empty, returns all discovered subfolders.
+
+        Args:
+            file_source: FileSource instance with list_subfolders() method.
+
+        Returns:
+            List of database names to process.
+        """
+        discovered = file_source.list_subfolders()
+        configured = cls.get_database_names()
+
+        if configured:
+            filtered = [d for d in discovered if d in configured]
+            logger.info(
+                "Filtered discovered folders by DATABASE_NAMES: %d of %d match",
+                len(filtered),
+                len(discovered),
+            )
+            return filtered
+
+        logger.info("Auto-discovered %d database folders: %s", len(discovered), discovered)
+        return discovered
+
+    @classmethod
     def validate(cls) -> bool:
         """Validate doc_refresh specific environment requirements."""
         missing = []
 
         if not cls.BASE_PATH:
             missing.append("BASE_PATH")
-        if not cls.DATABASE_NAMES:
-            missing.append("DATABASE_NAMES")
         if not cls.DB_HOST:
             missing.append("VECTOR_POSTGRES_DB_HOST")
         if not cls.DB_PORT:
@@ -148,6 +177,9 @@ class Config:
 
         if not cls.RBC_BASE_URL and not cls.OPENAI_API_KEY:
             missing.append("AZURE_BASE_URL or OPENAI_API_KEY")
+
+        if not cls.OUTPUT_PATH:
+            logger.warning("OUTPUT_PATH not set - PDF output copies will be skipped")
 
         if cls.BACKUP_ENABLED and not cls.BACKUP_PATH:
             missing.append("BACKUP_PATH (required when BACKUP_ENABLED=true)")

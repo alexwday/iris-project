@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set, Tuple
 
 from sqlalchemy import text
+from sqlalchemy.exc import ProgrammingError
 
 from ..connections.file_source import FileSource, get_file_source
 from ..connections.postgres import get_database_session
@@ -87,13 +88,13 @@ def run_stage(
             file_source = get_file_source()
             logger.info("Using file source mode: %s", config.FILE_SOURCE_MODE)
 
-        # Get database names to process
         if database_names is None:
-            database_names = config.get_database_names()
+            database_names = config.discover_database_names(file_source)
 
         if not database_names:
             raise ValueError(
-                "No database names configured. Set DATABASE_NAMES environment variable."
+                "No database folders found. Set DATABASE_NAMES or ensure "
+                "BASE_PATH contains subdirectories."
             )
 
         logger.info("Scanning %d database folders: %s", len(database_names), database_names)
@@ -185,25 +186,21 @@ def scan_folder(
                 )
         return result
 
-    # Get existing files from database (keyed by file_name for 2-table design)
     db_files_list = get_database_files(db_name)
-    db_files_map = {f["file_name"]: f for f in db_files_list}
-    source_names: Set[str] = set()
+    db_files_map = {f["file_path"]: f for f in db_files_list}
+    source_paths: Set[str] = set()
 
-    # Compare each file
     for file_info in files:
         relative_path = file_info["relative_path"]
         file_name = file_info["name"]
-        source_names.add(file_name)
+        source_paths.add(relative_path)
 
         try:
-            # Calculate file hash
             file_hash = file_source.get_file_hash(
                 f"{db_name}/{relative_path}" if config.FILE_SOURCE_MODE == "local" else file_info["path"]
             )
 
-            # Check if file exists in database (by file_name for 2-table design)
-            db_file = db_files_map.get(file_name)
+            db_file = db_files_map.get(relative_path)
 
             if db_file is None:
                 # New file
@@ -264,18 +261,17 @@ def scan_folder(
             logger.warning(error_msg)
             result.scan_errors.append(error_msg)
 
-    # Find files to remove (in DB but not in source)
-    for file_name, db_file in db_files_map.items():
-        if file_name not in source_names:
+    for file_path, db_file in db_files_map.items():
+        if file_path not in source_paths:
             result.files_to_remove.append(
                 {
                     "db_source": db_name,
-                    "file_name": file_name,
-                    "file_path": db_file.get("file_path"),
+                    "file_path": file_path,
+                    "file_name": db_file.get("file_name"),
                     "document_id": db_file.get("document_id"),
                 }
             )
-            logger.debug("File to remove: %s", file_name)
+            logger.debug("File to remove: %s", file_path)
 
     logger.info(
         "Folder %s: %d new/updated, %d to remove, %d unchanged",
@@ -323,6 +319,10 @@ def get_database_files(db_source: str) -> List[Dict]:
             ]
         logger.debug("Found %d existing files in DB for %s", len(results), db_source)
         return results
-    except Exception as exc:
-        logger.warning("Could not query database files for %s: %s", db_source, exc)
+    except ProgrammingError as exc:
+        logger.warning(
+            "Table not found querying database files for %s (first run?): %s",
+            db_source,
+            exc,
+        )
         return []

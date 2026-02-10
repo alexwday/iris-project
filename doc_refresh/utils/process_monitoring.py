@@ -114,6 +114,36 @@ class ProcessMonitoringManager:
         if self.enabled and stage_name in self.stages:
             self.stages[stage_name].add_details(**kwargs)
 
+    def get_summary(self) -> Dict[str, Any]:
+        """Build a summary dict of the entire run for reporting."""
+        total_duration = None
+        if self.start_time and self.end_time:
+            total_duration = (self.end_time - self.start_time).total_seconds()
+
+        total_tokens = 0
+        total_cost = 0.0
+        stages_summary: Dict[str, Any] = {}
+
+        for name, stage in self.stages.items():
+            stage_tokens = stage.get_total_tokens()
+            stage_cost = stage.get_total_cost()
+            total_tokens += stage_tokens
+            total_cost += stage_cost
+            stages_summary[name] = {
+                "duration_seconds": stage.duration,
+                "total_tokens": stage_tokens,
+                "total_cost": stage_cost,
+                "status": stage.status,
+            }
+
+        return {
+            "run_uuid": str(self.run_uuid) if self.run_uuid else None,
+            "total_duration_seconds": total_duration,
+            "total_tokens": total_tokens,
+            "total_cost": total_cost,
+            "stages": stages_summary,
+        }
+
     def log_to_database(self, session: Any) -> None:
         """Log all stage data to the process_monitor_logs table."""
         if not self.enabled:
@@ -153,6 +183,7 @@ class ProcessMonitoringManager:
     def _prepare_records_for_db(self) -> List[Dict[str, Any]]:
         """Convert stages to database-ready records."""
         records = []
+        skipped_count = 0
         for stage in self.stages.values():
             try:
                 total_tokens = stage.get_total_tokens()
@@ -179,6 +210,15 @@ class ProcessMonitoringManager:
                 })
             except (KeyError, TypeError, AttributeError) as exc:
                 logger.error("Error preparing stage '%s' for DB: %s", stage.name, exc)
+                skipped_count += 1
+
+        if skipped_count > 0:
+            logger.error(
+                "Skipped %d/%d stages during DB record preparation",
+                skipped_count,
+                len(self.stages),
+            )
+
         return records
 
 

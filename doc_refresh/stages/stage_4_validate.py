@@ -264,13 +264,15 @@ def validate_page_ranges(
                 )
             )
 
-    # Check for overlapping sections
+    # Check for overlapping sections. By design, adjacent sections share a
+    # boundary page (page_end == next page_start) and content is split at the
+    # section title position. Only flag overlaps beyond this single shared page.
     sorted_sections = sorted(doc.sections, key=lambda s: s.page_start)
     for i in range(len(sorted_sections) - 1):
         current = sorted_sections[i]
         next_sec = sorted_sections[i + 1]
 
-        if current.page_end >= next_sec.page_start:
+        if current.page_end > next_sec.page_start:
             errors.append(
                 ValidationError(
                     document_name=doc_name,
