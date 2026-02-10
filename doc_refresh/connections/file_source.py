@@ -290,9 +290,12 @@ class NASFileSource(FileSource):
     automatically reconnects on failure.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, base_path: str = "") -> None:
         """
         Initialize NAS file source with connection parameters from environment.
+
+        Args:
+            base_path: Root folder within the share for document scanning.
 
         Raises:
             RuntimeError: If pysmb is not available.
@@ -313,14 +316,16 @@ class NASFileSource(FileSource):
         self.user = config.NAS_USER
         self.password = config.NAS_PASSWORD
         self.port = config.NAS_PORT
+        self.base_path = base_path.replace("\\", "/").strip("/") if base_path else ""
         self.client_hostname = socket.gethostname()
         self._conn: Optional["SMBConnection"] = None
 
         logger.info(
-            "Initialized NASFileSource (ip=%s, share=%s, port=%d)",
+            "Initialized NASFileSource (ip=%s, share=%s, port=%d, base_path=%s)",
             self.ip,
             self.share,
             self.port,
+            self.base_path or "/",
         )
 
     def _create_connection(self) -> "SMBConnection":
@@ -365,17 +370,25 @@ class NASFileSource(FileSource):
                 pass
             self._conn = None
 
+    def _resolve_path(self, path: str) -> str:
+        """Prepend base_path to a relative path for share-level operations."""
+        path = path.replace("\\", "/").strip("/") if path else ""
+        if self.base_path and path:
+            return f"{self.base_path}/{path}"
+        return self.base_path or path
+
     def list_files(
         self, folder_path: str, extensions: Optional[List[str]] = None
     ) -> List[Dict]:
         """List files recursively in a NAS folder."""
+        full_path = self._resolve_path(folder_path)
         try:
             conn = self._get_connection()
-            files = self._list_files_recursive(conn, folder_path, extensions)
-            logger.info("Found %d files in NAS path %s/%s", len(files), self.share, folder_path)
+            files = self._list_files_recursive(conn, full_path, extensions)
+            logger.info("Found %d files in NAS path %s/%s", len(files), self.share, full_path)
             return files
         except Exception as exc:
-            logger.error("Error listing NAS files in %s: %s", folder_path, exc)
+            logger.error("Error listing NAS files in %s: %s", full_path, exc)
             raise
 
     def _list_files_recursive(
@@ -517,7 +530,7 @@ class NASFileSource(FileSource):
 
     def list_subfolders(self, folder_path: str = "") -> List[str]:
         """List immediate subdirectories on NAS, skipping hidden dirs."""
-        path = folder_path.replace("\\", "/").strip("/") if folder_path else ""
+        path = self._resolve_path(folder_path)
 
         try:
             conn = self._get_connection()
@@ -622,7 +635,7 @@ def get_file_source() -> FileSource:
         return LocalFileSource(base_path=base_path)
 
     elif mode == "nas":
-        return NASFileSource()
+        return NASFileSource(base_path=config.BASE_PATH)
 
     else:
         raise ValueError(
