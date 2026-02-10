@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from ..connections.file_source import FileSource
 from ..stages.stage_1_scan import ScanResult
 from ..stages.stage_2_extract import ExtractionResult
 from ..stages.stage_3_process import ProcessingResult
@@ -45,6 +46,7 @@ def run_stage(
     validation_result: Optional[ValidationResult] = None,
     database_result: Optional[DatabaseResult] = None,
     output_path: Optional[str] = None,
+    file_source: Optional[FileSource] = None,
 ) -> ReportResult:
     """
     Execute the reporting stage.
@@ -58,6 +60,7 @@ def run_stage(
         validation_result: Result from Stage 4.
         database_result: Result from Stage 5.
         output_path: Optional path to write JSON report.
+        file_source: Optional FileSource for writing report to NAS.
 
     Returns:
         ReportResult with report dict and optional file path.
@@ -65,7 +68,6 @@ def run_stage(
     result = ReportResult()
 
     try:
-        # Generate report
         result.report_dict = generate_report(
             scan_result,
             extraction_result,
@@ -74,15 +76,15 @@ def run_stage(
             database_result,
         )
 
-        # Print summary to console
         print_summary(result.report_dict)
 
-        # Write JSON report if path specified
         if output_path:
-            result.report_path = write_json_report(result.report_dict, output_path)
+            result.report_path = write_json_report(
+                result.report_dict, output_path, file_source=file_source
+            )
         elif config.REFRESH_LOG_PATH:
             result.report_path = write_json_report(
-                result.report_dict, config.REFRESH_LOG_PATH
+                result.report_dict, config.REFRESH_LOG_PATH, file_source=file_source
             )
 
         result.success = True
@@ -270,30 +272,44 @@ def print_summary(report: Dict[str, Any]) -> None:
     print("\n" + "=" * 60)
 
 
-def write_json_report(report: Dict[str, Any], output_path: str) -> str:
+def write_json_report(
+    report: Dict[str, Any],
+    output_path: str,
+    file_source: Optional[FileSource] = None,
+) -> str:
     """
     Write report to JSON file.
 
     Args:
         report: Report dictionary.
         output_path: Path to write file.
+        file_source: Optional FileSource for writing to NAS.
 
     Returns:
         Actual path where file was written.
     """
-    path = Path(output_path)
+    path = output_path
 
-    # Add timestamp to filename if it's a directory
-    if path.is_dir():
+    if file_source is not None:
+        if not path.lower().endswith(".json"):
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            path = f"{path.rstrip('/')}/doc_refresh_report_{timestamp}.json"
+
+        data = json.dumps(report, indent=2, default=str).encode("utf-8")
+        file_source.write_data(data, path)
+        logger.info("Report written to: %s", path)
+        return path
+
+    path_obj = Path(path)
+
+    if path_obj.is_dir():
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        path = path / f"doc_refresh_report_{timestamp}.json"
+        path_obj = path_obj / f"doc_refresh_report_{timestamp}.json"
 
-    # Ensure parent directory exists
-    path.parent.mkdir(parents=True, exist_ok=True)
+    path_obj.parent.mkdir(parents=True, exist_ok=True)
 
-    # Write report
-    with open(path, "w") as f:
+    with open(path_obj, "w") as f:
         json.dump(report, f, indent=2, default=str)
 
-    logger.info("Report written to: %s", path)
-    return str(path)
+    logger.info("Report written to: %s", path_obj)
+    return str(path_obj)

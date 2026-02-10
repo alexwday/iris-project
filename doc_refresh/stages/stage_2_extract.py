@@ -188,7 +188,7 @@ def extract_file(
                 pdf_path = str(Path(local_path).with_suffix(".pdf"))
             else:
                 pdf_path = local_path
-            _copy_pdf_to_output(pdf_path, file_info)
+            _copy_pdf_to_output(pdf_path, file_info, file_source)
 
         if needs_cleanup:
             converted_pdf = str(Path(local_path).with_suffix(".pdf"))
@@ -206,7 +206,9 @@ def extract_file(
         return extracted
 
 
-def _copy_pdf_to_output(pdf_path: str, file_info: FileInfo) -> None:
+def _copy_pdf_to_output(
+    pdf_path: str, file_info: FileInfo, file_source: FileSource
+) -> None:
     """Copy a PDF to the output folder, preserving subdirectory structure."""
     source = Path(pdf_path)
     if not source.exists():
@@ -214,12 +216,12 @@ def _copy_pdf_to_output(pdf_path: str, file_info: FileInfo) -> None:
         return
 
     relative_pdf = Path(file_info.relative_path).with_suffix(".pdf")
-    output_dir = Path(config.OUTPUT_PATH) / file_info.db_source
-    output_file = output_dir / relative_pdf
+    output_file = str(
+        Path(config.OUTPUT_PATH) / file_info.db_source / relative_pdf
+    )
 
     try:
-        output_file.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(str(source), str(output_file))
+        file_source.copy_from_local(str(source), output_file)
         logger.debug("Copied PDF to output: %s", output_file)
     except Exception as exc:
         logger.warning("Failed to copy PDF to output folder: %s", exc)

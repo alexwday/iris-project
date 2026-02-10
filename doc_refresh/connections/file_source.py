@@ -134,6 +134,38 @@ class FileSource(ABC):
         """
         pass
 
+    @abstractmethod
+    def ensure_directory(self, path: str) -> None:
+        """
+        Create a directory and all parents if they don't exist.
+
+        Args:
+            path: Absolute path (local) or share-relative path (NAS) of the directory.
+        """
+        pass
+
+    @abstractmethod
+    def copy_from_local(self, local_path: str, remote_path: str) -> None:
+        """
+        Copy a local file to the destination.
+
+        Args:
+            local_path: Path to the source file on the local filesystem.
+            remote_path: Destination path (absolute for local, share-relative for NAS).
+        """
+        pass
+
+    @abstractmethod
+    def write_data(self, data: bytes, remote_path: str) -> None:
+        """
+        Write raw bytes to the destination.
+
+        Args:
+            data: Bytes to write.
+            remote_path: Destination path (absolute for local, share-relative for NAS).
+        """
+        pass
+
 
 class LocalFileSource(FileSource):
     """
@@ -228,6 +260,25 @@ class LocalFileSource(FileSource):
             for item in resolved.iterdir()
             if item.is_dir() and not item.name.startswith(".")
         )
+
+    def ensure_directory(self, path: str) -> None:
+        """Create a local directory and all parents."""
+        Path(path).mkdir(parents=True, exist_ok=True)
+
+    def copy_from_local(self, local_path: str, remote_path: str) -> None:
+        """Copy a local file to another local path."""
+        dest = Path(remote_path)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(local_path, str(dest))
+        logger.debug("Copied %s to %s", local_path, remote_path)
+
+    def write_data(self, data: bytes, remote_path: str) -> None:
+        """Write raw bytes to a local file."""
+        dest = Path(remote_path)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        with open(dest, "wb") as f:
+            f.write(data)
+        logger.debug("Wrote %d bytes to %s", len(data), remote_path)
 
 
 class NASFileSource(FileSource):
@@ -481,6 +532,72 @@ class NASFileSource(FileSource):
         except Exception as exc:
             logger.error(
                 "Error listing NAS subfolders %s/%s: %s", self.share, path, exc
+            )
+            raise
+
+    def ensure_directory(self, path: str) -> None:
+        """Create a directory on NAS, walking path segments to create parents."""
+        path = path.replace("\\", "/").strip("/")
+        if not path:
+            return
+
+        conn = self._get_connection()
+        segments = path.split("/")
+        current = ""
+
+        for segment in segments:
+            current = f"{current}/{segment}" if current else segment
+            try:
+                conn.getAttributes(self.share, current)
+            except Exception:
+                try:
+                    conn.createDirectory(self.share, current)
+                    logger.debug("Created NAS directory: %s/%s", self.share, current)
+                except Exception as exc:
+                    logger.error(
+                        "Failed to create NAS directory %s/%s: %s",
+                        self.share,
+                        current,
+                        exc,
+                    )
+                    raise
+
+    def copy_from_local(self, local_path: str, remote_path: str) -> None:
+        """Copy a local file to the NAS share."""
+        remote_path = remote_path.replace("\\", "/")
+        parent = "/".join(remote_path.split("/")[:-1])
+        if parent:
+            self.ensure_directory(parent)
+
+        try:
+            conn = self._get_connection()
+            with open(local_path, "rb") as f:
+                conn.storeFile(self.share, remote_path, f)
+            logger.debug(
+                "Copied %s to NAS %s/%s", local_path, self.share, remote_path
+            )
+        except Exception as exc:
+            logger.error(
+                "Failed to copy to NAS %s/%s: %s", self.share, remote_path, exc
+            )
+            raise
+
+    def write_data(self, data: bytes, remote_path: str) -> None:
+        """Write raw bytes to the NAS share."""
+        remote_path = remote_path.replace("\\", "/")
+        parent = "/".join(remote_path.split("/")[:-1])
+        if parent:
+            self.ensure_directory(parent)
+
+        try:
+            conn = self._get_connection()
+            conn.storeFile(self.share, remote_path, io.BytesIO(data))
+            logger.debug(
+                "Wrote %d bytes to NAS %s/%s", len(data), self.share, remote_path
+            )
+        except Exception as exc:
+            logger.error(
+                "Failed to write to NAS %s/%s: %s", self.share, remote_path, exc
             )
             raise
 

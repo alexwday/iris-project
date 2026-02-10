@@ -214,7 +214,7 @@ def main() -> int:
             if scan_result.files_to_process:
                 if config.BACKUP_ENABLED and not args.dry_run:
                     backup_success, backup_files = backup.run_backup(
-                        config.BACKUP_PATH
+                        config.BACKUP_PATH, file_source=file_source
                     )
                     if backup_success:
                         logger.info("Backup completed: %s", backup_files)
@@ -386,6 +386,7 @@ def main() -> int:
             validation_result=validation_result,
             database_result=database_result,
             output_path=args.output,
+            file_source=file_source,
         )
 
         has_errors = False
