@@ -965,6 +965,13 @@ def detect_structure(
         "Detected %d raw sections across %d batches", len(all_sections), num_batches
     )
 
+    if not all_sections:
+        logger.warning(
+            "DIAG: ALL %d batches returned zero sections — consolidation will "
+            "receive empty input and return [] immediately",
+            num_batches,
+        )
+
     # Phase 3: Consolidate and correct using LLM
     final_sections = consolidate_sections_llm(
         all_sections,
@@ -1113,7 +1120,7 @@ def detect_sections_batch(
     tool_choice = {"type": "function", "function": {"name": "detect_section_breaks"}}
 
     try:
-        response, _ = _call_llm(
+        response, usage = _call_llm(
             auth_token,
             messages,
             model=config.MODEL_SMALL,
@@ -1122,10 +1129,51 @@ def detect_sections_batch(
             tool_choice=tool_choice,
         )
         message = response.choices[0].message
+        finish_reason = str(response.choices[0].finish_reason)
+        tool_calls = getattr(message, "tool_calls", None) or []
+        completion_tokens = usage.get("completion_tokens") if usage else None
+
+        logger.warning(
+            "DIAG batch pages %d-%d: finish_reason=%s, tool_calls=%d, "
+            "completion_tokens=%s, has_content=%s",
+            start_page,
+            end_page,
+            finish_reason,
+            len(tool_calls),
+            completion_tokens,
+            bool(getattr(message, "content", None)),
+        )
+
+        if tool_calls:
+            raw_args = tool_calls[0].function.arguments
+            logger.warning(
+                "DIAG batch pages %d-%d: tool=%s, args_len=%d, args_first_200=%s",
+                start_page,
+                end_page,
+                tool_calls[0].function.name,
+                len(raw_args) if raw_args else 0,
+                (raw_args or "")[:200],
+            )
+        else:
+            content_preview = (getattr(message, "content", None) or "")[:300]
+            logger.warning(
+                "DIAG batch pages %d-%d: NO tool_calls. Message content preview: %s",
+                start_page,
+                end_page,
+                content_preview,
+            )
+
         args = _parse_tool_arguments(message)
         if args:
+            sections_raw = args.get("sections", [])
+            logger.warning(
+                "DIAG batch pages %d-%d: parsed %d sections from args",
+                start_page,
+                end_page,
+                len(sections_raw),
+            )
             section_breaks = []
-            for section in args.get("sections", []):
+            for section in sections_raw:
                 page_number = section.get("page_number")
                 title = section.get("title", "")
                 if page_number is None:
@@ -1141,7 +1189,12 @@ def detect_sections_batch(
             return section_breaks, args.get("continued_section_title")
 
         logger.warning(
-            "Section detection returned no tool call for pages %d-%d", start_page, end_page
+            "Section detection returned no tool call for pages %d-%d "
+            "(finish_reason=%s, completion_tokens=%s)",
+            start_page,
+            end_page,
+            finish_reason,
+            completion_tokens,
         )
     except (OpenAIConnectorError, ConnectionError, OSError):
         raise
@@ -1167,7 +1220,16 @@ def consolidate_sections_llm(
 ) -> List[SectionBreak]:
     """Consolidate section breaks using prompts from database."""
     if not sections:
+        logger.warning(
+            "DIAG consolidate_sections_llm: called with 0 sections — "
+            "returning [] without calling LLM"
+        )
         return []
+
+    logger.warning(
+        "DIAG consolidate_sections_llm: called with %d sections, proceeding to LLM",
+        len(sections),
+    )
 
     system_prompt, tool_def, user_template = _load_prompt("consolidate_structure")
 
