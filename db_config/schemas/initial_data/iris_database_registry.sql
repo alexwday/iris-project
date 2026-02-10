@@ -1,5 +1,5 @@
 -- IRIS Database Registry Initial Data
--- Generated: 2026-01-19T10:36:44.178521
+-- Generated: 2026-02-10T12:16:47.014417
 -- 
 -- Import with: psql -f iris_database_registry.sql
 -- Or run in pgAdmin/DBeaver
@@ -37,7 +37,7 @@ VALUES (
     3,
     100,
     true,
-    ARRAY['document_summary']::text[],
+    ARRAY['document_summary','document_description','document_usage']::text[],
     5,
     20,
     6,
@@ -93,7 +93,7 @@ VALUES (
     NULL,
     NULL,
     NULL,
-    '["Under IFRS, what are examples of temporary differences that lead to a deferred tax liability?","Under IFRS, what are the presentation requirements for compound financial instruments? Please specify the relevant standard and sections."]'::jsonb,
+    '["Under IFRS, what are examples of temporary differences that lead to a deferred tax liability?","Under IFRS, what are the presentation requirements for compound financial instruments? Please specify the relevant standard and sections.","What does IFRS 16 require for lease modification accounting?","What are the recognition criteria for intangible assets under IAS 38?"]'::jsonb,
     true,
     ARRAY['all_users','local_dev']::text[],
     10,
@@ -102,7 +102,7 @@ VALUES (
     3,
     100,
     true,
-    ARRAY['document_summary']::text[],
+    ARRAY['document_summary','document_description','document_usage']::text[],
     5,
     20,
     6,
@@ -145,7 +145,7 @@ VALUES (
     'RBC''s internal policies, procedures, and FAQs focused on maintaining auditor independence, including guidelines for business and financial relationships with external auditors.',
     '**Content:** RBC''s internal policies, procedures, and FAQs focused on maintaining auditor independence, including guidelines for business and financial relationships with external auditors.
 
-**Tier/Priority:** DOMAIN EXPERT - Specialized guidance for auditor independence requirements and controls.
+**Tier/Priority:** NARROW SPECIALIST - Only for auditor independence requirements, restricted services, and external auditor relationship controls.
 
 **Usage Guidance:** Use for determining permissible relationships, approvals, disclosures, and procedural steps that preserve auditor independence for external auditor engagements.
 
@@ -167,7 +167,7 @@ VALUES (
     3,
     150,
     true,
-    ARRAY['document_summary']::text[],
+    ARRAY['document_summary','document_description','document_usage']::text[],
     5,
     20,
     6,
@@ -223,7 +223,7 @@ VALUES (
     NULL,
     NULL,
     NULL,
-    '["What is the IFRS and U.S. GAAP difference on firm commitment related to hedging?","Is a call option in a finanical instrument an embedded derivative?","What threshold is considered to be probable under IFRS?","What are the main criteria to derecognize a financial asset under IFRS?"]'::jsonb,
+    '["What is the IFRS and U.S. GAAP difference on firm commitment related to hedging?","Is a call option in a financial instrument an embedded derivative?","What threshold is considered to be probable under IFRS?","What are the main criteria to derecognize a financial asset under IFRS?"]'::jsonb,
     true,
     ARRAY['all_users','local_dev']::text[],
     10,
@@ -232,7 +232,7 @@ VALUES (
     3,
     150,
     true,
-    ARRAY['document_summary']::text[],
+    ARRAY['document_summary','document_description','document_usage']::text[],
     5,
     20,
     6,
@@ -297,7 +297,7 @@ VALUES (
     3,
     150,
     true,
-    ARRAY['document_summary']::text[],
+    ARRAY['document_summary','document_description','document_usage']::text[],
     5,
     20,
     6,
@@ -340,7 +340,7 @@ VALUES (
     'RBC''s policies and frameworks for ESG disclosures, including the ESG Materiality Framework and guidance on evaluating changes to prior period ESG information, aligned with global standards like ISSB and CSRD.',
     '**Content:** RBC''s policies and frameworks for ESG disclosures, including the ESG Materiality Framework and guidance on evaluating changes to prior period ESG information aligned with ISSB and CSRD expectations.
 
-**Tier/Priority:** DOMAIN EXPERT - Specialized ESG reporting policy and disclosure guidance.
+**Tier/Priority:** NARROW SPECIALIST - Only for ESG reporting, materiality frameworks, and ISSB/CSRD alignment.
 
 **Usage Guidance:** Use for ESG reporting requirements, materiality assessments, treatment of prior period changes, and alignment with external ESG frameworks.
 
@@ -362,7 +362,7 @@ VALUES (
     3,
     150,
     true,
-    ARRAY['document_summary']::text[],
+    ARRAY['document_summary','document_description','document_usage']::text[],
     5,
     20,
     6,
@@ -427,7 +427,7 @@ VALUES (
     3,
     150,
     true,
-    ARRAY['document_summary']::text[],
+    ARRAY['document_summary','document_description','document_usage']::text[],
     5,
     20,
     6,
@@ -492,7 +492,7 @@ VALUES (
     3,
     150,
     true,
-    ARRAY['document_summary']::text[],
+    ARRAY['document_summary','document_description','document_usage']::text[],
     5,
     20,
     6,
@@ -535,7 +535,7 @@ VALUES (
     'Documentation regarding the permanent material intergroup revenue breaks, including reconciliation analysis and entity-level break identification.',
     '**Content:** Documentation of permanent material intergroup revenue breaks, including reconciliation analysis and entity-level break identification.
 
-**Tier/Priority:** DOMAIN EXPERT - Specialized guidance for intergroup reconciliation and permanent break handling.
+**Tier/Priority:** NARROW SPECIALIST - Only for intergroup reconciliation, permanent revenue breaks, and entity-level discrepancy documentation.
 
 **Usage Guidance:** Use for questions on classifying, documenting, and explaining intergroup revenue discrepancies, including entity attribution and reconciliation procedures.
 
@@ -557,7 +557,7 @@ VALUES (
     3,
     150,
     true,
-    ARRAY['document_summary']::text[],
+    ARRAY['document_summary','document_description','document_usage']::text[],
     5,
     20,
     6,
@@ -622,7 +622,7 @@ VALUES (
     3,
     150,
     true,
-    ARRAY['document_summary']::text[],
+    ARRAY['document_summary','document_description','document_usage']::text[],
     5,
     20,
     6,
@@ -687,7 +687,7 @@ VALUES (
     3,
     150,
     true,
-    ARRAY['document_summary']::text[],
+    ARRAY['document_summary','document_description','document_usage']::text[],
     5,
     20,
     6,
@@ -730,7 +730,7 @@ VALUES (
     'Comprehensive user documentation for IBM''s Planning Analytics for Excel add-in, covering connection management, report creation, data manipulation, and formula usage for accessing TM1/EPM multidimensional financial data within Microsoft Excel.',
     '**Content:** Comprehensive user documentation for IBM''s Planning Analytics for Excel add-in, covering connection management, report creation, data manipulation, and formula usage for accessing TM1/EPM multidimensional financial data within Microsoft Excel.
 
-**Tier/Priority:** DOMAIN EXPERT - Specialized guidance for Planning Analytics for Excel usage and support.
+**Tier/Priority:** NARROW SPECIALIST - Only for Planning Analytics for Excel (PAfE), TM1/EPM connections, and related Excel formulas.
 
 **Usage Guidance:** Use for operational instructions, feature explanations, and troubleshooting when working with PAfE/TM1/EPM data connections, reports, and Excel-based analytics.
 
@@ -752,7 +752,7 @@ VALUES (
     3,
     150,
     true,
-    ARRAY['document_summary']::text[],
+    ARRAY['document_summary','document_description','document_usage']::text[],
     5,
     20,
     6,
@@ -795,7 +795,7 @@ VALUES (
     'RBC''s internal policies and interpretations specifically related to Project Approval Requests (PAR), including workflow, processes, and compliance requirements.',
     '**Content:** RBC''s internal policies and interpretations for Project Approval Requests (PAR), including workflow, processes, and compliance requirements.
 
-**Tier/Priority:** DOMAIN EXPERT - Specialized guidance for PAR governance and approvals.
+**Tier/Priority:** NARROW SPECIALIST - Only for Project Approval Request (PAR) workflows, thresholds, and governance.
 
 **Usage Guidance:** Use for approval level rules, required documentation, workflow steps, and governance expectations for PAR submissions.
 
@@ -817,7 +817,7 @@ VALUES (
     3,
     150,
     true,
-    ARRAY['document_summary']::text[],
+    ARRAY['document_summary','document_description','document_usage']::text[],
     5,
     20,
     6,
@@ -882,7 +882,7 @@ VALUES (
     3,
     150,
     true,
-    ARRAY['document_summary']::text[],
+    ARRAY['document_summary','document_description','document_usage']::text[],
     5,
     20,
     6,
@@ -925,7 +925,7 @@ VALUES (
     'Internal documents justifying the materiality assessment of financial statement errors, as guided by SEC Staff Accounting Bulletin No. 99. These memos are completed when financial statement errors exceed $120MM and include root cause analysis, control assessment, qualitative factor analysis, and remediation plans.',
     '**Content:** Internal documents justifying the materiality assessment of financial statement errors under SEC Staff Accounting Bulletin No. 99, including root cause analysis, control assessment, qualitative factor analysis, and remediation plans for errors exceeding $120MM.
 
-**Tier/Priority:** DOMAIN EXPERT - Specialized documentation for SAB 99 materiality assessments.
+**Tier/Priority:** NARROW SPECIALIST - Only for SAB 99 materiality assessments, the $120MM threshold, and error remediation documentation.
 
 **Usage Guidance:** Use for evaluating materiality of financial statement errors, understanding qualitative and quantitative factors, and reviewing remediation or control assessment details associated with identified errors.
 
@@ -938,7 +938,7 @@ VALUES (
     NULL,
     NULL,
     NULL,
-    '["What is the most common root cause?","How many errors impacted Deposits?","How many have EUDA related issues?"]'::jsonb,
+    '["What qualitative factors are assessed when determining materiality of a financial statement error under SAB 99?","What remediation steps are required when a financial statement error exceeds the $120MM threshold?","How does the SAB 99 assessment distinguish between intentional and unintentional misstatements?","What documentation is required to support an immaterial misstatement conclusion under SAB 99?"]'::jsonb,
     true,
     ARRAY['all_users','local_dev']::text[],
     10,
@@ -947,7 +947,7 @@ VALUES (
     3,
     150,
     true,
-    ARRAY['document_summary']::text[],
+    ARRAY['document_summary','document_description','document_usage']::text[],
     5,
     20,
     6,
@@ -1012,7 +1012,62 @@ VALUES (
     3,
     150,
     true,
-    ARRAY['document_summary']::text[],
+    ARRAY['document_summary','document_description','document_usage']::text[],
+    5,
+    20,
+    6,
+    6,
+    3,
+    2,
+    2
+)
+ON CONFLICT (db_source) DO UPDATE SET
+    db_name = EXCLUDED.db_name,
+    db_summary = EXCLUDED.db_summary,
+    db_description = EXCLUDED.db_description,
+    search_modes = EXCLUDED.search_modes,
+    catalog_config = EXCLUDED.catalog_config,
+    semantic_config = EXCLUDED.semantic_config,
+    metadata_config = EXCLUDED.metadata_config,
+    sample_questions = EXCLUDED.sample_questions,
+    enabled = EXCLUDED.enabled,
+    ad_groups = EXCLUDED.ad_groups,
+    batch_size = EXCLUDED.batch_size,
+    max_selected_files = EXCLUDED.max_selected_files,
+    top_chunks_in_catalog_selection = EXCLUDED.top_chunks_in_catalog_selection,
+    top_chunks_in_metadata_research = EXCLUDED.top_chunks_in_metadata_research,
+    page_threshold_for_full_content = EXCLUDED.page_threshold_for_full_content,
+    enable_db_wide_deep_research = EXCLUDED.enable_db_wide_deep_research,
+    metadata_context_fields = EXCLUDED.metadata_context_fields,
+    max_parallel_files = EXCLUDED.max_parallel_files,
+    max_chunks_per_file = EXCLUDED.max_chunks_per_file,
+    max_pages_for_full_context = EXCLUDED.max_pages_for_full_context,
+    max_primary_section_page_count = EXCLUDED.max_primary_section_page_count,
+    max_subsection_page_count = EXCLUDED.max_subsection_page_count,
+    max_neighbour_chunks = EXCLUDED.max_neighbour_chunks,
+    max_gap_fill_pages = EXCLUDED.max_gap_fill_pages,
+    updated_at = CURRENT_TIMESTAMP;
+
+INSERT INTO iris_database_registry (db_source, db_name, db_summary, db_description, search_modes, catalog_config, semantic_config, metadata_config, sample_questions, enabled, ad_groups, batch_size, max_selected_files, top_chunks_in_catalog_selection, top_chunks_in_metadata_research, page_threshold_for_full_content, enable_db_wide_deep_research, metadata_context_fields, max_parallel_files, max_chunks_per_file, max_pages_for_full_context, max_primary_section_page_count, max_subsection_page_count, max_neighbour_chunks, max_gap_fill_pages)
+VALUES (
+    'single_test',
+    'Test Documents',
+    'Collection of NLP and AI research papers for testing the doc_refresh pipeline and IRIS retrieval.',
+    'Academic research papers covering topics such as natural language processing, machine learning, text classification, summarization, and dialogue systems. These papers are from top-tier conferences including ACL, NAACL, EMNLP, and COLING.',
+    ARRAY['catalog','semantic']::text[],
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    true,
+    NULL,
+    10,
+    15,
+    1,
+    3,
+    150,
+    true,
+    ARRAY['document_summary','document_description','document_usage']::text[],
     5,
     20,
     6,
@@ -1050,4 +1105,4 @@ ON CONFLICT (db_source) DO UPDATE SET
 
 COMMIT;
 
--- Inserted/Updated 16 database registry entries
+-- Inserted/Updated 17 database registry entries

@@ -4,7 +4,8 @@ Export IRIS initial data for IT deployment.
 
 Generates CSV, SQL INSERT, and PostgreSQL COPY format files for:
 - iris_database_registry (all entries)
-- prompts (IRIS model only, excludes doc_refresh)
+- prompts (IRIS model prompts)
+- prompts (doc_refresh model prompts, latest version only)
 
 Output files are created in db_config/schemas/initial_data/
 """
@@ -52,6 +53,28 @@ def fetch_iris_prompts(conn) -> List[Dict]:
             ORDER BY layer, name
         """)
         return [dict(row) for row in cur.fetchall()]
+
+
+STALE_DOC_REFRESH_PROMPTS = {
+    "generate_catalog_fields",
+    "link_subsections",
+    "summarize_section",
+}
+
+
+def fetch_doc_refresh_prompts(conn) -> List[Dict]:
+    """Fetch latest-version doc_refresh prompts, excluding stale ones."""
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute("""
+            SELECT DISTINCT ON (layer, name)
+                model, layer, name, version, description,
+                system_prompt, user_prompt, tool_definition
+            FROM prompts
+            WHERE model = 'doc_refresh'
+            ORDER BY layer, name, version DESC
+        """)
+        rows = [dict(row) for row in cur.fetchall()]
+    return [r for r in rows if r["name"] not in STALE_DOC_REFRESH_PROMPTS]
 
 
 def fetch_registry(conn) -> List[Dict]:
@@ -134,18 +157,25 @@ def write_prompts_csv(prompts: List[Dict], filepath: str):
     print(f"  Created: {filepath}")
 
 
-def write_prompts_sql(prompts: List[Dict], filepath: str):
-    """Write prompts as SQL INSERT statements."""
+def write_prompts_sql(prompts: List[Dict], filepath: str, label: str = "IRIS"):
+    """Write prompts as SQL INSERT statements.
+
+    Args:
+        prompts: Prompt rows to write.
+        filepath: Output file path.
+        label: Label for the header comment (e.g., "IRIS", "Doc Refresh").
+    """
     columns = [
         "model", "layer", "name", "version", "description",
         "system_prompt", "user_prompt", "tool_definition"
     ]
 
+    filename = os.path.basename(filepath)
     with open(filepath, "w", encoding="utf-8") as f:
-        f.write("-- IRIS Prompts Initial Data\n")
+        f.write(f"-- {label} Prompts Initial Data\n")
         f.write(f"-- Generated: {datetime.now().isoformat()}\n")
         f.write("-- \n")
-        f.write("-- Import with: psql -f iris_prompts.sql\n")
+        f.write(f"-- Import with: psql -f {filename}\n")
         f.write("-- Or run in pgAdmin/DBeaver\n")
         f.write("--\n")
         f.write("-- Note: Uses ON CONFLICT to handle re-runs safely\n\n")
@@ -174,7 +204,7 @@ def write_prompts_sql(prompts: List[Dict], filepath: str):
             f.write(f"    updated_at = CURRENT_TIMESTAMP;\n\n")
 
         f.write("COMMIT;\n")
-        f.write(f"\n-- Inserted/Updated {len(prompts)} IRIS prompts\n")
+        f.write(f"\n-- Inserted/Updated {len(prompts)} {label} prompts\n")
 
     print(f"  Created: {filepath}")
 
@@ -330,15 +360,22 @@ def main():
         # Fetch data
         print("\nFetching data...")
         prompts = fetch_iris_prompts(conn)
+        dr_prompts = fetch_doc_refresh_prompts(conn)
         registry = fetch_registry(conn)
 
         print(f"  Found {len(prompts)} IRIS prompts")
+        print(f"  Found {len(dr_prompts)} doc_refresh prompts")
         print(f"  Found {len(registry)} registry entries")
 
-        # Export prompts
-        print("\nExporting prompts...")
+        # Export IRIS prompts
+        print("\nExporting IRIS prompts...")
         write_prompts_csv(prompts, os.path.join(OUTPUT_DIR, "iris_prompts.csv"))
-        write_prompts_sql(prompts, os.path.join(OUTPUT_DIR, "iris_prompts.sql"))
+        write_prompts_sql(prompts, os.path.join(OUTPUT_DIR, "iris_prompts.sql"), label="IRIS")
+
+        # Export doc_refresh prompts
+        print("\nExporting doc_refresh prompts...")
+        write_prompts_csv(dr_prompts, os.path.join(OUTPUT_DIR, "doc_refresh_prompts.csv"))
+        write_prompts_sql(dr_prompts, os.path.join(OUTPUT_DIR, "doc_refresh_prompts.sql"), label="Doc Refresh")
 
         # Export registry
         print("\nExporting registry...")
@@ -353,23 +390,27 @@ def main():
             f.write("## Contents\n\n")
             f.write("| File | Description | Import Method |\n")
             f.write("|------|-------------|---------------|\n")
-            f.write("| `iris_prompts.sql` | 8 IRIS prompts (SQL INSERT) | `psql -f iris_prompts.sql` |\n")
-            f.write("| `iris_prompts.csv` | 8 IRIS prompts (CSV) | pgAdmin Import or `\\copy` |\n")
+            f.write(f"| `iris_prompts.sql` | {len(prompts)} IRIS prompts (SQL INSERT) | `psql -f iris_prompts.sql` |\n")
+            f.write(f"| `iris_prompts.csv` | {len(prompts)} IRIS prompts (CSV) | pgAdmin Import or `\\copy` |\n")
+            f.write(f"| `doc_refresh_prompts.sql` | {len(dr_prompts)} doc_refresh prompts (SQL INSERT) | `psql -f doc_refresh_prompts.sql` |\n")
+            f.write(f"| `doc_refresh_prompts.csv` | {len(dr_prompts)} doc_refresh prompts (CSV) | pgAdmin Import or `\\copy` |\n")
             f.write(f"| `iris_database_registry.sql` | {len(registry)} database configs (SQL INSERT) | `psql -f iris_database_registry.sql` |\n")
             f.write(f"| `iris_database_registry.csv` | {len(registry)} database configs (CSV) | pgAdmin Import or `\\copy` |\n\n")
             f.write("## Recommended Import Order\n\n")
             f.write("1. Create tables first using schema files in parent directory\n")
             f.write("2. Import `iris_database_registry.sql` (registry must exist before documents)\n")
-            f.write("3. Import `iris_prompts.sql`\n\n")
+            f.write("3. Import `iris_prompts.sql`\n")
+            f.write("4. Import `doc_refresh_prompts.sql`\n\n")
             f.write("## SQL Files (Recommended)\n\n")
             f.write("The `.sql` files use `INSERT ... ON CONFLICT DO UPDATE` syntax, making them:\n")
             f.write("- Safe to re-run multiple times\n")
             f.write("- Self-contained with all escaping handled\n")
             f.write("- Wrapped in transactions for atomicity\n\n")
             f.write("```bash\n")
-            f.write("# Import both tables\n")
+            f.write("# Import all tables\n")
             f.write("psql -h <host> -p <port> -d <database> -f iris_database_registry.sql\n")
             f.write("psql -h <host> -p <port> -d <database> -f iris_prompts.sql\n")
+            f.write("psql -h <host> -p <port> -d <database> -f doc_refresh_prompts.sql\n")
             f.write("```\n\n")
             f.write("## CSV Files\n\n")
             f.write("For GUI tools like pgAdmin or DBeaver:\n")
@@ -380,9 +421,11 @@ def main():
             f.write("```bash\n")
             f.write("\\copy iris_database_registry FROM 'iris_database_registry.csv' WITH (FORMAT csv, HEADER true)\n")
             f.write("\\copy prompts(model,layer,name,version,description,system_prompt,user_prompt,tool_definition) FROM 'iris_prompts.csv' WITH (FORMAT csv, HEADER true)\n")
+            f.write("\\copy prompts(model,layer,name,version,description,system_prompt,user_prompt,tool_definition) FROM 'doc_refresh_prompts.csv' WITH (FORMAT csv, HEADER true)\n")
             f.write("```\n\n")
             f.write("## Notes\n\n")
-            f.write("- Prompts include only `model='iris'` entries (doc_refresh prompts excluded)\n")
+            f.write("- IRIS prompts: `model='iris'` entries for the IRIS agent pipeline\n")
+            f.write("- Doc refresh prompts: `model='doc_refresh'` entries for the document refresh pipeline\n")
             f.write("- JSONB columns are properly escaped in all formats\n")
             f.write("- Array columns use PostgreSQL array literal format `{val1,val2}`\n")
 

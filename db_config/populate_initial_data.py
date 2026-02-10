@@ -2,19 +2,20 @@
 """
 IRIS Initial Data Population Script for IT Deployment
 
-This script populates the 5 IRIS tables in IT's PostgreSQL database with initial
-data needed to run the IRIS pipeline. It executes SQL files from the
-schemas/initial_data/ directory in the correct dependency order.
+This script populates the IRIS tables in IT's PostgreSQL database with initial
+data needed to run the IRIS and doc_refresh pipelines. It executes SQL files from
+the schemas/initial_data/ directory in the correct dependency order.
 
 Steps:
-    1. Registry (wipe + load): DELETE CASCADE then insert 16 database entries
-    2. Prompts (additive upsert): Insert 8 IRIS prompts without touching others
-    3. Sample data (optional): Load 3 test documents into internal_wiki
+    1. Registry (wipe + load): DELETE CASCADE then insert database entries
+    2. IRIS Prompts (delete + insert): Replace model='iris' prompts
+    3. Doc Refresh Prompts (delete + insert): Replace model='doc_refresh' prompts
+    4. Sample data (optional): Load test documents into internal_wiki
 
 Connection is configured via environment variables matching the sync.py pattern.
 
 Usage:
-    # Full population (all 3 steps)
+    # Full population (all 4 steps)
     python db_config/populate_initial_data.py
 
     # Skip sample data (registry + prompts only)
@@ -48,6 +49,7 @@ INITIAL_DATA_DIR = os.path.join(SCRIPT_DIR, "schemas", "initial_data")
 
 REGISTRY_SQL = os.path.join(INITIAL_DATA_DIR, "iris_database_registry.sql")
 PROMPTS_SQL = os.path.join(INITIAL_DATA_DIR, "iris_prompts.sql")
+DOC_REFRESH_PROMPTS_SQL = os.path.join(INITIAL_DATA_DIR, "doc_refresh_prompts.sql")
 SAMPLE_DATA_SQL = os.path.join(INITIAL_DATA_DIR, "sample_internal_wiki.sql")
 
 
@@ -75,7 +77,7 @@ def step_registry(conn, dry_run: bool) -> None:
         conn: Active psycopg2 connection.
         dry_run: If True, show plan without executing.
     """
-    print("\n[Step 1/3] Registry: wipe + load iris_database_registry")
+    print("\n[Step 1/4] Registry: wipe + load iris_database_registry")
     print(f"  Source: {REGISTRY_SQL}")
 
     if not os.path.exists(REGISTRY_SQL):
@@ -112,7 +114,7 @@ def step_prompts(conn, dry_run: bool) -> None:
         conn: Active psycopg2 connection.
         dry_run: If True, show plan without executing.
     """
-    print("\n[Step 2/3] Prompts: additive upsert to prompts table")
+    print("\n[Step 2/4] IRIS Prompts: delete + insert to prompts table")
     print(f"  Source: {PROMPTS_SQL}")
 
     if not os.path.exists(PROMPTS_SQL):
@@ -150,6 +152,51 @@ def step_prompts(conn, dry_run: bool) -> None:
     print(f"  Inserted {after} IRIS prompts")
 
 
+def step_doc_refresh_prompts(conn, dry_run: bool) -> None:
+    """Replace doc_refresh prompts in the prompts table (delete + insert).
+
+    Args:
+        conn: Active psycopg2 connection.
+        dry_run: If True, show plan without executing.
+    """
+    print("\n[Step 3/4] Doc Refresh Prompts: delete + insert to prompts table")
+    print(f"  Source: {DOC_REFRESH_PROMPTS_SQL}")
+
+    if not os.path.exists(DOC_REFRESH_PROMPTS_SQL):
+        print(f"  ERROR: File not found: {DOC_REFRESH_PROMPTS_SQL}")
+        sys.exit(1)
+
+    sql = read_sql_file(DOC_REFRESH_PROMPTS_SQL)
+
+    if dry_run:
+        print("  [DRY RUN] Would delete existing doc_refresh prompts one-by-one")
+        print(f"  [DRY RUN] Would insert fresh prompts from {DOC_REFRESH_PROMPTS_SQL}")
+        return
+
+    cur = conn.cursor()
+
+    cur.execute("SELECT id FROM prompts WHERE model = 'doc_refresh'")
+    existing_ids = [row[0] for row in cur.fetchall()]
+    for prompt_id in existing_ids:
+        cur.execute("DELETE FROM prompts WHERE id = %s", [prompt_id])
+    conn.commit()
+    print(f"  Deleted {len(existing_ids)} existing doc_refresh prompts")
+
+    clean_sql = re.sub(
+        r"ON CONFLICT\s*\([^)]+\)\s*DO UPDATE SET\s+[\s\S]*?(?=;\s)",
+        "",
+        sql,
+    )
+
+    cur.execute(clean_sql)
+    conn.commit()
+
+    cur.execute("SELECT COUNT(*) FROM prompts WHERE model = 'doc_refresh'")
+    after = cur.fetchone()[0]
+    cur.close()
+    print(f"  Inserted {after} doc_refresh prompts")
+
+
 def step_sample_data(conn, dry_run: bool) -> None:
     """Load sample internal_wiki documents for testing.
 
@@ -157,7 +204,7 @@ def step_sample_data(conn, dry_run: bool) -> None:
         conn: Active psycopg2 connection.
         dry_run: If True, show plan without executing.
     """
-    print("\n[Step 3/3] Sample data: load internal_wiki test documents")
+    print("\n[Step 4/4] Sample data: load internal_wiki test documents")
     print(f"  Source: {SAMPLE_DATA_SQL}")
 
     if not os.path.exists(SAMPLE_DATA_SQL):
@@ -242,11 +289,12 @@ def main():
     try:
         step_registry(conn, args.dry_run)
         step_prompts(conn, args.dry_run)
+        step_doc_refresh_prompts(conn, args.dry_run)
 
         if not args.skip_sample_data:
             step_sample_data(conn, args.dry_run)
         else:
-            print("\n[Step 3/3] Sample data: SKIPPED")
+            print("\n[Step 4/4] Sample data: SKIPPED")
     except Exception as e:
         print(f"\nERROR: {e}")
         if conn:
@@ -263,6 +311,7 @@ def main():
         print("Population complete. Verify with:")
         print("  SELECT COUNT(*) FROM iris_database_registry;")
         print("  SELECT COUNT(*) FROM prompts WHERE model = 'iris';")
+        print("  SELECT COUNT(*) FROM prompts WHERE model = 'doc_refresh';")
         if not args.skip_sample_data:
             print(
                 "  SELECT COUNT(*) FROM iris_document_metadata"
