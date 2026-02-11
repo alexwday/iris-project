@@ -1,5 +1,5 @@
 -- Doc Refresh Prompts Initial Data
--- Generated: 2026-02-11T01:02:53.982692
+-- Generated: 2026-02-11T01:43:35.769723
 -- 
 -- Import with: psql -f doc_refresh_prompts.sql
 -- Or run in pgAdmin/DBeaver
