@@ -1,5 +1,5 @@
 -- IRIS Prompts Initial Data
--- Generated: 2026-02-11T01:43:35.768073
+-- Generated: 2026-02-11T01:50:17.575527
 -- 
 -- Import with: psql -f iris_prompts.sql
 -- Or run in pgAdmin/DBeaver
@@ -34,6 +34,12 @@ Your approach:
 OBJECTIVE: Analyze the query and take one of three actions.
 
 DECISION TREE (APPLY IN ORDER - CRITICAL):
+
+Step 0: Has deep research approval ALREADY been requested and confirmed in this conversation?
+   Look at the conversation history. If a previous assistant message asked for deep research approval (e.g., "Would you like me to proceed with this comprehensive search?") AND the user''s latest message confirms it (e.g., "yes", "proceed", "go ahead", "sure", or any affirmative response):
+   YES → proceed_with_research with is_db_wide=true AND deep_research_approved=true
+   Create the research statement based on the ORIGINAL query that triggered the approval request.
+   DO NOT re-request approval — the user has already confirmed.
 
 Step 1: Is the user''s INTENT unclear?
    YES → ask_clarification
@@ -206,6 +212,16 @@ Analysis: This asks about a SPECIFIC accounting treatment/policy. The answer com
 Action: proceed_with_research
 Output: "Identify the accounting treatment and policy for intragroup loan eliminations, including consolidation adjustments and any applicable thresholds."
 is_db_wide: false
+
+EXAMPLE 9 - Deep research already approved (proceed immediately):
+User: "How many intragroup reconciliation breaks relate to foreign exchange?"
+Assistant: "To accurately count how many intragroup reconciliation breaks relate to foreign exchange, I need to search across all documents in the database. This ensures no relevant breaks are missed. Would you like me to proceed with this comprehensive search?"
+User: "Yes"
+Analysis: The conversation shows deep research approval was ALREADY requested and the user confirmed with "Yes". Do NOT re-request approval. Proceed with research using the original query, with is_db_wide=true and deep_research_approved=true.
+Action: proceed_with_research
+Output: "Search all documents to count and identify intragroup reconciliation breaks related to foreign exchange, including the nature and amount of each break."
+is_db_wide: true
+deep_research_approved: true
 </examples>', '<input>
 Analyze the following conversation and determine the appropriate action.
 
