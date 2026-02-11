@@ -53,6 +53,7 @@ from .stages.stage_5_database import (
     replace_single_document,
 )
 from .utils import backup
+from .utils.audit_trail import create_audit_trail, generate_index_html
 from .utils.env_config import config
 from .utils.logging_format import configure_root_logger
 from .utils.prompt_loader import load_all_prompts
@@ -179,6 +180,7 @@ def main() -> int:
             force=args.force,
         )
 
+        audit_documents = []
         if not scan_result.files_to_process and not scan_result.files_to_remove:
             logger.info("No files to process or remove. Pipeline complete.")
         else:
@@ -271,9 +273,17 @@ def main() -> int:
                         extraction_result.extracted_documents.append(extracted)
                         extraction_result.total_pages += extracted.page_count
 
+                        audit_trail = create_audit_trail(
+                            config.AUDIT_PATH,
+                            file_info.db_source,
+                            file_info.relative_path,
+                        )
+
                         try:
                             auth_token = resolve_auth_token()
-                            processed = process_document(extracted, auth_token)
+                            processed = process_document(
+                                extracted, auth_token, audit_trail=audit_trail
+                            )
                         except Exception as exc:
                             logger.error(
                                 "Error processing %s: %s",
@@ -367,12 +377,20 @@ def main() -> int:
                             )
                             database_result.chunks_inserted += len(processed.chunks)
 
+                        audit_trail.finalize()
+                        audit_summary = audit_trail.get_summary()
+                        if audit_summary:
+                            audit_documents.append(audit_summary)
+
                         logger.info(
                             "Completed file %d/%d: %s",
                             i,
                             total,
                             file_info.file_name,
                         )
+
+        if audit_documents:
+            generate_index_html(config.AUDIT_PATH, audit_documents)
 
         # Stage 6: Report
         logger.info("-" * 60)

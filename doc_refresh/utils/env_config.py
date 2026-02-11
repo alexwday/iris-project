@@ -101,6 +101,7 @@ class Config:
     NAS_PORT: int = _int("NAS_PORT", 445)
 
     OUTPUT_PATH: str = os.getenv("OUTPUT_PATH", "")
+    AUDIT_PATH: str = os.getenv("AUDIT_PATH", "")
 
     BACKUP_ENABLED: bool = _bool("BACKUP_ENABLED")
     BACKUP_PATH: str = os.getenv("BACKUP_PATH", "")
@@ -180,6 +181,9 @@ class Config:
 
         if not cls.OUTPUT_PATH:
             logger.warning("OUTPUT_PATH not set - PDF output copies will be skipped")
+
+        if cls.AUDIT_PATH:
+            logger.info("AUDIT_PATH set - LLM decision audit trail will be written to %s", cls.AUDIT_PATH)
 
         if cls.BACKUP_ENABLED and not cls.BACKUP_PATH:
             missing.append("BACKUP_PATH (required when BACKUP_ENABLED=true)")

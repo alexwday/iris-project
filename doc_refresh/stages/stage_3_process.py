@@ -23,6 +23,7 @@ import json
 import logging
 import os
 import re
+import threading
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -35,6 +36,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from ..connections.llm import OpenAIConnectorError, calculate_token_cost, execute_llm_call
 from ..connections.oauth import fetch_oauth_token
 from ..stages.stage_2_extract import ExtractedDocument
+from ..utils.audit_trail import AuditTrail, NullAuditTrail
 from ..utils.env_config import config
 from ..utils.prompt_loader import get_prompt
 from ..utils.token_utils import count_tokens, truncate_to_tokens
@@ -719,6 +721,7 @@ def run_stage(
 def process_document(
     extracted: ExtractedDocument,
     auth_token: str,
+    audit_trail: Optional[AuditTrail] = None,
 ) -> ProcessedDocument:
     """
     Process a single document through all stages.
@@ -726,13 +729,16 @@ def process_document(
     Args:
         extracted: ExtractedDocument with pages.
         auth_token: Authentication token for API calls.
+        audit_trail: Optional audit trail for recording LLM decisions.
 
     Returns:
         ProcessedDocument with all structured data.
     """
+    if audit_trail is None:
+        audit_trail = NullAuditTrail()
+
     pages = extracted.pages
 
-    # Initialize result
     processed = ProcessedDocument(
         file_info=extracted.file_info,
         structure_type=StructureType.SEMANTIC,
@@ -741,12 +747,13 @@ def process_document(
     )
 
     try:
-        # Steps 1+2 are independent — run in parallel
         with ThreadPoolExecutor(max_workers=2) as executor:
             metadata_future = executor.submit(
-                extract_document_metadata, pages, auth_token
+                extract_document_metadata, pages, auth_token, audit_trail=audit_trail
             )
-            structure_future = executor.submit(detect_structure, pages, auth_token)
+            structure_future = executor.submit(
+                detect_structure, pages, auth_token, audit_trail=audit_trail
+            )
 
             metadata = metadata_future.result()
             structure_type, confidence, section_breaks, _ = structure_future.result()
@@ -755,24 +762,24 @@ def process_document(
         processed.structure_type = structure_type
         processed.structure_confidence = confidence
 
-        # Step 3: Build primary sections with page ranges
         sections = build_primary_sections(pages, section_breaks)
 
-        # Step 4: Analyze subsections within each primary section
-        sections = analyze_subsections(pages, sections, auth_token)
+        sections = analyze_subsections(
+            pages, sections, auth_token, audit_trail=audit_trail
+        )
 
-        # Step 5: Generate enhanced summaries for sections and subsections
-        sections = generate_enhanced_summaries(pages, sections, auth_token)
+        sections = generate_enhanced_summaries(
+            pages, sections, auth_token, audit_trail=audit_trail
+        )
         processed.sections = sections
 
-        # Step 6: Build complete document summary
         document_summary = build_document_summary(metadata, sections, len(pages))
         processed.document_summary = document_summary
 
-        # Steps 7+8 are independent — run in parallel
         with ThreadPoolExecutor(max_workers=2) as executor:
             fields_future = executor.submit(
-                generate_document_fields, metadata, sections, document_summary, auth_token
+                generate_document_fields, metadata, sections, document_summary,
+                auth_token, audit_trail=audit_trail
             )
             embedding_future = executor.submit(
                 generate_summary_embedding, document_summary, auth_token
@@ -785,20 +792,30 @@ def process_document(
         processed.document_usage = document_usage
         processed.summary_embedding = summary_embedding
 
-        # Step 9: Generate chunks with proper section/subsection linkage
         chunks = generate_chunks(pages, sections)
+
+        section_chunk_mapping = []
+        for section in sections:
+            count = sum(1 for c in chunks if c.primary_section_id == section.id)
+            section_chunk_mapping.append({
+                "section": section.title,
+                "chunk_count": count,
+            })
+        audit_trail.record_chunk_generation(
+            chunk_count=len(chunks),
+            section_chunk_mapping=section_chunk_mapping,
+        )
+
         processed.chunks = chunks
 
-        # Step 9.5: Generate and prepend chunk summary prefixes
-        chunks = generate_chunk_summaries(chunks, sections, auth_token)
+        chunks = generate_chunk_summaries(
+            chunks, sections, auth_token, audit_trail=audit_trail
+        )
         processed.chunks = chunks
 
-        # Step 10: Generate chunk embeddings
-        chunks = generate_embeddings(chunks, auth_token)
+        chunks = generate_embeddings(chunks, auth_token, audit_trail=audit_trail)
         processed.chunks = chunks
 
-        # Degradation check: if multiple sub-steps produced empty/fallback results,
-        # flag the document as degraded even though no single step raised an exception
         degradation_signals = []
         if not processed.metadata:
             degradation_signals.append("empty metadata")
@@ -809,6 +826,16 @@ def process_document(
             degradation_signals.append("missing summary embedding")
         if not processed.document_description or processed.document_description == (processed.metadata.get("title", "") or "Unknown"):
             degradation_signals.append("fallback document description")
+
+        audit_trail.set_overview(
+            file_name=extracted.file_info.file_name,
+            page_count=len(pages),
+            structure_type=processed.structure_type.value,
+            structure_confidence=processed.structure_confidence,
+            section_count=len(processed.sections),
+            chunk_count=len(processed.chunks),
+            degradation_signals=degradation_signals,
+        )
 
         if len(degradation_signals) >= 3:
             processed.processing_error = (
@@ -831,6 +858,7 @@ def process_document(
 def extract_document_metadata(
     pages: List[str],
     auth_token: str,
+    audit_trail: Optional[AuditTrail] = None,
 ) -> Dict[str, Any]:
     """
     Extract document metadata from first pages using LLM.
@@ -840,10 +868,14 @@ def extract_document_metadata(
     Args:
         pages: List of page texts.
         auth_token: Authentication token.
+        audit_trail: Optional audit trail for recording LLM decisions.
 
     Returns:
         Dict with metadata fields from config (e.g. title, authors, etc.).
     """
+    if audit_trail is None:
+        audit_trail = NullAuditTrail()
+
     if not pages:
         return {}
 
@@ -867,7 +899,7 @@ def extract_document_metadata(
     ]
 
     try:
-        response, _ = _call_llm(
+        response, usage = _call_llm(
             auth_token,
             messages,
             model=config.MODEL_LARGE,
@@ -878,6 +910,7 @@ def extract_document_metadata(
         message = response.choices[0].message
         args = _parse_tool_arguments(message)
         if args:
+            audit_trail.record_metadata_extraction(metadata=args, usage=usage)
             return args
 
         logger.warning("Metadata extraction returned no tool call")
@@ -895,6 +928,7 @@ def extract_document_metadata(
 def detect_structure(
     pages: List[str],
     auth_token: str,
+    audit_trail: Optional[AuditTrail] = None,
 ) -> Tuple[StructureType, str, List[SectionBreak], Dict[str, Any]]:
     """
     Detect document structure and section breaks.
@@ -902,21 +936,30 @@ def detect_structure(
     Args:
         pages: List of page texts.
         auth_token: Authentication token.
+        audit_trail: Optional audit trail for recording LLM decisions.
 
     Returns:
         Tuple of (structure_type, confidence, section_breaks, classification_info).
     """
+    if audit_trail is None:
+        audit_trail = NullAuditTrail()
+
     if not pages:
         return StructureType.SEMANTIC, "low", [], {}
 
-    # Phase 1: Classify document using first N pages
     classification_pages = pages[:CLASSIFICATION_PAGES]
-    classification = classify_document(classification_pages, auth_token)
+    classification, classify_usage = classify_document(
+        classification_pages, auth_token
+    )
 
     structure_type = _normalize_structure_type(classification.get("structure_type", "semantic"))
     confidence = classification.get("confidence", "low")
     has_toc = classification.get("has_toc", False)
     toc_sections = classification.get("toc_sections", [])
+
+    audit_trail.record_document_classification(
+        classification=classification, usage=classify_usage
+    )
 
     logger.info(
         "Document classified as %s (confidence: %s, has_toc: %s)",
@@ -925,9 +968,9 @@ def detect_structure(
         has_toc,
     )
 
-    # Phase 2: Detect sections in batches
     all_sections = []
     previous_context = ""
+    batch_audit_results = []
 
     num_batches = (len(pages) + BATCH_SIZE - 1) // BATCH_SIZE
     for batch_num in range(num_batches):
@@ -945,7 +988,7 @@ def detect_structure(
             end_page,
         )
 
-        sections, continued = detect_sections_batch(
+        sections, continued, batch_usage = detect_sections_batch(
             batch_pages,
             start_page,
             end_page,
@@ -954,6 +997,15 @@ def detect_structure(
             auth_token,
         )
 
+        batch_audit_results.append({
+            "batch": batch_num + 1,
+            "pages": f"{start_page}-{end_page}",
+            "sections_found": len(sections),
+            "section_titles": [s.title for s in sections],
+            "continued_from": previous_context or None,
+            "usage": batch_usage,
+        })
+
         all_sections.extend(sections)
 
         if sections:
@@ -961,6 +1013,8 @@ def detect_structure(
             previous_context = f"Previous section: '{last.title}' on page {last.page_number}"
         elif continued:
             previous_context = f"Continuing section: '{continued}'"
+
+    audit_trail.record_section_detection(batch_results=batch_audit_results)
 
     logger.info(
         "Detected %d raw sections across %d batches", len(all_sections), num_batches
@@ -974,8 +1028,8 @@ def detect_structure(
             NO_SECTIONS_PAGE_LIMIT,
         )
 
-    # Phase 3: Consolidate and correct using LLM
-    final_sections = consolidate_sections_llm(
+    raw_count = len(all_sections)
+    final_sections, consolidation_usage, corrections = consolidate_sections_llm(
         all_sections,
         len(pages),
         structure_type,
@@ -985,7 +1039,18 @@ def detect_structure(
         auth_token,
     )
 
+    pre_validation = [s.page_number for s in final_sections]
     final_sections = _validate_section_page_numbers(pages, final_sections)
+    post_validation = [s.page_number for s in final_sections]
+    page_fixes = sum(1 for a, b in zip(pre_validation, post_validation) if a != b)
+
+    audit_trail.record_section_consolidation(
+        raw_count=raw_count,
+        final_count=len(final_sections),
+        corrections=corrections,
+        page_validation_fixes=page_fixes,
+        usage=consolidation_usage,
+    )
 
     if not final_sections or final_sections[0].page_number > 1:
         final_sections.insert(
@@ -1007,8 +1072,14 @@ def detect_structure(
     return structure_type, confidence, final_sections, classification_info
 
 
-def classify_document(pages: List[str], auth_token: str) -> Dict[str, Any]:
-    """Classify document structure type using prompt from database."""
+def classify_document(
+    pages: List[str], auth_token: str
+) -> Tuple[Dict[str, Any], Optional[Dict[str, Any]]]:
+    """Classify document structure type using prompt from database.
+
+    Returns:
+        Tuple of (classification_dict, usage_dict).
+    """
     default_result = {
         "structure_type": "semantic",
         "confidence": "low",
@@ -1032,7 +1103,7 @@ def classify_document(pages: List[str], auth_token: str) -> Dict[str, Any]:
         )
     except Exception as exc:
         logger.warning("Classification prompt formatting failed: %s", exc)
-        return default_result
+        return default_result, None
 
     messages = [
         {"role": "system", "content": system_prompt},
@@ -1043,7 +1114,7 @@ def classify_document(pages: List[str], auth_token: str) -> Dict[str, Any]:
     tool_choice = {"type": "function", "function": {"name": "classify_document_structure"}}
 
     try:
-        response, _ = _call_llm(
+        response, usage = _call_llm(
             auth_token,
             messages,
             model=config.MODEL_SMALL,
@@ -1054,15 +1125,15 @@ def classify_document(pages: List[str], auth_token: str) -> Dict[str, Any]:
         message = response.choices[0].message
         args = _parse_tool_arguments(message)
         if args:
-            return args
+            return args, usage
 
         logger.warning("Classification returned no tool call")
     except (OpenAIConnectorError, ConnectionError, OSError):
         raise
     except Exception as exc:
         logger.warning("Classification failed (malformed response): %s", exc)
-        return default_result
-    return default_result
+        return default_result, None
+    return default_result, None
 
 
 def detect_sections_batch(
@@ -1072,8 +1143,12 @@ def detect_sections_batch(
     structure_type: StructureType,
     previous_context: str,
     auth_token: str,
-) -> Tuple[List[SectionBreak], Optional[str]]:
-    """Detect section breaks in a batch of pages using prompts from database."""
+) -> Tuple[List[SectionBreak], Optional[str], Optional[Dict[str, Any]]]:
+    """Detect section breaks in a batch of pages using prompts from database.
+
+    Returns:
+        Tuple of (section_breaks, continued_section_title, usage).
+    """
     pages_content = format_pages_for_prompt(pages, start_page)
 
     system_prompt, tool_def, user_template = _load_prompt("detect_sections_batch")
@@ -1105,7 +1180,7 @@ def detect_sections_batch(
             end_page,
             exc,
         )
-        return [], None
+        return [], None, None
 
     messages = [
         {"role": "system", "content": system_prompt},
@@ -1116,7 +1191,7 @@ def detect_sections_batch(
     tool_choice = {"type": "function", "function": {"name": "detect_section_breaks"}}
 
     try:
-        response, _ = _call_llm(
+        response, usage = _call_llm(
             auth_token,
             messages,
             model=config.MODEL_SMALL,
@@ -1150,7 +1225,7 @@ def detect_sections_batch(
                     reason,
                 )
 
-            return section_breaks, args.get("continued_section_title")
+            return section_breaks, args.get("continued_section_title"), usage
 
         logger.warning(
             "Section detection returned no tool call for pages %d-%d",
@@ -1166,8 +1241,8 @@ def detect_sections_batch(
             end_page,
             exc,
         )
-        return [], None
-    return [], None
+        return [], None, None
+    return [], None, None
 
 
 def consolidate_sections_llm(
@@ -1178,10 +1253,14 @@ def consolidate_sections_llm(
     has_toc: bool,
     toc_sections: List[str],
     auth_token: str,
-) -> List[SectionBreak]:
-    """Consolidate section breaks using prompts from database."""
+) -> Tuple[List[SectionBreak], Optional[Dict[str, Any]], List[str]]:
+    """Consolidate section breaks using prompts from database.
+
+    Returns:
+        Tuple of (consolidated_sections, usage, corrections_list).
+    """
     if not sections:
-        return []
+        return [], None, []
 
     system_prompt, tool_def, user_template = _load_prompt("consolidate_structure")
 
@@ -1220,7 +1299,7 @@ def consolidate_sections_llm(
             "Consolidation prompt formatting failed: %s — using unconsolidated sections",
             exc,
         )
-        return fallback_sections
+        return fallback_sections, None, []
 
     messages = [
         {"role": "system", "content": system_prompt},
@@ -1231,7 +1310,7 @@ def consolidate_sections_llm(
     tool_choice = {"type": "function", "function": {"name": "consolidate_sections"}}
 
     try:
-        response, _ = _call_llm(
+        response, usage = _call_llm(
             auth_token,
             messages,
             model=config.MODEL_LARGE,
@@ -1276,7 +1355,7 @@ def consolidate_sections_llm(
                     "page_number. Check consolidate_structure tool_definition."
                 )
 
-            return sorted(consolidated, key=lambda s: s.page_number)
+            return sorted(consolidated, key=lambda s: s.page_number), usage, corrections
 
         raise RuntimeError(
             "LLM consolidation returned no tool call. "
@@ -1334,13 +1413,26 @@ def analyze_subsections(
     pages: List[str],
     sections: List[Section],
     auth_token: str,
+    audit_trail: Optional[AuditTrail] = None,
 ) -> List[Section]:
     """
     Analyze each primary section and identify subsections.
 
     Creates Subsection objects for each level-2 section found.
     Eligible sections are analyzed in parallel using a thread pool.
+
+    Args:
+        pages: List of page texts.
+        sections: List of primary Section objects.
+        auth_token: Authentication token.
+        audit_trail: Optional audit trail for recording LLM decisions.
+
+    Returns:
+        Sections with subsections populated.
     """
+    if audit_trail is None:
+        audit_trail = NullAuditTrail()
+
     if not sections:
         return sections
 
@@ -1362,6 +1454,9 @@ def analyze_subsections(
         if section.page_end - section.page_start + 1 > 1
     ]
 
+    subsection_audit_results = []
+    audit_lock = threading.Lock()
+
     def _analyze_one(idx: int, section: Section) -> List[Subsection]:
         """Analyze subsections for a single section."""
         section_pages = _get_section_pages(pages, sections, idx)
@@ -1381,7 +1476,7 @@ def analyze_subsections(
             {"role": "user", "content": user_prompt},
         ]
 
-        response, _ = _call_llm(
+        response, usage = _call_llm(
             auth_token,
             messages,
             model=config.MODEL_SMALL,
@@ -1395,6 +1490,14 @@ def analyze_subsections(
             logger.warning(
                 "Subsection analysis returned no tool call for %s", section.title
             )
+            with audit_lock:
+                subsection_audit_results.append({
+                    "section": section.title,
+                    "pages": f"{section.page_start}-{section.page_end}",
+                    "subsection_count": 0,
+                    "subsection_titles": [],
+                    "usage": usage,
+                })
             return []
 
         subsections_data = args.get("subsections", [])
@@ -1420,7 +1523,28 @@ def analyze_subsections(
             )
             subsections.append(subsection)
 
+        with audit_lock:
+            subsection_audit_results.append({
+                "section": section.title,
+                "pages": f"{section.page_start}-{section.page_end}",
+                "subsection_count": len(subsections),
+                "subsection_titles": [s.title for s in subsections],
+                "usage": usage,
+            })
+
         return subsections
+
+    skipped_sections = [
+        s.title for _, s in enumerate(sections)
+        if s.page_end - s.page_start + 1 <= 1
+    ]
+    for title in skipped_sections:
+        subsection_audit_results.append({
+            "section": title,
+            "skipped": True,
+            "reason": "single-page section",
+            "subsection_count": 0,
+        })
 
     failed_count = 0
 
@@ -1442,6 +1566,8 @@ def analyze_subsections(
                 )
                 failed_count += 1
 
+    audit_trail.record_subsection_analysis(per_section_results=subsection_audit_results)
+
     if len(eligible) > 0 and failed_count == len(eligible):
         logger.error(
             "Subsection analysis failed for ALL %d eligible sections", len(eligible)
@@ -1456,6 +1582,7 @@ def generate_enhanced_summaries(
     pages: List[str],
     sections: List[Section],
     auth_token: str,
+    audit_trail: Optional[AuditTrail] = None,
 ) -> List[Section]:
     """
     Generate enhanced JSON summaries for sections and subsections.
@@ -1463,23 +1590,45 @@ def generate_enhanced_summaries(
     Non-boilerplate sections are summarized in parallel using a thread pool.
     Each summary includes overview, key_topics, key_metrics, key_findings,
     and notable_facts.
+
+    Args:
+        pages: List of page texts.
+        sections: List of primary Section objects.
+        auth_token: Authentication token.
+        audit_trail: Optional audit trail for recording LLM decisions.
+
+    Returns:
+        Sections with summaries populated.
     """
+    if audit_trail is None:
+        audit_trail = NullAuditTrail()
+
     if not sections:
         return sections
 
     logger.info("Generating enhanced summaries for %d sections", len(sections))
 
     llm_indices = []
+    boilerplate_count = 0
     for i, section in enumerate(sections):
         boilerplate = _is_boilerplate_section(section.title)
         if boilerplate is not None:
             logger.info("Using boilerplate summary for section: %s", section.title)
             section.summary = boilerplate
+            boilerplate_count += 1
         else:
             llm_indices.append(i)
 
     if not llm_indices:
+        audit_trail.record_section_summaries(
+            per_section_results=[],
+            boilerplate_count=boilerplate_count,
+            fallback_count=0,
+        )
         return sections
+
+    summary_audit_results = []
+    audit_lock = threading.Lock()
 
     def _summarize_one(idx: int) -> Tuple[int, Dict[str, Any]]:
         """Generate summary for a single section."""
@@ -1492,7 +1641,7 @@ def generate_enhanced_summaries(
             section.title,
             len(section_pages),
         )
-        summary = generate_section_summary_json(
+        summary, usage = generate_section_summary_json(
             section_pages, section.title, section.page_start, section.page_end, auth_token
         )
         is_fallback = summary.get("is_fallback", False)
@@ -1503,6 +1652,16 @@ def generate_enhanced_summaries(
             len(summary.get("key_findings", [])),
             " (FALLBACK)" if is_fallback else "",
         )
+        with audit_lock:
+            summary_audit_results.append({
+                "section": section.title,
+                "pages": f"{section.page_start}-{section.page_end}",
+                "overview": summary.get("overview", ""),
+                "topic_count": len(summary.get("key_topics", [])),
+                "finding_count": len(summary.get("key_findings", [])),
+                "is_fallback": is_fallback,
+                "usage": usage,
+            })
         return idx, summary
 
     with ThreadPoolExecutor(max_workers=MAX_LLM_WORKERS) as executor:
@@ -1533,6 +1692,12 @@ def generate_enhanced_summaries(
             "%d/%d sections used fallback summaries", fallback_count, len(sections)
         )
 
+    audit_trail.record_section_summaries(
+        per_section_results=summary_audit_results,
+        boilerplate_count=boilerplate_count,
+        fallback_count=fallback_count,
+    )
+
     return sections
 
 
@@ -1542,11 +1707,11 @@ def generate_section_summary_json(
     page_start: int,
     page_end: int,
     auth_token: str,
-) -> Dict[str, Any]:
-    """
-    Generate an enhanced JSON summary for a section.
+) -> Tuple[Dict[str, Any], Optional[Dict[str, Any]]]:
+    """Generate an enhanced JSON summary for a section.
 
-    Returns dict with overview, key_topics, key_metrics, key_findings, notable_facts.
+    Returns:
+        Tuple of (summary_dict, usage_dict).
     """
     section_content = "\n\n---PAGE BREAK---\n\n".join(pages)
 
@@ -1577,7 +1742,7 @@ def generate_section_summary_json(
         )
     except Exception as exc:
         logger.error("Summary prompt formatting failed for %s: %s", title, exc)
-        return default_summary
+        return default_summary, None
 
     messages = [
         {"role": "system", "content": system_prompt},
@@ -1585,7 +1750,7 @@ def generate_section_summary_json(
     ]
 
     try:
-        response, _ = _call_llm(
+        response, usage = _call_llm(
             auth_token,
             messages,
             model=config.MODEL_LARGE,
@@ -1599,13 +1764,13 @@ def generate_section_summary_json(
         message = response.choices[0].message
         args = _parse_tool_arguments(message)
         if args:
-            return args
+            return args, usage
         logger.error("Summary generation returned no tool call for %s", title)
     except (OpenAIConnectorError, ConnectionError, OSError):
         raise
     except Exception as exc:
         logger.error("Summary generation failed for %s: %s", title, exc)
-    return default_summary
+    return default_summary, None
 
 
 def build_document_summary(
@@ -1697,6 +1862,7 @@ def generate_document_fields(
     sections: List[Section],
     document_summary: str,
     auth_token: str,
+    audit_trail: Optional[AuditTrail] = None,
 ) -> Tuple[str, str]:
     """
     Generate document description and usage fields using LLM.
@@ -1706,10 +1872,14 @@ def generate_document_fields(
         sections: List of processed sections with summaries.
         document_summary: Complete document summary for LLM context.
         auth_token: Authentication token for API calls.
+        audit_trail: Optional audit trail for recording LLM decisions.
 
     Returns:
         Tuple of (document_description, document_usage).
     """
+    if audit_trail is None:
+        audit_trail = NullAuditTrail()
+
     title = metadata.get("title", "") or "Unknown"
     fallback_description = title
     fallback_usage = ""
@@ -1720,7 +1890,7 @@ def generate_document_fields(
     user_prompt = _safe_format(user_template, document_summary=truncated_summary)
 
     try:
-        response, _ = _call_llm(
+        response, usage = _call_llm(
             auth_token,
             [
                 {"role": "system", "content": system_prompt},
@@ -1734,10 +1904,12 @@ def generate_document_fields(
         message = response.choices[0].message
         args = _parse_tool_arguments(message)
         if args:
-            return (
-                args.get("document_description", fallback_description),
-                args.get("document_usage", fallback_usage),
+            description = args.get("document_description", fallback_description)
+            usage_text = args.get("document_usage", fallback_usage)
+            audit_trail.record_document_fields(
+                description=description, usage_text=usage_text, usage=usage
             )
+            return description, usage_text
         logger.error("Document fields generation returned no tool call")
     except (OpenAIConnectorError, ConnectionError, OSError):
         raise
@@ -1876,8 +2048,12 @@ def _generate_chunk_summary_batch(
     chunks: List[Chunk],
     section_context: str,
     auth_token: str,
-) -> Dict[int, str]:
-    """Send a batch of chunks to MODEL_SMALL and return chunk_number-to-summary mapping."""
+) -> Tuple[Dict[int, str], Optional[Dict[str, Any]]]:
+    """Send a batch of chunks to MODEL_SMALL and return chunk_number-to-summary mapping.
+
+    Returns:
+        Tuple of (chunk_number_to_summary_mapping, usage_dict).
+    """
     system_prompt, tool_def, user_template = _load_prompt("generate_chunk_summaries")
 
     if not tool_def:
@@ -1902,7 +2078,7 @@ def _generate_chunk_summary_batch(
         chunk_blocks=chunk_blocks_text,
     )
 
-    response, _ = _call_llm(
+    response, usage = _call_llm(
         auth_token,
         [
             {"role": "system", "content": system_prompt},
@@ -1921,7 +2097,7 @@ def _generate_chunk_summary_batch(
             "Chunk summary batch returned no tool call for %d chunks",
             len(chunks),
         )
-        return {}
+        return {}, usage
 
     result = {}
     dropped_count = 0
@@ -1944,13 +2120,14 @@ def _generate_chunk_summary_batch(
         len(result),
         len(chunks),
     )
-    return result
+    return result, usage
 
 
 def generate_chunk_summaries(
     chunks: List[Chunk],
     sections: List[Section],
     auth_token: str,
+    audit_trail: Optional[AuditTrail] = None,
 ) -> List[Chunk]:
     """Generate concise summaries and prefix them to chunk content for better embeddings.
 
@@ -1963,10 +2140,14 @@ def generate_chunk_summaries(
         chunks: List of Chunk objects from generate_chunks.
         sections: List of Section objects with summaries.
         auth_token: Authentication token for API calls.
+        audit_trail: Optional audit trail for recording LLM decisions.
 
     Returns:
         The same list of Chunk objects with embedding_prefix set where applicable.
     """
+    if audit_trail is None:
+        audit_trail = NullAuditTrail()
+
     if not chunks:
         return chunks
 
@@ -1995,6 +2176,8 @@ def generate_chunk_summaries(
     total_batches = len(batches)
     failed_batches = 0
     summaries: Dict[int, str] = {}
+    batch_audit_stats = []
+    batch_audit_lock = threading.Lock()
 
     with ThreadPoolExecutor(max_workers=MAX_LLM_WORKERS) as executor:
         futures = {
@@ -2006,8 +2189,15 @@ def generate_chunk_summaries(
         for future in as_completed(futures):
             batch_idx = futures[future]
             try:
-                batch_result = future.result()
+                batch_result, batch_usage = future.result()
                 summaries.update(batch_result)
+                with batch_audit_lock:
+                    batch_audit_stats.append({
+                        "batch": batch_idx + 1,
+                        "chunks_in_batch": len(batches[batch_idx]),
+                        "summaries_returned": len(batch_result),
+                        "usage": batch_usage,
+                    })
             except (OpenAIConnectorError, ConnectionError, OSError):
                 raise
             except Exception as exc:
@@ -2036,8 +2226,15 @@ def generate_chunk_summaries(
             for future in as_completed(futures):
                 batch_idx = futures[future]
                 try:
-                    batch_result = future.result()
+                    batch_result, batch_usage = future.result()
                     summaries.update(batch_result)
+                    with batch_audit_lock:
+                        batch_audit_stats.append({
+                            "batch": f"retry_{batch_idx + 1}",
+                            "chunks_in_batch": len(retry_batches[batch_idx]),
+                            "summaries_returned": len(batch_result),
+                            "usage": batch_usage,
+                        })
                 except (OpenAIConnectorError, ConnectionError, OSError):
                     raise
                 except Exception as exc:
@@ -2060,16 +2257,40 @@ def generate_chunk_summaries(
             chunk.embedding_prefix = f"[{summary}]\n\n"
             prefixed_count += 1
 
+    audit_trail.record_chunk_summaries(
+        eligible_count=len(eligible_chunks),
+        prefixed_count=prefixed_count,
+        batch_stats=batch_audit_stats,
+    )
+
     logger.info("Set embedding prefixes for %d/%d chunks", prefixed_count, len(eligible_chunks))
     return chunks
 
 
-def generate_embeddings(chunks: List[Chunk], auth_token: str) -> List[Chunk]:
-    """Generate embeddings for all chunks."""
+def generate_embeddings(
+    chunks: List[Chunk],
+    auth_token: str,
+    audit_trail: Optional[AuditTrail] = None,
+) -> List[Chunk]:
+    """Generate embeddings for all chunks.
+
+    Args:
+        chunks: List of Chunk objects to embed.
+        auth_token: Authentication token for API calls.
+        audit_trail: Optional audit trail for recording embedding decisions.
+
+    Returns:
+        Chunks with embeddings populated.
+    """
+    if audit_trail is None:
+        audit_trail = NullAuditTrail()
+
     if not chunks:
         return chunks
 
     logger.info("Generating embeddings for %d chunks", len(chunks))
+
+    embedding_batch_stats = []
 
     for i in range(0, len(chunks), EMBEDDING_BATCH_SIZE):
         batch = chunks[i : i + EMBEDDING_BATCH_SIZE]
@@ -2082,7 +2303,7 @@ def generate_embeddings(chunks: List[Chunk], auth_token: str) -> List[Chunk]:
         ]
 
         try:
-            embeddings, _ = _create_embedding(
+            embeddings, usage_details = _create_embedding(
                 auth_token,
                 texts,
                 model=config.MODEL_EMBEDDING,
@@ -2097,6 +2318,12 @@ def generate_embeddings(chunks: List[Chunk], auth_token: str) -> List[Chunk]:
             for j, embedding in enumerate(embeddings):
                 batch[j].embedding = embedding
 
+            embedding_batch_stats.append({
+                "batch": i // EMBEDDING_BATCH_SIZE + 1,
+                "chunks_in_batch": len(batch),
+                "usage": usage_details,
+            })
+
         except Exception as exc:
             logger.error("Embedding batch %d failed: %s", i // EMBEDDING_BATCH_SIZE, exc)
             raise RuntimeError(
@@ -2104,6 +2331,13 @@ def generate_embeddings(chunks: List[Chunk], auth_token: str) -> List[Chunk]:
             ) from exc
 
     embedded_count = sum(1 for c in chunks if c.embedding is not None)
+
+    audit_trail.record_embeddings(
+        chunks_embedded=embedded_count,
+        summary_embedded=False,
+        batch_stats=embedding_batch_stats,
+    )
+
     logger.info("Generated %d/%d embeddings", embedded_count, len(chunks))
 
     return chunks
