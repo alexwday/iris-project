@@ -18,6 +18,8 @@ from ..utils.reference_processor import (
     process_streaming_reference_buffer,
 )
 
+logger = logging.getLogger(__name__)
+
 
 def consolidate_findings_with_refs(
     all_findings: FindingsList,
@@ -146,8 +148,6 @@ def _execute_database_query_task(
     Returns:
         Dict[str, Any]: Query results with findings, status_summary, path info.
     """
-    logger = logging.getLogger(__name__)
-    logger.setLevel(logging.INFO)
     router_result = None
     task_exception = None
 
@@ -255,9 +255,6 @@ def _stream_model_workflow(
         set_process_monitoring_enabled,
     )
 
-    logger = logging.getLogger(__name__)
-    logger.setLevel(logging.INFO)
-
     set_process_monitoring_enabled(True)
     process_monitor = get_process_monitor_instance()
     run_uuid_val = uuid.uuid4()
@@ -287,12 +284,9 @@ def _stream_model_workflow(
     from ..agent.summarizer import stream_research_summary
     from ..agent.tools.database_metadata import fetch_available_databases
     from ..utils.input_sanitizer import sanitize_conversation_history
-    from ..utils.logging_format import configure_root_logger
     from ..connections.oauth import fetch_oauth_token
     from ..utils.rbc_security import configure_rbc_security_certs
     from ..utils.prompt_loader import load_all_prompts
-
-    logger = configure_root_logger()
 
     try:
         logger.info("Initializing model...")
@@ -792,8 +786,6 @@ def stream_model_response(
     Yields:
         str: Streaming research plans, database status updates, and final answers.
     """
-    logger = logging.getLogger(__name__)
-    logger.setLevel(logging.INFO)
     try:
         yield from _stream_model_workflow(
             conversation, html_callback, debug_mode, db_names
@@ -826,8 +818,6 @@ async def process_conversation_request_async(
     """
     import asyncio
 
-    logger = logging.getLogger(__name__)
-    logger.setLevel(logging.INFO)
     if "_stream" in kwargs:
         stream = kwargs.pop("_stream")
 
