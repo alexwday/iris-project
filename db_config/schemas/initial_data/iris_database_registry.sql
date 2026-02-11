@@ -555,16 +555,16 @@ VALUES (
     10,
     1,
     3,
-    150,
+    30,
     true,
     ARRAY['document_summary','document_description','document_usage']::text[],
-    5,
     20,
-    6,
-    6,
-    3,
-    2,
-    2
+    20,
+    30,
+    10,
+    5,
+    4,
+    5
 )
 ON CONFLICT (db_source) DO UPDATE SET
     db_name = EXCLUDED.db_name,
@@ -750,16 +750,16 @@ VALUES (
     10,
     1,
     3,
-    150,
+    30,
     true,
     ARRAY['document_summary','document_description','document_usage']::text[],
-    5,
     20,
-    6,
-    6,
-    3,
-    2,
-    2
+    20,
+    30,
+    10,
+    5,
+    4,
+    5
 )
 ON CONFLICT (db_source) DO UPDATE SET
     db_name = EXCLUDED.db_name,
@@ -945,16 +945,16 @@ VALUES (
     10,
     1,
     3,
-    150,
+    30,
     true,
     ARRAY['document_summary','document_description','document_usage']::text[],
-    5,
     20,
-    6,
-    6,
-    3,
-    2,
-    2
+    20,
+    30,
+    10,
+    5,
+    4,
+    5
 )
 ON CONFLICT (db_source) DO UPDATE SET
     db_name = EXCLUDED.db_name,
