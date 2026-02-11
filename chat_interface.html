@@ -677,6 +677,21 @@
             color: var(--accent-hover);
         }
 
+        .message-content td a.link-chip,
+        .message-content th a.link-chip,
+        .message-content td a.citation-link,
+        .message-content th a.citation-link {
+            display: inline;
+            margin: 0;
+            padding: 0;
+            border-radius: 0;
+            border: none;
+            border-bottom: 1px dashed color-mix(in srgb, var(--link) 45%, transparent);
+            background: none;
+            font-size: inherit;
+            line-height: inherit;
+        }
+
         .message-actions {
             display: flex;
             gap: 2px;
@@ -1332,12 +1347,13 @@
                 contentDiv.querySelectorAll('a').forEach(link => {
                     const href = (link.getAttribute('href') || '').trim();
                     const text = (link.textContent || '').trim();
+                    const isInTable = !!link.closest('td, th');
 
-                    if (!link.classList.contains('citation-link')) {
+                    if (!link.classList.contains('citation-link') && !isInTable) {
                         link.classList.add('link-chip');
                     }
 
-                    if (!link.classList.contains('citation-link') && (text.length === 0 || text === href || text.length > 70)) {
+                    if (!link.classList.contains('citation-link') && !isInTable && (text.length === 0 || text === href || text.length > 70)) {
                         link.textContent = this.compactLinkLabel(text, href);
                     }
 
