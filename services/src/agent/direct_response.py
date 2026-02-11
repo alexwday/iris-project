@@ -114,6 +114,7 @@ def stream_direct_response_from_conversation(
             completion_token_cost=model_settings["completion_token_cost"],
         )
 
+        has_content = False
         for item in response_stream:
             if isinstance(item, dict) and "usage_details" in item:
                 final_usage_details = item
@@ -124,7 +125,12 @@ def stream_direct_response_from_conversation(
                 and item.choices[0].delta
                 and item.choices[0].delta.content
             ):
+                has_content = True
                 yield item.choices[0].delta.content
+
+        if not has_content:
+            logger.warning("Direct response produced no content")
+            yield "I wasn't able to generate a response. Please try again."
 
         if not final_usage_details:
             logger.warning("Usage details not found in direct response stream")

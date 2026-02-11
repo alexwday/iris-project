@@ -369,6 +369,16 @@ def _stream_model_workflow(
             available_databases = {
                 k: v for k, v in available_databases.items() if k in db_names
             }
+            if not available_databases:
+                logger.warning(
+                    "All databases filtered out by db_names: %s", db_names
+                )
+                yield (
+                    "None of the requested databases are available. "
+                    "Please check your database selection and try again."
+                )
+                process_monitor.end_monitoring()
+                return
 
         process_monitor.start_stage("router")
         logger.info("Getting routing decision...")
@@ -662,6 +672,11 @@ def _stream_model_workflow(
                             summary_exc,
                             exc_info=True,
                         )
+                        if buffer:
+                            yield from finalize_reference_replacements(
+                                buffer, master_reference_index
+                            )
+                            buffer = ""
                         err_msg = str(summary_exc)
                         yield f"\n\n**Error during summarization:** {err_msg}"
                         process_monitor.end_stage("summary", "error")
@@ -669,6 +684,13 @@ def _stream_model_workflow(
                             "summary", error=str(summary_exc)
                         )
                     logger.info("Research completed")
+                else:
+                    logger.info("No findings returned from any database")
+                    yield (
+                        "\n\n---\n\n"
+                        "No relevant results were found across the searched databases. "
+                        "Try rephrasing your question or broadening the search criteria."
+                    )
 
                 logger.debug("Research completed, ending monitoring")
                 process_monitor.end_monitoring()
@@ -847,6 +869,9 @@ async def process_conversation_request_async(
                         token_usage = chunk.get("token_usage")
 
             full_response = "".join(response_chunks)
+
+            if not full_response.strip():
+                full_response = "No response was generated. Please try again."
 
             return {
                 "response": full_response,

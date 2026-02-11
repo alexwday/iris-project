@@ -248,5 +248,4 @@ def stream_research_summary(
 
     except (ValueError, TypeError, KeyError, AttributeError) as exc:
         logger.error("Error generating streaming summary: %s", str(exc), exc_info=True)
-        yield f"\n\n**Error generating research summary:** {exc}\n"
         raise SummarizerError(f"Failed to generate streaming summary: {exc}") from exc

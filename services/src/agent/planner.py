@@ -385,12 +385,13 @@ def _validate_selected_database_list(
         List of validated database names corresponding to the indices.
 
     Raises:
-        PlannerError: If indices are missing, empty, or out of range.
+        PlannerError: If indices are invalid types or out of range.
     """
     selected_indices = arguments.get("databases", [])
 
     if not selected_indices:
-        raise PlannerError("Missing or empty 'databases' in tool arguments")
+        logger.warning("LLM returned empty database selection")
+        return []
 
     db_keys = get_ordered_database_keys(available_databases)
 
