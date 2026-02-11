@@ -761,6 +761,83 @@
             30% { transform: translateY(-4px); opacity: 1; }
         }
 
+        .typing-text {
+            font-size: 12px;
+            color: var(--text-muted);
+            font-weight: 500;
+            animation: fadeIn 0.4s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        /* Export Mode */
+        .export-banner {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 18px;
+            background: color-mix(in srgb, var(--accent) 10%, var(--bg-secondary));
+            border-bottom: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+            animation: fadeIn 0.2s ease-out;
+        }
+
+        .export-banner-text {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-primary);
+            flex: 1;
+        }
+
+        .export-banner .btn {
+            padding: 6px 12px;
+            font-size: 11px;
+        }
+
+        .export-mode .message {
+            position: relative;
+        }
+
+        .export-checkbox {
+            position: absolute;
+            top: 4px;
+            left: -28px;
+            width: 20px;
+            height: 20px;
+            appearance: none;
+            border: 2px solid var(--border);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.15s;
+            background: var(--bg-secondary);
+            z-index: 5;
+        }
+
+        .export-checkbox:checked {
+            background: var(--accent);
+            border-color: var(--accent);
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3E%3C/svg%3E");
+            background-size: 14px;
+            background-position: center;
+            background-repeat: no-repeat;
+        }
+
+        .export-checkbox:hover {
+            border-color: var(--accent);
+        }
+
+        .export-mode .message.export-selected .message-content {
+            outline: 2px solid color-mix(in srgb, var(--accent) 50%, transparent);
+            outline-offset: 2px;
+            border-radius: var(--radius-lg);
+        }
+
+        .export-mode .messages {
+            padding-left: 50px;
+        }
+
         /* Input Area */
         .input-area {
             padding: 14px 18px;
@@ -1073,6 +1150,12 @@
                 </svg>
                 Reset
             </button>
+            <button class="btn btn-secondary" id="exportBtn" title="Export conversation" style="display: none;">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+                </svg>
+                Export
+            </button>
             <div class="status-badge" id="statusIndicator">
                 <span class="status-dot"></span>
                 <span>Connecting...</span>
@@ -1162,6 +1245,7 @@
                 this.streamRenderHandle = null;
                 this.pendingStreamRender = null;
                 this.lastStreamRenderAt = 0;
+                this.exportMode = false;
 
                 this.messagesContainer = document.getElementById('messages');
                 this.messageInput = document.getElementById('messageInput');
@@ -1175,6 +1259,7 @@
                 this.filterToggleBtn = document.getElementById('filterToggleBtn');
                 this.filterBadge = document.getElementById('filterBadge');
                 this.sidebarClose = document.getElementById('sidebarClose');
+                this.exportBtn = document.getElementById('exportBtn');
 
                 this.init();
             }
@@ -1432,6 +1517,7 @@
 
                 this.newChatBtn.addEventListener('click', () => this.resetConversation());
                 this.resetServerBtn.addEventListener('click', () => this.resetServer());
+                this.exportBtn.addEventListener('click', () => this.enterExportMode());
 
                 // Sidebar toggle
                 this.filterToggleBtn.addEventListener('click', () => this.toggleSidebar());
@@ -1545,9 +1631,12 @@
 
             addMessage(role, content) {
                 this.messages.push({ role, content });
+                this.exportBtn.style.display = '';
+                const msgIndex = this.messages.length - 1;
 
                 const messageDiv = document.createElement('div');
                 messageDiv.className = `message ${role}`;
+                messageDiv.dataset.msgIndex = String(msgIndex);
 
                 const avatar = document.createElement('div');
                 avatar.className = `avatar ${role}`;
@@ -1676,6 +1765,7 @@
                         <div class="typing-dot"></div>
                         <div class="typing-dot"></div>
                     </div>
+                    <span class="typing-text">IRIS is thinking...</span>
                 `;
 
                 messageDiv.appendChild(avatar);
@@ -1742,9 +1832,11 @@
             }
 
             resetConversation() {
+                if (this.exportMode) this.exitExportMode();
                 this.clearStreamingRenderQueue();
                 this.isStreaming = false;
                 this.messages = [];
+                this.exportBtn.style.display = 'none';
                 this.messagesContainer.innerHTML = `
                     <div class="message assistant">
                         <div class="avatar assistant">
@@ -1912,6 +2004,299 @@
                 const subject = encodeURIComponent('IRIS Research Response');
                 const body = encodeURIComponent(`IRIS Response:\n\n${plainText}\n\n---\nGenerated by IRIS Financial Assistant`);
                 window.location.href = `mailto:?subject=${subject}&body=${body}`;
+            }
+
+            enterExportMode() {
+                if (this.isStreaming || this.messages.length === 0) return;
+                this.exportMode = true;
+
+                const chatArea = document.querySelector('.chat-area');
+                chatArea.classList.add('export-mode');
+
+                const banner = document.createElement('div');
+                banner.className = 'export-banner';
+                banner.id = 'exportBanner';
+                banner.innerHTML = `
+                    <span class="export-banner-text">Select messages to export</span>
+                    <button class="btn btn-ghost" id="exportSelectAll">Select All</button>
+                    <button class="btn btn-primary" id="exportGenerate">Generate Export</button>
+                    <button class="btn btn-secondary" id="exportCancel">Cancel</button>
+                `;
+                chatArea.insertBefore(banner, this.messagesContainer);
+
+                document.getElementById('exportSelectAll').addEventListener('click', () => this.selectAllForExport());
+                document.getElementById('exportGenerate').addEventListener('click', () => this.generateExport());
+                document.getElementById('exportCancel').addEventListener('click', () => this.exitExportMode());
+
+                this.messagesContainer.querySelectorAll('.message[data-msg-index]').forEach(div => {
+                    const idx = div.dataset.msgIndex;
+                    const cb = document.createElement('input');
+                    cb.type = 'checkbox';
+                    cb.className = 'export-checkbox';
+                    cb.dataset.msgIndex = idx;
+                    cb.addEventListener('change', () => {
+                        div.classList.toggle('export-selected', cb.checked);
+                    });
+                    div.appendChild(cb);
+                });
+
+                document.querySelector('.input-area').style.display = 'none';
+            }
+
+            exitExportMode() {
+                this.exportMode = false;
+
+                const chatArea = document.querySelector('.chat-area');
+                chatArea.classList.remove('export-mode');
+
+                const banner = document.getElementById('exportBanner');
+                if (banner) banner.remove();
+
+                this.messagesContainer.querySelectorAll('.export-checkbox').forEach(cb => cb.remove());
+                this.messagesContainer.querySelectorAll('.message.export-selected').forEach(div => {
+                    div.classList.remove('export-selected');
+                });
+
+                document.querySelector('.input-area').style.display = '';
+            }
+
+            selectAllForExport() {
+                const checkboxes = this.messagesContainer.querySelectorAll('.export-checkbox');
+                const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+                checkboxes.forEach(cb => {
+                    cb.checked = !allChecked;
+                    cb.closest('.message')?.classList.toggle('export-selected', !allChecked);
+                });
+                const btn = document.getElementById('exportSelectAll');
+                if (btn) btn.textContent = allChecked ? 'Select All' : 'Deselect All';
+            }
+
+            generateExport() {
+                const checkboxes = this.messagesContainer.querySelectorAll('.export-checkbox:checked');
+                const selectedItems = [];
+
+                checkboxes.forEach(cb => {
+                    const idx = parseInt(cb.dataset.msgIndex, 10);
+                    if (!isNaN(idx) && this.messages[idx]) {
+                        selectedItems.push(this.messages[idx]);
+                    }
+                });
+
+                if (selectedItems.length === 0) {
+                    this.showToast('No messages selected', 'error');
+                    return;
+                }
+
+                const now = new Date();
+                const dateStr = now.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+                const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+
+                let messagesHtml = '';
+                selectedItems.forEach(msg => {
+                    if (msg.role === 'user') {
+                        const escaped = msg.content.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                        messagesHtml += `
+                            <div class="card query-card">
+                                <div class="card-label">Q</div>
+                                <div class="card-content">${escaped}</div>
+                            </div>
+                        `;
+                    } else {
+                        const rendered = this.renderMarkdownToSafeHtml(msg.content);
+                        messagesHtml += `
+                            <div class="card response-card">
+                                <div class="card-label iris-label">IRIS</div>
+                                <div class="card-content">${rendered}</div>
+                            </div>
+                        `;
+                    }
+                });
+
+                const exportHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IRIS Research Export - ${dateStr}</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: "Space Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: #f6f5f0;
+            color: #1d2230;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        .header-bar {
+            background: linear-gradient(130deg, #0c7b7d 0%, #c86f31 100%);
+            padding: 24px 32px;
+            color: white;
+        }
+        .header-bar h1 {
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            margin-bottom: 4px;
+        }
+        .header-bar .date {
+            font-size: 13px;
+            opacity: 0.85;
+        }
+        .content {
+            max-width: 900px;
+            margin: 32px auto;
+            padding: 0 24px;
+        }
+        .card {
+            margin-bottom: 20px;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        .card-label {
+            padding: 6px 14px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .card-content {
+            padding: 16px 20px;
+            font-size: 13.5px;
+            line-height: 1.55;
+        }
+        .query-card {
+            border-left: 4px solid #0c7b7d;
+            background: #f0f9f9;
+        }
+        .query-card .card-label {
+            background: #e0f2f2;
+            color: #0c7b7d;
+        }
+        .query-card .card-content {
+            white-space: pre-wrap;
+        }
+        .response-card {
+            background: #ffffff;
+            border: 1px solid #d7d1bf;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+        .response-card .card-label.iris-label {
+            background: linear-gradient(130deg, #0c7b7d 0%, #0a6668 100%);
+            color: white;
+        }
+        .response-card .card-content h1,
+        .response-card .card-content h2,
+        .response-card .card-content h3 {
+            margin: 0.8em 0 0.4em;
+            font-weight: 600;
+            line-height: 1.3;
+        }
+        .response-card .card-content h1 { font-size: 1.1em; }
+        .response-card .card-content h2 { font-size: 1.05em; }
+        .response-card .card-content h3 { font-size: 1em; }
+        .response-card .card-content > :first-child { margin-top: 0; }
+        .response-card .card-content > :last-child { margin-bottom: 0; }
+        .response-card .card-content p { margin: 0.4em 0; }
+        .response-card .card-content ul,
+        .response-card .card-content ol {
+            margin: 0.4em 0;
+            padding-left: 1.4em;
+        }
+        .response-card .card-content li { margin: 0.15em 0; }
+        .response-card .card-content code {
+            background: #f0ece0;
+            padding: 1px 5px;
+            border-radius: 4px;
+            font-family: "IBM Plex Mono", Menlo, monospace;
+            font-size: 0.88em;
+        }
+        .response-card .card-content pre {
+            background: #13161c;
+            color: #e6e7eb;
+            padding: 12px 14px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 0.6em 0;
+        }
+        .response-card .card-content pre code {
+            background: none;
+            padding: 0;
+            color: inherit;
+        }
+        .response-card .card-content blockquote {
+            border-left: 3px solid #c86f31;
+            padding-left: 12px;
+            margin: 0.6em 0;
+            color: #4a5769;
+        }
+        .response-card .card-content table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 0.6em 0;
+            font-size: 12px;
+        }
+        .response-card .card-content th,
+        .response-card .card-content td {
+            border: 1px solid #d7d1bf;
+            padding: 6px 10px;
+            text-align: left;
+        }
+        .response-card .card-content thead { background: #f4f1e7; }
+        .response-card .card-content th { font-weight: 600; color: #38485f; }
+        .response-card .card-content tbody tr:nth-child(even) { background: #f8f6ef; }
+        .response-card .card-content a {
+            color: #0a5f9e;
+            text-decoration: none;
+            border-bottom: 1px dashed rgba(10,95,158,0.4);
+        }
+        .response-card .card-content hr {
+            border: none;
+            border-top: 1px solid #d7d1bf;
+            margin: 0.8em 0;
+        }
+        .footer {
+            max-width: 900px;
+            margin: 40px auto 32px;
+            padding: 16px 24px;
+            text-align: center;
+            font-size: 11px;
+            color: #748095;
+            border-top: 1px solid #d7d1bf;
+        }
+        @media print {
+            body { background: white; }
+            .header-bar {
+                background: #0c7b7d !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            .card { break-inside: avoid; box-shadow: none; }
+            .response-card { border-color: #ccc; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header-bar">
+        <h1>IRIS Research Export</h1>
+        <div class="date">${dateStr} at ${timeStr}</div>
+    </div>
+    <div class="content">
+        ${messagesHtml}
+    </div>
+    <div class="footer">Generated by IRIS Financial Research Assistant</div>
+</body>
+</html>`;
+
+                const exportWindow = window.open('', '_blank');
+                if (exportWindow) {
+                    exportWindow.document.write(exportHtml);
+                    exportWindow.document.close();
+                    this.showToast('Export opened in new tab');
+                } else {
+                    this.showToast('Pop-up blocked — please allow pop-ups', 'error');
+                }
+
+                this.exitExportMode();
             }
         }
 
