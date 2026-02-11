@@ -454,7 +454,9 @@
 
         .message {
             display: flex;
-            gap: 10px;
+            flex-wrap: wrap;
+            column-gap: 10px;
+            row-gap: 0;
             animation: messageIn 0.3s ease-out;
             width: min(100%, 980px);
         }
@@ -507,7 +509,7 @@
             min-width: 0;
             flex: 1;
             word-wrap: break-word;
-            overflow-wrap: anywhere;
+            overflow-wrap: break-word;
         }
 
         .message.user .message-content {
@@ -678,9 +680,9 @@
         .message-actions {
             display: flex;
             gap: 2px;
-            margin-top: 4px;
-            margin-left: 42px;
-            width: min(100%, 938px);
+            margin-top: 2px;
+            padding-left: 42px;
+            flex-basis: 100%;
         }
 
         .action-btn {
