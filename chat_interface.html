@@ -2289,14 +2289,14 @@
 </body>
 </html>`;
 
-                const exportWindow = window.open('', '_blank');
-                if (exportWindow) {
-                    exportWindow.document.write(exportHtml);
-                    exportWindow.document.close();
-                    this.showToast('Export opened in new tab');
-                } else {
-                    this.showToast('Pop-up blocked — please allow pop-ups', 'error');
-                }
+                const blob = new Blob([exportHtml], { type: 'text/html' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `IRIS Export ${dateStr}.html`;
+                a.click();
+                URL.revokeObjectURL(url);
+                this.showToast('Export downloaded');
 
                 this.exitExportMode();
             }
