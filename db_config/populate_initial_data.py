@@ -7,7 +7,7 @@ data needed to run the IRIS and doc_refresh pipelines. It executes SQL files fro
 the schemas/initial_data/ directory in the correct dependency order.
 
 Steps:
-    1. Registry (wipe + load): DELETE CASCADE then insert database entries
+    1. Registry (upsert): Insert or update database registry entries
     2. IRIS Prompts (delete + insert): Replace model='iris' prompts
     3. Doc Refresh Prompts (delete + insert): Replace model='doc_refresh' prompts
     4. Sample data (optional): Load test documents into internal_wiki
@@ -71,13 +71,13 @@ def read_sql_file(path: str) -> str:
 
 
 def step_registry(conn, dry_run: bool) -> None:
-    """Wipe and reload the iris_database_registry table.
+    """Upsert the iris_database_registry table.
 
     Args:
         conn: Active psycopg2 connection.
         dry_run: If True, show plan without executing.
     """
-    print("\n[Step 1/4] Registry: wipe + load iris_database_registry")
+    print("\n[Step 1/4] Registry: upsert iris_database_registry")
     print(f"  Source: {REGISTRY_SQL}")
 
     if not os.path.exists(REGISTRY_SQL):
@@ -87,24 +87,20 @@ def step_registry(conn, dry_run: bool) -> None:
     sql = read_sql_file(REGISTRY_SQL)
 
     if dry_run:
-        print("  [DRY RUN] Would DELETE FROM iris_database_registry CASCADE")
         print(f"  [DRY RUN] Would execute {REGISTRY_SQL} ({len(sql)} bytes)")
         return
 
     cur = conn.cursor()
-    cur.execute("DELETE FROM iris_database_registry CASCADE")
-    deleted = cur.rowcount
-    print(f"  Deleted {deleted} existing registry entries (CASCADE)")
+    cur.execute("SELECT COUNT(*) FROM iris_database_registry")
+    before = cur.fetchone()[0]
 
     cur.execute(sql)
     conn.commit()
-    cur.close()
 
-    cur = conn.cursor()
     cur.execute("SELECT COUNT(*) FROM iris_database_registry")
-    count = cur.fetchone()[0]
+    after = cur.fetchone()[0]
     cur.close()
-    print(f"  Loaded {count} registry entries")
+    print(f"  Registry: {before} → {after} entries (upsert)")
 
 
 def step_prompts(conn, dry_run: bool) -> None:
