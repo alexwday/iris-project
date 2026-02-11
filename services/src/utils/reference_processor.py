@@ -145,7 +145,7 @@ def _replace_reference_markers_in_text(
             len(links),
             found_refs,
         )
-        return f"\n\n{' '.join(links)}\n\n"
+        return ' '.join(links)
 
     return REF_PATTERN.sub(replace_match, text)
 
