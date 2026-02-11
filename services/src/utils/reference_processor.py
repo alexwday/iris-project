@@ -20,8 +20,10 @@ from .env_config import config
 
 logger = logging.getLogger(__name__)
 
-REF_PATTERN = re.compile(r"\[REF:([\d,\s\-]+)\]")
-REF_INCOMPLETE_PATTERN = re.compile(r"\[REF:?[0-9,\s\-]*$")
+REF_PATTERN = re.compile(r"\[REF:([\d,\s\-]+)\]", re.IGNORECASE)
+REF_INCOMPLETE_PATTERN = re.compile(
+    r"\[(?:R(?:E(?:F(?::?[0-9,\s\-]*)?)?)?)?$", re.IGNORECASE
+)
 
 
 def _build_reference_link_text(
@@ -129,12 +131,13 @@ def _replace_reference_markers_in_text(
     """Substitute all [REF:X] patterns in text with HTML href links."""
 
     def replace_match(match: re.Match) -> str:
-        """Convert a single [REF:...] match to href links or return unchanged."""
+        """Convert a single [REF:...] match to href links or remove if unresolved."""
         ref_ids = _parse_reference_ids(match.group(1))
         links, found_refs = _generate_reference_links(ref_ids, reference_index)
 
         if not links:
-            return match.group(0)
+            logger.warning("Removing unresolved reference marker: %s", match.group(0))
+            return ""
 
         logger.debug(
             "Replaced %s with %d link(s) for refs: %s",
@@ -201,8 +204,6 @@ def process_streaming_reference_buffer(
             )
 
         if len(buffer) < buffer_size:
-            if buffer.endswith("["):
-                return buffer[:-1], "["
             return buffer, ""
         potential_ref_start = buffer.rfind("[")
         if potential_ref_start != -1 and potential_ref_start > len(buffer) - 15:

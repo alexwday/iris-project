@@ -645,6 +645,7 @@ def _stream_model_workflow(
                                     yield from finalize_reference_replacements(
                                         buffer, master_reference_index
                                     )
+                                    buffer = ""
                             else:
                                 buffer += chunk
                                 processed, buffer = process_streaming_reference_buffer(
