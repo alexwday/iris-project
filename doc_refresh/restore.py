@@ -57,8 +57,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--nas",
         action="store_true",
-        default=False,
-        help="Read backup files via NAS FileSource (copies to local temp first)",
+        default=(config.FILE_SOURCE_MODE == "nas"),
+        help="Read backup files via NAS FileSource (copies to local temp first). "
+        "Defaults to true when FILE_SOURCE_MODE=nas.",
     )
 
     parser.add_argument(
