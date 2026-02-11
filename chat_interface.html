@@ -2163,6 +2163,7 @@
             padding: 16px 20px;
             font-size: 13.5px;
             line-height: 1.55;
+            overflow-x: auto;
         }
         .query-card {
             border-left: 4px solid #0c7b7d;
@@ -2231,7 +2232,8 @@
         }
         .response-card .card-content table {
             border-collapse: collapse;
-            width: 100%;
+            width: max-content;
+            min-width: 100%;
             margin: 0.6em 0;
             font-size: 12px;
         }
