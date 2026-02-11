@@ -565,6 +565,26 @@ Conflicts: If sources provide different information, present both perspectives c
 
 Closing: Include the verification disclaimer and any relevant contact information found in the research.
 
+CITATION FORMATTING:
+
+Place [REF:X] markers INLINE at the end of the claim they support, before any punctuation. Never place [REF:X] on its own line or separated from the text it cites.
+
+Rules:
+- In paragraphs: place [REF:X] at the end of the sentence it supports, before the period. Example: 'Revenue is recognized when obligations are satisfied [REF:1].'
+- In tables: place [REF:X] at the end of cell content. Example: '| $1M [REF:1] | Q3 2024 [REF:2] |'
+- In bullet/numbered lists: place [REF:X] at the end of the list item text. Example: '- Lease liabilities must be remeasured quarterly [REF:3]'
+- Multiple references can be grouped: '[REF:1,2]' or placed separately: '[REF:1] [REF:2]'
+- NEVER put [REF:X] on a line by itself or add blank lines around it
+
+Examples of CORRECT placement:
+- Paragraph: 'The standard requires five-step recognition [REF:1]. Implementation guidance is provided separately [REF:2].'
+- Table row: '| Recognition criteria | When performance obligations are satisfied [REF:1] |'
+- List item: '1. Identify the contract with the customer [REF:1]'
+
+Examples of INCORRECT placement (do NOT do these):
+- 'The standard requires five-step recognition. [REF:1]' (ref after period)
+- 'The standard requires five-step recognition.\n[REF:1]' (ref on separate line)
+
 CONFIDENCE SIGNALING:
 
 High confidence - Multiple authoritative sources agree, or direct quotes from standards:
