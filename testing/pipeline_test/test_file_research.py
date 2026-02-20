@@ -49,22 +49,31 @@ from services.src.connections import postgres as db_config
 def build_database_dsn_no_ssl(params: dict, for_sqlalchemy=True):
     """Modified DSN builder that disables SSL for local postgres."""
     host = params.get("host", "localhost")
-    hosts = host.split(",") if "," in host else [host]
-    port = params.get("port", "5432")
+    hosts = [h.strip() for h in str(host).split(",") if h.strip()]
+    raw_port = str(params.get("port", "5432")).strip()
+    ports = [p.strip() for p in raw_port.split(",") if p.strip()] if "," in raw_port else [raw_port] * len(hosts)
     dbname = params.get("dbname", "postgres")
     user = params.get("user", "postgres")
     password = params.get("password", "")
 
     if for_sqlalchemy:
+        if len(hosts) == 1:
+            return (
+                f"postgresql+psycopg2://{user}:{password}@{hosts[0]}:{ports[0]}/{dbname}"
+                f"?sslmode=disable&target_session_attrs=read-write"
+            )
         hosts_str = ",".join(hosts)
+        ports_str = ",".join(ports)
         return (
-            f"postgresql+psycopg2://{user}:{password}@{hosts_str}:{port}/{dbname}"
-            f"?sslmode=disable&target_session_attrs=read-write"
+            f"postgresql+psycopg2://{user}:{password}@/{dbname}"
+            f"?host={hosts_str}&port={ports_str}"
+            f"&sslmode=disable&target_session_attrs=read-write"
         )
     else:
         hosts_str = ",".join(hosts)
+        ports_str = ",".join(ports)
         return (
-            f"host='{hosts_str}' port='{port}' sslmode='disable' "
+            f"host='{hosts_str}' port='{ports_str}' sslmode='disable' "
             f"target_session_attrs='read-write' dbname='{dbname}' user='{user}' password='{password}'"
         )
 

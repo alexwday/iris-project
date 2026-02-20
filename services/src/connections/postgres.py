@@ -109,6 +109,8 @@ def build_database_dsn(params: Dict[str, Any]) -> str:
         raise ValueError("Database password is not set.")
 
     host_port = ",".join(f"{host}:{port}" for host, port in zip(hosts, ports))
+    hosts_csv = ",".join(hosts)
+    ports_csv = ",".join(ports)
     safe_user = quote_plus(str(user))
     safe_password = quote_plus(str(password))
     safe_database = quote_plus(str(database))
@@ -121,9 +123,17 @@ def build_database_dsn(params: Dict[str, Any]) -> str:
     sslmode = "prefer" if is_local else "require"
     logger.info("Using SSL mode: %s (local=%s)", sslmode, is_local)
 
+    # SQLAlchemy multi-host URLs must use query args, not host1:port1,host2:port2
+    # in the authority section of the URL.
+    if len(hosts) == 1:
+        return (
+            f"postgresql+psycopg2://{safe_user}:{safe_password}@{host_port}/{safe_database}"
+            f"?sslmode={sslmode}&target_session_attrs=read-write"
+        )
     return (
-        f"postgresql+psycopg2://{safe_user}:{safe_password}@{host_port}/{safe_database}"
-        f"?sslmode={sslmode}&target_session_attrs=read-write"
+        f"postgresql+psycopg2://{safe_user}:{safe_password}@/{safe_database}"
+        f"?host={quote_plus(hosts_csv)}&port={quote_plus(ports_csv)}"
+        f"&sslmode={sslmode}&target_session_attrs=read-write"
     )
 
 
