@@ -40,6 +40,7 @@ STATE_VERSION = 1
 XLSX_EXTENSIONS = [".xlsx"]
 SKIP_PREFIXES = ("~$",)
 ROW_PROGRESS_INTERVAL = 5000
+WRITE_PROGRESS_INTERVAL_DEFAULT = 100
 AUTO_KEY_CANDIDATES = {
     "id",
     "recordid",
@@ -114,6 +115,17 @@ def _parse_args() -> argparse.Namespace:
         type=str,
         default=os.getenv("PREPROCESSING_KEY_COLUMNS", ""),
         help="Comma-separated preferred key columns for row identity (global across sheets).",
+    )
+    parser.add_argument(
+        "--write-progress-interval",
+        type=int,
+        default=int(
+            os.getenv(
+                "PREPROCESSING_WRITE_PROGRESS_INTERVAL",
+                str(WRITE_PROGRESS_INTERVAL_DEFAULT),
+            )
+        ),
+        help="Log write progress every N rows within a sheet (0 disables interval logs).",
     )
     parser.add_argument(
         "--dry-run",
@@ -552,6 +564,7 @@ def _process_database(
     state_base: str,
     generated_subdir: str,
     preferred_key_columns: List[str],
+    write_progress_interval: int,
     load_workbook: Any,
     document_cls: Any,
     dry_run: bool,
@@ -643,8 +656,20 @@ def _process_database(
                 sheet_created_before = stats.created
                 sheet_updated_before = stats.updated
                 sheet_unchanged_before = stats.unchanged
+                sheet_errors_before = stats.errors
+                sheet_total_rows = len(sheet["rows"])
 
-                for row in sheet["rows"]:
+                if key_strategy == "row_number":
+                    logger.warning(
+                        "[%s] Workbook %s sheet '%s' is using row_number identity; "
+                        "row insert/delete can trigger record churn. "
+                        "Set PREPROCESSING_KEY_COLUMNS or --key-columns for stable IDs.",
+                        db_source,
+                        workbook_relative_path,
+                        sheet_name,
+                    )
+
+                for row_index, row in enumerate(sheet["rows"], start=1):
                     stats.rows_total += 1
                     row_key = _global_row_key(
                         workbook_relative_path=workbook_relative_path,
@@ -719,6 +744,24 @@ def _process_database(
                             exc,
                         )
                         stats.errors += 1
+
+                    if write_progress_interval > 0 and (
+                        row_index % write_progress_interval == 0
+                        or row_index == sheet_total_rows
+                    ):
+                        logger.info(
+                            "[%s] Workbook %s sheet '%s' progress: %d/%d rows "
+                            "(created=%d updated=%d unchanged=%d errors=%d)",
+                            db_source,
+                            workbook_relative_path,
+                            sheet_name,
+                            row_index,
+                            sheet_total_rows,
+                            stats.created - sheet_created_before,
+                            stats.updated - sheet_updated_before,
+                            stats.unchanged - sheet_unchanged_before,
+                            stats.errors - sheet_errors_before,
+                        )
 
                 logger.info(
                     "[%s] Workbook %s sheet '%s' results: created=%d updated=%d unchanged=%d",
@@ -862,6 +905,7 @@ def main() -> int:
             state_base=state_base,
             generated_subdir=generated_subdir,
             preferred_key_columns=preferred_key_columns,
+            write_progress_interval=args.write_progress_interval,
             load_workbook=load_workbook,
             document_cls=document_cls,
             dry_run=args.dry_run,
