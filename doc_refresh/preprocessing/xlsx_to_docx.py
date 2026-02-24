@@ -39,6 +39,7 @@ logger = logging.getLogger(__name__)
 STATE_VERSION = 1
 XLSX_EXTENSIONS = [".xlsx"]
 SKIP_PREFIXES = ("~$",)
+ROW_PROGRESS_INTERVAL = 5000
 AUTO_KEY_CANDIDATES = {
     "id",
     "recordid",
@@ -396,6 +397,7 @@ def _extract_rows_from_workbook(
     load_workbook: Any,
     local_xlsx_path: str,
     preferred_key_columns: List[str],
+    workbook_label: str,
 ) -> List[Dict[str, Any]]:
     """Extract sheet rows from workbook with row identity and hashes."""
     workbook = load_workbook(
@@ -407,20 +409,39 @@ def _extract_rows_from_workbook(
     results: List[Dict[str, Any]] = []
     try:
         for worksheet in workbook.worksheets:
+            logger.info(
+                "[%s] Scanning sheet '%s'",
+                workbook_label,
+                worksheet.title,
+            )
             header_row = next(
                 worksheet.iter_rows(min_row=1, max_row=1, values_only=True),
                 None,
             )
             if header_row is None:
+                logger.info(
+                    "[%s] Sheet '%s' has no header row, skipping",
+                    workbook_label,
+                    worksheet.title,
+                )
                 continue
 
             headers = _normalize_headers(header_row)
             rows: List[Dict[str, Any]] = []
+            scanned_rows = 0
 
             for excel_row, values in enumerate(
                 worksheet.iter_rows(min_row=2, values_only=True),
                 start=2,
             ):
+                scanned_rows += 1
+                if scanned_rows % ROW_PROGRESS_INTERVAL == 0:
+                    logger.info(
+                        "[%s] Sheet '%s' scanned %d rows...",
+                        workbook_label,
+                        worksheet.title,
+                        scanned_rows,
+                    )
                 record: Dict[str, str] = {}
                 nonempty = False
 
@@ -442,6 +463,11 @@ def _extract_rows_from_workbook(
                 )
 
             if not rows:
+                logger.info(
+                    "[%s] Sheet '%s' has no non-empty rows",
+                    workbook_label,
+                    worksheet.title,
+                )
                 continue
 
             key_columns, key_strategy = _resolve_key_columns(
@@ -462,6 +488,14 @@ def _extract_rows_from_workbook(
                     "key_strategy": key_strategy,
                     "rows": rows,
                 }
+            )
+            logger.info(
+                "[%s] Sheet '%s' extracted %d rows (key_strategy=%s, key_columns=%s)",
+                workbook_label,
+                worksheet.title,
+                len(rows),
+                key_strategy,
+                key_columns or ["<row_number>"],
             )
     finally:
         workbook.close()
@@ -567,12 +601,14 @@ def _process_database(
         for file_info in xlsx_files:
             workbook_relative_path = file_info.get("relative_path", "").replace("\\", "/")
             source_file_path = file_info.get("path", "")
+            logger.info("[%s] Workbook: %s", db_source, workbook_relative_path)
             try:
                 local_xlsx_path = source_scan_fs.copy_to_local(source_file_path, temp_dir)
                 sheets = _extract_rows_from_workbook(
                     load_workbook=load_workbook,
                     local_xlsx_path=local_xlsx_path,
                     preferred_key_columns=preferred_key_columns,
+                    workbook_label=f"{db_source}/{workbook_relative_path}",
                 )
             except Exception as exc:
                 logger.error(
@@ -584,10 +620,29 @@ def _process_database(
                 stats.errors += 1
                 continue
 
+            if not sheets:
+                logger.info(
+                    "[%s] Workbook %s produced no record rows",
+                    db_source,
+                    workbook_relative_path,
+                )
+                continue
+
+            workbook_rows = sum(len(sheet["rows"]) for sheet in sheets)
+            logger.info(
+                "[%s] Workbook %s total extracted rows: %d",
+                db_source,
+                workbook_relative_path,
+                workbook_rows,
+            )
+
             for sheet in sheets:
                 sheet_name = sheet["sheet_name"]
                 key_columns = sheet["key_columns"]
                 key_strategy = sheet["key_strategy"]
+                sheet_created_before = stats.created
+                sheet_updated_before = stats.updated
+                sheet_unchanged_before = stats.unchanged
 
                 for row in sheet["rows"]:
                     stats.rows_total += 1
@@ -664,6 +719,16 @@ def _process_database(
                             exc,
                         )
                         stats.errors += 1
+
+                logger.info(
+                    "[%s] Workbook %s sheet '%s' results: created=%d updated=%d unchanged=%d",
+                    db_source,
+                    workbook_relative_path,
+                    sheet_name,
+                    stats.created - sheet_created_before,
+                    stats.updated - sheet_updated_before,
+                    stats.unchanged - sheet_unchanged_before,
+                )
 
     stale_keys = set(previous_rows.keys()) - set(current_rows.keys())
     for stale_key in stale_keys:
