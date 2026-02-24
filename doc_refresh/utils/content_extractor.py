@@ -16,7 +16,9 @@ Functions:
 """
 
 import logging
+import os
 import re
+import shutil
 import subprocess
 import unicodedata
 from pathlib import Path
@@ -123,10 +125,12 @@ def convert_docx_to_pdf(docx_path: str, output_dir: str) -> str:
     docx = Path(docx_path)
     expected_pdf = Path(output_dir) / f"{docx.stem}.pdf"
 
+    libreoffice_cmd = _resolve_libreoffice_command()
+
     try:
         result = subprocess.run(
             [
-                "libreoffice",
+                libreoffice_cmd,
                 "--headless",
                 "--convert-to",
                 "pdf",
@@ -155,14 +159,45 @@ def convert_docx_to_pdf(docx_path: str, output_dir: str) -> str:
 
     except FileNotFoundError:
         raise RuntimeError(
-            "LibreOffice not found. Install with: "
-            "apt-get install libreoffice-writer (Linux) or "
-            "brew install --cask libreoffice (macOS)"
+            "LibreOffice executable not found. Set LIBREOFFICE_BIN, ensure "
+            "'libreoffice' or 'soffice' is on PATH, or install LibreOffice."
         )
     except subprocess.TimeoutExpired:
         raise RuntimeError(
             f"LibreOffice conversion timed out after 300s: {docx_path}"
         )
+
+
+def _resolve_libreoffice_command() -> str:
+    """Resolve a usable LibreOffice CLI executable path.
+
+    Priority:
+    1. LIBREOFFICE_BIN env var (absolute path or command name)
+    2. PATH lookup: libreoffice
+    3. PATH lookup: soffice
+    4. macOS app bundle path
+    """
+    env_override = os.getenv("LIBREOFFICE_BIN", "").strip()
+    if env_override:
+        if os.path.isabs(env_override):
+            if os.path.exists(env_override):
+                return env_override
+        else:
+            resolved = shutil.which(env_override)
+            if resolved:
+                return resolved
+
+    for candidate in ("libreoffice", "soffice"):
+        resolved = shutil.which(candidate)
+        if resolved:
+            return resolved
+
+    mac_soffice = "/Applications/LibreOffice.app/Contents/MacOS/soffice"
+    if os.path.exists(mac_soffice):
+        return mac_soffice
+
+    # Let subprocess raise FileNotFoundError with the conventional command.
+    return "libreoffice"
 
 
 def clean_text(text: str) -> str:
