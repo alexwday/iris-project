@@ -24,6 +24,7 @@ import os
 import shutil
 import socket
 import tempfile
+import threading
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -336,6 +337,7 @@ class NASFileSource(FileSource):
         self.base_path = base_path.replace("\\", "/").strip("/") if base_path else ""
         self.client_hostname = socket.gethostname()
         self._conn: Optional["SMBConnection"] = None
+        self._lock = threading.Lock()
 
         logger.info(
             "Initialized NASFileSource (ip=%s, share=%s, port=%d, base_path=%s)",
@@ -399,14 +401,15 @@ class NASFileSource(FileSource):
     ) -> List[Dict]:
         """List files recursively in a NAS folder."""
         full_path = self._resolve_path(folder_path)
-        try:
-            conn = self._get_connection()
-            files = self._list_files_recursive(conn, full_path, extensions)
-            logger.info("Found %d files in NAS path %s/%s", len(files), self.share, full_path)
-            return files
-        except Exception as exc:
-            logger.error("Error listing NAS files in %s: %s", full_path, exc)
-            raise
+        with self._lock:
+            try:
+                conn = self._get_connection()
+                files = self._list_files_recursive(conn, full_path, extensions)
+                logger.info("Found %d files in NAS path %s/%s", len(files), self.share, full_path)
+                return files
+            except Exception as exc:
+                logger.error("Error listing NAS files in %s: %s", full_path, exc)
+                raise
 
     def _list_files_recursive(
         self,
@@ -473,100 +476,105 @@ class NASFileSource(FileSource):
         name, ext = os.path.splitext(filename)
         local_path = os.path.join(local_dir, f"{name}_{path_hash}{ext}")
 
-        try:
-            conn = self._get_connection()
-            file_obj = io.BytesIO()
+        with self._lock:
+            try:
+                conn = self._get_connection()
+                file_obj = io.BytesIO()
 
-            _, filesize = conn.retrieveFile(self.share, remote_path, file_obj)
+                _, filesize = conn.retrieveFile(self.share, remote_path, file_obj)
 
-            file_obj.seek(0)
-            with open(local_path, "wb") as f:
-                f.write(file_obj.read())
+                file_obj.seek(0)
+                with open(local_path, "wb") as f:
+                    f.write(file_obj.read())
 
-            logger.debug(
-                "Downloaded %d bytes from NAS %s/%s to %s",
-                filesize,
-                self.share,
-                remote_path,
-                local_path,
-            )
-            return local_path
+                logger.debug(
+                    "Downloaded %d bytes from NAS %s/%s to %s",
+                    filesize,
+                    self.share,
+                    remote_path,
+                    local_path,
+                )
+                return local_path
 
-        except Exception as exc:
-            logger.error(
-                "Error downloading from NAS %s/%s: %s", self.share, remote_path, exc
-            )
-            raise
+            except Exception as exc:
+                logger.error(
+                    "Error downloading from NAS %s/%s: %s", self.share, remote_path, exc
+                )
+                raise
 
     def path_exists(self, path: str) -> bool:
         """Check if a path exists on NAS."""
         path = path.replace("\\", "/")
 
-        try:
-            conn = self._get_connection()
-            conn.getAttributes(self.share, path)
-            return True
-        except smb_structs.OperationFailure:
-            return False
-        except Exception as exc:
-            logger.warning("NAS path_exists failed for %s/%s: %s", self.share, path, exc)
-            raise
+        with self._lock:
+            try:
+                conn = self._get_connection()
+                conn.getAttributes(self.share, path)
+                return True
+            except smb_structs.OperationFailure:
+                return False
+            except Exception as exc:
+                logger.warning("NAS path_exists failed for %s/%s: %s", self.share, path, exc)
+                raise
 
     def get_file_hash(self, path: str) -> str:
         """Calculate SHA-256 hash of a NAS file."""
         path = path.replace("\\", "/")
 
-        try:
-            conn = self._get_connection()
-            file_obj = io.BytesIO()
-            conn.retrieveFile(self.share, path, file_obj)
-            file_obj.seek(0)
+        with self._lock:
+            try:
+                conn = self._get_connection()
+                file_obj = io.BytesIO()
+                conn.retrieveFile(self.share, path, file_obj)
+                file_obj.seek(0)
 
-            hash_sha256 = hashlib.sha256()
-            for chunk in iter(lambda: file_obj.read(8192), b""):
-                hash_sha256.update(chunk)
-            return hash_sha256.hexdigest()
+                hash_sha256 = hashlib.sha256()
+                for chunk in iter(lambda: file_obj.read(8192), b""):
+                    hash_sha256.update(chunk)
+                return hash_sha256.hexdigest()
 
-        except Exception as exc:
-            logger.error("Error hashing NAS file %s/%s: %s", self.share, path, exc)
-            raise
+            except Exception as exc:
+                logger.error("Error hashing NAS file %s/%s: %s", self.share, path, exc)
+                raise
 
     def get_file_size(self, path: str) -> int:
         """Get size of a NAS file."""
         path = path.replace("\\", "/")
 
-        try:
-            conn = self._get_connection()
-            attrs = conn.getAttributes(self.share, path)
-            return attrs.file_size
-        except Exception as exc:
-            logger.error(
-                "Error getting size of NAS file %s/%s: %s", self.share, path, exc
-            )
-            raise
+        with self._lock:
+            try:
+                conn = self._get_connection()
+                attrs = conn.getAttributes(self.share, path)
+                return attrs.file_size
+            except Exception as exc:
+                logger.error(
+                    "Error getting size of NAS file %s/%s: %s", self.share, path, exc
+                )
+                raise
 
     def list_subfolders(self, folder_path: str = "") -> List[str]:
         """List immediate subdirectories on NAS, skipping hidden dirs."""
         path = self._resolve_path(folder_path)
 
-        try:
-            conn = self._get_connection()
-            entries = conn.listPath(self.share, path or "/")
-            return sorted(
-                entry.filename
-                for entry in entries
-                if entry.isDirectory
-                and entry.filename not in (".", "..")
-                and not entry.filename.startswith(".")
-            )
-        except Exception as exc:
-            logger.error(
-                "Error listing NAS subfolders %s/%s: %s", self.share, path, exc
-            )
-            raise
+        with self._lock:
+            try:
+                conn = self._get_connection()
+                entries = conn.listPath(self.share, path or "/")
+                return sorted(
+                    entry.filename
+                    for entry in entries
+                    if entry.isDirectory
+                    and entry.filename not in (".", "..")
+                    and not entry.filename.startswith(".")
+                )
+            except Exception as exc:
+                logger.error(
+                    "Error listing NAS subfolders %s/%s: %s", self.share, path, exc
+                )
+                raise
 
-    def ensure_directory(self, path: str) -> None:
-        """Create a directory on NAS, walking path segments to create parents."""
+    def _ensure_directory_locked(self, path: str) -> None:
+        """Create a directory on NAS (caller must hold self._lock)."""
         path = path.replace("\\", "/").strip("/")
         if not path:
             return
@@ -592,60 +600,68 @@ class NASFileSource(FileSource):
                     )
                     raise
 
+    def ensure_directory(self, path: str) -> None:
+        """Create a directory on NAS, walking path segments to create parents."""
+        with self._lock:
+            self._ensure_directory_locked(path)
+
     def copy_from_local(self, local_path: str, remote_path: str) -> None:
         """Copy a local file to the NAS share."""
         remote_path = remote_path.replace("\\", "/")
         parent = "/".join(remote_path.split("/")[:-1])
-        if parent:
-            self.ensure_directory(parent)
 
-        try:
-            conn = self._get_connection()
-            with open(local_path, "rb") as f:
-                conn.storeFile(self.share, remote_path, f)
-            logger.debug(
-                "Copied %s to NAS %s/%s", local_path, self.share, remote_path
-            )
-        except Exception as exc:
-            logger.error(
-                "Failed to copy to NAS %s/%s: %s", self.share, remote_path, exc
-            )
-            raise
+        with self._lock:
+            if parent:
+                self._ensure_directory_locked(parent)
+            try:
+                conn = self._get_connection()
+                with open(local_path, "rb") as f:
+                    conn.storeFile(self.share, remote_path, f)
+                logger.debug(
+                    "Copied %s to NAS %s/%s", local_path, self.share, remote_path
+                )
+            except Exception as exc:
+                logger.error(
+                    "Failed to copy to NAS %s/%s: %s", self.share, remote_path, exc
+                )
+                raise
 
     def write_data(self, data: bytes, remote_path: str) -> None:
         """Write raw bytes to the NAS share."""
         remote_path = remote_path.replace("\\", "/")
         parent = "/".join(remote_path.split("/")[:-1])
-        if parent:
-            self.ensure_directory(parent)
 
-        try:
-            conn = self._get_connection()
-            conn.storeFile(self.share, remote_path, io.BytesIO(data))
-            logger.debug(
-                "Wrote %d bytes to NAS %s/%s", len(data), self.share, remote_path
-            )
-        except Exception as exc:
-            logger.error(
-                "Failed to write to NAS %s/%s: %s", self.share, remote_path, exc
-            )
-            raise
+        with self._lock:
+            if parent:
+                self._ensure_directory_locked(parent)
+            try:
+                conn = self._get_connection()
+                conn.storeFile(self.share, remote_path, io.BytesIO(data))
+                logger.debug(
+                    "Wrote %d bytes to NAS %s/%s", len(data), self.share, remote_path
+                )
+            except Exception as exc:
+                logger.error(
+                    "Failed to write to NAS %s/%s: %s", self.share, remote_path, exc
+                )
+                raise
 
     def delete_file(self, path: str) -> None:
         """Delete a file from the NAS share."""
         remote_path = path.replace("\\", "/")
-        try:
-            conn = self._get_connection()
-            conn.deleteFiles(self.share, remote_path)
-            logger.debug("Deleted NAS file %s/%s", self.share, remote_path)
-        except Exception as exc:
-            logger.error(
-                "Failed to delete NAS file %s/%s: %s",
-                self.share,
-                remote_path,
-                exc,
-            )
-            raise
+        with self._lock:
+            try:
+                conn = self._get_connection()
+                conn.deleteFiles(self.share, remote_path)
+                logger.debug("Deleted NAS file %s/%s", self.share, remote_path)
+            except Exception as exc:
+                logger.error(
+                    "Failed to delete NAS file %s/%s: %s",
+                    self.share,
+                    remote_path,
+                    exc,
+                )
+                raise
 
 
 def get_file_source() -> FileSource:
