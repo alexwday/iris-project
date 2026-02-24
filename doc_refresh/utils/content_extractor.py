@@ -20,6 +20,7 @@ import os
 import re
 import shutil
 import subprocess
+import tempfile
 import unicodedata
 from pathlib import Path
 from typing import List, Optional
@@ -127,11 +128,13 @@ def convert_docx_to_pdf(docx_path: str, output_dir: str) -> str:
 
     libreoffice_cmd = _resolve_libreoffice_command()
 
+    user_install_dir = tempfile.mkdtemp(prefix="lo_profile_")
     try:
         result = subprocess.run(
             [
                 libreoffice_cmd,
                 "--headless",
+                f"-env:UserInstallation=file://{user_install_dir}",
                 "--convert-to",
                 "pdf",
                 "--outdir",
@@ -166,6 +169,8 @@ def convert_docx_to_pdf(docx_path: str, output_dir: str) -> str:
         raise RuntimeError(
             f"LibreOffice conversion timed out after 300s: {docx_path}"
         )
+    finally:
+        shutil.rmtree(user_install_dir, ignore_errors=True)
 
 
 def _resolve_libreoffice_command() -> str:

@@ -28,12 +28,16 @@ import argparse
 import logging
 import sys
 import tempfile
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass, field
+from typing import List, Optional
 
-from .connections.file_source import get_file_source
+from .connections.file_source import FileSource, get_file_source
 from .stages import (
     stage_1_scan,
     stage_6_report,
 )
+from .stages.stage_1_scan import FileInfo
 from .stages.stage_2_extract import ExtractionResult, ExtractedDocument, extract_file
 from .stages.stage_3_process import (
     ProcessedDocument,
@@ -45,6 +49,7 @@ from .stages.stage_3_process import (
 from .stages.stage_4_validate import (
     ValidatedDocument,
     ValidationResult,
+    ValidationError,
     validate_document,
 )
 from .stages.stage_5_database import (
@@ -60,6 +65,214 @@ from .utils.prompt_loader import load_all_prompts
 from .utils.rbc_security import configure_rbc_security_certs
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class DocumentPipelineResult:
+    """Outcome of running extract-process-validate-insert for one document."""
+
+    file_info: Optional[FileInfo] = None
+    extracted: Optional[ExtractedDocument] = None
+    extraction_failed: bool = False
+    processed: Optional[ProcessedDocument] = None
+    processing_failed: bool = False
+    validated: Optional[ValidatedDocument] = None
+    validation_failed: bool = False
+    validation_errors: List = field(default_factory=list)
+    validation_warnings: List = field(default_factory=list)
+    db_sections_inserted: int = 0
+    db_chunks_inserted: int = 0
+    db_inserted: bool = False
+    db_error: Optional[str] = None
+    audit_summary: Optional[dict] = None
+    stage_reached: str = "none"
+
+
+def _process_single_file(
+    file_info: FileInfo,
+    file_source: FileSource,
+    auth_token: str,
+    dry_run: bool,
+) -> DocumentPipelineResult:
+    """Run extract-process-validate-insert for a single document.
+
+    Each invocation creates its own temp directory, which is cleaned up
+    when the document finishes — preventing file-descriptor accumulation.
+    """
+    result = DocumentPipelineResult(file_info=file_info)
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        try:
+            extracted = extract_file(file_info, file_source, temp_dir)
+        except Exception as exc:
+            logger.error("Error extracting %s: %s", file_info.file_name, exc)
+            result.extracted = ExtractedDocument(
+                file_info=file_info, extraction_error=str(exc)
+            )
+            result.extraction_failed = True
+            result.stage_reached = "extraction"
+            return result
+
+        if not extracted.is_valid:
+            logger.warning(
+                "Extraction failed for %s: %s",
+                file_info.file_name,
+                extracted.extraction_error,
+            )
+            result.extracted = extracted
+            result.extraction_failed = True
+            result.stage_reached = "extraction"
+            return result
+
+        result.extracted = extracted
+        result.stage_reached = "extraction"
+
+        audit_trail = create_audit_trail(
+            config.AUDIT_PATH, file_info.db_source, file_info.relative_path
+        )
+
+        try:
+            processed = process_document(
+                extracted, auth_token, audit_trail=audit_trail
+            )
+        except Exception as exc:
+            logger.error("Error processing %s: %s", file_info.file_name, exc)
+            result.processed = ProcessedDocument(
+                file_info=file_info,
+                structure_type=StructureType.SEMANTIC,
+                structure_confidence="low",
+                page_count=extracted.page_count,
+                processing_error=str(exc),
+            )
+            result.processing_failed = True
+            result.stage_reached = "processing"
+            return result
+
+        if not processed.is_valid:
+            logger.warning(
+                "Processing failed for %s: %s",
+                file_info.file_name,
+                processed.processing_error,
+            )
+            result.processed = processed
+            result.processing_failed = True
+            result.stage_reached = "processing"
+            return result
+
+        result.processed = processed
+        result.stage_reached = "processing"
+
+        errors = validate_document(processed)
+        hard_errors = [e for e in errors if e.severity == "error"]
+        warnings = [e for e in errors if e.severity == "warning"]
+        result.validation_errors = errors
+        result.validation_warnings = warnings
+
+        if hard_errors:
+            for error in hard_errors:
+                logger.error(
+                    "Validation error for %s: [%s] %s",
+                    error.document_name,
+                    error.error_type,
+                    error.message,
+                )
+            result.validation_failed = True
+            result.stage_reached = "validation"
+            return result
+
+        result.validated = ValidatedDocument(document=processed, warnings=warnings)
+        result.stage_reached = "validation"
+
+        if warnings:
+            for warning in warnings:
+                logger.warning(
+                    "Validation warning for %s: [%s] %s",
+                    warning.document_name,
+                    warning.error_type,
+                    warning.message,
+                )
+
+        if not dry_run:
+            try:
+                sections, chunks = replace_single_document(processed)
+                result.db_inserted = True
+                result.db_sections_inserted = sections
+                result.db_chunks_inserted = chunks
+            except Exception as exc:
+                error_msg = f"Failed to insert {file_info.file_name}: {exc}"
+                logger.error(error_msg)
+                result.db_error = error_msg
+                result.stage_reached = "database"
+                return result
+        else:
+            logger.info(
+                "DRY RUN: Would insert %s (%d sections, %d chunks)",
+                file_info.file_name,
+                len(processed.sections),
+                len(processed.chunks),
+            )
+            result.db_inserted = True
+            result.db_sections_inserted = len(processed.sections)
+            result.db_chunks_inserted = len(processed.chunks)
+
+        result.stage_reached = "complete"
+
+        audit_trail.finalize()
+        audit_summary = audit_trail.get_summary()
+        if audit_summary:
+            result.audit_summary = audit_summary
+
+    return result
+
+
+def _aggregate_document_result(
+    doc_result: DocumentPipelineResult,
+    extraction_result: ExtractionResult,
+    processing_result: ProcessingResult,
+    validation_result: ValidationResult,
+    database_result: DatabaseResult,
+    audit_documents: list,
+) -> None:
+    """Merge a single document's pipeline outcome into stage-level accumulators."""
+    if doc_result.extraction_failed:
+        extraction_result.failed_documents.append(doc_result.extracted)
+        return
+
+    if doc_result.extracted and doc_result.extracted.is_valid:
+        extraction_result.extracted_documents.append(doc_result.extracted)
+        extraction_result.total_pages += doc_result.extracted.page_count
+
+    if doc_result.processing_failed:
+        processing_result.failed_documents.append(doc_result.processed)
+        return
+
+    if doc_result.processed and doc_result.processed.is_valid:
+        processing_result.processed_documents.append(doc_result.processed)
+        processing_result.total_sections += len(doc_result.processed.sections)
+        processing_result.total_subsections += doc_result.processed.subsection_count
+        processing_result.total_chunks += len(doc_result.processed.chunks)
+
+    validation_result.all_errors.extend(doc_result.validation_errors)
+    validation_result.total_warnings += len(doc_result.validation_warnings)
+
+    if doc_result.validation_failed:
+        validation_result.failed_documents.append(doc_result.processed)
+        return
+
+    if doc_result.validated:
+        validation_result.validated_documents.append(doc_result.validated)
+
+    if doc_result.db_error:
+        database_result.errors.append(doc_result.db_error)
+        return
+
+    if doc_result.db_inserted:
+        database_result.documents_inserted += 1
+        database_result.sections_inserted += doc_result.db_sections_inserted
+        database_result.chunks_inserted += doc_result.db_chunks_inserted
+
+    if doc_result.audit_summary:
+        audit_documents.append(doc_result.audit_summary)
 
 
 def parse_args() -> argparse.Namespace:
@@ -233,160 +446,62 @@ def main() -> int:
             files_to_process = scan_result.files_to_process
             if files_to_process:
                 total = len(files_to_process)
+                max_workers = config.MAX_DOCUMENT_WORKERS
                 logger.info("-" * 60)
-                logger.info("Processing %d files (per-file pipeline)", total)
+                logger.info(
+                    "Processing %d files (per-file pipeline, %d workers)",
+                    total,
+                    max_workers,
+                )
                 logger.info("-" * 60)
 
-                with tempfile.TemporaryDirectory() as temp_dir:
-                    for i, file_info in enumerate(files_to_process, 1):
-                        logger.info(
-                            "File %d/%d: %s", i, total, file_info.file_name
-                        )
+                auth_token = resolve_auth_token()
+                completed_count = 0
 
+                with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                    futures = {
+                        executor.submit(
+                            _process_single_file,
+                            fi,
+                            file_source,
+                            auth_token,
+                            args.dry_run,
+                        ): fi
+                        for fi in files_to_process
+                    }
+                    for future in as_completed(futures):
+                        fi = futures[future]
                         try:
-                            extracted = extract_file(
-                                file_info, file_source, temp_dir
-                            )
+                            doc_result = future.result()
                         except Exception as exc:
                             logger.error(
-                                "Error extracting %s: %s",
-                                file_info.file_name,
+                                "Unexpected error processing %s: %s",
+                                fi.file_name,
                                 exc,
                             )
                             extraction_result.failed_documents.append(
                                 ExtractedDocument(
-                                    file_info=file_info,
+                                    file_info=fi,
                                     extraction_error=str(exc),
                                 )
                             )
+                            completed_count += 1
                             continue
 
-                        if not extracted.is_valid:
-                            extraction_result.failed_documents.append(extracted)
-                            logger.warning(
-                                "Extraction failed for %s: %s",
-                                file_info.file_name,
-                                extracted.extraction_error,
-                            )
-                            continue
-
-                        extraction_result.extracted_documents.append(extracted)
-                        extraction_result.total_pages += extracted.page_count
-
-                        audit_trail = create_audit_trail(
-                            config.AUDIT_PATH,
-                            file_info.db_source,
-                            file_info.relative_path,
+                        _aggregate_document_result(
+                            doc_result,
+                            extraction_result,
+                            processing_result,
+                            validation_result,
+                            database_result,
+                            audit_documents,
                         )
-
-                        try:
-                            auth_token = resolve_auth_token()
-                            processed = process_document(
-                                extracted, auth_token, audit_trail=audit_trail
-                            )
-                        except Exception as exc:
-                            logger.error(
-                                "Error processing %s: %s",
-                                file_info.file_name,
-                                exc,
-                            )
-                            processing_result.failed_documents.append(
-                                ProcessedDocument(
-                                    file_info=file_info,
-                                    structure_type=StructureType.SEMANTIC,
-                                    structure_confidence="low",
-                                    page_count=extracted.page_count,
-                                    processing_error=str(exc),
-                                )
-                            )
-                            continue
-
-                        if not processed.is_valid:
-                            processing_result.failed_documents.append(processed)
-                            logger.warning(
-                                "Processing failed for %s: %s",
-                                file_info.file_name,
-                                processed.processing_error,
-                            )
-                            continue
-
-                        processing_result.processed_documents.append(processed)
-                        processing_result.total_sections += len(processed.sections)
-                        processing_result.total_subsections += processed.subsection_count
-                        processing_result.total_chunks += len(processed.chunks)
-
-                        errors = validate_document(processed)
-                        hard_errors = [
-                            e for e in errors if e.severity == "error"
-                        ]
-                        warnings = [
-                            e for e in errors if e.severity == "warning"
-                        ]
-                        validation_result.all_errors.extend(errors)
-                        validation_result.total_warnings += len(warnings)
-
-                        if hard_errors:
-                            validation_result.failed_documents.append(processed)
-                            for error in hard_errors:
-                                logger.error(
-                                    "Validation error for %s: [%s] %s",
-                                    error.document_name,
-                                    error.error_type,
-                                    error.message,
-                                )
-                            continue
-
-                        validated = ValidatedDocument(
-                            document=processed, warnings=warnings
-                        )
-                        validation_result.validated_documents.append(validated)
-                        if warnings:
-                            for warning in warnings:
-                                logger.warning(
-                                    "Validation warning for %s: [%s] %s",
-                                    warning.document_name,
-                                    warning.error_type,
-                                    warning.message,
-                                )
-
-                        if not args.dry_run:
-                            try:
-                                sections, chunks = replace_single_document(
-                                    processed
-                                )
-                                database_result.documents_inserted += 1
-                                database_result.sections_inserted += sections
-                                database_result.chunks_inserted += chunks
-                            except Exception as exc:
-                                error_msg = (
-                                    f"Failed to insert {file_info.file_name}: {exc}"
-                                )
-                                logger.error(error_msg)
-                                database_result.errors.append(error_msg)
-                                continue
-                        else:
-                            logger.info(
-                                "DRY RUN: Would insert %s (%d sections, %d chunks)",
-                                file_info.file_name,
-                                len(processed.sections),
-                                len(processed.chunks),
-                            )
-                            database_result.documents_inserted += 1
-                            database_result.sections_inserted += len(
-                                processed.sections
-                            )
-                            database_result.chunks_inserted += len(processed.chunks)
-
-                        audit_trail.finalize()
-                        audit_summary = audit_trail.get_summary()
-                        if audit_summary:
-                            audit_documents.append(audit_summary)
-
+                        completed_count += 1
                         logger.info(
                             "Completed file %d/%d: %s",
-                            i,
+                            completed_count,
                             total,
-                            file_info.file_name,
+                            fi.file_name,
                         )
 
         if audit_documents:
