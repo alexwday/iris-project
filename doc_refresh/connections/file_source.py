@@ -166,6 +166,16 @@ class FileSource(ABC):
         """
         pass
 
+    @abstractmethod
+    def delete_file(self, path: str) -> None:
+        """
+        Delete a file from the source.
+
+        Args:
+            path: Absolute path (local) or share-relative path (NAS) to delete.
+        """
+        pass
+
 
 class LocalFileSource(FileSource):
     """
@@ -279,6 +289,13 @@ class LocalFileSource(FileSource):
         with open(dest, "wb") as f:
             f.write(data)
         logger.debug("Wrote %d bytes to %s", len(data), remote_path)
+
+    def delete_file(self, path: str) -> None:
+        """Delete a local file."""
+        target = Path(path)
+        if target.exists():
+            target.unlink()
+            logger.debug("Deleted local file: %s", path)
 
 
 class NASFileSource(FileSource):
@@ -611,6 +628,22 @@ class NASFileSource(FileSource):
         except Exception as exc:
             logger.error(
                 "Failed to write to NAS %s/%s: %s", self.share, remote_path, exc
+            )
+            raise
+
+    def delete_file(self, path: str) -> None:
+        """Delete a file from the NAS share."""
+        remote_path = path.replace("\\", "/")
+        try:
+            conn = self._get_connection()
+            conn.deleteFiles(self.share, remote_path)
+            logger.debug("Deleted NAS file %s/%s", self.share, remote_path)
+        except Exception as exc:
+            logger.error(
+                "Failed to delete NAS file %s/%s: %s",
+                self.share,
+                remote_path,
+                exc,
             )
             raise
 

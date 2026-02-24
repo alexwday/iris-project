@@ -172,6 +172,50 @@ python -m doc_refresh.testing.test_stages --stage 1
 python -m doc_refresh.testing.test_stages --stage all
 ```
 
+## XLSX Preprocessing to DOCX
+
+Use the preprocessing script when source data is in Excel and must be converted
+into document files before running `doc_refresh`.
+
+Recommended layout:
+
+```text
+<nas-base>/
+  Preprocessing/
+    <db_source>/
+      *.xlsx
+    _state/
+      <db_source>.json
+  Input/
+    <db_source>/
+      _generated/xlsx_rows/.../*.docx
+```
+
+Key behavior:
+- Reads each workbook sheet.
+- Uses row 1 as headers.
+- Converts each non-empty row into one DOCX document.
+- Tracks row-level hashes in state files so reruns only create/update/delete changed records.
+
+Run:
+
+```bash
+# Example with NAS-style paths
+python -m doc_refresh.preprocessing.xlsx_to_docx \
+  --source-base Preprocessing \
+  --output-base Input \
+  --state-base Preprocessing/_state \
+  --file-source-mode nas
+
+# Then run the normal ingestion pipeline
+python -m doc_refresh.main
+```
+
+Optional:
+- `--database-names db1,db2`
+- `--key-columns record_id` (preferred stable key field[s])
+- `--dry-run`
+
 ## Environment Variables Reference
 
 See `.env.example` for the full list. Key groups:
@@ -195,6 +239,7 @@ iris-project/
 │   └── connections/       # LLM, OAuth, PostgreSQL connectors
 ├── doc_refresh/           # Document ingestion pipeline
 │   ├── main.py            # Pipeline entry point
+│   ├── preprocessing/     # XLSX -> DOCX preprocessing scripts
 │   ├── stages/            # 6-stage processing pipeline
 │   ├── connections/       # File source, LLM, database connectors
 │   └── utils/             # Config, logging, prompt loading
