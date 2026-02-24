@@ -57,12 +57,21 @@ from typing import Any, Dict, List, Optional
 import psycopg2
 import yaml
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+    load_dotenv(".env.local", override=True)
+except ImportError:
+    pass
+
 # Database connection settings
 DB_HOST = os.getenv("VECTOR_POSTGRES_DB_HOST", "localhost")
 DB_PORT = os.getenv("VECTOR_POSTGRES_DB_PORT", "34532")
 DB_NAME = os.getenv("VECTOR_POSTGRES_DB_NAME", "maven-finance")
 DB_USER = os.getenv("VECTOR_POSTGRES_DB_USERNAME", os.getenv("USER", "postgres"))
 DB_PASSWORD = os.getenv("VECTOR_POSTGRES_DB_PASSWORD", "")
+DB_GSSENCMODE = os.getenv("PGGSSENCMODE", "")
+DB_SSLMODE = os.getenv("PGSSLMODE", "")
 
 # Paths relative to this script
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -74,13 +83,18 @@ ARCHIVE_DIR = os.path.join(SCRIPT_DIR, "archive")
 
 def get_connection():
     """Create database connection."""
-    return psycopg2.connect(
+    kwargs = dict(
         host=DB_HOST,
         port=DB_PORT,
         database=DB_NAME,
         user=DB_USER,
         password=DB_PASSWORD,
     )
+    if DB_GSSENCMODE:
+        kwargs["gssencmode"] = DB_GSSENCMODE
+    if DB_SSLMODE:
+        kwargs["sslmode"] = DB_SSLMODE
+    return psycopg2.connect(**kwargs)
 
 
 # =============================================================================

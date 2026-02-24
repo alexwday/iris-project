@@ -33,6 +33,7 @@ import sys
 try:
     from dotenv import load_dotenv
     load_dotenv()
+    load_dotenv(".env.local", override=True)
 except ImportError:
     pass
 
@@ -43,6 +44,8 @@ DB_PORT = os.getenv("VECTOR_POSTGRES_DB_PORT", "34532")
 DB_NAME = os.getenv("VECTOR_POSTGRES_DB_NAME", "maven-finance")
 DB_USER = os.getenv("VECTOR_POSTGRES_DB_USERNAME", os.getenv("USER", "postgres"))
 DB_PASSWORD = os.getenv("VECTOR_POSTGRES_DB_PASSWORD", "")
+DB_GSSENCMODE = os.getenv("PGGSSENCMODE", "")
+DB_SSLMODE = os.getenv("PGSSLMODE", "")
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 INITIAL_DATA_DIR = os.path.join(SCRIPT_DIR, "schemas", "initial_data")
@@ -55,13 +58,18 @@ SAMPLE_DATA_SQL = os.path.join(INITIAL_DATA_DIR, "sample_internal_wiki.sql")
 
 def get_connection():
     """Create database connection using environment variables."""
-    return psycopg2.connect(
+    kwargs = dict(
         host=DB_HOST,
         port=DB_PORT,
         database=DB_NAME,
         user=DB_USER,
         password=DB_PASSWORD,
     )
+    if DB_GSSENCMODE:
+        kwargs["gssencmode"] = DB_GSSENCMODE
+    if DB_SSLMODE:
+        kwargs["sslmode"] = DB_SSLMODE
+    return psycopg2.connect(**kwargs)
 
 
 def read_sql_file(path: str) -> str:
