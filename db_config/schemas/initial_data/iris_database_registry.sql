@@ -985,6 +985,71 @@ ON CONFLICT (db_source) DO UPDATE SET
 
 INSERT INTO iris_database_registry (db_source, db_name, db_summary, db_description, search_modes, catalog_config, semantic_config, metadata_config, sample_questions, enabled, ad_groups, batch_size, max_selected_files, top_chunks_in_catalog_selection, top_chunks_in_metadata_research, page_threshold_for_full_content, enable_db_wide_deep_research, metadata_context_fields, max_parallel_files, max_chunks_per_file, max_pages_for_full_context, max_primary_section_page_count, max_subsection_page_count, max_neighbour_chunks, max_gap_fill_pages)
 VALUES (
+    'internal_sox',
+    'Internal SOX Controls',
+    'RBC''s SOX controls inventory, where each document represents an individual control with associated attributes such as control objective, process area, systems, and testing context.',
+    '**Content:** Internal SOX controls repository where each document represents a single control record (for example control ID, control statement, process area, system references, and related control metadata).
+
+**Tier/Priority:** DOMAIN EXPERT - Specialized internal controls source for SOX control lookup and analysis.
+
+**Usage Guidance:** Use this database to find controls by process, system, keyword, or control characteristics. Best for questions that need sets of controls matching criteria (for example process ownership, system association, or text mentions).
+
+**When to Select:** Queries such as: all controls under a specific process area, controls mentioning a specific term, controls involving a specific system, or control discovery/filtering questions.
+
+**Query Tips:** Include process names, system names, control IDs, and targeted terms (for example ''SOX'', ''access review'', ''change management'', ''SAP'', ''revenue'', ''financial reporting'').
+
+**Query Type:** semantic search',
+    ARRAY['catalog','semantic']::text[],
+    NULL,
+    NULL,
+    NULL,
+    '["What are all the SOX controls under the Procure to Pay process?","What are all the controls that mention access reviews?","What controls involve the SAP system?","Which SOX controls relate to change management?"]'::jsonb,
+    true,
+    ARRAY['all_users','local_dev']::text[],
+    10,
+    25,
+    1,
+    3,
+    150,
+    true,
+    ARRAY['document_summary','document_description','document_usage']::text[],
+    10,
+    20,
+    6,
+    6,
+    3,
+    2,
+    2
+)
+ON CONFLICT (db_source) DO UPDATE SET
+    db_name = EXCLUDED.db_name,
+    db_summary = EXCLUDED.db_summary,
+    db_description = EXCLUDED.db_description,
+    search_modes = EXCLUDED.search_modes,
+    catalog_config = EXCLUDED.catalog_config,
+    semantic_config = EXCLUDED.semantic_config,
+    metadata_config = EXCLUDED.metadata_config,
+    sample_questions = EXCLUDED.sample_questions,
+    enabled = EXCLUDED.enabled,
+    ad_groups = EXCLUDED.ad_groups,
+    batch_size = EXCLUDED.batch_size,
+    max_selected_files = EXCLUDED.max_selected_files,
+    top_chunks_in_catalog_selection = EXCLUDED.top_chunks_in_catalog_selection,
+    top_chunks_in_metadata_research = EXCLUDED.top_chunks_in_metadata_research,
+    page_threshold_for_full_content = EXCLUDED.page_threshold_for_full_content,
+    enable_db_wide_deep_research = EXCLUDED.enable_db_wide_deep_research,
+    metadata_context_fields = EXCLUDED.metadata_context_fields,
+    max_parallel_files = EXCLUDED.max_parallel_files,
+    max_chunks_per_file = EXCLUDED.max_chunks_per_file,
+    max_pages_for_full_context = EXCLUDED.max_pages_for_full_context,
+    max_primary_section_page_count = EXCLUDED.max_primary_section_page_count,
+    max_subsection_page_count = EXCLUDED.max_subsection_page_count,
+    max_neighbour_chunks = EXCLUDED.max_neighbour_chunks,
+    max_gap_fill_pages = EXCLUDED.max_gap_fill_pages,
+    updated_at = CURRENT_TIMESTAMP;
+
+INSERT INTO iris_database_registry (db_source, db_name, db_summary, db_description, search_modes, catalog_config, semantic_config, metadata_config, sample_questions, enabled, ad_groups, batch_size, max_selected_files, top_chunks_in_catalog_selection, top_chunks_in_metadata_research, page_threshold_for_full_content, enable_db_wide_deep_research, metadata_context_fields, max_parallel_files, max_chunks_per_file, max_pages_for_full_context, max_primary_section_page_count, max_subsection_page_count, max_neighbour_chunks, max_gap_fill_pages)
+VALUES (
     'internal_wiki',
     'APG Wiki',
     'RBC-specific accounting compilations and guidance for unique transactions, providing detailed interpretations and applications of accounting standards tailored to RBC''s business scenarios.',
@@ -1105,4 +1170,4 @@ ON CONFLICT (db_source) DO UPDATE SET
 
 COMMIT;
 
--- Inserted/Updated 17 database registry entries
+-- Inserted/Updated 18 database registry entries
