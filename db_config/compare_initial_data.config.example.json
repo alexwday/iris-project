@@ -1,0 +1,23 @@
+{
+  "connections": [
+    {
+      "name": "local_env",
+      "host": "localhost",
+      "port": 34532,
+      "database": "maven-finance",
+      "user": "postgres",
+      "password": "",
+      "sslmode": "prefer",
+      "gssencmode": "disable"
+    },
+    {
+      "name": "it_env",
+      "host": "replace-with-it-host",
+      "port": 5432,
+      "database": "replace-with-db-name",
+      "user": "replace-with-user",
+      "password": "${IT_DB_PASSWORD}",
+      "sslmode": "require"
+    }
+  ]
+}
