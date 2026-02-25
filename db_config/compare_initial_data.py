@@ -34,6 +34,8 @@ INITIAL_DATA_DIR = SCRIPT_DIR / "schemas" / "initial_data"
 DEFAULT_CONFIG_PATH = SCRIPT_DIR / "compare_initial_data.config.json"
 DEFAULT_REPORT_PATH = SCRIPT_DIR / "compare_initial_data.report.json"
 DEFAULT_HTML_REPORT_PATH = SCRIPT_DIR / "compare_initial_data.report.html"
+IGNORED_NOISE_COLUMNS = {"created_at", "updated_at", "uploaded_at"}
+SAMPLE_QUESTIONS_COLUMN = "sample_questions"
 
 
 @dataclass(frozen=True)
@@ -311,6 +313,32 @@ def short_hash(value: Any) -> str:
     return hashlib.sha256(rendered.encode("utf-8")).hexdigest()[:12]
 
 
+def normalize_sample_questions(value: Any) -> list[str]:
+    if value is None:
+        return []
+
+    if isinstance(value, list):
+        return [canonical_string(item) for item in value]
+
+    if isinstance(value, tuple):
+        return [canonical_string(item) for item in list(value)]
+
+    if isinstance(value, str):
+        text = value.strip()
+        if text == "":
+            return []
+        if text.startswith("[") and text.endswith("]"):
+            try:
+                parsed = json.loads(text)
+                if isinstance(parsed, list):
+                    return [canonical_string(item) for item in parsed]
+            except json.JSONDecodeError:
+                pass
+        return [text]
+
+    return [canonical_string(value)]
+
+
 def format_key(key_columns: tuple[str, ...], key_values: tuple[Any, ...]) -> str:
     parts = [f"{column}={value!r}" for column, value in zip(key_columns, key_values)]
     return ", ".join(parts)
@@ -495,9 +523,17 @@ def compare_table(
     baseline_column_set = set(baseline_columns)
     actual_column_set = set(actual_columns)
 
-    ignored_extra_columns = sorted(actual_column_set - baseline_column_set)
-    missing_baseline_columns = sorted(baseline_column_set - actual_column_set)
-    compare_columns = [column for column in baseline_columns if column in actual_column_set]
+    ignored_extra_columns = sorted(
+        (actual_column_set - baseline_column_set) - IGNORED_NOISE_COLUMNS
+    )
+    missing_baseline_columns = sorted(
+        (baseline_column_set - actual_column_set) - IGNORED_NOISE_COLUMNS
+    )
+    compare_columns = [
+        column
+        for column in baseline_columns
+        if column in actual_column_set and column not in IGNORED_NOISE_COLUMNS
+    ]
 
     result: dict[str, Any] = {
         "table": spec.name,
@@ -519,6 +555,9 @@ def compare_table(
         "duplicate_actual_keys": [],
         "value_differences": [],
         "value_differences_truncated": False,
+        "sample_question_differences": [],
+        "sample_question_diff_row_count": 0,
+        "sample_question_diff_db_count": 0,
         "common_key_count": 0,
         "same_as_golden_count": 0,
         "changed_row_count": 0,
@@ -553,6 +592,7 @@ def compare_table(
 
     changed_keys: set[tuple[Any, ...]] = set()
     value_differences: list[dict[str, Any]] = []
+    sample_question_differences: list[dict[str, Any]] = []
     truncated = False
 
     for key in common_keys:
@@ -567,6 +607,37 @@ def compare_table(
                 continue
 
             changed_keys.add(key)
+            if spec.name == "iris_database_registry" and column == SAMPLE_QUESTIONS_COLUMN:
+                expected_questions = normalize_sample_questions(expected_value)
+                actual_questions = normalize_sample_questions(actual_value)
+                max_count = max(len(expected_questions), len(actual_questions))
+                for index in range(max_count):
+                    expected_question = (
+                        expected_questions[index] if index < len(expected_questions) else None
+                    )
+                    actual_question = (
+                        actual_questions[index] if index < len(actual_questions) else None
+                    )
+                    if expected_question == actual_question:
+                        status = "same"
+                    elif expected_question is None:
+                        status = "actual_only"
+                    elif actual_question is None:
+                        status = "expected_only"
+                    else:
+                        status = "changed"
+
+                    sample_question_differences.append(
+                        {
+                            "key": format_key(spec.key_columns, key),
+                            "question_index": index + 1,
+                            "status": status,
+                            "expected_question": expected_question,
+                            "actual_question": actual_question,
+                        }
+                    )
+                continue
+
             if len(value_differences) < max_differences:
                 value_differences.append(
                     {
@@ -583,6 +654,11 @@ def compare_table(
 
     result["value_differences"] = value_differences
     result["value_differences_truncated"] = truncated
+    result["sample_question_differences"] = sample_question_differences
+    result["sample_question_diff_row_count"] = len(sample_question_differences)
+    result["sample_question_diff_db_count"] = len(
+        {entry["key"] for entry in sample_question_differences}
+    )
     result["changed_row_count"] = len(changed_keys)
     result["same_as_golden_count"] = len(common_keys) - len(changed_keys)
 
@@ -595,6 +671,7 @@ def compare_table(
             bool(result["duplicate_expected_keys"]),
             bool(result["duplicate_actual_keys"]),
             bool(result["value_differences"]) or result["value_differences_truncated"],
+            bool(result["sample_question_differences"]),
         ]
     )
     result["matches_golden"] = not has_issues
@@ -654,6 +731,9 @@ def compare_database(
                         "duplicate_actual_keys": [],
                         "value_differences": [],
                         "value_differences_truncated": False,
+                        "sample_question_differences": [],
+                        "sample_question_diff_row_count": 0,
+                        "sample_question_diff_db_count": 0,
                         "common_key_count": 0,
                         "same_as_golden_count": 0,
                         "changed_row_count": 0,
@@ -735,7 +815,7 @@ def print_table_summary(table: dict[str, Any], max_key_samples: int) -> None:
             print(f"      - {key}")
 
     if table["value_differences"]:
-        print("    Value differences (sample):")
+        print("    Value differences excluding sample_questions (sample):")
         for diff in table["value_differences"][:max_key_samples]:
             print(
                 "      - "
@@ -747,6 +827,13 @@ def print_table_summary(table: dict[str, Any], max_key_samples: int) -> None:
 
     if table["value_differences_truncated"]:
         print("    Value differences truncated. Increase --max-differences for full output.")
+
+    if table.get("sample_question_diff_row_count", 0):
+        print(
+            "    Sample question diff rows: "
+            f"{table['sample_question_diff_row_count']} across "
+            f"{table.get('sample_question_diff_db_count', 0)} db_source entries"
+        )
 
 
 def print_report(report: dict[str, Any], max_key_samples: int) -> None:
@@ -802,6 +889,7 @@ def _issue_count(table: dict[str, Any]) -> int:
         + len(table.get("duplicate_actual_keys", []))
         + len(table.get("value_differences", []))
         + (1 if table.get("value_differences_truncated") else 0)
+        + table.get("sample_question_diff_row_count", 0)
     )
 
 
@@ -845,7 +933,7 @@ def _render_value_differences(table: dict[str, Any]) -> str:
 
     table_html = (
         "<details class=\"diff-block\" open>\n"
-        f"<summary>Value differences ({len(differences)})</summary>\n"
+        f"<summary>Column differences excluding sample_questions ({len(differences)})</summary>\n"
         f"{truncation_note}\n"
         "<div class=\"table-wrap\">\n"
         "<table>\n"
@@ -867,6 +955,63 @@ def _render_value_differences(table: dict[str, Any]) -> str:
         "</details>"
     )
     return table_html
+
+
+def _render_sample_question_differences(table: dict[str, Any]) -> str:
+    rows = table.get("sample_question_differences", [])
+    if not rows:
+        return ""
+
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        key = row.get("key", "")
+        grouped.setdefault(key, []).append(row)
+
+    key_sections: list[str] = []
+    for key in sorted(grouped.keys()):
+        key_rows = grouped[key]
+        question_rows: list[str] = []
+        for item in key_rows:
+            status = item.get("status", "")
+            status_class = status if status in {"same", "changed", "expected_only", "actual_only"} else "changed"
+            expected_question = item.get("expected_question")
+            actual_question = item.get("actual_question")
+            question_rows.append(
+                "<tr>"
+                f"<td>{item.get('question_index', '')}</td>"
+                f"<td><span class=\"status-chip {status_class}\">{_escape(status)}</span></td>"
+                f"<td><pre>{_escape('NULL' if expected_question is None else expected_question)}</pre></td>"
+                f"<td><pre>{_escape('NULL' if actual_question is None else actual_question)}</pre></td>"
+                "</tr>"
+            )
+
+        key_sections.append(
+            "<details class=\"sample-question-db\">\n"
+            f"<summary><code>{_escape(key)}</code> ({len(key_rows)} rows)</summary>\n"
+            "<div class=\"table-wrap\">\n"
+            "<table>\n"
+            "<thead>"
+            "<tr>"
+            "<th>#</th>"
+            "<th>Status</th>"
+            "<th>Golden sample question</th>"
+            "<th>Target sample question</th>"
+            "</tr>"
+            "</thead>\n"
+            "<tbody>\n"
+            + "\n".join(question_rows)
+            + "\n</tbody>\n"
+            "</table>\n"
+            "</div>\n"
+            "</details>"
+        )
+
+    return (
+        "<details class=\"diff-block\" open>\n"
+        f"<summary>Sample question breakdown ({len(rows)} rows across {len(grouped)} db_source entries)</summary>\n"
+        + "\n".join(key_sections)
+        + "\n</details>"
+    )
 
 
 def _render_table_card(table: dict[str, Any]) -> str:
@@ -929,6 +1074,7 @@ def _render_table_card(table: dict[str, Any]) -> str:
         )
     )
     details.append(_render_value_differences(table))
+    details.append(_render_sample_question_differences(table))
 
     return (
         f"<details class=\"table-card {status_class}\"{open_attr}>\n"
@@ -1194,6 +1340,29 @@ pre {{
   max-width: 520px;
   font-size: 12px;
   font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+}}
+.status-chip {{
+  display: inline-block;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+}}
+.status-chip.same {{
+  background: #ecfdf5;
+  color: #065f46;
+}}
+.status-chip.changed {{
+  background: #fef2f2;
+  color: #991b1b;
+}}
+.status-chip.expected_only,
+.status-chip.actual_only {{
+  background: #fff7ed;
+  color: #9a3412;
+}}
+.sample-question-db {{
+  margin-top: 8px;
 }}
 </style>
 </head>
