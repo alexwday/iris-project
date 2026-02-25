@@ -10,6 +10,7 @@ Outputs are written to db_config/ by default:
   - registry_new_columns_report.json
   - registry_new_columns_values.csv
   - registry_new_columns_report.md
+  - registry_new_columns_values.txt
 """
 
 from __future__ import annotations
@@ -210,7 +211,7 @@ def build_column_stats(
         distinct_rendered = {value_to_text(value) for value in non_null_values}
         sample_values = []
         for value in non_null_values[:5]:
-            sample_values.append(value_to_text(value, max_len=180))
+            sample_values.append(value_to_text(value))
 
         stats[column] = {
             "non_null_count": len(non_null_values),
@@ -229,6 +230,35 @@ def write_values_csv(path: Path, key_column: str, extra_columns: list[str], rows
             for column in extra_columns:
                 out.append(value_to_text(row.get(column)))
             writer.writerow(out)
+
+
+def markdown_cell(value: Any) -> str:
+    text = value_to_text(value)
+    text = text.replace("|", "\\|")
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    text = text.replace("\n", "<br>")
+    return text
+
+
+def write_values_text(path: Path, key_column: str, matrix_columns: list[str], rows: list[dict[str, Any]]) -> None:
+    lines: list[str] = []
+    lines.append("IRIS Registry Full Value Dump")
+    lines.append("=" * 80)
+    lines.append("")
+    if not rows:
+        lines.append("No rows found.")
+        lines.append("")
+    for row in rows:
+        key_value = value_to_text(row.get(key_column))
+        lines.append(f"{key_column}: {key_value}")
+        lines.append("-" * 80)
+        for column in matrix_columns:
+            lines.append(f"{column}:")
+            lines.append(value_to_text(row.get(column)))
+            lines.append("")
+        lines.append("")
+
+    path.write_text("\n".join(lines), encoding="utf-8")
 
 
 def write_markdown_report(
@@ -307,9 +337,9 @@ def write_markdown_report(
     lines.append("| db_source | " + " | ".join(matrix_columns) + " |")
     lines.append("|---|" + "|".join("---" for _ in matrix_columns) + "|")
     for row in rows:
-        parts = [value_to_text(row.get(KEY_COLUMN), max_len=120)]
+        parts = [markdown_cell(row.get(KEY_COLUMN))]
         for column in matrix_columns:
-            parts.append(value_to_text(row.get(column), max_len=120))
+            parts.append(markdown_cell(row.get(column)))
         lines.append("| " + " | ".join(parts) + " |")
     lines.append("")
 
@@ -325,6 +355,7 @@ def main() -> int:
     json_path = output_dir / "registry_new_columns_report.json"
     csv_path = output_dir / "registry_new_columns_values.csv"
     md_path = output_dir / "registry_new_columns_report.md"
+    txt_path = output_dir / "registry_new_columns_values.txt"
 
     try:
         baseline_columns = load_baseline_columns(baseline_csv)
@@ -385,6 +416,7 @@ def main() -> int:
             json.dump(report, handle, indent=2, ensure_ascii=False)
 
         write_values_csv(csv_path, KEY_COLUMN, matrix_columns, rows)
+        write_values_text(txt_path, KEY_COLUMN, matrix_columns, rows)
         write_markdown_report(
             path=md_path,
             connection_info=connection_info,
@@ -423,6 +455,7 @@ def main() -> int:
         print(f"JSON report: {json_path}")
         print(f"CSV values:  {csv_path}")
         print(f"MD report:   {md_path}")
+        print(f"TXT values:  {txt_path}")
         print("=" * 72)
         return 0
     except Exception as exc:
