@@ -8,6 +8,7 @@ the schemas/initial_data/ directory in the correct dependency order.
 
 Steps:
     1. Registry (upsert): Insert or update database registry entries
+       Optional: force exact registry match by deleting non-seed db_source rows
     2. IRIS Prompts (delete + insert): Replace model='iris' prompts
     3. Doc Refresh Prompts (delete + insert): Replace model='doc_refresh' prompts
     4. Sample data (optional): Load test documents into internal_wiki
@@ -18,6 +19,9 @@ Usage:
     # Full population (all 4 steps)
     python db_config/populate_initial_data.py
 
+    # Full population + force registry to exactly match seed
+    python db_config/populate_initial_data.py --force-registry-exact
+
     # Skip sample data (registry + prompts only)
     python db_config/populate_initial_data.py --skip-sample-data
 
@@ -26,6 +30,7 @@ Usage:
 """
 
 import argparse
+import csv
 import os
 import re
 import sys
@@ -51,6 +56,7 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 INITIAL_DATA_DIR = os.path.join(SCRIPT_DIR, "schemas", "initial_data")
 
 REGISTRY_SQL = os.path.join(INITIAL_DATA_DIR, "iris_database_registry.sql")
+REGISTRY_CSV = os.path.join(INITIAL_DATA_DIR, "iris_database_registry.csv")
 PROMPTS_SQL = os.path.join(INITIAL_DATA_DIR, "iris_prompts.sql")
 DOC_REFRESH_PROMPTS_SQL = os.path.join(INITIAL_DATA_DIR, "doc_refresh_prompts.sql")
 SAMPLE_DATA_SQL = os.path.join(INITIAL_DATA_DIR, "sample_internal_wiki.sql")
@@ -78,15 +84,35 @@ def read_sql_file(path: str) -> str:
         return f.read()
 
 
-def step_registry(conn, dry_run: bool) -> None:
+def load_seed_registry_sources() -> list[str]:
+    """Load db_source values from the seed registry CSV."""
+    if not os.path.exists(REGISTRY_CSV):
+        raise FileNotFoundError(f"Seed registry CSV not found: {REGISTRY_CSV}")
+
+    with open(REGISTRY_CSV, "r", encoding="utf-8", newline="") as f:
+        reader = csv.DictReader(f)
+        if not reader.fieldnames or "db_source" not in reader.fieldnames:
+            raise ValueError(f"Invalid registry CSV header in {REGISTRY_CSV}")
+        sources = [row.get("db_source", "").strip() for row in reader]
+
+    deduped = [s for s in dict.fromkeys(sources) if s]
+    if not deduped:
+        raise ValueError(f"No db_source entries found in {REGISTRY_CSV}")
+    return deduped
+
+
+def step_registry(conn, dry_run: bool, force_exact: bool = False) -> None:
     """Upsert the iris_database_registry table.
 
     Args:
         conn: Active psycopg2 connection.
         dry_run: If True, show plan without executing.
+        force_exact: If True, delete non-seed db_source rows after upsert.
     """
     print("\n[Step 1/4] Registry: upsert iris_database_registry")
     print(f"  Source: {REGISTRY_SQL}")
+    if force_exact:
+        print("  Mode: force exact (delete non-seed db_source rows)")
 
     if not os.path.exists(REGISTRY_SQL):
         print(f"  ERROR: File not found: {REGISTRY_SQL}")
@@ -94,8 +120,19 @@ def step_registry(conn, dry_run: bool) -> None:
 
     sql = read_sql_file(REGISTRY_SQL)
 
+    seed_sources: list[str] = []
+    if force_exact:
+        try:
+            seed_sources = load_seed_registry_sources()
+            print(f"  Seed db_source count: {len(seed_sources)}")
+        except Exception as e:
+            print(f"  ERROR: {e}")
+            sys.exit(1)
+
     if dry_run:
         print(f"  [DRY RUN] Would execute {REGISTRY_SQL} ({len(sql)} bytes)")
+        if force_exact:
+            print(f"  [DRY RUN] Would delete rows where db_source NOT IN seed CSV ({len(seed_sources)} sources)")
         return
 
     cur = conn.cursor()
@@ -107,8 +144,35 @@ def step_registry(conn, dry_run: bool) -> None:
 
     cur.execute("SELECT COUNT(*) FROM iris_database_registry")
     after = cur.fetchone()[0]
-    cur.close()
     print(f"  Registry: {before} → {after} entries (upsert)")
+
+    if force_exact:
+        cur.execute(
+            """
+            SELECT db_source
+            FROM iris_database_registry
+            WHERE NOT (db_source = ANY(%s))
+            ORDER BY db_source
+            """,
+            (seed_sources,),
+        )
+        extras = [row[0] for row in cur.fetchall()]
+
+        if extras:
+            cur.execute(
+                """
+                DELETE FROM iris_database_registry
+                WHERE db_source = ANY(%s)
+                """,
+                (extras,),
+            )
+            conn.commit()
+            print(f"  Registry: deleted {len(extras)} non-seed db_source rows")
+            print(f"  Deleted sources: {', '.join(extras)}")
+        else:
+            print("  Registry: no non-seed db_source rows found")
+
+    cur.close()
 
 
 def step_prompts(conn, dry_run: bool) -> None:
@@ -254,6 +318,14 @@ def main():
         action="store_true",
         help="Skip step 3 (sample internal_wiki data).",
     )
+    parser.add_argument(
+        "--force-registry-exact",
+        action="store_true",
+        help=(
+            "After registry upsert, delete rows not present in "
+            "schemas/initial_data/iris_database_registry.csv."
+        ),
+    )
     args = parser.parse_args()
 
     print("=" * 60)
@@ -271,6 +343,8 @@ def main():
 
     if args.skip_sample_data:
         print(f"  Sample:   SKIPPED (--skip-sample-data)")
+    if args.force_registry_exact:
+        print(f"  Registry: FORCE EXACT (--force-registry-exact)")
 
     if not args.dry_run:
         print("\nConnecting to database...")
@@ -291,7 +365,7 @@ def main():
             sys.exit(1)
 
     try:
-        step_registry(conn, args.dry_run)
+        step_registry(conn, args.dry_run, force_exact=args.force_registry_exact)
         step_prompts(conn, args.dry_run)
         step_doc_refresh_prompts(conn, args.dry_run)
 
