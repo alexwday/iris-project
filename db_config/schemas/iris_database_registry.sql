@@ -18,6 +18,11 @@ CREATE TABLE IF NOT EXISTS iris_database_registry (
     sample_questions JSONB,
     enabled BOOLEAN NOT NULL DEFAULT true,
     ad_groups TEXT[],
+    query_type VARCHAR(100) DEFAULT 'semantic search',
+    content_type VARCHAR(100) DEFAULT 'general content',
+    use_when TEXT DEFAULT ''::text,
+    display_order INTEGER DEFAULT 100,
+    is_internal BOOLEAN DEFAULT true,
     created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     batch_size INTEGER NOT NULL,
@@ -36,6 +41,13 @@ CREATE TABLE IF NOT EXISTS iris_database_registry (
     max_gap_fill_pages INTEGER NOT NULL DEFAULT 2,
     CONSTRAINT iris_database_registry_pkey PRIMARY KEY (db_source)
 );
+
+-- Backfill compatibility for environments where the table already exists
+ALTER TABLE iris_database_registry ADD COLUMN IF NOT EXISTS query_type VARCHAR(100) DEFAULT 'semantic search';
+ALTER TABLE iris_database_registry ADD COLUMN IF NOT EXISTS content_type VARCHAR(100) DEFAULT 'general content';
+ALTER TABLE iris_database_registry ADD COLUMN IF NOT EXISTS use_when TEXT DEFAULT ''::text;
+ALTER TABLE iris_database_registry ADD COLUMN IF NOT EXISTS display_order INTEGER DEFAULT 100;
+ALTER TABLE iris_database_registry ADD COLUMN IF NOT EXISTS is_internal BOOLEAN DEFAULT true;
 
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_iris_db_registry_enabled ON iris_database_registry USING btree (enabled);
@@ -56,6 +68,11 @@ CREATE INDEX IF NOT EXISTS idx_iris_db_registry_search_modes ON iris_database_re
 -- sample_questions: Example questions for this database
 -- enabled: Whether this database is active
 -- ad_groups: Active Directory groups with access
+-- query_type: Preferred query mode label for UX and diagnostics
+-- content_type: High-level content classification label
+-- use_when: Guidance on when this source should be used
+-- display_order: UI sort order for database listings
+-- is_internal: Whether the source is an internal RBC source
 -- batch_size: Number of documents to process in batch operations
 -- max_selected_files: Maximum files to select for research
 -- top_chunks_in_catalog_selection: Top chunks to consider in catalog selection

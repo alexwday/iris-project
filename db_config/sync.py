@@ -465,7 +465,8 @@ def fetch_all_registry(conn, source_filter: Optional[str] = None) -> List[Dict]:
                    max_subsection_page_count, max_neighbour_chunks, max_gap_fill_pages,
                    metadata_context_fields, search_modes, catalog_config,
                    semantic_config, metadata_config, sample_questions,
-                   enabled, ad_groups
+                   enabled, ad_groups,
+                   query_type, content_type, use_when, display_order, is_internal
             FROM iris_database_registry
             WHERE db_source LIKE %s
             ORDER BY db_name
@@ -484,7 +485,8 @@ def fetch_all_registry(conn, source_filter: Optional[str] = None) -> List[Dict]:
                    max_subsection_page_count, max_neighbour_chunks, max_gap_fill_pages,
                    metadata_context_fields, search_modes, catalog_config,
                    semantic_config, metadata_config, sample_questions,
-                   enabled, ad_groups
+                   enabled, ad_groups,
+                   query_type, content_type, use_when, display_order, is_internal
             FROM iris_database_registry
             ORDER BY db_name
             """
@@ -499,7 +501,8 @@ def fetch_all_registry(conn, source_filter: Optional[str] = None) -> List[Dict]:
                'max_subsection_page_count', 'max_neighbour_chunks', 'max_gap_fill_pages',
                'metadata_context_fields', 'search_modes', 'catalog_config',
                'semantic_config', 'metadata_config', 'sample_questions',
-               'enabled', 'ad_groups']
+               'enabled', 'ad_groups',
+               'query_type', 'content_type', 'use_when', 'display_order', 'is_internal']
 
     entries = []
     for row in cursor.fetchall():
@@ -541,6 +544,11 @@ def format_registry_yaml(entry: Dict) -> str:
         'semantic_config': entry['semantic_config'],
         'metadata_config': entry['metadata_config'],
         'sample_questions': entry['sample_questions'],
+        'query_type': entry.get('query_type'),
+        'content_type': entry.get('content_type'),
+        'use_when': entry.get('use_when'),
+        'display_order': entry.get('display_order'),
+        'is_internal': entry.get('is_internal'),
     }
 
     return yaml.dump(output, default_flow_style=False, allow_unicode=True, sort_keys=False, width=120)
@@ -602,7 +610,9 @@ def upload_registry_entry(conn, entry: Dict, dry_run: bool = False) -> str:
                     metadata_context_fields = %s,
                     search_modes = %s, catalog_config = %s,
                     semantic_config = %s, metadata_config = %s, sample_questions = %s,
-                    enabled = %s, ad_groups = %s, updated_at = NOW()
+                    enabled = %s, ad_groups = %s,
+                    query_type = %s, content_type = %s, use_when = %s, display_order = %s, is_internal = %s,
+                    updated_at = NOW()
                 WHERE db_source = %s
                 """,
                 (entry['db_name'], entry['db_summary'], entry['db_description'],
@@ -622,6 +632,11 @@ def upload_registry_entry(conn, entry: Dict, dry_run: bool = False) -> str:
                  json.dumps(entry.get('metadata_config')) if entry.get('metadata_config') else None,
                  json.dumps(entry.get('sample_questions')) if entry.get('sample_questions') else None,
                  entry.get('enabled', True), entry.get('ad_groups'),
+                 entry.get('query_type', 'semantic search'),
+                 entry.get('content_type', 'general content'),
+                 entry.get('use_when', ''),
+                 entry.get('display_order', 100),
+                 entry.get('is_internal', True),
                  entry['db_source'])
             )
     else:
@@ -639,8 +654,9 @@ def upload_registry_entry(conn, entry: Dict, dry_run: bool = False) -> str:
                      max_subsection_page_count, max_neighbour_chunks, max_gap_fill_pages,
                      metadata_context_fields,
                      search_modes, catalog_config, semantic_config, metadata_config,
-                     sample_questions, enabled, ad_groups)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                     sample_questions, enabled, ad_groups,
+                     query_type, content_type, use_when, display_order, is_internal)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (entry['db_source'], entry['db_name'], entry['db_summary'], entry['db_description'],
                  entry['batch_size'], entry['max_selected_files'],
@@ -658,7 +674,12 @@ def upload_registry_entry(conn, entry: Dict, dry_run: bool = False) -> str:
                  json.dumps(entry.get('semantic_config')) if entry.get('semantic_config') else None,
                  json.dumps(entry.get('metadata_config')) if entry.get('metadata_config') else None,
                  json.dumps(entry.get('sample_questions')) if entry.get('sample_questions') else None,
-                 entry.get('enabled', True), entry.get('ad_groups'))
+                 entry.get('enabled', True), entry.get('ad_groups'),
+                 entry.get('query_type', 'semantic search'),
+                 entry.get('content_type', 'general content'),
+                 entry.get('use_when', ''),
+                 entry.get('display_order', 100),
+                 entry.get('is_internal', True))
             )
 
     cursor.close()

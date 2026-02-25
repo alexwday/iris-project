@@ -1,5 +1,5 @@
 -- IRIS Database Registry Initial Data
--- Generated: 2026-02-11T01:50:17.577002
+-- Generated: 2026-02-25T17:56:16.497931
 -- 
 -- Import with: psql -f iris_database_registry.sql
 -- Or run in pgAdmin/DBeaver
@@ -8,7 +8,7 @@
 
 BEGIN;
 
-INSERT INTO iris_database_registry (db_source, db_name, db_summary, db_description, search_modes, catalog_config, semantic_config, metadata_config, sample_questions, enabled, ad_groups, batch_size, max_selected_files, top_chunks_in_catalog_selection, top_chunks_in_metadata_research, page_threshold_for_full_content, enable_db_wide_deep_research, metadata_context_fields, max_parallel_files, max_chunks_per_file, max_pages_for_full_context, max_primary_section_page_count, max_subsection_page_count, max_neighbour_chunks, max_gap_fill_pages)
+INSERT INTO iris_database_registry (db_source, db_name, db_summary, db_description, search_modes, catalog_config, semantic_config, metadata_config, sample_questions, enabled, ad_groups, query_type, content_type, use_when, display_order, is_internal, batch_size, max_selected_files, top_chunks_in_catalog_selection, top_chunks_in_metadata_research, page_threshold_for_full_content, enable_db_wide_deep_research, metadata_context_fields, max_parallel_files, max_chunks_per_file, max_pages_for_full_context, max_primary_section_page_count, max_subsection_page_count, max_neighbour_chunks, max_gap_fill_pages)
 VALUES (
     'external_ey',
     'EY IFRS Guidance',
@@ -28,9 +28,14 @@ VALUES (
     NULL,
     NULL,
     NULL,
-    '["What does EY''''s guidance say about lease modification accounting under IFRS 16?","Does the EY disclosure checklist include requirements for financial instrument classification?","How does EY interpret principal-versus-agent considerations in IFRS 15?","What EY perspective exists on recycling of OCI balances?"]'::jsonb,
+    NULL,
     true,
-    ARRAY['all_users','local_dev']::text[],
+    ARRAY['APP_0MF0_MAVEN_APG_EXTERNAL_IRIS']::text[],
+    'semantic search',
+    'general content',
+    NULL,
+    100,
+    true,
     10,
     8,
     2,
@@ -57,6 +62,11 @@ ON CONFLICT (db_source) DO UPDATE SET
     sample_questions = EXCLUDED.sample_questions,
     enabled = EXCLUDED.enabled,
     ad_groups = EXCLUDED.ad_groups,
+    query_type = EXCLUDED.query_type,
+    content_type = EXCLUDED.content_type,
+    use_when = EXCLUDED.use_when,
+    display_order = EXCLUDED.display_order,
+    is_internal = EXCLUDED.is_internal,
     batch_size = EXCLUDED.batch_size,
     max_selected_files = EXCLUDED.max_selected_files,
     top_chunks_in_catalog_selection = EXCLUDED.top_chunks_in_catalog_selection,
@@ -73,7 +83,7 @@ ON CONFLICT (db_source) DO UPDATE SET
     max_gap_fill_pages = EXCLUDED.max_gap_fill_pages,
     updated_at = CURRENT_TIMESTAMP;
 
-INSERT INTO iris_database_registry (db_source, db_name, db_summary, db_description, search_modes, catalog_config, semantic_config, metadata_config, sample_questions, enabled, ad_groups, batch_size, max_selected_files, top_chunks_in_catalog_selection, top_chunks_in_metadata_research, page_threshold_for_full_content, enable_db_wide_deep_research, metadata_context_fields, max_parallel_files, max_chunks_per_file, max_pages_for_full_context, max_primary_section_page_count, max_subsection_page_count, max_neighbour_chunks, max_gap_fill_pages)
+INSERT INTO iris_database_registry (db_source, db_name, db_summary, db_description, search_modes, catalog_config, semantic_config, metadata_config, sample_questions, enabled, ad_groups, query_type, content_type, use_when, display_order, is_internal, batch_size, max_selected_files, top_chunks_in_catalog_selection, top_chunks_in_metadata_research, page_threshold_for_full_content, enable_db_wide_deep_research, metadata_context_fields, max_parallel_files, max_chunks_per_file, max_pages_for_full_context, max_primary_section_page_count, max_subsection_page_count, max_neighbour_chunks, max_gap_fill_pages)
 VALUES (
     'external_iasb',
     'International Accounting Standards Board (IASB)',
@@ -93,9 +103,14 @@ VALUES (
     NULL,
     NULL,
     NULL,
-    '["Under IFRS, what are examples of temporary differences that lead to a deferred tax liability?","Under IFRS, what are the presentation requirements for compound financial instruments? Please specify the relevant standard and sections.","What does IFRS 16 require for lease modification accounting?","What are the recognition criteria for intangible assets under IAS 38?"]'::jsonb,
+    '["Under IFRS, what are examples of temporary differences that lead to a deferred tax liability?","Under IFRS, what are the presentation requirements for compound financial instruments? Please specify the relevant standard and sections."]'::jsonb,
     true,
-    ARRAY['all_users','local_dev']::text[],
+    ARRAY['APP_0MF0_MAVEN_APG_EXTERNAL_IRIS']::text[],
+    'semantic search',
+    'general content',
+    NULL,
+    100,
+    true,
     10,
     8,
     2,
@@ -122,6 +137,11 @@ ON CONFLICT (db_source) DO UPDATE SET
     sample_questions = EXCLUDED.sample_questions,
     enabled = EXCLUDED.enabled,
     ad_groups = EXCLUDED.ad_groups,
+    query_type = EXCLUDED.query_type,
+    content_type = EXCLUDED.content_type,
+    use_when = EXCLUDED.use_when,
+    display_order = EXCLUDED.display_order,
+    is_internal = EXCLUDED.is_internal,
     batch_size = EXCLUDED.batch_size,
     max_selected_files = EXCLUDED.max_selected_files,
     top_chunks_in_catalog_selection = EXCLUDED.top_chunks_in_catalog_selection,
@@ -138,7 +158,7 @@ ON CONFLICT (db_source) DO UPDATE SET
     max_gap_fill_pages = EXCLUDED.max_gap_fill_pages,
     updated_at = CURRENT_TIMESTAMP;
 
-INSERT INTO iris_database_registry (db_source, db_name, db_summary, db_description, search_modes, catalog_config, semantic_config, metadata_config, sample_questions, enabled, ad_groups, batch_size, max_selected_files, top_chunks_in_catalog_selection, top_chunks_in_metadata_research, page_threshold_for_full_content, enable_db_wide_deep_research, metadata_context_fields, max_parallel_files, max_chunks_per_file, max_pages_for_full_context, max_primary_section_page_count, max_subsection_page_count, max_neighbour_chunks, max_gap_fill_pages)
+INSERT INTO iris_database_registry (db_source, db_name, db_summary, db_description, search_modes, catalog_config, semantic_config, metadata_config, sample_questions, enabled, ad_groups, query_type, content_type, use_when, display_order, is_internal, batch_size, max_selected_files, top_chunks_in_catalog_selection, top_chunks_in_metadata_research, page_threshold_for_full_content, enable_db_wide_deep_research, metadata_context_fields, max_parallel_files, max_chunks_per_file, max_pages_for_full_context, max_primary_section_page_count, max_subsection_page_count, max_neighbour_chunks, max_gap_fill_pages)
 VALUES (
     'internal_aio',
     'Auditor Independence Office Policy Documents',
@@ -160,7 +180,12 @@ VALUES (
     NULL,
     '["What type of business relationships are acceptable with an external auditor?","What types of financial information are required to be disclosed to external parties?","What arrangements are prohibited under joint marketing and co-branding with external auditors?","What are examples of external parties?"]'::jsonb,
     true,
-    ARRAY['all_users','local_dev']::text[],
+    ARRAY['APP_0MF0_MAVEN_FINANCE_ASSIST']::text[],
+    'semantic search',
+    'general content',
+    NULL,
+    100,
+    true,
     10,
     10,
     1,
@@ -187,6 +212,11 @@ ON CONFLICT (db_source) DO UPDATE SET
     sample_questions = EXCLUDED.sample_questions,
     enabled = EXCLUDED.enabled,
     ad_groups = EXCLUDED.ad_groups,
+    query_type = EXCLUDED.query_type,
+    content_type = EXCLUDED.content_type,
+    use_when = EXCLUDED.use_when,
+    display_order = EXCLUDED.display_order,
+    is_internal = EXCLUDED.is_internal,
     batch_size = EXCLUDED.batch_size,
     max_selected_files = EXCLUDED.max_selected_files,
     top_chunks_in_catalog_selection = EXCLUDED.top_chunks_in_catalog_selection,
@@ -203,7 +233,7 @@ ON CONFLICT (db_source) DO UPDATE SET
     max_gap_fill_pages = EXCLUDED.max_gap_fill_pages,
     updated_at = CURRENT_TIMESTAMP;
 
-INSERT INTO iris_database_registry (db_source, db_name, db_summary, db_description, search_modes, catalog_config, semantic_config, metadata_config, sample_questions, enabled, ad_groups, batch_size, max_selected_files, top_chunks_in_catalog_selection, top_chunks_in_metadata_research, page_threshold_for_full_content, enable_db_wide_deep_research, metadata_context_fields, max_parallel_files, max_chunks_per_file, max_pages_for_full_context, max_primary_section_page_count, max_subsection_page_count, max_neighbour_chunks, max_gap_fill_pages)
+INSERT INTO iris_database_registry (db_source, db_name, db_summary, db_description, search_modes, catalog_config, semantic_config, metadata_config, sample_questions, enabled, ad_groups, query_type, content_type, use_when, display_order, is_internal, batch_size, max_selected_files, top_chunks_in_catalog_selection, top_chunks_in_metadata_research, page_threshold_for_full_content, enable_db_wide_deep_research, metadata_context_fields, max_parallel_files, max_chunks_per_file, max_pages_for_full_context, max_primary_section_page_count, max_subsection_page_count, max_neighbour_chunks, max_gap_fill_pages)
 VALUES (
     'internal_capm',
     'Corporate Accounting Policy Manuals',
@@ -225,7 +255,12 @@ VALUES (
     NULL,
     '["What is the IFRS and U.S. GAAP difference on firm commitment related to hedging?","Is a call option in a financial instrument an embedded derivative?","What threshold is considered to be probable under IFRS?","What are the main criteria to derecognize a financial asset under IFRS?"]'::jsonb,
     true,
-    ARRAY['all_users','local_dev']::text[],
+    ARRAY['APP_0MF0_MAVEN_FINANCE_ASSIST']::text[],
+    'semantic search',
+    'general content',
+    NULL,
+    100,
+    true,
     10,
     15,
     1,
@@ -252,6 +287,11 @@ ON CONFLICT (db_source) DO UPDATE SET
     sample_questions = EXCLUDED.sample_questions,
     enabled = EXCLUDED.enabled,
     ad_groups = EXCLUDED.ad_groups,
+    query_type = EXCLUDED.query_type,
+    content_type = EXCLUDED.content_type,
+    use_when = EXCLUDED.use_when,
+    display_order = EXCLUDED.display_order,
+    is_internal = EXCLUDED.is_internal,
     batch_size = EXCLUDED.batch_size,
     max_selected_files = EXCLUDED.max_selected_files,
     top_chunks_in_catalog_selection = EXCLUDED.top_chunks_in_catalog_selection,
@@ -268,7 +308,7 @@ ON CONFLICT (db_source) DO UPDATE SET
     max_gap_fill_pages = EXCLUDED.max_gap_fill_pages,
     updated_at = CURRENT_TIMESTAMP;
 
-INSERT INTO iris_database_registry (db_source, db_name, db_summary, db_description, search_modes, catalog_config, semantic_config, metadata_config, sample_questions, enabled, ad_groups, batch_size, max_selected_files, top_chunks_in_catalog_selection, top_chunks_in_metadata_research, page_threshold_for_full_content, enable_db_wide_deep_research, metadata_context_fields, max_parallel_files, max_chunks_per_file, max_pages_for_full_context, max_primary_section_page_count, max_subsection_page_count, max_neighbour_chunks, max_gap_fill_pages)
+INSERT INTO iris_database_registry (db_source, db_name, db_summary, db_description, search_modes, catalog_config, semantic_config, metadata_config, sample_questions, enabled, ad_groups, query_type, content_type, use_when, display_order, is_internal, batch_size, max_selected_files, top_chunks_in_catalog_selection, top_chunks_in_metadata_research, page_threshold_for_full_content, enable_db_wide_deep_research, metadata_context_fields, max_parallel_files, max_chunks_per_file, max_pages_for_full_context, max_primary_section_page_count, max_subsection_page_count, max_neighbour_chunks, max_gap_fill_pages)
 VALUES (
     'internal_cheatsheets',
     'APG Cheatsheets',
@@ -288,9 +328,14 @@ VALUES (
     NULL,
     NULL,
     NULL,
-    '["Is there a decision tree for determining lease classification?","Do we have a checklist for hedge accounting eligibility?","Is there a flowchart for financial asset derecognition?","Do we have a visual guide for impairment indicator assessment?"]'::jsonb,
+    NULL,
     true,
-    ARRAY['all_users','local_dev']::text[],
+    ARRAY['APP_0MF0_MAVEN_APG_IRIS']::text[],
+    'semantic search',
+    'general content',
+    NULL,
+    100,
+    true,
     10,
     10,
     1,
@@ -317,6 +362,11 @@ ON CONFLICT (db_source) DO UPDATE SET
     sample_questions = EXCLUDED.sample_questions,
     enabled = EXCLUDED.enabled,
     ad_groups = EXCLUDED.ad_groups,
+    query_type = EXCLUDED.query_type,
+    content_type = EXCLUDED.content_type,
+    use_when = EXCLUDED.use_when,
+    display_order = EXCLUDED.display_order,
+    is_internal = EXCLUDED.is_internal,
     batch_size = EXCLUDED.batch_size,
     max_selected_files = EXCLUDED.max_selected_files,
     top_chunks_in_catalog_selection = EXCLUDED.top_chunks_in_catalog_selection,
@@ -333,7 +383,7 @@ ON CONFLICT (db_source) DO UPDATE SET
     max_gap_fill_pages = EXCLUDED.max_gap_fill_pages,
     updated_at = CURRENT_TIMESTAMP;
 
-INSERT INTO iris_database_registry (db_source, db_name, db_summary, db_description, search_modes, catalog_config, semantic_config, metadata_config, sample_questions, enabled, ad_groups, batch_size, max_selected_files, top_chunks_in_catalog_selection, top_chunks_in_metadata_research, page_threshold_for_full_content, enable_db_wide_deep_research, metadata_context_fields, max_parallel_files, max_chunks_per_file, max_pages_for_full_context, max_primary_section_page_count, max_subsection_page_count, max_neighbour_chunks, max_gap_fill_pages)
+INSERT INTO iris_database_registry (db_source, db_name, db_summary, db_description, search_modes, catalog_config, semantic_config, metadata_config, sample_questions, enabled, ad_groups, query_type, content_type, use_when, display_order, is_internal, batch_size, max_selected_files, top_chunks_in_catalog_selection, top_chunks_in_metadata_research, page_threshold_for_full_content, enable_db_wide_deep_research, metadata_context_fields, max_parallel_files, max_chunks_per_file, max_pages_for_full_context, max_primary_section_page_count, max_subsection_page_count, max_neighbour_chunks, max_gap_fill_pages)
 VALUES (
     'internal_esg',
     'Internal ESG Guidance',
@@ -355,7 +405,12 @@ VALUES (
     NULL,
     '["If something isn''t material should it still go into the Sustainability Report?","Is there a threshold for materiality?","How to treat measurement uncertainty in the ESG framework?","What are the ESG guidelines for revising materiality from prior reporting periods?"]'::jsonb,
     true,
-    ARRAY['all_users','local_dev']::text[],
+    ARRAY['APP_0MF0_MAVEN_FINANCE_ASSIST']::text[],
+    'semantic search',
+    'general content',
+    NULL,
+    100,
+    true,
     10,
     10,
     1,
@@ -382,6 +437,11 @@ ON CONFLICT (db_source) DO UPDATE SET
     sample_questions = EXCLUDED.sample_questions,
     enabled = EXCLUDED.enabled,
     ad_groups = EXCLUDED.ad_groups,
+    query_type = EXCLUDED.query_type,
+    content_type = EXCLUDED.content_type,
+    use_when = EXCLUDED.use_when,
+    display_order = EXCLUDED.display_order,
+    is_internal = EXCLUDED.is_internal,
     batch_size = EXCLUDED.batch_size,
     max_selected_files = EXCLUDED.max_selected_files,
     top_chunks_in_catalog_selection = EXCLUDED.top_chunks_in_catalog_selection,
@@ -398,7 +458,7 @@ ON CONFLICT (db_source) DO UPDATE SET
     max_gap_fill_pages = EXCLUDED.max_gap_fill_pages,
     updated_at = CURRENT_TIMESTAMP;
 
-INSERT INTO iris_database_registry (db_source, db_name, db_summary, db_description, search_modes, catalog_config, semantic_config, metadata_config, sample_questions, enabled, ad_groups, batch_size, max_selected_files, top_chunks_in_catalog_selection, top_chunks_in_metadata_research, page_threshold_for_full_content, enable_db_wide_deep_research, metadata_context_fields, max_parallel_files, max_chunks_per_file, max_pages_for_full_context, max_primary_section_page_count, max_subsection_page_count, max_neighbour_chunks, max_gap_fill_pages)
+INSERT INTO iris_database_registry (db_source, db_name, db_summary, db_description, search_modes, catalog_config, semantic_config, metadata_config, sample_questions, enabled, ad_groups, query_type, content_type, use_when, display_order, is_internal, batch_size, max_selected_files, top_chunks_in_catalog_selection, top_chunks_in_metadata_research, page_threshold_for_full_content, enable_db_wide_deep_research, metadata_context_fields, max_parallel_files, max_chunks_per_file, max_pages_for_full_context, max_primary_section_page_count, max_subsection_page_count, max_neighbour_chunks, max_gap_fill_pages)
 VALUES (
     'internal_ext_reporting_and_disclosure',
     'External Reporting and Disclosure Policies',
@@ -420,7 +480,12 @@ VALUES (
     NULL,
     '["According to the disclosure policy: Who are authorized spokespersons?","What guidelines should be followed for announcements that are not material?","Can an RBC employee speak at a conference during quiet period?","Which teams must review forward-looking information before it''s disclosed?"]'::jsonb,
     true,
-    ARRAY['all_users','local_dev']::text[],
+    ARRAY['APP_0MF0_MAVEN_FINANCE_ASSIST']::text[],
+    'semantic search',
+    'general content',
+    NULL,
+    100,
+    true,
     10,
     10,
     1,
@@ -447,6 +512,11 @@ ON CONFLICT (db_source) DO UPDATE SET
     sample_questions = EXCLUDED.sample_questions,
     enabled = EXCLUDED.enabled,
     ad_groups = EXCLUDED.ad_groups,
+    query_type = EXCLUDED.query_type,
+    content_type = EXCLUDED.content_type,
+    use_when = EXCLUDED.use_when,
+    display_order = EXCLUDED.display_order,
+    is_internal = EXCLUDED.is_internal,
     batch_size = EXCLUDED.batch_size,
     max_selected_files = EXCLUDED.max_selected_files,
     top_chunks_in_catalog_selection = EXCLUDED.top_chunks_in_catalog_selection,
@@ -463,7 +533,7 @@ ON CONFLICT (db_source) DO UPDATE SET
     max_gap_fill_pages = EXCLUDED.max_gap_fill_pages,
     updated_at = CURRENT_TIMESTAMP;
 
-INSERT INTO iris_database_registry (db_source, db_name, db_summary, db_description, search_modes, catalog_config, semantic_config, metadata_config, sample_questions, enabled, ad_groups, batch_size, max_selected_files, top_chunks_in_catalog_selection, top_chunks_in_metadata_research, page_threshold_for_full_content, enable_db_wide_deep_research, metadata_context_fields, max_parallel_files, max_chunks_per_file, max_pages_for_full_context, max_primary_section_page_count, max_subsection_page_count, max_neighbour_chunks, max_gap_fill_pages)
+INSERT INTO iris_database_registry (db_source, db_name, db_summary, db_description, search_modes, catalog_config, semantic_config, metadata_config, sample_questions, enabled, ad_groups, query_type, content_type, use_when, display_order, is_internal, batch_size, max_selected_files, top_chunks_in_catalog_selection, top_chunks_in_metadata_research, page_threshold_for_full_content, enable_db_wide_deep_research, metadata_context_fields, max_parallel_files, max_chunks_per_file, max_pages_for_full_context, max_primary_section_page_count, max_subsection_page_count, max_neighbour_chunks, max_gap_fill_pages)
 VALUES (
     'internal_global_finance_standards',
     'Global Financial Standards',
@@ -485,7 +555,12 @@ VALUES (
     NULL,
     '["What are the minimum standards for Non-Interest Expenses in COA reporting?","What is RBC''s global FX rate policy?","What are examples of regulatory reports RBC provides OSFI?","What are requirements for resident and non-resident transactions?"]'::jsonb,
     true,
-    ARRAY['all_users','local_dev']::text[],
+    ARRAY['APP_0MF0_MAVEN_FINANCE_ASSIST']::text[],
+    'semantic search',
+    'general content',
+    NULL,
+    100,
+    true,
     10,
     10,
     1,
@@ -512,6 +587,11 @@ ON CONFLICT (db_source) DO UPDATE SET
     sample_questions = EXCLUDED.sample_questions,
     enabled = EXCLUDED.enabled,
     ad_groups = EXCLUDED.ad_groups,
+    query_type = EXCLUDED.query_type,
+    content_type = EXCLUDED.content_type,
+    use_when = EXCLUDED.use_when,
+    display_order = EXCLUDED.display_order,
+    is_internal = EXCLUDED.is_internal,
     batch_size = EXCLUDED.batch_size,
     max_selected_files = EXCLUDED.max_selected_files,
     top_chunks_in_catalog_selection = EXCLUDED.top_chunks_in_catalog_selection,
@@ -528,7 +608,7 @@ ON CONFLICT (db_source) DO UPDATE SET
     max_gap_fill_pages = EXCLUDED.max_gap_fill_pages,
     updated_at = CURRENT_TIMESTAMP;
 
-INSERT INTO iris_database_registry (db_source, db_name, db_summary, db_description, search_modes, catalog_config, semantic_config, metadata_config, sample_questions, enabled, ad_groups, batch_size, max_selected_files, top_chunks_in_catalog_selection, top_chunks_in_metadata_research, page_threshold_for_full_content, enable_db_wide_deep_research, metadata_context_fields, max_parallel_files, max_chunks_per_file, max_pages_for_full_context, max_primary_section_page_count, max_subsection_page_count, max_neighbour_chunks, max_gap_fill_pages)
+INSERT INTO iris_database_registry (db_source, db_name, db_summary, db_description, search_modes, catalog_config, semantic_config, metadata_config, sample_questions, enabled, ad_groups, query_type, content_type, use_when, display_order, is_internal, batch_size, max_selected_files, top_chunks_in_catalog_selection, top_chunks_in_metadata_research, page_threshold_for_full_content, enable_db_wide_deep_research, metadata_context_fields, max_parallel_files, max_chunks_per_file, max_pages_for_full_context, max_primary_section_page_count, max_subsection_page_count, max_neighbour_chunks, max_gap_fill_pages)
 VALUES (
     'internal_intragroup_memos',
     'Intragroup Reconciliation Memos',
@@ -548,9 +628,14 @@ VALUES (
     NULL,
     NULL,
     NULL,
-    '["What qualifies as a permanent break in the intergroup revenue reconciliation?","How should revenue breaks be attributed across legal entities and OUs/CPOUs?","What steps are recommended to investigate recurring intergroup revenue differences?","How are insurance-related intergroup breaks documented?"]'::jsonb,
+    '["Which Intragroup Reconciliation breaks relate to RBC Insurance, and what is the amount related to each?","How many Intragroup Reconciliation breaks relate to timing differences, and what are the reasons for these timing differences?","Which Intragroup Reconciliation breaks relate to human error?"]'::jsonb,
     true,
-    ARRAY['all_users','local_dev']::text[],
+    ARRAY['APP_0MF0_INTRAGROUP_MEMOS_IRIS']::text[],
+    'semantic search',
+    'general content',
+    NULL,
+    100,
+    true,
     10,
     10,
     1,
@@ -577,6 +662,11 @@ ON CONFLICT (db_source) DO UPDATE SET
     sample_questions = EXCLUDED.sample_questions,
     enabled = EXCLUDED.enabled,
     ad_groups = EXCLUDED.ad_groups,
+    query_type = EXCLUDED.query_type,
+    content_type = EXCLUDED.content_type,
+    use_when = EXCLUDED.use_when,
+    display_order = EXCLUDED.display_order,
+    is_internal = EXCLUDED.is_internal,
     batch_size = EXCLUDED.batch_size,
     max_selected_files = EXCLUDED.max_selected_files,
     top_chunks_in_catalog_selection = EXCLUDED.top_chunks_in_catalog_selection,
@@ -593,7 +683,7 @@ ON CONFLICT (db_source) DO UPDATE SET
     max_gap_fill_pages = EXCLUDED.max_gap_fill_pages,
     updated_at = CURRENT_TIMESTAMP;
 
-INSERT INTO iris_database_registry (db_source, db_name, db_summary, db_description, search_modes, catalog_config, semantic_config, metadata_config, sample_questions, enabled, ad_groups, batch_size, max_selected_files, top_chunks_in_catalog_selection, top_chunks_in_metadata_research, page_threshold_for_full_content, enable_db_wide_deep_research, metadata_context_fields, max_parallel_files, max_chunks_per_file, max_pages_for_full_context, max_primary_section_page_count, max_subsection_page_count, max_neighbour_chunks, max_gap_fill_pages)
+INSERT INTO iris_database_registry (db_source, db_name, db_summary, db_description, search_modes, catalog_config, semantic_config, metadata_config, sample_questions, enabled, ad_groups, query_type, content_type, use_when, display_order, is_internal, batch_size, max_selected_files, top_chunks_in_catalog_selection, top_chunks_in_metadata_research, page_threshold_for_full_content, enable_db_wide_deep_research, metadata_context_fields, max_parallel_files, max_chunks_per_file, max_pages_for_full_context, max_primary_section_page_count, max_subsection_page_count, max_neighbour_chunks, max_gap_fill_pages)
 VALUES (
     'internal_management_reporting',
     'Management Reporting Policies & Guidance',
@@ -615,7 +705,12 @@ VALUES (
     NULL,
     '["What are the major performance measurements for management reporting at RBC?","What are the processes for funds transfer pricing?","How are FTE numbers calculated?","How does RBC do rounding for management reporting purposes?"]'::jsonb,
     true,
-    ARRAY['all_users','local_dev']::text[],
+    ARRAY['APP_0MF0_MAVEN_FINANCE_ASSIST']::text[],
+    'semantic search',
+    'general content',
+    NULL,
+    100,
+    true,
     10,
     10,
     1,
@@ -642,6 +737,11 @@ ON CONFLICT (db_source) DO UPDATE SET
     sample_questions = EXCLUDED.sample_questions,
     enabled = EXCLUDED.enabled,
     ad_groups = EXCLUDED.ad_groups,
+    query_type = EXCLUDED.query_type,
+    content_type = EXCLUDED.content_type,
+    use_when = EXCLUDED.use_when,
+    display_order = EXCLUDED.display_order,
+    is_internal = EXCLUDED.is_internal,
     batch_size = EXCLUDED.batch_size,
     max_selected_files = EXCLUDED.max_selected_files,
     top_chunks_in_catalog_selection = EXCLUDED.top_chunks_in_catalog_selection,
@@ -658,7 +758,7 @@ ON CONFLICT (db_source) DO UPDATE SET
     max_gap_fill_pages = EXCLUDED.max_gap_fill_pages,
     updated_at = CURRENT_TIMESTAMP;
 
-INSERT INTO iris_database_registry (db_source, db_name, db_summary, db_description, search_modes, catalog_config, semantic_config, metadata_config, sample_questions, enabled, ad_groups, batch_size, max_selected_files, top_chunks_in_catalog_selection, top_chunks_in_metadata_research, page_threshold_for_full_content, enable_db_wide_deep_research, metadata_context_fields, max_parallel_files, max_chunks_per_file, max_pages_for_full_context, max_primary_section_page_count, max_subsection_page_count, max_neighbour_chunks, max_gap_fill_pages)
+INSERT INTO iris_database_registry (db_source, db_name, db_summary, db_description, search_modes, catalog_config, semantic_config, metadata_config, sample_questions, enabled, ad_groups, query_type, content_type, use_when, display_order, is_internal, batch_size, max_selected_files, top_chunks_in_catalog_selection, top_chunks_in_metadata_research, page_threshold_for_full_content, enable_db_wide_deep_research, metadata_context_fields, max_parallel_files, max_chunks_per_file, max_pages_for_full_context, max_primary_section_page_count, max_subsection_page_count, max_neighbour_chunks, max_gap_fill_pages)
 VALUES (
     'internal_memos',
     'APG Internal Accounting Memos',
@@ -678,9 +778,14 @@ VALUES (
     NULL,
     NULL,
     NULL,
-    '["What was APG''s documented reasoning for the accounting treatment of cloud computing implementation costs?","Is there a memo explaining why RBC chose a particular approach for syndicated loan derecognition?","What alternatives were considered for expected credit loss modeling on off-balance-sheet commitments?","Has APG issued a formal position on embedded derivative assessment for structured products?"]'::jsonb,
+    NULL,
     true,
-    ARRAY['all_users','local_dev']::text[],
+    ARRAY['APP_0MF0_MAVEN_APG_IRIS']::text[],
+    'semantic search',
+    'general content',
+    NULL,
+    100,
+    true,
     10,
     15,
     1,
@@ -707,6 +812,11 @@ ON CONFLICT (db_source) DO UPDATE SET
     sample_questions = EXCLUDED.sample_questions,
     enabled = EXCLUDED.enabled,
     ad_groups = EXCLUDED.ad_groups,
+    query_type = EXCLUDED.query_type,
+    content_type = EXCLUDED.content_type,
+    use_when = EXCLUDED.use_when,
+    display_order = EXCLUDED.display_order,
+    is_internal = EXCLUDED.is_internal,
     batch_size = EXCLUDED.batch_size,
     max_selected_files = EXCLUDED.max_selected_files,
     top_chunks_in_catalog_selection = EXCLUDED.top_chunks_in_catalog_selection,
@@ -723,7 +833,7 @@ ON CONFLICT (db_source) DO UPDATE SET
     max_gap_fill_pages = EXCLUDED.max_gap_fill_pages,
     updated_at = CURRENT_TIMESTAMP;
 
-INSERT INTO iris_database_registry (db_source, db_name, db_summary, db_description, search_modes, catalog_config, semantic_config, metadata_config, sample_questions, enabled, ad_groups, batch_size, max_selected_files, top_chunks_in_catalog_selection, top_chunks_in_metadata_research, page_threshold_for_full_content, enable_db_wide_deep_research, metadata_context_fields, max_parallel_files, max_chunks_per_file, max_pages_for_full_context, max_primary_section_page_count, max_subsection_page_count, max_neighbour_chunks, max_gap_fill_pages)
+INSERT INTO iris_database_registry (db_source, db_name, db_summary, db_description, search_modes, catalog_config, semantic_config, metadata_config, sample_questions, enabled, ad_groups, query_type, content_type, use_when, display_order, is_internal, batch_size, max_selected_files, top_chunks_in_catalog_selection, top_chunks_in_metadata_research, page_threshold_for_full_content, enable_db_wide_deep_research, metadata_context_fields, max_parallel_files, max_chunks_per_file, max_pages_for_full_context, max_primary_section_page_count, max_subsection_page_count, max_neighbour_chunks, max_gap_fill_pages)
 VALUES (
     'internal_pafe',
     'Planning Analytics for Excel (PAfE) User Guide',
@@ -743,9 +853,14 @@ VALUES (
     NULL,
     NULL,
     NULL,
-    '["How do I configure an EPM connection to a TM1 server in PAfE?","What steps create a Dynamic Report from an Exploration view?","What is the DBRW formula syntax for retrieving cube data with multiple dimensions?","How can I migrate a Perspectives report to PAfE while preserving formatting?"]'::jsonb,
+    '["What is a DBRA formula in PAfE?","How do I Recalculate a PAfE report?","How do I connect to PAfE?"]'::jsonb,
     true,
-    ARRAY['all_users','local_dev']::text[],
+    ARRAY['APP_0MF0_MAVEN_FINANCE_ASSIST']::text[],
+    'semantic search',
+    'general content',
+    NULL,
+    100,
+    true,
     10,
     10,
     1,
@@ -772,6 +887,11 @@ ON CONFLICT (db_source) DO UPDATE SET
     sample_questions = EXCLUDED.sample_questions,
     enabled = EXCLUDED.enabled,
     ad_groups = EXCLUDED.ad_groups,
+    query_type = EXCLUDED.query_type,
+    content_type = EXCLUDED.content_type,
+    use_when = EXCLUDED.use_when,
+    display_order = EXCLUDED.display_order,
+    is_internal = EXCLUDED.is_internal,
     batch_size = EXCLUDED.batch_size,
     max_selected_files = EXCLUDED.max_selected_files,
     top_chunks_in_catalog_selection = EXCLUDED.top_chunks_in_catalog_selection,
@@ -788,7 +908,7 @@ ON CONFLICT (db_source) DO UPDATE SET
     max_gap_fill_pages = EXCLUDED.max_gap_fill_pages,
     updated_at = CURRENT_TIMESTAMP;
 
-INSERT INTO iris_database_registry (db_source, db_name, db_summary, db_description, search_modes, catalog_config, semantic_config, metadata_config, sample_questions, enabled, ad_groups, batch_size, max_selected_files, top_chunks_in_catalog_selection, top_chunks_in_metadata_research, page_threshold_for_full_content, enable_db_wide_deep_research, metadata_context_fields, max_parallel_files, max_chunks_per_file, max_pages_for_full_context, max_primary_section_page_count, max_subsection_page_count, max_neighbour_chunks, max_gap_fill_pages)
+INSERT INTO iris_database_registry (db_source, db_name, db_summary, db_description, search_modes, catalog_config, semantic_config, metadata_config, sample_questions, enabled, ad_groups, query_type, content_type, use_when, display_order, is_internal, batch_size, max_selected_files, top_chunks_in_catalog_selection, top_chunks_in_metadata_research, page_threshold_for_full_content, enable_db_wide_deep_research, metadata_context_fields, max_parallel_files, max_chunks_per_file, max_pages_for_full_context, max_primary_section_page_count, max_subsection_page_count, max_neighbour_chunks, max_gap_fill_pages)
 VALUES (
     'internal_par',
     'Project Approval Request Guidance',
@@ -808,9 +928,14 @@ VALUES (
     NULL,
     NULL,
     NULL,
-    '["What would the approval level be if i had a Contract PAR greater than $200MM?","Who is responsible for the fulfillment of all monitoring, reporting, and follow up of the PAR?","According to RBC PAR when is an addendum required?","How do I know if my PAR requires a GE or GOCx meeting?"]'::jsonb,
+    '["What would the approval level be if I had a Contract PAR greater than $200MM?","Who is responsible for the fulfillment of all monitoring, reporting, and follow up of the PAR?","According to RBC PAR when is an addendum required?","How do I know if my PAR requires a GE or GOCx meeting?"]'::jsonb,
     true,
-    ARRAY['all_users','local_dev']::text[],
+    ARRAY['APP_0MF0_MAVEN_FINANCE_ASSIST']::text[],
+    'semantic search',
+    'general content',
+    NULL,
+    100,
+    true,
     10,
     10,
     1,
@@ -837,6 +962,11 @@ ON CONFLICT (db_source) DO UPDATE SET
     sample_questions = EXCLUDED.sample_questions,
     enabled = EXCLUDED.enabled,
     ad_groups = EXCLUDED.ad_groups,
+    query_type = EXCLUDED.query_type,
+    content_type = EXCLUDED.content_type,
+    use_when = EXCLUDED.use_when,
+    display_order = EXCLUDED.display_order,
+    is_internal = EXCLUDED.is_internal,
     batch_size = EXCLUDED.batch_size,
     max_selected_files = EXCLUDED.max_selected_files,
     top_chunks_in_catalog_selection = EXCLUDED.top_chunks_in_catalog_selection,
@@ -853,7 +983,7 @@ ON CONFLICT (db_source) DO UPDATE SET
     max_gap_fill_pages = EXCLUDED.max_gap_fill_pages,
     updated_at = CURRENT_TIMESTAMP;
 
-INSERT INTO iris_database_registry (db_source, db_name, db_summary, db_description, search_modes, catalog_config, semantic_config, metadata_config, sample_questions, enabled, ad_groups, batch_size, max_selected_files, top_chunks_in_catalog_selection, top_chunks_in_metadata_research, page_threshold_for_full_content, enable_db_wide_deep_research, metadata_context_fields, max_parallel_files, max_chunks_per_file, max_pages_for_full_context, max_primary_section_page_count, max_subsection_page_count, max_neighbour_chunks, max_gap_fill_pages)
+INSERT INTO iris_database_registry (db_source, db_name, db_summary, db_description, search_modes, catalog_config, semantic_config, metadata_config, sample_questions, enabled, ad_groups, query_type, content_type, use_when, display_order, is_internal, batch_size, max_selected_files, top_chunks_in_catalog_selection, top_chunks_in_metadata_research, page_threshold_for_full_content, enable_db_wide_deep_research, metadata_context_fields, max_parallel_files, max_chunks_per_file, max_pages_for_full_context, max_primary_section_page_count, max_subsection_page_count, max_neighbour_chunks, max_gap_fill_pages)
 VALUES (
     'internal_process_and_controls',
     'Internal Process and Controls Policies',
@@ -873,9 +1003,14 @@ VALUES (
     NULL,
     NULL,
     NULL,
-    '["What are the requirements of RBC''s internal controls policy?","What is the top down risk based approach in the ICFR policy?","What are the standardized abbreviations for the Chart of Accounts?","How does RBC apply it''s ICMP policy for Control Activities?"]'::jsonb,
+    '["What are the requirements of RBC''s internal controls policy?","What is the top down risk based approach in the ICFR policy?","What are the standardized abbreviations for the Chart of Accounts?","How does RBC apply its ICMP policy for Control Activities?"]'::jsonb,
     true,
-    ARRAY['all_users','local_dev']::text[],
+    ARRAY['APP_0MF0_MAVEN_FINANCE_ASSIST']::text[],
+    'semantic search',
+    'general content',
+    NULL,
+    100,
+    true,
     10,
     10,
     1,
@@ -902,6 +1037,11 @@ ON CONFLICT (db_source) DO UPDATE SET
     sample_questions = EXCLUDED.sample_questions,
     enabled = EXCLUDED.enabled,
     ad_groups = EXCLUDED.ad_groups,
+    query_type = EXCLUDED.query_type,
+    content_type = EXCLUDED.content_type,
+    use_when = EXCLUDED.use_when,
+    display_order = EXCLUDED.display_order,
+    is_internal = EXCLUDED.is_internal,
     batch_size = EXCLUDED.batch_size,
     max_selected_files = EXCLUDED.max_selected_files,
     top_chunks_in_catalog_selection = EXCLUDED.top_chunks_in_catalog_selection,
@@ -918,7 +1058,7 @@ ON CONFLICT (db_source) DO UPDATE SET
     max_gap_fill_pages = EXCLUDED.max_gap_fill_pages,
     updated_at = CURRENT_TIMESTAMP;
 
-INSERT INTO iris_database_registry (db_source, db_name, db_summary, db_description, search_modes, catalog_config, semantic_config, metadata_config, sample_questions, enabled, ad_groups, batch_size, max_selected_files, top_chunks_in_catalog_selection, top_chunks_in_metadata_research, page_threshold_for_full_content, enable_db_wide_deep_research, metadata_context_fields, max_parallel_files, max_chunks_per_file, max_pages_for_full_context, max_primary_section_page_count, max_subsection_page_count, max_neighbour_chunks, max_gap_fill_pages)
+INSERT INTO iris_database_registry (db_source, db_name, db_summary, db_description, search_modes, catalog_config, semantic_config, metadata_config, sample_questions, enabled, ad_groups, query_type, content_type, use_when, display_order, is_internal, batch_size, max_selected_files, top_chunks_in_catalog_selection, top_chunks_in_metadata_research, page_threshold_for_full_content, enable_db_wide_deep_research, metadata_context_fields, max_parallel_files, max_chunks_per_file, max_pages_for_full_context, max_primary_section_page_count, max_subsection_page_count, max_neighbour_chunks, max_gap_fill_pages)
 VALUES (
     'internal_sab_99',
     'SAB 99 Memos',
@@ -938,9 +1078,14 @@ VALUES (
     NULL,
     NULL,
     NULL,
-    '["What qualitative factors are assessed when determining materiality of a financial statement error under SAB 99?","What remediation steps are required when a financial statement error exceeds the $120MM threshold?","How does the SAB 99 assessment distinguish between intentional and unintentional misstatements?","What documentation is required to support an immaterial misstatement conclusion under SAB 99?"]'::jsonb,
+    '["What is the most common root cause?","How many errors impacted Deposits?","How many have EUDA related issues?"]'::jsonb,
     true,
-    ARRAY['all_users','local_dev']::text[],
+    ARRAY['APP_0MF0_SAB99_IRIS']::text[],
+    'semantic search',
+    'general content',
+    NULL,
+    100,
+    true,
     10,
     10,
     1,
@@ -967,6 +1112,11 @@ ON CONFLICT (db_source) DO UPDATE SET
     sample_questions = EXCLUDED.sample_questions,
     enabled = EXCLUDED.enabled,
     ad_groups = EXCLUDED.ad_groups,
+    query_type = EXCLUDED.query_type,
+    content_type = EXCLUDED.content_type,
+    use_when = EXCLUDED.use_when,
+    display_order = EXCLUDED.display_order,
+    is_internal = EXCLUDED.is_internal,
     batch_size = EXCLUDED.batch_size,
     max_selected_files = EXCLUDED.max_selected_files,
     top_chunks_in_catalog_selection = EXCLUDED.top_chunks_in_catalog_selection,
@@ -983,7 +1133,7 @@ ON CONFLICT (db_source) DO UPDATE SET
     max_gap_fill_pages = EXCLUDED.max_gap_fill_pages,
     updated_at = CURRENT_TIMESTAMP;
 
-INSERT INTO iris_database_registry (db_source, db_name, db_summary, db_description, search_modes, catalog_config, semantic_config, metadata_config, sample_questions, enabled, ad_groups, batch_size, max_selected_files, top_chunks_in_catalog_selection, top_chunks_in_metadata_research, page_threshold_for_full_content, enable_db_wide_deep_research, metadata_context_fields, max_parallel_files, max_chunks_per_file, max_pages_for_full_context, max_primary_section_page_count, max_subsection_page_count, max_neighbour_chunks, max_gap_fill_pages)
+INSERT INTO iris_database_registry (db_source, db_name, db_summary, db_description, search_modes, catalog_config, semantic_config, metadata_config, sample_questions, enabled, ad_groups, query_type, content_type, use_when, display_order, is_internal, batch_size, max_selected_files, top_chunks_in_catalog_selection, top_chunks_in_metadata_research, page_threshold_for_full_content, enable_db_wide_deep_research, metadata_context_fields, max_parallel_files, max_chunks_per_file, max_pages_for_full_context, max_primary_section_page_count, max_subsection_page_count, max_neighbour_chunks, max_gap_fill_pages)
 VALUES (
     'internal_sox',
     'Internal SOX Controls',
@@ -1006,6 +1156,11 @@ VALUES (
     '["What are all the SOX controls under the Procure to Pay process?","What are all the controls that mention access reviews?","What controls involve the SAP system?","Which SOX controls relate to change management?"]'::jsonb,
     true,
     ARRAY['all_users','local_dev']::text[],
+    'semantic search',
+    'general content',
+    NULL,
+    100,
+    true,
     10,
     25,
     1,
@@ -1032,6 +1187,11 @@ ON CONFLICT (db_source) DO UPDATE SET
     sample_questions = EXCLUDED.sample_questions,
     enabled = EXCLUDED.enabled,
     ad_groups = EXCLUDED.ad_groups,
+    query_type = EXCLUDED.query_type,
+    content_type = EXCLUDED.content_type,
+    use_when = EXCLUDED.use_when,
+    display_order = EXCLUDED.display_order,
+    is_internal = EXCLUDED.is_internal,
     batch_size = EXCLUDED.batch_size,
     max_selected_files = EXCLUDED.max_selected_files,
     top_chunks_in_catalog_selection = EXCLUDED.top_chunks_in_catalog_selection,
@@ -1048,7 +1208,7 @@ ON CONFLICT (db_source) DO UPDATE SET
     max_gap_fill_pages = EXCLUDED.max_gap_fill_pages,
     updated_at = CURRENT_TIMESTAMP;
 
-INSERT INTO iris_database_registry (db_source, db_name, db_summary, db_description, search_modes, catalog_config, semantic_config, metadata_config, sample_questions, enabled, ad_groups, batch_size, max_selected_files, top_chunks_in_catalog_selection, top_chunks_in_metadata_research, page_threshold_for_full_content, enable_db_wide_deep_research, metadata_context_fields, max_parallel_files, max_chunks_per_file, max_pages_for_full_context, max_primary_section_page_count, max_subsection_page_count, max_neighbour_chunks, max_gap_fill_pages)
+INSERT INTO iris_database_registry (db_source, db_name, db_summary, db_description, search_modes, catalog_config, semantic_config, metadata_config, sample_questions, enabled, ad_groups, query_type, content_type, use_when, display_order, is_internal, batch_size, max_selected_files, top_chunks_in_catalog_selection, top_chunks_in_metadata_research, page_threshold_for_full_content, enable_db_wide_deep_research, metadata_context_fields, max_parallel_files, max_chunks_per_file, max_pages_for_full_context, max_primary_section_page_count, max_subsection_page_count, max_neighbour_chunks, max_gap_fill_pages)
 VALUES (
     'internal_wiki',
     'APG Wiki',
@@ -1068,9 +1228,14 @@ VALUES (
     NULL,
     NULL,
     NULL,
-    '["How has APG answered questions about breakage fees on early mortgage repayments?","What''s the APG guidance on loyalty point accruals for card reward programs?","Has APG addressed how to account for bundled wealth management service fees?","What does APG say about capitalizing vs expensing software development costs?"]'::jsonb,
+    NULL,
     true,
-    ARRAY['all_users','local_dev']::text[],
+    ARRAY['APP_0MF0_MAVEN_APG_IRIS']::text[],
+    'semantic search',
+    'general content',
+    NULL,
+    100,
+    true,
     10,
     15,
     1,
@@ -1097,61 +1262,11 @@ ON CONFLICT (db_source) DO UPDATE SET
     sample_questions = EXCLUDED.sample_questions,
     enabled = EXCLUDED.enabled,
     ad_groups = EXCLUDED.ad_groups,
-    batch_size = EXCLUDED.batch_size,
-    max_selected_files = EXCLUDED.max_selected_files,
-    top_chunks_in_catalog_selection = EXCLUDED.top_chunks_in_catalog_selection,
-    top_chunks_in_metadata_research = EXCLUDED.top_chunks_in_metadata_research,
-    page_threshold_for_full_content = EXCLUDED.page_threshold_for_full_content,
-    enable_db_wide_deep_research = EXCLUDED.enable_db_wide_deep_research,
-    metadata_context_fields = EXCLUDED.metadata_context_fields,
-    max_parallel_files = EXCLUDED.max_parallel_files,
-    max_chunks_per_file = EXCLUDED.max_chunks_per_file,
-    max_pages_for_full_context = EXCLUDED.max_pages_for_full_context,
-    max_primary_section_page_count = EXCLUDED.max_primary_section_page_count,
-    max_subsection_page_count = EXCLUDED.max_subsection_page_count,
-    max_neighbour_chunks = EXCLUDED.max_neighbour_chunks,
-    max_gap_fill_pages = EXCLUDED.max_gap_fill_pages,
-    updated_at = CURRENT_TIMESTAMP;
-
-INSERT INTO iris_database_registry (db_source, db_name, db_summary, db_description, search_modes, catalog_config, semantic_config, metadata_config, sample_questions, enabled, ad_groups, batch_size, max_selected_files, top_chunks_in_catalog_selection, top_chunks_in_metadata_research, page_threshold_for_full_content, enable_db_wide_deep_research, metadata_context_fields, max_parallel_files, max_chunks_per_file, max_pages_for_full_context, max_primary_section_page_count, max_subsection_page_count, max_neighbour_chunks, max_gap_fill_pages)
-VALUES (
-    'single_test',
-    'Test Documents',
-    'Collection of NLP and AI research papers for testing the doc_refresh pipeline and IRIS retrieval.',
-    'Academic research papers covering topics such as natural language processing, machine learning, text classification, summarization, and dialogue systems. These papers are from top-tier conferences including ACL, NAACL, EMNLP, and COLING.',
-    ARRAY['catalog','semantic']::text[],
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    true,
-    NULL,
-    10,
-    15,
-    1,
-    3,
-    150,
-    true,
-    ARRAY['document_summary','document_description','document_usage']::text[],
-    5,
-    20,
-    6,
-    6,
-    3,
-    2,
-    2
-)
-ON CONFLICT (db_source) DO UPDATE SET
-    db_name = EXCLUDED.db_name,
-    db_summary = EXCLUDED.db_summary,
-    db_description = EXCLUDED.db_description,
-    search_modes = EXCLUDED.search_modes,
-    catalog_config = EXCLUDED.catalog_config,
-    semantic_config = EXCLUDED.semantic_config,
-    metadata_config = EXCLUDED.metadata_config,
-    sample_questions = EXCLUDED.sample_questions,
-    enabled = EXCLUDED.enabled,
-    ad_groups = EXCLUDED.ad_groups,
+    query_type = EXCLUDED.query_type,
+    content_type = EXCLUDED.content_type,
+    use_when = EXCLUDED.use_when,
+    display_order = EXCLUDED.display_order,
+    is_internal = EXCLUDED.is_internal,
     batch_size = EXCLUDED.batch_size,
     max_selected_files = EXCLUDED.max_selected_files,
     top_chunks_in_catalog_selection = EXCLUDED.top_chunks_in_catalog_selection,
@@ -1170,4 +1285,4 @@ ON CONFLICT (db_source) DO UPDATE SET
 
 COMMIT;
 
--- Inserted/Updated 18 database registry entries
+-- Inserted/Updated 17 database registry entries

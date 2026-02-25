@@ -10,8 +10,8 @@ Generated: 2026-02-11 01:50:17
 | `iris_prompts.csv` | 8 IRIS prompts (CSV) | pgAdmin Import or `\copy` |
 | `doc_refresh_prompts.sql` | 12 doc_refresh prompts (SQL INSERT) | `psql -f doc_refresh_prompts.sql` |
 | `doc_refresh_prompts.csv` | 12 doc_refresh prompts (CSV) | pgAdmin Import or `\copy` |
-| `iris_database_registry.sql` | 18 database configs (SQL INSERT) | `psql -f iris_database_registry.sql` |
-| `iris_database_registry.csv` | 18 database configs (CSV) | pgAdmin Import or `\copy` |
+| `iris_database_registry.sql` | 17 database configs (SQL INSERT) | `psql -f iris_database_registry.sql` |
+| `iris_database_registry.csv` | 17 database configs (CSV) | pgAdmin Import or `\copy` |
 
 ## Recommended Import Order
 

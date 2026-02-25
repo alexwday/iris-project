@@ -78,13 +78,14 @@ def fetch_doc_refresh_prompts(conn) -> List[Dict]:
 
 
 def fetch_registry(conn) -> List[Dict]:
-    """Fetch production database registry entries (excludes test_docs)."""
+    """Fetch production database registry entries (excludes test/single sources)."""
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute("""
             SELECT
                 db_source, db_name, db_summary, db_description,
                 search_modes, catalog_config, semantic_config, metadata_config,
                 sample_questions, enabled, ad_groups,
+                query_type, content_type, use_when, display_order, is_internal,
                 batch_size, max_selected_files,
                 top_chunks_in_catalog_selection, top_chunks_in_metadata_research,
                 page_threshold_for_full_content, enable_db_wide_deep_research,
@@ -92,7 +93,7 @@ def fetch_registry(conn) -> List[Dict]:
                 max_pages_for_full_context, max_primary_section_page_count,
                 max_subsection_page_count, max_neighbour_chunks, max_gap_fill_pages
             FROM iris_database_registry
-            WHERE db_source != 'test_docs'
+            WHERE db_source NOT IN ('test_docs', 'single_test')
             ORDER BY db_source
         """)
         return [dict(row) for row in cur.fetchall()]
@@ -215,6 +216,7 @@ def write_registry_csv(registry: List[Dict], filepath: str):
         "db_source", "db_name", "db_summary", "db_description",
         "search_modes", "catalog_config", "semantic_config", "metadata_config",
         "sample_questions", "enabled", "ad_groups",
+        "query_type", "content_type", "use_when", "display_order", "is_internal",
         "batch_size", "max_selected_files",
         "top_chunks_in_catalog_selection", "top_chunks_in_metadata_research",
         "page_threshold_for_full_content", "enable_db_wide_deep_research",
@@ -243,6 +245,7 @@ def write_registry_sql(registry: List[Dict], filepath: str):
         "db_source", "db_name", "db_summary", "db_description",
         "search_modes", "catalog_config", "semantic_config", "metadata_config",
         "sample_questions", "enabled", "ad_groups",
+        "query_type", "content_type", "use_when", "display_order", "is_internal",
         "batch_size", "max_selected_files",
         "top_chunks_in_catalog_selection", "top_chunks_in_metadata_research",
         "page_threshold_for_full_content", "enable_db_wide_deep_research",
@@ -253,7 +256,7 @@ def write_registry_sql(registry: List[Dict], filepath: str):
 
     array_cols = {"search_modes", "ad_groups", "metadata_context_fields"}
     json_cols = {"catalog_config", "semantic_config", "metadata_config", "sample_questions"}
-    bool_cols = {"enabled", "enable_db_wide_deep_research"}
+    bool_cols = {"enabled", "enable_db_wide_deep_research", "is_internal"}
 
     with open(filepath, "w", encoding="utf-8") as f:
         f.write("-- IRIS Database Registry Initial Data\n")

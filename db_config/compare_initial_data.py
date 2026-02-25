@@ -94,6 +94,7 @@ COLUMN_TYPES: dict[str, dict[str, set[str]]] = {
             "top_chunks_in_catalog_selection",
             "top_chunks_in_metadata_research",
             "page_threshold_for_full_content",
+            "display_order",
             "max_parallel_files",
             "max_chunks_per_file",
             "max_pages_for_full_context",
@@ -102,7 +103,7 @@ COLUMN_TYPES: dict[str, dict[str, set[str]]] = {
             "max_neighbour_chunks",
             "max_gap_fill_pages",
         },
-        "bool": {"enabled", "enable_db_wide_deep_research"},
+        "bool": {"enabled", "enable_db_wide_deep_research", "is_internal"},
     },
 }
 
