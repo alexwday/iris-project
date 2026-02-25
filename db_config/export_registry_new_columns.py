@@ -42,7 +42,8 @@ DEFAULT_BASELINE_CSV = SCRIPT_DIR / "schemas" / "initial_data" / "iris_database_
 DEFAULT_OUTPUT_DIR = SCRIPT_DIR
 TABLE_NAME = "iris_database_registry"
 KEY_COLUMN = "db_source"
-MATRIX_CONTEXT_COLUMNS = ("ad_groups", "sample_questions")
+SAMPLE_QUESTIONS_COLUMN = "sample_questions"
+EXCLUDED_EXTRA_VALUE_COLUMNS = {"created_at", "updated_at"}
 
 
 def parse_args() -> argparse.Namespace:
@@ -240,6 +241,33 @@ def markdown_cell(value: Any) -> str:
     return text
 
 
+def extract_sample_questions(value: Any) -> list[str]:
+    normalized = normalize_json(value)
+    if normalized is None:
+        return []
+
+    if isinstance(normalized, list):
+        return [value_to_text(item) for item in normalized]
+
+    if isinstance(normalized, tuple):
+        return [value_to_text(item) for item in list(normalized)]
+
+    if isinstance(normalized, str):
+        text = normalized.strip()
+        if text == "":
+            return []
+        if text.startswith("[") and text.endswith("]"):
+            try:
+                parsed = json.loads(text)
+                if isinstance(parsed, list):
+                    return [value_to_text(item) for item in parsed]
+            except json.JSONDecodeError:
+                pass
+        return [normalized]
+
+    return [value_to_text(normalized)]
+
+
 def write_values_text(path: Path, key_column: str, matrix_columns: list[str], rows: list[dict[str, Any]]) -> None:
     lines: list[str] = []
     lines.append("IRIS Registry Full Value Dump")
@@ -268,7 +296,8 @@ def write_markdown_report(
     baseline_columns: list[str],
     actual_columns_meta: list[dict[str, Any]],
     extra_columns_meta: list[dict[str, Any]],
-    matrix_columns: list[str],
+    matrix_extra_columns: list[str],
+    sample_questions_available: bool,
     stats: dict[str, dict[str, Any]],
     rows: list[dict[str, Any]],
 ) -> None:
@@ -289,17 +318,15 @@ def write_markdown_report(
     lines.append(f"- Actual table columns: **{len(actual_columns)}**")
     lines.append(f"- New/extra columns: **{len(extra_columns)}**")
     lines.append(
-        "- Matrix columns: **"
-        + str(len(matrix_columns))
-        + "** (`"
-        + "`, `".join(matrix_columns)
-        + "`)"
+        "- Matrix extra columns (excluding `created_at` and `updated_at`): **"
+        + str(len(matrix_extra_columns))
+        + "**"
     )
     lines.append("")
 
+    lines.append("## Table 1: Extra Column Schema")
+    lines.append("")
     if extra_columns:
-        lines.append("## Extra Columns")
-        lines.append("")
         lines.append(
             "| column_name | data_type | udt_name | nullable | default | non_null | distinct |"
         )
@@ -327,20 +354,35 @@ def write_markdown_report(
         lines.append("No new columns were found relative to baseline CSV.")
         lines.append("")
 
-    lines.append("## Column Value Matrix")
+    lines.append("## Table 2: Extra Column Value Matrix (excluding created_at, updated_at)")
     lines.append("")
-    lines.append(
-        "This matrix shows each `db_source` row and the values for `ad_groups`, "
-        "`sample_questions`, and any extra columns."
-    )
+    if matrix_extra_columns:
+        lines.append("| db_source | " + " | ".join(matrix_extra_columns) + " |")
+        lines.append("|---|" + "|".join("---" for _ in matrix_extra_columns) + "|")
+        for row in rows:
+            parts = [markdown_cell(row.get(KEY_COLUMN))]
+            for column in matrix_extra_columns:
+                parts.append(markdown_cell(row.get(column)))
+            lines.append("| " + " | ".join(parts) + " |")
+    else:
+        lines.append("_No extra columns remain after excluding created_at and updated_at._")
     lines.append("")
-    lines.append("| db_source | " + " | ".join(matrix_columns) + " |")
-    lines.append("|---|" + "|".join("---" for _ in matrix_columns) + "|")
-    for row in rows:
-        parts = [markdown_cell(row.get(KEY_COLUMN))]
-        for column in matrix_columns:
-            parts.append(markdown_cell(row.get(column)))
-        lines.append("| " + " | ".join(parts) + " |")
+
+    lines.append("## Table 3: Sample Questions by db_source")
+    lines.append("")
+    if sample_questions_available:
+        lines.append("| db_source | question_index | sample_question |")
+        lines.append("|---|---:|---|")
+        for row in rows:
+            db_source = markdown_cell(row.get(KEY_COLUMN))
+            questions = extract_sample_questions(row.get(SAMPLE_QUESTIONS_COLUMN))
+            if not questions:
+                lines.append(f"| {db_source} | 0 | NULL |")
+                continue
+            for index, question in enumerate(questions, start=1):
+                lines.append(f"| {db_source} | {index} | {markdown_cell(question)} |")
+    else:
+        lines.append("_sample_questions column not found in target table._")
     lines.append("")
 
     path.write_text("\n".join(lines), encoding="utf-8")
@@ -377,14 +419,20 @@ def main() -> int:
             meta for meta in actual_columns_meta if meta["column_name"] not in baseline_set
         ]
         extra_columns = [meta["column_name"] for meta in extra_columns_meta]
-        context_columns = [column for column in MATRIX_CONTEXT_COLUMNS if column in actual_columns]
-        matrix_columns = context_columns + [
-            column for column in extra_columns if column not in context_columns
+        matrix_extra_columns = [
+            column for column in extra_columns if column not in EXCLUDED_EXTRA_VALUE_COLUMNS
         ]
+        sample_questions_available = SAMPLE_QUESTIONS_COLUMN in actual_columns
+
+        fetch_columns = list(extra_columns)
+        if sample_questions_available and SAMPLE_QUESTIONS_COLUMN not in fetch_columns:
+            fetch_columns.append(SAMPLE_QUESTIONS_COLUMN)
 
         rows: list[dict[str, Any]] = []
-        if matrix_columns:
-            rows = fetch_selected_values(conn, TABLE_NAME, KEY_COLUMN, matrix_columns)
+        if fetch_columns:
+            rows = fetch_selected_values(conn, TABLE_NAME, KEY_COLUMN, fetch_columns)
+        elif sample_questions_available:
+            rows = fetch_selected_values(conn, TABLE_NAME, KEY_COLUMN, [SAMPLE_QUESTIONS_COLUMN])
 
         stats = build_column_stats(extra_columns, rows)
         report = {
@@ -398,7 +446,9 @@ def main() -> int:
             "row_count": fetch_row_count(conn, TABLE_NAME),
             "baseline_columns": baseline_columns,
             "actual_columns": actual_columns,
-            "matrix_columns": matrix_columns,
+            "excluded_matrix_columns": sorted(EXCLUDED_EXTRA_VALUE_COLUMNS),
+            "extra_columns_for_matrix": matrix_extra_columns,
+            "sample_questions_available": sample_questions_available,
             "extra_columns": [
                 {
                     **meta,
@@ -415,8 +465,11 @@ def main() -> int:
         with json_path.open("w", encoding="utf-8") as handle:
             json.dump(report, handle, indent=2, ensure_ascii=False)
 
-        write_values_csv(csv_path, KEY_COLUMN, matrix_columns, rows)
-        write_values_text(txt_path, KEY_COLUMN, matrix_columns, rows)
+        write_values_csv(csv_path, KEY_COLUMN, matrix_extra_columns, rows)
+        text_columns = list(matrix_extra_columns)
+        if sample_questions_available and SAMPLE_QUESTIONS_COLUMN not in text_columns:
+            text_columns.append(SAMPLE_QUESTIONS_COLUMN)
+        write_values_text(txt_path, KEY_COLUMN, text_columns, rows)
         write_markdown_report(
             path=md_path,
             connection_info=connection_info,
@@ -424,7 +477,8 @@ def main() -> int:
             baseline_columns=baseline_columns,
             actual_columns_meta=actual_columns_meta,
             extra_columns_meta=extra_columns_meta,
-            matrix_columns=matrix_columns,
+            matrix_extra_columns=matrix_extra_columns,
+            sample_questions_available=sample_questions_available,
             stats=stats,
             rows=rows,
         )
@@ -438,7 +492,14 @@ def main() -> int:
         print(f"Baseline columns: {len(baseline_columns)}")
         print(f"Actual columns:   {len(actual_columns)}")
         print(f"New columns:      {len(extra_columns)}")
-        print("Matrix columns:   " + ", ".join(matrix_columns) if matrix_columns else "Matrix columns:   (none)")
+        if matrix_extra_columns:
+            print("Matrix extra columns: " + ", ".join(matrix_extra_columns))
+        else:
+            print("Matrix extra columns: (none after excluding created_at/updated_at)")
+        print(
+            "Sample questions column: "
+            + ("present" if sample_questions_available else "missing")
+        )
         if extra_columns:
             print("New columns found:")
             for meta in extra_columns_meta:
