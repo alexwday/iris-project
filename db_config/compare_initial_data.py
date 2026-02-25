@@ -16,9 +16,11 @@ from __future__ import annotations
 import argparse
 import csv
 import hashlib
+import html
 import json
 import os
 import sys
+from datetime import datetime
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -31,6 +33,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 INITIAL_DATA_DIR = SCRIPT_DIR / "schemas" / "initial_data"
 DEFAULT_CONFIG_PATH = SCRIPT_DIR / "compare_initial_data.config.json"
 DEFAULT_REPORT_PATH = SCRIPT_DIR / "compare_initial_data.report.json"
+DEFAULT_HTML_REPORT_PATH = SCRIPT_DIR / "compare_initial_data.report.html"
 
 
 @dataclass(frozen=True)
@@ -123,6 +126,14 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Path to write JSON report. "
             f"Default: {DEFAULT_REPORT_PATH}"
+        ),
+    )
+    parser.add_argument(
+        "--output-html",
+        default=str(DEFAULT_HTML_REPORT_PATH),
+        help=(
+            "Path to write HTML report. "
+            f"Default: {DEFAULT_HTML_REPORT_PATH}"
         ),
     )
     parser.add_argument(
@@ -502,10 +513,14 @@ def compare_table(
         "actual_rows": len(actual_rows),
         "missing_keys": [],
         "extra_keys": [],
+        "missing_key_count": 0,
+        "extra_key_count": 0,
         "duplicate_expected_keys": [],
         "duplicate_actual_keys": [],
         "value_differences": [],
         "value_differences_truncated": False,
+        "common_key_count": 0,
+        "same_as_golden_count": 0,
         "changed_row_count": 0,
         "matches_golden": False,
     }
@@ -532,6 +547,9 @@ def compare_table(
 
     result["missing_keys"] = [format_key(spec.key_columns, key) for key in missing_keys]
     result["extra_keys"] = [format_key(spec.key_columns, key) for key in extra_keys]
+    result["missing_key_count"] = len(missing_keys)
+    result["extra_key_count"] = len(extra_keys)
+    result["common_key_count"] = len(common_keys)
 
     changed_keys: set[tuple[Any, ...]] = set()
     value_differences: list[dict[str, Any]] = []
@@ -566,6 +584,7 @@ def compare_table(
     result["value_differences"] = value_differences
     result["value_differences_truncated"] = truncated
     result["changed_row_count"] = len(changed_keys)
+    result["same_as_golden_count"] = len(common_keys) - len(changed_keys)
 
     has_issues = any(
         [
@@ -629,10 +648,14 @@ def compare_database(
                         "actual_rows": 0,
                         "missing_keys": [],
                         "extra_keys": [],
+                        "missing_key_count": len(golden_rows),
+                        "extra_key_count": 0,
                         "duplicate_expected_keys": [],
                         "duplicate_actual_keys": [],
                         "value_differences": [],
                         "value_differences_truncated": False,
+                        "common_key_count": 0,
+                        "same_as_golden_count": 0,
                         "changed_row_count": 0,
                         "matches_golden": False,
                     }
@@ -683,8 +706,9 @@ def print_table_summary(table: dict[str, Any], max_key_samples: int) -> None:
         f"    Rows (expected/actual): {table['expected_rows']}/{table['actual_rows']}"
     )
     print(
-        "    Missing keys / Extra keys / Changed rows: "
-        f"{len(table['missing_keys'])} / {len(table['extra_keys'])} / {table['changed_row_count']}"
+        "    Same as golden / Missing keys / Extra keys / Changed rows: "
+        f"{table['same_as_golden_count']} / {len(table['missing_keys'])} / "
+        f"{len(table['extra_keys'])} / {table['changed_row_count']}"
     )
 
     if table["errors"]:
@@ -764,6 +788,447 @@ def write_json_report(report: dict[str, Any], output_path: Path) -> None:
         json.dump(report, handle, indent=2, ensure_ascii=False)
 
 
+def _escape(value: Any) -> str:
+    return html.escape("" if value is None else str(value), quote=True)
+
+
+def _issue_count(table: dict[str, Any]) -> int:
+    return (
+        len(table.get("errors", []))
+        + len(table.get("missing_baseline_columns", []))
+        + len(table.get("missing_keys", []))
+        + len(table.get("extra_keys", []))
+        + len(table.get("duplicate_expected_keys", []))
+        + len(table.get("duplicate_actual_keys", []))
+        + len(table.get("value_differences", []))
+        + (1 if table.get("value_differences_truncated") else 0)
+    )
+
+
+def _render_string_list(title: str, values: list[str], class_name: str = "") -> str:
+    if not values:
+        return ""
+
+    rendered_items = "\n".join(f"<li><code>{_escape(item)}</code></li>" for item in values)
+    css_class = f' class="{_escape(class_name)}"' if class_name else ""
+    return (
+        f"<details{css_class}>\n"
+        f"<summary>{_escape(title)} ({len(values)})</summary>\n"
+        f"<ul>\n{rendered_items}\n</ul>\n"
+        "</details>"
+    )
+
+
+def _render_value_differences(table: dict[str, Any]) -> str:
+    differences = table.get("value_differences", [])
+    if not differences and not table.get("value_differences_truncated"):
+        return ""
+
+    rows: list[str] = []
+    for item in differences:
+        rows.append(
+            "<tr>"
+            f"<td><code>{_escape(item.get('key', ''))}</code></td>"
+            f"<td><code>{_escape(item.get('column', ''))}</code></td>"
+            f"<td><code>{_escape(item.get('expected_hash', ''))}</code></td>"
+            f"<td><pre>{_escape(item.get('expected_preview', ''))}</pre></td>"
+            f"<td><code>{_escape(item.get('actual_hash', ''))}</code></td>"
+            f"<td><pre>{_escape(item.get('actual_preview', ''))}</pre></td>"
+            "</tr>"
+        )
+
+    truncation_note = ""
+    if table.get("value_differences_truncated"):
+        truncation_note = (
+            "<p class=\"warn\">Diff list truncated. Increase --max-differences for full details.</p>"
+        )
+
+    table_html = (
+        "<details class=\"diff-block\" open>\n"
+        f"<summary>Value differences ({len(differences)})</summary>\n"
+        f"{truncation_note}\n"
+        "<div class=\"table-wrap\">\n"
+        "<table>\n"
+        "<thead>"
+        "<tr>"
+        "<th>Key</th>"
+        "<th>Column</th>"
+        "<th>Golden Hash</th>"
+        "<th>Golden Value</th>"
+        "<th>Target Hash</th>"
+        "<th>Target Value</th>"
+        "</tr>"
+        "</thead>\n"
+        "<tbody>\n"
+        + "\n".join(rows)
+        + "\n</tbody>\n"
+        "</table>\n"
+        "</div>\n"
+        "</details>"
+    )
+    return table_html
+
+
+def _render_table_card(table: dict[str, Any]) -> str:
+    status_class = "pass" if table.get("matches_golden") else "fail"
+    issue_count = _issue_count(table)
+    open_attr = "" if table.get("matches_golden") else " open"
+
+    header = (
+        "<summary>"
+        f"<span class=\"title\">{_escape(table.get('table', 'unknown'))}</span>"
+        f"<span class=\"pill {status_class}\">{status_class.upper()}</span>"
+        f"<span class=\"counts\">issues={issue_count}, "
+        f"same={table.get('same_as_golden_count', 0)}, "
+        f"rows={table.get('expected_rows', 0)}/{table.get('actual_rows', 0)}, "
+        f"changed={table.get('changed_row_count', 0)}</span>"
+        "</summary>"
+    )
+
+    details = [
+        f"<p><b>Key columns:</b> <code>{_escape(', '.join(table.get('key_columns', [])))}</code></p>",
+        (
+            "<p><b>Columns (baseline/actual):</b> "
+            f"{len(table.get('baseline_columns', []))}/{len(table.get('actual_columns', []))}</p>"
+        ),
+    ]
+
+    if table.get("where_clause"):
+        details.append(
+            f"<p><b>Where clause:</b> <code>{_escape(table['where_clause'])}</code></p>"
+        )
+
+    if table.get("errors"):
+        details.append(
+            "<div class=\"error-list\">"
+            + "".join(f"<p class=\"error\">{_escape(error)}</p>" for error in table["errors"])
+            + "</div>"
+        )
+
+    details.append(
+        _render_string_list("Ignored extra columns", table.get("ignored_extra_columns", []))
+    )
+    details.append(
+        _render_string_list(
+            "Missing baseline columns",
+            table.get("missing_baseline_columns", []),
+        )
+    )
+    details.append(_render_string_list("Missing keys", table.get("missing_keys", [])))
+    details.append(_render_string_list("Extra keys", table.get("extra_keys", [])))
+    details.append(
+        _render_string_list(
+            "Duplicate keys in golden data",
+            table.get("duplicate_expected_keys", []),
+        )
+    )
+    details.append(
+        _render_string_list(
+            "Duplicate keys in target data",
+            table.get("duplicate_actual_keys", []),
+        )
+    )
+    details.append(_render_value_differences(table))
+
+    return (
+        f"<details class=\"table-card {status_class}\"{open_attr}>\n"
+        f"{header}\n"
+        "<div class=\"content\">\n"
+        + "\n".join(part for part in details if part)
+        + "\n</div>\n"
+        "</details>"
+    )
+
+
+def _render_db_same_summary(db_report: dict[str, Any]) -> str:
+    rows: list[str] = []
+    for table in db_report.get("tables", []):
+        rows.append(
+            "<tr>"
+            f"<td><code>{_escape(table.get('table', ''))}</code></td>"
+            f"<td>{table.get('same_as_golden_count', 0)}</td>"
+            f"<td>{table.get('expected_rows', 0)}</td>"
+            f"<td>{table.get('missing_key_count', len(table.get('missing_keys', [])))}</td>"
+            f"<td>{table.get('extra_key_count', len(table.get('extra_keys', [])))}</td>"
+            f"<td>{table.get('changed_row_count', 0)}</td>"
+            "</tr>"
+        )
+
+    if not rows:
+        return ""
+
+    return (
+        "<div class=\"card\">"
+        "<p><b>Quick summary (same as golden)</b></p>"
+        "<div class=\"table-wrap\">"
+        "<table>"
+        "<thead>"
+        "<tr>"
+        "<th>Table</th>"
+        "<th>Same</th>"
+        "<th>Expected</th>"
+        "<th>Missing</th>"
+        "<th>Extra</th>"
+        "<th>Changed</th>"
+        "</tr>"
+        "</thead>"
+        "<tbody>"
+        + "\n".join(rows)
+        + "</tbody>"
+        "</table>"
+        "</div>"
+        "</div>"
+    )
+
+
+def write_html_report(report: dict[str, Any], output_path: Path) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    generated_at = datetime.now().astimezone().isoformat(timespec="seconds")
+    overall_class = "pass" if report.get("all_match_golden") else "fail"
+    overall_label = "PASS" if report.get("all_match_golden") else "FAIL"
+
+    database_sections: list[str] = []
+    for db_report in report.get("databases", []):
+        db_status_class = "pass" if db_report.get("matches_golden") else "fail"
+        db_open = "" if db_report.get("matches_golden") else " open"
+        connection = db_report.get("connection", {})
+        tables = db_report.get("tables", [])
+        table_cards = "\n".join(_render_table_card(table) for table in tables)
+        summary_card = _render_db_same_summary(db_report)
+
+        error_html = ""
+        if db_report.get("errors"):
+            error_html = (
+                "<div class=\"error-list\">"
+                + "".join(f"<p class=\"error\">{_escape(error)}</p>" for error in db_report["errors"])
+                + "</div>"
+            )
+
+        database_sections.append(
+            f"<details class=\"db-card {db_status_class}\"{db_open}>\n"
+            "<summary>"
+            f"<span class=\"title\">{_escape(db_report.get('name', 'unknown'))}</span>"
+            f"<span class=\"pill {db_status_class}\">{db_status_class.upper()}</span>"
+            f"<span class=\"counts\">{_escape(connection.get('host', ''))}:{_escape(connection.get('port', ''))}/"
+            f"{_escape(connection.get('database', ''))}</span>"
+            "</summary>\n"
+            "<div class=\"content\">\n"
+            f"{summary_card}\n"
+            f"{error_html}\n"
+            f"{table_cards}\n"
+            "</div>\n"
+            "</details>"
+        )
+
+    golden_files = "".join(
+        f"<li><code>{_escape(spec.name)}</code>: {_escape(spec.csv_path)}</li>"
+        for spec in TABLE_SPECS
+    )
+
+    html_body = f"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>IRIS Initial Data Comparison</title>
+<style>
+:root {{
+  --bg: #f7f7f9;
+  --card: #ffffff;
+  --text: #18202a;
+  --muted: #5a6470;
+  --border: #d6dde6;
+  --pass-bg: #ecfdf5;
+  --pass-fg: #065f46;
+  --fail-bg: #fef2f2;
+  --fail-fg: #991b1b;
+  --warn-bg: #fff7ed;
+  --warn-fg: #9a3412;
+}}
+* {{ box-sizing: border-box; }}
+body {{
+  margin: 0;
+  font-family: "Segoe UI", Tahoma, sans-serif;
+  color: var(--text);
+  background: linear-gradient(170deg, #eff6ff 0%, var(--bg) 45%, #fefce8 100%);
+}}
+.wrap {{
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 24px;
+}}
+h1 {{
+  margin: 0 0 8px 0;
+  font-size: 28px;
+}}
+.meta {{
+  color: var(--muted);
+  margin-bottom: 18px;
+}}
+.toolbar {{
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}}
+button {{
+  background: #1d4ed8;
+  color: #fff;
+  border: 0;
+  border-radius: 6px;
+  padding: 8px 12px;
+  cursor: pointer;
+}}
+button.secondary {{
+  background: #475569;
+}}
+.card {{
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  padding: 14px;
+  margin-bottom: 14px;
+}}
+.pill {{
+  margin-left: 10px;
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 12px;
+  font-weight: 700;
+}}
+.pill.pass {{
+  background: var(--pass-bg);
+  color: var(--pass-fg);
+}}
+.pill.fail {{
+  background: var(--fail-bg);
+  color: var(--fail-fg);
+}}
+details {{
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0;
+  background: var(--card);
+  margin-bottom: 12px;
+}}
+details > summary {{
+  cursor: pointer;
+  list-style: none;
+  padding: 12px 14px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}}
+details > summary::-webkit-details-marker {{ display: none; }}
+details > summary::before {{
+  content: ">";
+  font-weight: 700;
+  color: var(--muted);
+  margin-right: 4px;
+}}
+details[open] > summary::before {{
+  content: "v";
+}}
+.content {{
+  padding: 0 14px 14px 14px;
+}}
+.title {{
+  font-weight: 700;
+}}
+.counts {{
+  color: var(--muted);
+  font-size: 13px;
+}}
+.db-card.pass > summary {{ background: #f8fafc; }}
+.db-card.fail > summary {{ background: #fff7f7; }}
+.table-card.pass > summary {{ background: #f9fffb; }}
+.table-card.fail > summary {{ background: #fff8f8; }}
+.error {{
+  background: var(--fail-bg);
+  color: var(--fail-fg);
+  border: 1px solid #fca5a5;
+  border-radius: 6px;
+  padding: 8px;
+  margin: 0 0 8px 0;
+}}
+.warn {{
+  background: var(--warn-bg);
+  color: var(--warn-fg);
+  border: 1px solid #fdba74;
+  border-radius: 6px;
+  padding: 8px;
+}}
+ul {{
+  margin: 8px 0 0 0;
+  padding-left: 20px;
+}}
+code {{
+  font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 12px;
+}}
+.table-wrap {{
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}}
+table {{
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 1100px;
+}}
+th, td {{
+  border-bottom: 1px solid var(--border);
+  padding: 8px;
+  text-align: left;
+  vertical-align: top;
+}}
+th {{
+  position: sticky;
+  top: 0;
+  background: #f8fafc;
+  font-size: 12px;
+}}
+pre {{
+  margin: 0;
+  white-space: pre-wrap;
+  max-width: 520px;
+  font-size: 12px;
+  font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+}}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>IRIS Initial Data Comparison</h1>
+    <div class="meta">Generated: {_escape(generated_at)}</div>
+    <div class="card">
+      <span class="title">Overall Status</span>
+      <span class="pill {overall_class}">{overall_label}</span>
+      <p class="meta">Config: <code>{_escape(report.get("config_path", ""))}</code></p>
+      <p class="meta">Golden source files:</p>
+      <ul>{golden_files}</ul>
+    </div>
+    <div class="toolbar">
+      <button onclick="setAll(true)">Expand all</button>
+      <button class="secondary" onclick="setAll(false)">Collapse all</button>
+    </div>
+    {"".join(database_sections)}
+  </div>
+  <script>
+  function setAll(openState) {{
+    document.querySelectorAll("details").forEach(function(node) {{
+      node.open = openState;
+    }});
+  }}
+  </script>
+</body>
+</html>
+"""
+
+    with output_path.open("w", encoding="utf-8") as handle:
+        handle.write(html_body)
+
+
 def main() -> int:
     args = parse_args()
     config_path = Path(args.config).expanduser().resolve()
@@ -791,6 +1256,9 @@ def main() -> int:
     output_path = Path(args.output_json).expanduser().resolve()
     write_json_report(report, output_path)
     print(f"JSON report written to: {output_path}")
+    html_path = Path(args.output_html).expanduser().resolve()
+    write_html_report(report, html_path)
+    print(f"HTML report written to: {html_path}")
 
     return 0 if report["all_match_golden"] else 1
 
