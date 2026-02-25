@@ -41,6 +41,7 @@ DEFAULT_BASELINE_CSV = SCRIPT_DIR / "schemas" / "initial_data" / "iris_database_
 DEFAULT_OUTPUT_DIR = SCRIPT_DIR
 TABLE_NAME = "iris_database_registry"
 KEY_COLUMN = "db_source"
+MATRIX_CONTEXT_COLUMNS = ("ad_groups", "sample_questions")
 
 
 def parse_args() -> argparse.Namespace:
@@ -141,13 +142,13 @@ def fetch_row_count(conn, table_name: str) -> int:
         return int(cur.fetchone()[0])
 
 
-def fetch_extra_values(
+def fetch_selected_values(
     conn,
     table_name: str,
     key_column: str,
-    extra_columns: list[str],
+    selected_columns: list[str],
 ) -> list[dict[str, Any]]:
-    selected = [key_column] + extra_columns
+    selected = [key_column] + selected_columns
     query = sql.SQL("SELECT {cols} FROM {table} ORDER BY {key_col}").format(
         cols=sql.SQL(", ").join(sql.Identifier(col) for col in selected),
         table=sql.Identifier(table_name),
@@ -237,6 +238,7 @@ def write_markdown_report(
     baseline_columns: list[str],
     actual_columns_meta: list[dict[str, Any]],
     extra_columns_meta: list[dict[str, Any]],
+    matrix_columns: list[str],
     stats: dict[str, dict[str, Any]],
     rows: list[dict[str, Any]],
 ) -> None:
@@ -256,51 +258,57 @@ def write_markdown_report(
     lines.append(f"- Baseline columns: **{len(baseline_columns)}**")
     lines.append(f"- Actual table columns: **{len(actual_columns)}**")
     lines.append(f"- New/extra columns: **{len(extra_columns)}**")
+    lines.append(
+        "- Matrix columns: **"
+        + str(len(matrix_columns))
+        + "** (`"
+        + "`, `".join(matrix_columns)
+        + "`)"
+    )
     lines.append("")
 
-    if not extra_columns:
+    if extra_columns:
+        lines.append("## Extra Columns")
+        lines.append("")
+        lines.append(
+            "| column_name | data_type | udt_name | nullable | default | non_null | distinct |"
+        )
+        lines.append("|---|---|---|---|---|---:|---:|")
+        for meta in extra_columns_meta:
+            column = meta["column_name"]
+            stat = stats[column]
+            lines.append(
+                "| "
+                + " | ".join(
+                    [
+                        column,
+                        str(meta.get("data_type", "")),
+                        str(meta.get("udt_name", "")),
+                        str(meta.get("is_nullable", "")),
+                        str(meta.get("column_default", ""))[:80],
+                        str(stat["non_null_count"]),
+                        str(stat["distinct_non_null_count"]),
+                    ]
+                )
+                + " |"
+            )
+        lines.append("")
+    else:
         lines.append("No new columns were found relative to baseline CSV.")
         lines.append("")
-        path.write_text("\n".join(lines), encoding="utf-8")
-        return
 
-    lines.append("## Extra Columns")
+    lines.append("## Column Value Matrix")
     lines.append("")
     lines.append(
-        "| column_name | data_type | udt_name | nullable | default | non_null | distinct |"
-    )
-    lines.append("|---|---|---|---|---|---:|---:|")
-    for meta in extra_columns_meta:
-        column = meta["column_name"]
-        stat = stats[column]
-        lines.append(
-            "| "
-            + " | ".join(
-                [
-                    column,
-                    str(meta.get("data_type", "")),
-                    str(meta.get("udt_name", "")),
-                    str(meta.get("is_nullable", "")),
-                    str(meta.get("column_default", ""))[:80],
-                    str(stat["non_null_count"]),
-                    str(stat["distinct_non_null_count"]),
-                ]
-            )
-            + " |"
-        )
-    lines.append("")
-
-    lines.append("## Extra Column Value Matrix")
-    lines.append("")
-    lines.append(
-        "This matrix shows each `db_source` row and the values for extra columns."
+        "This matrix shows each `db_source` row and the values for `ad_groups`, "
+        "`sample_questions`, and any extra columns."
     )
     lines.append("")
-    lines.append("| db_source | " + " | ".join(extra_columns) + " |")
-    lines.append("|---|" + "|".join("---" for _ in extra_columns) + "|")
+    lines.append("| db_source | " + " | ".join(matrix_columns) + " |")
+    lines.append("|---|" + "|".join("---" for _ in matrix_columns) + "|")
     for row in rows:
         parts = [value_to_text(row.get(KEY_COLUMN), max_len=120)]
-        for column in extra_columns:
+        for column in matrix_columns:
             parts.append(value_to_text(row.get(column), max_len=120))
         lines.append("| " + " | ".join(parts) + " |")
     lines.append("")
@@ -338,10 +346,14 @@ def main() -> int:
             meta for meta in actual_columns_meta if meta["column_name"] not in baseline_set
         ]
         extra_columns = [meta["column_name"] for meta in extra_columns_meta]
+        context_columns = [column for column in MATRIX_CONTEXT_COLUMNS if column in actual_columns]
+        matrix_columns = context_columns + [
+            column for column in extra_columns if column not in context_columns
+        ]
 
         rows: list[dict[str, Any]] = []
-        if extra_columns:
-            rows = fetch_extra_values(conn, TABLE_NAME, KEY_COLUMN, extra_columns)
+        if matrix_columns:
+            rows = fetch_selected_values(conn, TABLE_NAME, KEY_COLUMN, matrix_columns)
 
         stats = build_column_stats(extra_columns, rows)
         report = {
@@ -355,6 +367,7 @@ def main() -> int:
             "row_count": fetch_row_count(conn, TABLE_NAME),
             "baseline_columns": baseline_columns,
             "actual_columns": actual_columns,
+            "matrix_columns": matrix_columns,
             "extra_columns": [
                 {
                     **meta,
@@ -371,7 +384,7 @@ def main() -> int:
         with json_path.open("w", encoding="utf-8") as handle:
             json.dump(report, handle, indent=2, ensure_ascii=False)
 
-        write_values_csv(csv_path, KEY_COLUMN, extra_columns, rows)
+        write_values_csv(csv_path, KEY_COLUMN, matrix_columns, rows)
         write_markdown_report(
             path=md_path,
             connection_info=connection_info,
@@ -379,6 +392,7 @@ def main() -> int:
             baseline_columns=baseline_columns,
             actual_columns_meta=actual_columns_meta,
             extra_columns_meta=extra_columns_meta,
+            matrix_columns=matrix_columns,
             stats=stats,
             rows=rows,
         )
@@ -392,6 +406,7 @@ def main() -> int:
         print(f"Baseline columns: {len(baseline_columns)}")
         print(f"Actual columns:   {len(actual_columns)}")
         print(f"New columns:      {len(extra_columns)}")
+        print("Matrix columns:   " + ", ".join(matrix_columns) if matrix_columns else "Matrix columns:   (none)")
         if extra_columns:
             print("New columns found:")
             for meta in extra_columns_meta:
