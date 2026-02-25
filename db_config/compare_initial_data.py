@@ -29,6 +29,8 @@ from psycopg2 import sql
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 INITIAL_DATA_DIR = SCRIPT_DIR / "schemas" / "initial_data"
+DEFAULT_CONFIG_PATH = SCRIPT_DIR / "compare_initial_data.config.json"
+DEFAULT_REPORT_PATH = SCRIPT_DIR / "compare_initial_data.report.json"
 
 
 @dataclass(frozen=True)
@@ -109,12 +111,19 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--config",
-        required=True,
-        help="Path to JSON config with two database connections.",
+        default=str(DEFAULT_CONFIG_PATH),
+        help=(
+            "Path to JSON config with two database connections. "
+            f"Default: {DEFAULT_CONFIG_PATH}"
+        ),
     )
     parser.add_argument(
         "--output-json",
-        help="Optional path to write a JSON report.",
+        default=str(DEFAULT_REPORT_PATH),
+        help=(
+            "Path to write JSON report. "
+            f"Default: {DEFAULT_REPORT_PATH}"
+        ),
     )
     parser.add_argument(
         "--max-differences",
@@ -779,10 +788,9 @@ def main() -> int:
 
     print_report(report, max_key_samples=args.max_key_samples)
 
-    if args.output_json:
-        output_path = Path(args.output_json).expanduser().resolve()
-        write_json_report(report, output_path)
-        print(f"JSON report written to: {output_path}")
+    output_path = Path(args.output_json).expanduser().resolve()
+    write_json_report(report, output_path)
+    print(f"JSON report written to: {output_path}")
 
     return 0 if report["all_match_golden"] else 1
 
