@@ -43,6 +43,7 @@ DEFAULT_OUTPUT_DIR = SCRIPT_DIR
 TABLE_NAME = "iris_database_registry"
 KEY_COLUMN = "db_source"
 SAMPLE_QUESTIONS_COLUMN = "sample_questions"
+AD_GROUPS_COLUMN = "ad_groups"
 EXCLUDED_EXTRA_VALUE_COLUMNS = {"created_at", "updated_at"}
 
 
@@ -241,7 +242,7 @@ def markdown_cell(value: Any) -> str:
     return text
 
 
-def extract_sample_questions(value: Any) -> list[str]:
+def extract_text_list(value: Any) -> list[str]:
     normalized = normalize_json(value)
     if normalized is None:
         return []
@@ -266,6 +267,14 @@ def extract_sample_questions(value: Any) -> list[str]:
         return [normalized]
 
     return [value_to_text(normalized)]
+
+
+def extract_sample_questions(value: Any) -> list[str]:
+    return extract_text_list(value)
+
+
+def extract_ad_groups(value: Any) -> list[str]:
+    return extract_text_list(value)
 
 
 def write_values_text(path: Path, key_column: str, matrix_columns: list[str], rows: list[dict[str, Any]]) -> None:
@@ -298,6 +307,7 @@ def write_markdown_report(
     extra_columns_meta: list[dict[str, Any]],
     matrix_extra_columns: list[str],
     sample_questions_available: bool,
+    ad_groups_available: bool,
     stats: dict[str, dict[str, Any]],
     rows: list[dict[str, Any]],
 ) -> None:
@@ -385,6 +395,23 @@ def write_markdown_report(
         lines.append("_sample_questions column not found in target table._")
     lines.append("")
 
+    lines.append("## Table 4: AD Groups by db_source")
+    lines.append("")
+    if ad_groups_available:
+        lines.append("| db_source | ad_group_index | ad_group |")
+        lines.append("|---|---:|---|")
+        for row in rows:
+            db_source = markdown_cell(row.get(KEY_COLUMN))
+            ad_groups = extract_ad_groups(row.get(AD_GROUPS_COLUMN))
+            if not ad_groups:
+                lines.append(f"| {db_source} | 0 | NULL |")
+                continue
+            for index, ad_group in enumerate(ad_groups, start=1):
+                lines.append(f"| {db_source} | {index} | {markdown_cell(ad_group)} |")
+    else:
+        lines.append("_ad_groups column not found in target table._")
+    lines.append("")
+
     path.write_text("\n".join(lines), encoding="utf-8")
 
 
@@ -423,10 +450,13 @@ def main() -> int:
             column for column in extra_columns if column not in EXCLUDED_EXTRA_VALUE_COLUMNS
         ]
         sample_questions_available = SAMPLE_QUESTIONS_COLUMN in actual_columns
+        ad_groups_available = AD_GROUPS_COLUMN in actual_columns
 
         fetch_columns = list(extra_columns)
         if sample_questions_available and SAMPLE_QUESTIONS_COLUMN not in fetch_columns:
             fetch_columns.append(SAMPLE_QUESTIONS_COLUMN)
+        if ad_groups_available and AD_GROUPS_COLUMN not in fetch_columns:
+            fetch_columns.append(AD_GROUPS_COLUMN)
 
         rows: list[dict[str, Any]] = []
         if fetch_columns:
@@ -449,6 +479,7 @@ def main() -> int:
             "excluded_matrix_columns": sorted(EXCLUDED_EXTRA_VALUE_COLUMNS),
             "extra_columns_for_matrix": matrix_extra_columns,
             "sample_questions_available": sample_questions_available,
+            "ad_groups_available": ad_groups_available,
             "extra_columns": [
                 {
                     **meta,
@@ -469,6 +500,8 @@ def main() -> int:
         text_columns = list(matrix_extra_columns)
         if sample_questions_available and SAMPLE_QUESTIONS_COLUMN not in text_columns:
             text_columns.append(SAMPLE_QUESTIONS_COLUMN)
+        if ad_groups_available and AD_GROUPS_COLUMN not in text_columns:
+            text_columns.append(AD_GROUPS_COLUMN)
         write_values_text(txt_path, KEY_COLUMN, text_columns, rows)
         write_markdown_report(
             path=md_path,
@@ -479,6 +512,7 @@ def main() -> int:
             extra_columns_meta=extra_columns_meta,
             matrix_extra_columns=matrix_extra_columns,
             sample_questions_available=sample_questions_available,
+            ad_groups_available=ad_groups_available,
             stats=stats,
             rows=rows,
         )
@@ -499,6 +533,10 @@ def main() -> int:
         print(
             "Sample questions column: "
             + ("present" if sample_questions_available else "missing")
+        )
+        print(
+            "AD groups column: "
+            + ("present" if ad_groups_available else "missing")
         )
         if extra_columns:
             print("New columns found:")
