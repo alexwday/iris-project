@@ -411,7 +411,7 @@ def main() -> int:
         backup_requested = backup_enabled_live and (
             has_mutations or args.backup_even_if_no_changes
         )
-        backup_stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_stamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
         audit_documents = []
         if backup_requested:
@@ -421,7 +421,6 @@ def main() -> int:
                 file_source=file_source,
                 backup_stamp=backup_stamp,
                 backup_phase=backup_phase,
-                db_name=config.DB_NAME,
             )
             if backup_success:
                 logger.info(
@@ -554,7 +553,6 @@ def main() -> int:
                 file_source=file_source,
                 backup_stamp=backup_stamp,
                 backup_phase="after",
-                db_name=config.DB_NAME,
             )
             if backup_success:
                 logger.info("Post-run backup (after) completed: %s", backup_files)

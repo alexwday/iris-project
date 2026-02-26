@@ -104,7 +104,6 @@ def run_backup(
     file_source: Optional[FileSource] = None,
     backup_stamp: Optional[str] = None,
     backup_phase: Optional[str] = None,
-    db_name: Optional[str] = None,
 ) -> Tuple[bool, List[str]]:
     """
     Run full database backup to CSV files.
@@ -112,11 +111,10 @@ def run_backup(
     Args:
         backup_path: Base directory to write backups.
         file_source: Optional FileSource for writing to NAS.
-        backup_stamp: Shared timestamp token (`YYYYMMDD_HHMMSS`) used to group
+        backup_stamp: Shared timestamp token (`YYYY-MM-DD_HH-MM-SS`) used to group
             related backups from one pipeline run.
         backup_phase: Optional subfolder under the timestamped backup folder
             (for example "before", "after", "snapshot").
-        db_name: Optional database name used in output CSV filenames.
 
     Returns:
         Tuple of (success flag, list of created files).
@@ -125,7 +123,7 @@ def run_backup(
         logger.warning("Backup path not configured; skipping backup")
         return False, []
 
-    timestamp = backup_stamp or datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp = backup_stamp or datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     backup_root = os.path.join(backup_path, f"backup_{timestamp}")
 
     backup_dir = backup_root
@@ -137,17 +135,8 @@ def run_backup(
         if safe_phase:
             backup_dir = os.path.join(backup_root, safe_phase)
 
-    safe_db_name = "database"
-    if db_name:
-        candidate = "".join(
-            ch if (ch.isalnum() or ch in {"_", "-"}) else "_"
-            for ch in db_name.strip()
-        ).strip("_")
-        if candidate:
-            safe_db_name = candidate
-
-    metadata_file_name = f"{safe_db_name}_{timestamp}_iris_document_metadata.csv"
-    chunks_file_name = f"{safe_db_name}_{timestamp}_iris_document_chunks.csv"
+    metadata_file_name = f"iris_document_metadata_{timestamp}.csv"
+    chunks_file_name = f"iris_document_chunks_{timestamp}.csv"
 
     try:
         if file_source is not None:
@@ -215,10 +204,18 @@ def _list_backup_csv_files(
 
 def _select_backup_csv_path(csv_paths: List[str], base_name: str) -> Optional[str]:
     """Pick the best CSV match for a table from available backup paths."""
+    base_stem = os.path.splitext(base_name)[0]
     matches = []
     for path in csv_paths:
         filename = os.path.basename(path)
-        if filename == base_name or filename.endswith(f"_{base_name}"):
+        if (
+            filename == base_name
+            or filename.endswith(f"_{base_name}")  # legacy: <db>_<base_name>
+            or (
+                filename.startswith(f"{base_stem}_")
+                and filename.endswith(".csv")
+            )  # current: <base_stem>_<timestamp>.csv
+        ):
             matches.append(path)
 
     if not matches:
