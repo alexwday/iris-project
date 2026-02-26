@@ -442,6 +442,321 @@
             min-height: 0;
         }
 
+        .view-switcher {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 18px 8px;
+            border-bottom: 1px solid var(--border);
+            background: color-mix(in srgb, var(--bg-secondary) 88%, transparent);
+            backdrop-filter: blur(8px);
+            flex-shrink: 0;
+        }
+
+        .view-tab-btn {
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+            padding: 6px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.16s ease;
+            font-family: inherit;
+        }
+
+        .view-tab-btn:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+
+        .view-tab-btn.active {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+            box-shadow: 0 8px 16px rgba(12, 123, 125, 0.2);
+        }
+
+        .chat-view,
+        .db-explorer-view {
+            flex: 1;
+            min-height: 0;
+        }
+
+        .chat-view {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .db-explorer-view {
+            display: none;
+            padding: 12px 18px 16px;
+            overflow: hidden;
+        }
+
+        .db-explorer-view.active {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .db-explorer-toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .db-connection-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            font-size: 11px;
+            border: 1px solid var(--border);
+            background: var(--bg-secondary);
+            border-radius: var(--radius-full);
+            color: var(--text-secondary);
+            font-family: "IBM Plex Mono", Menlo, monospace;
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .db-toolbar-right {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .db-limit-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .db-limit-input {
+            width: 72px;
+            padding: 6px 8px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border);
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            font-size: 12px;
+            font-family: "IBM Plex Mono", Menlo, monospace;
+        }
+
+        .db-limit-input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(12, 123, 125, 0.14);
+        }
+
+        .db-refresh-btn {
+            padding: 7px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            background: var(--accent);
+            color: white;
+            border: 1px solid var(--accent);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all 0.16s ease;
+            font-family: inherit;
+        }
+
+        .db-refresh-btn:hover:not(:disabled) {
+            background: var(--accent-hover);
+            border-color: var(--accent-hover);
+        }
+
+        .db-refresh-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .db-table-tabs {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .db-table-tab {
+            padding: 6px 10px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border);
+            background: var(--bg-secondary);
+            color: var(--text-secondary);
+            font-size: 12px;
+            cursor: pointer;
+            font-family: inherit;
+            transition: all 0.16s ease;
+        }
+
+        .db-table-tab:hover {
+            color: var(--text-primary);
+            border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+        }
+
+        .db-table-tab.active {
+            background: color-mix(in srgb, var(--accent) 12%, white);
+            border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+            color: var(--accent-hover);
+            font-weight: 600;
+        }
+
+        .db-table-meta {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .db-table-shell {
+            flex: 1;
+            min-height: 0;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            background: var(--bg-secondary);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 6px 16px rgba(36, 37, 42, 0.08);
+        }
+
+        .db-table-scroll {
+            flex: 1;
+            min-height: 0;
+            overflow: auto;
+        }
+
+        .db-grid {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: auto;
+            min-width: max-content;
+        }
+
+        .db-grid thead {
+            background: #f4f1e7;
+        }
+
+        .db-grid th,
+        .db-grid td {
+            border: 1px solid var(--border);
+            padding: 6px 8px;
+            text-align: left;
+            vertical-align: top;
+            font-size: 12px;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .db-grid th {
+            position: sticky;
+            top: 0;
+            z-index: 2;
+            color: #38485f;
+            font-weight: 600;
+            background: #f4f1e7;
+        }
+
+        .db-grid tbody tr:nth-child(even) {
+            background: #f8f6ef;
+        }
+
+        .db-filter-header-cell {
+            padding: 8px;
+            background: #f7f4eb;
+            position: sticky;
+            top: 0;
+            z-index: 3;
+        }
+
+        .db-column-filter-wrap {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .db-column-filter-btn {
+            padding: 5px 10px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            background: var(--bg-secondary);
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 11px;
+            font-family: inherit;
+        }
+
+        .db-column-filter-btn:hover {
+            border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+            color: var(--text-primary);
+        }
+
+        .db-column-filter-menu {
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            width: min(320px, 70vw);
+            max-height: 300px;
+            overflow-y: auto;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            box-shadow: 0 14px 24px rgba(25, 27, 34, 0.2);
+            padding: 8px;
+            display: none;
+            z-index: 20;
+        }
+
+        .db-column-filter-menu.open {
+            display: block;
+        }
+
+        .db-column-filter-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 8px;
+            border-radius: var(--radius-sm);
+            font-size: 12px;
+            color: var(--text-primary);
+            cursor: pointer;
+        }
+
+        .db-column-filter-item:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .db-column-filter-item input[type="checkbox"] {
+            width: 15px;
+            height: 15px;
+            accent-color: var(--accent);
+            cursor: pointer;
+        }
+
+        .db-cell-value {
+            display: inline-block;
+            max-width: 640px;
+            overflow-wrap: anywhere;
+        }
+
+        .db-null {
+            font-style: italic;
+            color: var(--text-muted);
+        }
+
+        .db-empty-state {
+            padding: 18px;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 12px;
+        }
+
         .messages {
             flex: 1;
             overflow-y: auto;
@@ -1121,6 +1436,35 @@
             .message-content td {
                 padding: 4px 6px;
             }
+
+            .view-switcher {
+                padding: 10px;
+                gap: 6px;
+                flex-wrap: wrap;
+            }
+
+            .view-tab-btn {
+                flex: 1;
+                min-width: 140px;
+                text-align: center;
+            }
+
+            .db-explorer-view {
+                padding: 10px;
+            }
+
+            .db-explorer-toolbar {
+                align-items: stretch;
+            }
+
+            .db-toolbar-right {
+                width: 100%;
+                justify-content: space-between;
+            }
+
+            .db-cell-value {
+                max-width: 360px;
+            }
         }
     </style>
 </head>
@@ -1192,44 +1536,69 @@
         </div>
 
         <div class="chat-area">
-            <div class="messages" id="messages">
-                <div class="message assistant">
-                    <div class="avatar assistant">
-                        <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
-                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-                        </svg>
+            <div class="view-switcher">
+                <button class="view-tab-btn active" id="chatTabBtn">Chat</button>
+                <button class="view-tab-btn" id="dbExplorerTabBtn">Database Explorer</button>
+            </div>
+
+            <div class="chat-view" id="chatView">
+                <div class="messages" id="messages">
+                    <div class="message assistant">
+                        <div class="avatar assistant">
+                            <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
+                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                            </svg>
+                        </div>
+                        <div class="message-content">
+                            <p>Hello! I'm IRIS, your financial research assistant. I can help you explore RBC policies, accounting standards, regulatory guidance, and more.</p>
+                            <p>What would you like to know?</p>
+                        </div>
                     </div>
-                    <div class="message-content">
-                        <p>Hello! I'm IRIS, your financial research assistant. I can help you explore RBC policies, accounting standards, regulatory guidance, and more.</p>
-                        <p>What would you like to know?</p>
+                </div>
+
+                <div class="input-area">
+                    <div class="input-container">
+                        <div class="input-wrapper">
+                            <textarea
+                                class="input-box"
+                                id="messageInput"
+                                placeholder="Ask about financial policies, accounting standards, or regulations..."
+                                rows="1"
+                            ></textarea>
+                            <button class="send-button" id="sendButton">
+                                <svg viewBox="0 0 24 24">
+                                    <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <button class="filter-toggle-btn" id="filterToggleBtn" title="Database filters">
+                            <svg viewBox="0 0 24 24">
+                                <path d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z"/>
+                            </svg>
+                            <span class="filter-badge" id="filterBadge">16</span>
+                        </button>
+                    </div>
+                    <div class="input-hint">
+                        <kbd>Enter</kbd> to send · <kbd>Shift+Enter</kbd> for new line · <kbd>Cmd/Ctrl+K</kbd> to reset
                     </div>
                 </div>
             </div>
 
-            <div class="input-area">
-                <div class="input-container">
-                    <div class="input-wrapper">
-                        <textarea
-                            class="input-box"
-                            id="messageInput"
-                            placeholder="Ask about financial policies, accounting standards, or regulations..."
-                            rows="1"
-                        ></textarea>
-                        <button class="send-button" id="sendButton">
-                            <svg viewBox="0 0 24 24">
-                                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
-                            </svg>
-                        </button>
+            <div class="db-explorer-view" id="dbExplorerView">
+                <div class="db-explorer-toolbar">
+                    <div class="db-connection-pill" id="dbConnectionInfo">Connection details loading...</div>
+                    <div class="db-toolbar-right">
+                        <label class="db-limit-label" for="dbLimitInput">Rows per table</label>
+                        <input class="db-limit-input" id="dbLimitInput" type="number" value="50" min="1" max="200">
+                        <button class="db-refresh-btn" id="dbRefreshBtn">Refresh</button>
                     </div>
-                    <button class="filter-toggle-btn" id="filterToggleBtn" title="Database filters">
-                        <svg viewBox="0 0 24 24">
-                            <path d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z"/>
-                        </svg>
-                        <span class="filter-badge" id="filterBadge">16</span>
-                    </button>
                 </div>
-                <div class="input-hint">
-                    <kbd>Enter</kbd> to send · <kbd>Shift+Enter</kbd> for new line · <kbd>Cmd/Ctrl+K</kbd> to reset
+                <div class="db-table-tabs" id="dbTableTabs"></div>
+                <div class="db-table-meta" id="dbTableMeta">Open this tab to inspect your configured PostgreSQL tables.</div>
+                <div class="db-table-shell">
+                    <div class="db-table-scroll" id="dbTableContainer">
+                        <div class="db-empty-state">Database explorer is ready. Click Refresh to load table data.</div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1246,12 +1615,29 @@
                 this.pendingStreamRender = null;
                 this.lastStreamRenderAt = 0;
                 this.exportMode = false;
+                this.activeView = 'chat';
+
+                this.dbTableOrder = ['database_registry', 'metadata', 'document_chunks'];
+                this.dbTableLabels = {
+                    database_registry: 'Database Registry',
+                    metadata: 'Metadata',
+                    document_chunks: 'Document Chunks'
+                };
+                this.dbInspectorData = null;
+                this.activeDbTableKey = 'database_registry';
+                this.visibleDbColumns = {};
+                this.dbColumnMenuOpen = false;
+                this.dbExplorerLoading = false;
 
                 this.messagesContainer = document.getElementById('messages');
                 this.messageInput = document.getElementById('messageInput');
                 this.sendButton = document.getElementById('sendButton');
                 this.statusIndicator = document.getElementById('statusIndicator');
                 this.toastContainer = document.getElementById('toastContainer');
+                this.chatView = document.getElementById('chatView');
+                this.dbExplorerView = document.getElementById('dbExplorerView');
+                this.chatTabBtn = document.getElementById('chatTabBtn');
+                this.dbExplorerTabBtn = document.getElementById('dbExplorerTabBtn');
                 this.newChatBtn = document.getElementById('newChatBtn');
                 this.resetServerBtn = document.getElementById('resetServerBtn');
                 this.sidebar = document.getElementById('sidebar');
@@ -1260,6 +1646,12 @@
                 this.filterBadge = document.getElementById('filterBadge');
                 this.sidebarClose = document.getElementById('sidebarClose');
                 this.exportBtn = document.getElementById('exportBtn');
+                this.dbConnectionInfo = document.getElementById('dbConnectionInfo');
+                this.dbLimitInput = document.getElementById('dbLimitInput');
+                this.dbRefreshBtn = document.getElementById('dbRefreshBtn');
+                this.dbTableTabs = document.getElementById('dbTableTabs');
+                this.dbTableMeta = document.getElementById('dbTableMeta');
+                this.dbTableContainer = document.getElementById('dbTableContainer');
 
                 this.init();
             }
@@ -1503,6 +1895,8 @@
             }
 
             setupEventListeners() {
+                this.chatTabBtn.addEventListener('click', () => this.switchMainView('chat'));
+                this.dbExplorerTabBtn.addEventListener('click', () => this.switchMainView('db_explorer'));
                 this.sendButton.addEventListener('click', () => this.sendMessage());
                 this.messageInput.addEventListener('keydown', (e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
@@ -1518,6 +1912,13 @@
                 this.newChatBtn.addEventListener('click', () => this.resetConversation());
                 this.resetServerBtn.addEventListener('click', () => this.resetServer());
                 this.exportBtn.addEventListener('click', () => this.enterExportMode());
+                this.dbRefreshBtn.addEventListener('click', () => this.loadDbInspectorData(true));
+                this.dbLimitInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        this.loadDbInspectorData(true);
+                    }
+                });
 
                 // Sidebar toggle
                 this.filterToggleBtn.addEventListener('click', () => this.toggleSidebar());
@@ -1564,6 +1965,13 @@
                         window.maven.openPdf(pdfUrl, page, '');
                     }
                 });
+
+                document.addEventListener('click', (event) => {
+                    if (!this.dbColumnMenuOpen) return;
+                    if (event.target.closest('.db-column-filter-wrap')) return;
+                    this.dbColumnMenuOpen = false;
+                    this.renderDbExplorerTable();
+                });
             }
 
             setFilterButtons(active) {
@@ -1603,6 +2011,328 @@
             updateStatus(status, text) {
                 this.statusIndicator.className = `status-badge ${status}`;
                 this.statusIndicator.innerHTML = `<span class="status-dot"></span><span>${text}</span>`;
+            }
+
+            switchMainView(viewName) {
+                if (viewName !== 'chat' && viewName !== 'db_explorer') return;
+                if (this.exportMode) this.exitExportMode();
+
+                this.activeView = viewName;
+                const isChat = viewName === 'chat';
+
+                this.chatView.style.display = isChat ? 'flex' : 'none';
+                this.dbExplorerView.classList.toggle('active', !isChat);
+                this.chatTabBtn.classList.toggle('active', isChat);
+                this.dbExplorerTabBtn.classList.toggle('active', !isChat);
+
+                if (isChat) {
+                    this.messageInput.focus();
+                } else {
+                    this.closeSidebar();
+                    this.loadDbInspectorData(false);
+                }
+            }
+
+            getDbPreviewLimit() {
+                const raw = Number.parseInt(this.dbLimitInput.value, 10);
+                if (Number.isNaN(raw)) {
+                    this.dbLimitInput.value = '50';
+                    return 50;
+                }
+                const bounded = Math.max(1, Math.min(raw, 200));
+                this.dbLimitInput.value = String(bounded);
+                return bounded;
+            }
+
+            async loadDbInspectorData(force = false) {
+                if (this.dbExplorerLoading) return;
+                if (!force && this.dbInspectorData) {
+                    this.renderDbTableTabs();
+                    this.renderDbExplorerTable();
+                    return;
+                }
+
+                this.dbExplorerLoading = true;
+                this.dbRefreshBtn.disabled = true;
+                this.dbTableMeta.textContent = 'Loading table data from PostgreSQL...';
+                this.dbTableContainer.innerHTML = '<div class="db-empty-state">Loading table data...</div>';
+                this.dbColumnMenuOpen = false;
+
+                try {
+                    const limit = this.getDbPreviewLimit();
+                    const response = await fetch(`${this.apiUrl}/db-inspector?limit=${limit}&offset=0`);
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+
+                    const payload = await response.json();
+                    this.dbInspectorData = payload;
+
+                    const connection = payload.connection || {};
+                    const connectionSummary = `${connection.host || 'unknown-host'}:${connection.port || 'unknown-port'}/${connection.database || 'unknown-db'} (${connection.user || 'unknown-user'})`;
+                    this.dbConnectionInfo.textContent = connectionSummary;
+
+                    if (!payload.tables?.[this.activeDbTableKey]) {
+                        const firstAvailable = this.dbTableOrder.find(key => payload.tables?.[key]);
+                        this.activeDbTableKey = firstAvailable || this.activeDbTableKey;
+                    }
+
+                    this.dbTableOrder.forEach((tableKey) => {
+                        const table = payload.tables?.[tableKey];
+                        if (!table) return;
+                        const columns = Array.isArray(table.columns) ? table.columns : [];
+                        this.ensureVisibleColumns(tableKey, columns);
+                    });
+
+                    this.renderDbTableTabs();
+                    this.renderDbExplorerTable();
+                } catch (error) {
+                    console.error('Failed to load DB inspector data:', error);
+                    this.dbTableMeta.textContent = 'Failed to load table data.';
+                    this.dbTableContainer.innerHTML = `
+                        <div class="error-banner" style="margin: 12px;">
+                            Could not load PostgreSQL table data: ${this.escapeHtml(error.message || 'Unknown error')}
+                        </div>
+                    `;
+                } finally {
+                    this.dbExplorerLoading = false;
+                    this.dbRefreshBtn.disabled = false;
+                }
+            }
+
+            ensureVisibleColumns(tableKey, allColumns) {
+                if (!Array.isArray(allColumns)) return;
+
+                const current = this.visibleDbColumns[tableKey];
+                if (!current) {
+                    this.visibleDbColumns[tableKey] = new Set(allColumns);
+                    return;
+                }
+
+                if (current.size === 0) {
+                    this.visibleDbColumns[tableKey] = new Set();
+                    return;
+                }
+
+                const validColumns = new Set(allColumns);
+                const next = new Set([...current].filter(column => validColumns.has(column)));
+                if (next.size === 0 && allColumns.length > 0) {
+                    allColumns.forEach(column => next.add(column));
+                }
+                this.visibleDbColumns[tableKey] = next;
+            }
+
+            getActiveDbTableData() {
+                const table = this.dbInspectorData?.tables?.[this.activeDbTableKey];
+                if (!table) return null;
+
+                const rows = Array.isArray(table.rows) ? table.rows : [];
+                let allColumns = Array.isArray(table.columns) ? table.columns : [];
+                if (allColumns.length === 0 && rows.length > 0) {
+                    allColumns = Object.keys(rows[0]);
+                }
+
+                return { table, rows, allColumns };
+            }
+
+            renderDbTableTabs() {
+                if (!this.dbInspectorData?.tables) {
+                    this.dbTableTabs.innerHTML = '';
+                    return;
+                }
+
+                const buttons = this.dbTableOrder
+                    .filter(tableKey => this.dbInspectorData.tables[tableKey])
+                    .map((tableKey) => {
+                        const table = this.dbInspectorData.tables[tableKey];
+                        const label = this.dbTableLabels[tableKey] || tableKey;
+                        const totalRows = Number.isFinite(table.total_rows) ? table.total_rows : 0;
+                        const activeClass = tableKey === this.activeDbTableKey ? 'active' : '';
+                        return `
+                            <button class="db-table-tab ${activeClass}" data-table-key="${tableKey}" type="button">
+                                ${this.escapeHtml(label)} (${totalRows})
+                            </button>
+                        `;
+                    })
+                    .join('');
+
+                this.dbTableTabs.innerHTML = buttons;
+                this.dbTableTabs.querySelectorAll('[data-table-key]').forEach((btn) => {
+                    btn.addEventListener('click', () => {
+                        this.activeDbTableKey = btn.dataset.tableKey;
+                        this.dbColumnMenuOpen = false;
+                        this.renderDbTableTabs();
+                        this.renderDbExplorerTable();
+                    });
+                });
+            }
+
+            getVisibleColumns(tableKey, allColumns) {
+                const selected = this.visibleDbColumns[tableKey];
+                if (!selected) return [...allColumns];
+                return allColumns.filter(column => selected.has(column));
+            }
+
+            updateDbColumnVisibility(columnName, isVisible) {
+                const active = this.getActiveDbTableData();
+                if (!active) return;
+
+                const allColumns = active.allColumns;
+                const current = this.visibleDbColumns[this.activeDbTableKey] || new Set(allColumns);
+                let next = new Set(current);
+
+                if (columnName === '__all__') {
+                    next = isVisible ? new Set(allColumns) : new Set();
+                } else if (isVisible) {
+                    next.add(columnName);
+                } else {
+                    next.delete(columnName);
+                }
+
+                this.visibleDbColumns[this.activeDbTableKey] = next;
+                this.dbColumnMenuOpen = true;
+                this.renderDbExplorerTable();
+            }
+
+            renderDbExplorerTable() {
+                const active = this.getActiveDbTableData();
+                if (!active) {
+                    this.dbTableMeta.textContent = 'No table data loaded yet.';
+                    this.dbTableContainer.innerHTML = '<div class="db-empty-state">Click Refresh to load table data.</div>';
+                    return;
+                }
+
+                const { table, rows, allColumns } = active;
+                this.ensureVisibleColumns(this.activeDbTableKey, allColumns);
+
+                const visibleColumns = this.getVisibleColumns(this.activeDbTableKey, allColumns);
+                const tableName = table.table_name || this.activeDbTableKey;
+                const totalRows = Number.isFinite(table.total_rows) ? table.total_rows : rows.length;
+                const offset = Number.isFinite(table.offset) ? table.offset : 0;
+                const limit = Number.isFinite(table.limit) ? table.limit : rows.length;
+
+                this.dbTableMeta.textContent =
+                    `Showing ${rows.length} row(s) of ${totalRows} from ${tableName} (offset ${offset}, limit ${limit}).`;
+
+                if (allColumns.length === 0) {
+                    this.dbTableContainer.innerHTML =
+                        '<div class="db-empty-state">No columns found for this table.</div>';
+                    return;
+                }
+
+                const menuOpenClass = this.dbColumnMenuOpen ? 'open' : '';
+                const allChecked = visibleColumns.length === allColumns.length && allColumns.length > 0;
+
+                const columnCheckboxes = allColumns.map((column) => `
+                    <label class="db-column-filter-item">
+                        <input
+                            type="checkbox"
+                            data-db-column="${this.escapeHtml(column)}"
+                            ${visibleColumns.includes(column) ? 'checked' : ''}
+                        >
+                        <span>${this.escapeHtml(column)}</span>
+                    </label>
+                `).join('');
+
+                const headerRow = visibleColumns.length > 0
+                    ? `<tr>${visibleColumns.map(column => `<th>${this.escapeHtml(column)}</th>`).join('')}</tr>`
+                    : '';
+
+                const bodyRows = visibleColumns.length === 0
+                    ? `<tr><td colspan="1" class="db-empty-state">No fields selected. Use "Filter fields" to choose columns.</td></tr>`
+                    : (
+                        rows.length === 0
+                            ? `<tr><td colspan="${visibleColumns.length}" class="db-empty-state">No rows found for this range.</td></tr>`
+                            : rows.map((row) => `
+                                <tr>
+                                    ${visibleColumns.map((column) => `<td>${this.formatDbCell(row[column])}</td>`).join('')}
+                                </tr>
+                            `).join('')
+                    );
+
+                this.dbTableContainer.innerHTML = `
+                    <table class="db-grid">
+                        <thead>
+                            <tr>
+                                <th class="db-filter-header-cell" colspan="${Math.max(visibleColumns.length, 1)}">
+                                    <div class="db-column-filter-wrap">
+                                        <button class="db-column-filter-btn" id="dbColumnFilterBtn" type="button">
+                                            Filter fields (${visibleColumns.length}/${allColumns.length})
+                                        </button>
+                                        <div class="db-column-filter-menu ${menuOpenClass}" id="dbColumnFilterMenu">
+                                            <label class="db-column-filter-item">
+                                                <input type="checkbox" data-db-column="__all__" ${allChecked ? 'checked' : ''}>
+                                                <span>All fields</span>
+                                            </label>
+                                            ${columnCheckboxes}
+                                        </div>
+                                    </div>
+                                </th>
+                            </tr>
+                            ${headerRow}
+                        </thead>
+                        <tbody>
+                            ${bodyRows}
+                        </tbody>
+                    </table>
+                `;
+
+                const filterBtn = this.dbTableContainer.querySelector('#dbColumnFilterBtn');
+                const filterMenu = this.dbTableContainer.querySelector('#dbColumnFilterMenu');
+
+                if (filterBtn) {
+                    filterBtn.addEventListener('click', (event) => {
+                        event.stopPropagation();
+                        this.dbColumnMenuOpen = !this.dbColumnMenuOpen;
+                        this.renderDbExplorerTable();
+                    });
+                }
+
+                if (filterMenu) {
+                    filterMenu.addEventListener('click', (event) => event.stopPropagation());
+                    filterMenu.querySelectorAll('input[type="checkbox"]').forEach((input) => {
+                        input.addEventListener('change', () => {
+                            this.updateDbColumnVisibility(input.dataset.dbColumn, input.checked);
+                        });
+                    });
+                }
+            }
+
+            escapeHtml(value) {
+                return String(value ?? '')
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+            }
+
+            formatDbCell(value) {
+                if (value === null || value === undefined) {
+                    return '<span class="db-null">null</span>';
+                }
+
+                let cellText = '';
+                if (typeof value === 'object') {
+                    try {
+                        cellText = JSON.stringify(value);
+                    } catch (error) {
+                        cellText = String(value);
+                    }
+                } else {
+                    cellText = String(value);
+                }
+
+                const maxDisplay = 320;
+                const maxTitle = 3000;
+                const displayText = cellText.length > maxDisplay
+                    ? `${cellText.slice(0, maxDisplay)}...`
+                    : cellText;
+                const titleText = cellText.length > maxTitle
+                    ? `${cellText.slice(0, maxTitle)}...`
+                    : cellText;
+
+                return `<span class="db-cell-value" title="${this.escapeHtml(titleText)}">${this.escapeHtml(displayText)}</span>`;
             }
 
             async sendMessage() {
@@ -1962,6 +2692,9 @@
 
                     this.showToast('Server reset complete');
                     await this.loadDatabases();
+                    if (this.dbInspectorData || this.activeView === 'db_explorer') {
+                        await this.loadDbInspectorData(true);
+                    }
                 } catch (error) {
                     console.error('Failed to reset server:', error);
                     this.showToast('Reset failed: ' + error.message, 'error');
@@ -2008,10 +2741,12 @@
 
             enterExportMode() {
                 if (this.isStreaming || this.messages.length === 0) return;
+                if (this.activeView !== 'chat') this.switchMainView('chat');
                 this.exportMode = true;
 
                 const chatArea = document.querySelector('.chat-area');
                 chatArea.classList.add('export-mode');
+                const chatView = this.chatView;
 
                 const banner = document.createElement('div');
                 banner.className = 'export-banner';
@@ -2022,7 +2757,7 @@
                     <button class="btn btn-primary" id="exportGenerate">Generate Export</button>
                     <button class="btn btn-secondary" id="exportCancel">Cancel</button>
                 `;
-                chatArea.insertBefore(banner, this.messagesContainer);
+                chatView.insertBefore(banner, this.messagesContainer);
 
                 document.getElementById('exportSelectAll').addEventListener('click', () => this.selectAllForExport());
                 document.getElementById('exportGenerate').addEventListener('click', () => this.generateExport());

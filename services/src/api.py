@@ -9,6 +9,7 @@ Endpoints:
     GET /health: Health check endpoint
     GET /: Root endpoint with API info
     GET /databases: List available databases
+    GET /db-inspector: Preview core database tables
     POST /reset: Clear server caches
 
 Functions:
@@ -19,6 +20,7 @@ Functions:
     health_check: Health check handler
     root: Root endpoint handler
     get_databases: Database listing handler
+    get_db_inspector: Database table preview handler
     reset_server: Cache reset handler
     startup_event: FastAPI startup hook
     shutdown_event: FastAPI shutdown hook
@@ -36,6 +38,9 @@ import importlib
 import logging
 import queue
 import threading
+from datetime import date, datetime
+from decimal import Decimal
+from uuid import UUID
 
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -97,6 +102,32 @@ class HealthResponse(BaseModel):
 
     status: str
     version: str
+
+
+def _serialize_db_value(value: Any) -> Any:
+    """Convert DB values into JSON-serializable representations."""
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+
+    if isinstance(value, Decimal):
+        return str(value)
+
+    if isinstance(value, UUID):
+        return str(value)
+
+    if isinstance(value, (bytes, bytearray, memoryview)):
+        return bytes(value).hex()
+
+    if isinstance(value, dict):
+        return {str(k): _serialize_db_value(v) for k, v in value.items()}
+
+    if isinstance(value, (list, tuple, set)):
+        return [_serialize_db_value(v) for v in value]
+
+    return str(value)
 
 
 def _lazy_import(module_path: str, attr_name: str) -> Any:
@@ -369,6 +400,94 @@ async def get_databases():
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve databases: {exc}",
+        ) from exc
+
+
+@app.get("/db-inspector")
+async def get_db_inspector(limit: int = 50, offset: int = 0):
+    """
+    Return preview rows from core database tables.
+
+    Uses the same PostgreSQL connection configured at server startup.
+
+    Args:
+        limit: Number of rows per table to return (1-200).
+        offset: Pagination offset (>=0).
+
+    Returns:
+        Dictionary with connection metadata and table previews.
+
+    Raises:
+        HTTPException: 500 error if inspection query fails.
+    """
+    from sqlalchemy import text
+    from .connections.postgres import get_database_session
+
+    bounded_limit = max(1, min(limit, 200))
+    bounded_offset = max(0, offset)
+
+    table_map = {
+        "database_registry": "iris_database_registry",
+        "metadata": "iris_document_metadata",
+        "document_chunks": "iris_document_chunks",
+    }
+
+    try:
+        tables: Dict[str, Dict[str, Any]] = {}
+        with get_database_session() as session:
+            for table_key, table_name in table_map.items():
+                column_rows = session.execute(
+                    text(
+                        """
+                        SELECT column_name
+                        FROM information_schema.columns
+                        WHERE table_schema = 'public' AND table_name = :table_name
+                        ORDER BY ordinal_position
+                        """
+                    ),
+                    {"table_name": table_name},
+                ).fetchall()
+                columns = [row[0] for row in column_rows]
+
+                total_rows = session.execute(
+                    text(f"SELECT COUNT(*) FROM {table_name}")
+                ).scalar_one()
+
+                preview_rows = session.execute(
+                    text(f"SELECT * FROM {table_name} LIMIT :limit OFFSET :offset"),
+                    {"limit": bounded_limit, "offset": bounded_offset},
+                ).mappings().all()
+
+                serialized_rows: List[Dict[str, Any]] = []
+                for row in preview_rows:
+                    serialized_rows.append(
+                        {key: _serialize_db_value(value) for key, value in row.items()}
+                    )
+
+                tables[table_key] = {
+                    "table_name": table_name,
+                    "columns": columns,
+                    "rows": serialized_rows,
+                    "total_rows": total_rows,
+                    "limit": bounded_limit,
+                    "offset": bounded_offset,
+                }
+
+        return {
+            "connection": {
+                "host": config.DB_HOST,
+                "port": config.DB_PORT,
+                "database": config.DB_NAME,
+                "user": config.DB_USER,
+            },
+            "tables": tables,
+        }
+
+    except Exception as exc:
+        logger.error("Failed to inspect database tables: %s", exc, exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to inspect database tables: {exc}",
         ) from exc
 
 
