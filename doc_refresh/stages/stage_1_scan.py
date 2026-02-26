@@ -84,16 +84,28 @@ def run_stage(
             file_source = get_file_source()
             logger.info("Using file source mode: %s", config.FILE_SOURCE_MODE)
 
+        auto_discover_mode = database_names is None and not config.get_database_names()
+
         if database_names is None:
             database_names = config.discover_database_names(file_source)
 
-        if not database_names:
+        if not database_names and not auto_discover_mode:
             raise ValueError(
                 "No database folders found. Set DATABASE_NAMES or ensure "
                 "BASE_PATH contains subdirectories."
             )
 
-        logger.info("Scanning %d database folders: %s", len(database_names), database_names)
+        if database_names:
+            logger.info(
+                "Scanning %d database folders: %s",
+                len(database_names),
+                database_names,
+            )
+        else:
+            logger.info(
+                "No database folders discovered. "
+                "Checking for stale database records to remove."
+            )
 
         # Scan each database folder
         for db_name in database_names:
@@ -110,6 +122,33 @@ def run_stage(
                 error_msg = f"Error scanning folder {db_name}: {exc}"
                 logger.error(error_msg)
                 result.scan_errors.append(error_msg)
+
+        if auto_discover_mode:
+            removed_db_sources = get_removed_database_sources(database_names)
+            if removed_db_sources:
+                logger.info(
+                    "Detected %d removed database folders in source: %s",
+                    len(removed_db_sources),
+                    removed_db_sources,
+                )
+
+            for db_name in removed_db_sources:
+                db_files = get_database_files(db_name)
+                for db_file in db_files:
+                    result.files_to_remove.append(
+                        {
+                            "db_source": db_name,
+                            "file_path": db_file["file_path"],
+                            "file_name": db_file.get("file_name"),
+                            "document_id": db_file.get("document_id"),
+                        }
+                    )
+                if db_files:
+                    logger.info(
+                        "Marked %d stale files for removal in missing folder %s",
+                        len(db_files),
+                        db_name,
+                    )
 
         # Log summary
         logger.info(
@@ -310,3 +349,49 @@ def get_database_files(db_source: str) -> List[Dict]:
             exc,
         )
         return []
+
+
+def get_database_sources() -> List[str]:
+    """
+    Get all db_source values that currently exist in iris_document_metadata.
+
+    Returns:
+        Sorted list of distinct db_source values.
+    """
+    query = text(
+        """
+        SELECT DISTINCT db_source
+        FROM iris_document_metadata
+        """
+    )
+
+    try:
+        with get_database_session() as session:
+            rows = session.execute(query).fetchall()
+            sources = sorted(
+                row._mapping.get("db_source")
+                for row in rows
+                if row._mapping.get("db_source")
+            )
+        return sources
+    except ProgrammingError as exc:
+        logger.warning(
+            "Table not found querying existing database sources (first run?): %s",
+            exc,
+        )
+        return []
+
+
+def get_removed_database_sources(discovered_sources: Optional[List[str]]) -> List[str]:
+    """
+    Find db_source values present in DB but missing from discovered source folders.
+
+    Args:
+        discovered_sources: Folder names discovered from file source.
+
+    Returns:
+        Sorted list of missing db_source values that should be removed.
+    """
+    discovered = set(discovered_sources or [])
+    existing = set(get_database_sources())
+    return sorted(existing - discovered)
