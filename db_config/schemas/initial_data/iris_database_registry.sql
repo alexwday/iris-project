@@ -1,5 +1,5 @@
 -- IRIS Database Registry Initial Data
--- Generated: 2026-02-26T12:43:46.097811
+-- Generated: 2026-02-26T15:32:43.033151
 -- 
 -- Import with: psql -f iris_database_registry.sql
 -- Or run in pgAdmin/DBeaver
@@ -37,19 +37,19 @@ VALUES (
     100,
     true,
     10,
-    8,
+    10,
     2,
     3,
     100,
     true,
     ARRAY['document_summary','document_description','document_usage']::text[],
-    5,
     20,
-    6,
+    20,
+    100,
     6,
     3,
-    2,
-    2
+    4,
+    5
 )
 ON CONFLICT (db_source) DO UPDATE SET
     db_name = EXCLUDED.db_name,
@@ -112,19 +112,19 @@ VALUES (
     100,
     true,
     10,
-    8,
+    10,
     2,
     3,
     100,
     true,
     ARRAY['document_summary','document_description','document_usage']::text[],
-    5,
     20,
-    6,
+    20,
+    100,
     6,
     3,
-    2,
-    2
+    4,
+    5
 )
 ON CONFLICT (db_source) DO UPDATE SET
     db_name = EXCLUDED.db_name,
@@ -190,16 +190,16 @@ VALUES (
     10,
     1,
     3,
-    150,
+    100,
     true,
     ARRAY['document_summary','document_description','document_usage']::text[],
-    5,
     20,
-    6,
+    20,
+    100,
     6,
     3,
-    2,
-    2
+    4,
+    5
 )
 ON CONFLICT (db_source) DO UPDATE SET
     db_name = EXCLUDED.db_name,
@@ -262,19 +262,19 @@ VALUES (
     100,
     true,
     10,
-    15,
+    10,
     1,
     3,
-    150,
+    100,
     true,
     ARRAY['document_summary','document_description','document_usage']::text[],
-    5,
     20,
-    6,
+    20,
+    100,
     6,
     3,
-    2,
-    2
+    4,
+    5
 )
 ON CONFLICT (db_source) DO UPDATE SET
     db_name = EXCLUDED.db_name,
@@ -340,16 +340,16 @@ VALUES (
     10,
     1,
     3,
-    150,
+    100,
     true,
     ARRAY['document_summary','document_description','document_usage']::text[],
-    5,
     20,
-    6,
+    20,
+    100,
     6,
     3,
-    2,
-    2
+    4,
+    5
 )
 ON CONFLICT (db_source) DO UPDATE SET
     db_name = EXCLUDED.db_name,
@@ -415,16 +415,16 @@ VALUES (
     10,
     1,
     3,
-    150,
+    100,
     true,
     ARRAY['document_summary','document_description','document_usage']::text[],
-    5,
     20,
-    6,
+    20,
+    100,
     6,
     3,
-    2,
-    2
+    4,
+    5
 )
 ON CONFLICT (db_source) DO UPDATE SET
     db_name = EXCLUDED.db_name,
@@ -490,16 +490,16 @@ VALUES (
     10,
     1,
     3,
-    150,
+    100,
     true,
     ARRAY['document_summary','document_description','document_usage']::text[],
-    5,
     20,
-    6,
+    20,
+    100,
     6,
     3,
-    2,
-    2
+    4,
+    5
 )
 ON CONFLICT (db_source) DO UPDATE SET
     db_name = EXCLUDED.db_name,
@@ -565,16 +565,16 @@ VALUES (
     10,
     1,
     3,
-    150,
+    100,
     true,
     ARRAY['document_summary','document_description','document_usage']::text[],
-    5,
     20,
-    6,
+    20,
+    100,
     6,
     3,
-    2,
-    2
+    4,
+    5
 )
 ON CONFLICT (db_source) DO UPDATE SET
     db_name = EXCLUDED.db_name,
@@ -640,12 +640,12 @@ VALUES (
     10,
     1,
     3,
-    30,
+    100,
     true,
     ARRAY['document_summary','document_description','document_usage']::text[],
     20,
     20,
-    30,
+    100,
     10,
     5,
     4,
@@ -715,16 +715,16 @@ VALUES (
     10,
     1,
     3,
-    150,
+    100,
     true,
     ARRAY['document_summary','document_description','document_usage']::text[],
-    5,
     20,
-    6,
+    20,
+    100,
     6,
     3,
-    2,
-    2
+    4,
+    5
 )
 ON CONFLICT (db_source) DO UPDATE SET
     db_name = EXCLUDED.db_name,
@@ -787,19 +787,19 @@ VALUES (
     100,
     true,
     10,
-    15,
+    10,
     1,
     3,
-    150,
+    100,
     true,
     ARRAY['document_summary','document_description','document_usage']::text[],
-    5,
     20,
-    6,
+    20,
+    100,
     6,
     3,
-    2,
-    2
+    4,
+    5
 )
 ON CONFLICT (db_source) DO UPDATE SET
     db_name = EXCLUDED.db_name,
@@ -865,12 +865,12 @@ VALUES (
     10,
     1,
     3,
-    30,
+    100,
     true,
     ARRAY['document_summary','document_description','document_usage']::text[],
     20,
     20,
-    30,
+    100,
     10,
     5,
     4,
@@ -940,16 +940,16 @@ VALUES (
     10,
     1,
     3,
-    150,
+    100,
     true,
     ARRAY['document_summary','document_description','document_usage']::text[],
-    5,
     20,
-    6,
+    20,
+    100,
     6,
     3,
-    2,
-    2
+    4,
+    5
 )
 ON CONFLICT (db_source) DO UPDATE SET
     db_name = EXCLUDED.db_name,
@@ -1015,16 +1015,16 @@ VALUES (
     10,
     1,
     3,
-    150,
+    100,
     true,
     ARRAY['document_summary','document_description','document_usage']::text[],
-    5,
     20,
-    6,
+    20,
+    100,
     6,
     3,
-    2,
-    2
+    4,
+    5
 )
 ON CONFLICT (db_source) DO UPDATE SET
     db_name = EXCLUDED.db_name,
@@ -1090,12 +1090,12 @@ VALUES (
     10,
     1,
     3,
-    30,
+    100,
     true,
     ARRAY['document_summary','document_description','document_usage']::text[],
     20,
     20,
-    30,
+    100,
     10,
     5,
     4,
@@ -1162,19 +1162,19 @@ VALUES (
     100,
     true,
     10,
-    15,
+    10,
     1,
     3,
-    150,
+    100,
     true,
     ARRAY['document_summary','document_description','document_usage']::text[],
-    5,
     20,
-    6,
+    20,
+    100,
     6,
     3,
-    2,
-    2
+    4,
+    5
 )
 ON CONFLICT (db_source) DO UPDATE SET
     db_name = EXCLUDED.db_name,
@@ -1238,16 +1238,16 @@ VALUES (
     10,
     1,
     3,
-    150,
+    100,
     true,
-    ARRAY['document_summary']::text[],
-    5,
+    ARRAY['document_summary','document_description','document_usage']::text[],
     20,
-    6,
+    20,
+    100,
     6,
     3,
-    2,
-    2
+    4,
+    5
 )
 ON CONFLICT (db_source) DO UPDATE SET
     db_name = EXCLUDED.db_name,

@@ -19,6 +19,9 @@ Usage:
     # Full population (all 4 steps)
     python db_config/populate_initial_data.py
 
+    # Prompts only (skip registry + sample data)
+    python db_config/populate_initial_data.py --prompts-only
+
     # Full population + force registry to exactly match seed
     python db_config/populate_initial_data.py --force-registry-exact
 
@@ -309,6 +312,11 @@ def main():
         description="Populate IRIS tables with initial data for IT deployment."
     )
     parser.add_argument(
+        "--prompts-only",
+        action="store_true",
+        help="Populate only prompts (iris + doc_refresh), skipping registry and sample data.",
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Show what would happen without executing.",
@@ -343,8 +351,13 @@ def main():
 
     if args.skip_sample_data:
         print(f"  Sample:   SKIPPED (--skip-sample-data)")
+    if args.prompts_only:
+        print(f"  Scope:    PROMPTS ONLY (--prompts-only)")
     if args.force_registry_exact:
-        print(f"  Registry: FORCE EXACT (--force-registry-exact)")
+        if args.prompts_only:
+            print(f"  Registry: SKIPPED (--prompts-only ignores --force-registry-exact)")
+        else:
+            print(f"  Registry: FORCE EXACT (--force-registry-exact)")
 
     if not args.dry_run:
         print("\nConnecting to database...")
@@ -365,11 +378,17 @@ def main():
             sys.exit(1)
 
     try:
-        step_registry(conn, args.dry_run, force_exact=args.force_registry_exact)
+        if args.prompts_only:
+            print("\n[Step 1/4] Registry: SKIPPED (--prompts-only)")
+        else:
+            step_registry(conn, args.dry_run, force_exact=args.force_registry_exact)
+
         step_prompts(conn, args.dry_run)
         step_doc_refresh_prompts(conn, args.dry_run)
 
-        if not args.skip_sample_data:
+        if args.prompts_only:
+            print("\n[Step 4/4] Sample data: SKIPPED (--prompts-only)")
+        elif not args.skip_sample_data:
             step_sample_data(conn, args.dry_run)
         else:
             print("\n[Step 4/4] Sample data: SKIPPED")
@@ -387,10 +406,11 @@ def main():
         print("DRY RUN complete. No changes were made.")
     else:
         print("Population complete. Verify with:")
-        print("  SELECT COUNT(*) FROM iris_database_registry;")
+        if not args.prompts_only:
+            print("  SELECT COUNT(*) FROM iris_database_registry;")
         print("  SELECT COUNT(*) FROM prompts WHERE model = 'iris';")
         print("  SELECT COUNT(*) FROM prompts WHERE model = 'doc_refresh';")
-        if not args.skip_sample_data:
+        if not args.skip_sample_data and not args.prompts_only:
             print(
                 "  SELECT COUNT(*) FROM iris_document_metadata"
                 " WHERE db_source = 'internal_wiki';"
