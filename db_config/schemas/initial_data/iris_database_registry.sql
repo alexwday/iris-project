@@ -1,5 +1,5 @@
 -- IRIS Database Registry Initial Data
--- Generated: 2026-02-25T17:56:16.497931
+-- Generated: 2026-02-26T12:43:46.097811
 -- 
 -- Import with: psql -f iris_database_registry.sql
 -- Or run in pgAdmin/DBeaver
@@ -1135,40 +1135,40 @@ ON CONFLICT (db_source) DO UPDATE SET
 
 INSERT INTO iris_database_registry (db_source, db_name, db_summary, db_description, search_modes, catalog_config, semantic_config, metadata_config, sample_questions, enabled, ad_groups, query_type, content_type, use_when, display_order, is_internal, batch_size, max_selected_files, top_chunks_in_catalog_selection, top_chunks_in_metadata_research, page_threshold_for_full_content, enable_db_wide_deep_research, metadata_context_fields, max_parallel_files, max_chunks_per_file, max_pages_for_full_context, max_primary_section_page_count, max_subsection_page_count, max_neighbour_chunks, max_gap_fill_pages)
 VALUES (
-    'internal_sox',
-    'Internal SOX Controls',
-    'RBC''s SOX controls inventory, where each document represents an individual control with associated attributes such as control objective, process area, systems, and testing context.',
-    '**Content:** Internal SOX controls repository where each document represents a single control record (for example control ID, control statement, process area, system references, and related control metadata).
+    'internal_wiki',
+    'APG Wiki',
+    'RBC-specific accounting compilations and guidance for unique transactions, providing detailed interpretations and applications of accounting standards tailored to RBC''s business scenarios.',
+    '**Content:** APG Wiki containing Q&A-style knowledge base entries - questions received by the Accounting Policy Group and their researched resolutions. Provides RBC-specific accounting compilations, detailed interpretations, and application guidance for unique transactions tailored to RBC''s business scenarios. Covers a broad range of accounting questions from simple to moderately complex.
 
-**Tier/Priority:** DOMAIN EXPERT - Specialized internal controls source for SOX control lookup and analysis.
+**Tier/Priority:** SUPPLEMENTARY SOURCE (Q&A Knowledge Base) - APG Q&A entries that supplement core policy with practical answers to accounting questions.
 
-**Usage Guidance:** Use this database to find controls by process, system, keyword, or control characteristics. Best for questions that need sets of controls matching criteria (for example process ownership, system association, or text mentions).
+**Usage Guidance:** Contains practical answers to accounting questions that APG has addressed over time. Use when looking for how APG has resolved specific accounting questions. Provides concise Q&A-style resolutions rather than lengthy formal documentation. Especially useful for specific transaction types or application examples.
 
-**When to Select:** Queries such as: all controls under a specific process area, controls mentioning a specific term, controls involving a specific system, or control discovery/filtering questions.
+**When to Select:** Questions about: how RBC/APG has handled specific accounting scenarios, practical resolutions to accounting questions, APG guidance on day-to-day accounting issues, or answers to common accounting questions.
 
-**Query Tips:** Include process names, system names, control IDs, and targeted terms (for example ''SOX'', ''access review'', ''change management'', ''SAP'', ''revenue'', ''financial reporting'').
+**Query Tips:** Focus on application scenarios, specific conclusions, and industry/scenario terms.
 
 **Query Type:** semantic search',
     ARRAY['catalog','semantic']::text[],
     NULL,
     NULL,
     NULL,
-    '["What are all the SOX controls under the Procure to Pay process?","What are all the controls that mention access reviews?","What controls involve the SAP system?","Which SOX controls relate to change management?"]'::jsonb,
+    NULL,
     true,
-    ARRAY['all_users','local_dev']::text[],
+    ARRAY['APP_0MF0_MAVEN_APG_IRIS']::text[],
     'semantic search',
     'general content',
     NULL,
     100,
     true,
     10,
-    25,
+    15,
     1,
     3,
     150,
     true,
     ARRAY['document_summary','document_description','document_usage']::text[],
-    10,
+    5,
     20,
     6,
     6,
@@ -1210,39 +1210,37 @@ ON CONFLICT (db_source) DO UPDATE SET
 
 INSERT INTO iris_database_registry (db_source, db_name, db_summary, db_description, search_modes, catalog_config, semantic_config, metadata_config, sample_questions, enabled, ad_groups, query_type, content_type, use_when, display_order, is_internal, batch_size, max_selected_files, top_chunks_in_catalog_selection, top_chunks_in_metadata_research, page_threshold_for_full_content, enable_db_wide_deep_research, metadata_context_fields, max_parallel_files, max_chunks_per_file, max_pages_for_full_context, max_primary_section_page_count, max_subsection_page_count, max_neighbour_chunks, max_gap_fill_pages)
 VALUES (
-    'internal_wiki',
-    'APG Wiki',
-    'RBC-specific accounting compilations and guidance for unique transactions, providing detailed interpretations and applications of accounting standards tailored to RBC''s business scenarios.',
-    '**Content:** APG Wiki containing Q&A-style knowledge base entries - questions received by the Accounting Policy Group and their researched resolutions. Provides RBC-specific accounting compilations, detailed interpretations, and application guidance for unique transactions tailored to RBC''s business scenarios. Covers a broad range of accounting questions from simple to moderately complex.
+    'internal_pega_attestation',
+    'PEGA Attestation',
+    'RBC''s policies, procedures, and training materials for the PEGA-based General Ledger attestation process, including the Enterprise GL Attestation Policy, SOD requirements, BRAG methodology, and comprehensive user guidance for monthly balance sheet reconciliations and attestations.',
+    '**Content:** RBC''s comprehensive framework for General Ledger attestation including the Enterprise GL Attestation Policy, PEGA system user guides, and FAQs. Covers monthly attestation requirements, Standards of Documentation (SOD) preparation, risk-based review processes, BRAG reconciliation assessments, aging analysis, and governance structures for ensuring balance sheet accuracy.
 
-**Tier/Priority:** SUPPLEMENTARY SOURCE (Q&A Knowledge Base) - APG Q&A entries that supplement core policy with practical answers to accounting questions.
+**Tier/Priority:** PRIMARY SOURCE - Authoritative RBC GL attestation policy and procedural guidance.
 
-**Usage Guidance:** Contains practical answers to accounting questions that APG has addressed over time. Use when looking for how APG has resolved specific accounting questions. Provides concise Q&A-style resolutions rather than lengthy formal documentation. Especially useful for specific transaction types or application examples.
+**Usage Guidance:** Use for definitive requirements on GL reconciliations, attestation statuses, SOD components, review frequencies, PEGA system navigation, and compliance with RBC''s financial control framework. Essential for understanding monthly attestation deadlines, ownership hierarchies, and escalation procedures.
 
-**When to Select:** Questions about: how RBC/APG has handled specific accounting scenarios, practical resolutions to accounting questions, APG guidance on day-to-day accounting issues, or answers to common accounting questions.
+**When to Select:** Queries about GL attestation requirements, SOD preparation standards, PEGA workflow processes, attestation status definitions (FR/RWE/RPI/NR), BRAG assessments, second-level review requirements, aging thresholds, clearings/transitory account treatment, or references to policies such as FIN-ACC-300-EN.
 
-**Query Tips:** Focus on application scenarios, specific conclusions, and industry/scenario terms.
-
-**Query Type:** semantic search',
+**Query Tips:** Use terms like ''GL attestation'', ''PEGA'', ''SOD'', ''reconciliation'', ''BRAG'', ''attestation status'', ''Fully Reconciled'', ''RWE'', ''Not Reconciled'', ''second level review'', ''aging'', ''clearings accounts'', ''transitory accounts'', ''attestation deadline'', ''Controller freeze''.',
     ARRAY['catalog','semantic']::text[],
     NULL,
     NULL,
     NULL,
     NULL,
     true,
-    ARRAY['APP_0MF0_MAVEN_APG_IRIS']::text[],
+    NULL,
     'semantic search',
     'general content',
     NULL,
     100,
     true,
     10,
-    15,
+    10,
     1,
     3,
     150,
     true,
-    ARRAY['document_summary','document_description','document_usage']::text[],
+    ARRAY['document_summary']::text[],
     5,
     20,
     6,

@@ -1,0 +1,56 @@
+db_source: internal_pega_attestation
+db_name: PEGA Attestation
+db_summary: RBC's policies, procedures, and training materials for the PEGA-based General Ledger attestation process,
+  including the Enterprise GL Attestation Policy, SOD requirements, BRAG methodology, and comprehensive user guidance
+  for monthly balance sheet reconciliations and attestations.
+db_description: '**Content:** RBC''s comprehensive framework for General Ledger attestation including the Enterprise GL
+  Attestation Policy, PEGA system user guides, and FAQs. Covers monthly attestation requirements, Standards of Documentation
+  (SOD) preparation, risk-based review processes, BRAG reconciliation assessments, aging analysis, and governance structures
+  for ensuring balance sheet accuracy.
+
+
+  **Tier/Priority:** PRIMARY SOURCE - Authoritative RBC GL attestation policy and procedural guidance.
+
+
+  **Usage Guidance:** Use for definitive requirements on GL reconciliations, attestation statuses, SOD components, review
+  frequencies, PEGA system navigation, and compliance with RBC''s financial control framework. Essential for understanding
+  monthly attestation deadlines, ownership hierarchies, and escalation procedures.
+
+
+  **When to Select:** Queries about GL attestation requirements, SOD preparation standards, PEGA workflow processes, attestation
+  status definitions (FR/RWE/RPI/NR), BRAG assessments, second-level review requirements, aging thresholds, clearings/transitory
+  account treatment, or references to policies such as FIN-ACC-300-EN.
+
+
+  **Query Tips:** Use terms like ''GL attestation'', ''PEGA'', ''SOD'', ''reconciliation'', ''BRAG'', ''attestation status'',
+  ''Fully Reconciled'', ''RWE'', ''Not Reconciled'', ''second level review'', ''aging'', ''clearings accounts'', ''transitory
+  accounts'', ''attestation deadline'', ''Controller freeze''.'
+enabled: true
+search_modes:
+- catalog
+- semantic
+ad_groups: null
+batch_size: 10
+max_selected_files: 10
+top_chunks_in_catalog_selection: 1
+top_chunks_in_metadata_research: 3
+page_threshold_for_full_content: 150
+enable_db_wide_deep_research: true
+max_parallel_files: 5
+max_chunks_per_file: 20
+max_pages_for_full_context: 6
+max_primary_section_page_count: 6
+max_subsection_page_count: 3
+max_neighbour_chunks: 2
+max_gap_fill_pages: 2
+metadata_context_fields:
+- document_summary
+catalog_config: null
+semantic_config: null
+metadata_config: null
+sample_questions: null
+query_type: semantic search
+content_type: general content
+use_when: ''
+display_order: 100
+is_internal: true
