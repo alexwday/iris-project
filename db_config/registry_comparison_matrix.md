@@ -1,6 +1,6 @@
 # Registry Config Comparison Matrix
 
-Generated: 2026-02-26 16:07:35
+Generated: 2026-02-26 16:14:41
 
 Source: `db_config/schemas/initial_data/iris_database_registry.csv`
 Rows: **17**
@@ -22,7 +22,7 @@ Rows: **17**
 | internal_memos | internal | true | true | catalog, semantic | 1 | 0 | 10 | 10 | 100 | 20 | 100 | 4 | 5 | document_summary, document_description, document_usage |
 | internal_pafe | internal | true | true | catalog, semantic | 1 | 3 | 10 | 10 | 100 | 20 | 100 | 4 | 5 | document_summary, document_description, document_usage |
 | internal_par | internal | true | true | catalog, semantic | 1 | 4 | 10 | 10 | 100 | 20 | 100 | 4 | 5 | document_summary, document_description, document_usage |
-| internal_pega_attestation | internal | true | true | catalog, semantic | 0 | 0 | 10 | 10 | 100 | 20 | 100 | 4 | 5 | document_summary, document_description, document_usage |
+| internal_pega_attestation | internal | true | true | catalog, semantic | 1 | 0 | 10 | 10 | 100 | 20 | 100 | 4 | 5 | document_summary, document_description, document_usage |
 | internal_process_and_controls | internal | true | true | catalog, semantic | 1 | 4 | 10 | 10 | 100 | 20 | 100 | 4 | 5 | document_summary, document_description, document_usage |
 | internal_sab_99 | internal | true | true | catalog, semantic | 1 | 3 | 10 | 10 | 100 | 20 | 100 | 4 | 5 | document_summary, document_description, document_usage |
 | internal_wiki | internal | true | true | catalog, semantic | 1 | 0 | 10 | 10 | 100 | 20 | 100 | 4 | 5 | document_summary, document_description, document_usage |

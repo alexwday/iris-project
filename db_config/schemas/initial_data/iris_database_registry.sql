@@ -1,5 +1,5 @@
 -- IRIS Database Registry Initial Data
--- Generated: 2026-02-26T15:32:43.033151
+-- Generated: 2026-02-26T16:14:14.370164
 -- 
 -- Import with: psql -f iris_database_registry.sql
 -- Or run in pgAdmin/DBeaver
@@ -1228,7 +1228,7 @@ VALUES (
     NULL,
     NULL,
     true,
-    NULL,
+    ARRAY['APP_0MF0_MAVEN_FINANCE_ASSIST']::text[],
     'semantic search',
     'general content',
     NULL,
