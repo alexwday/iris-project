@@ -11,6 +11,8 @@ Usage:
 Options:
     --dry-run       Don't modify database, just report what would happen
     --force         Process all files, ignore unchanged
+    --backup-even-if-no-changes
+                    Force a fresh backup snapshot even when no files changed
     --log-level     Logging level (DEBUG, INFO, WARNING, ERROR)
     --help          Show this help message
 
@@ -30,6 +32,7 @@ import sys
 import tempfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import List, Optional
 
 from .connections.file_source import FileSource, get_file_source
@@ -316,6 +319,13 @@ Environment:
     )
 
     parser.add_argument(
+        "--backup-even-if-no-changes",
+        action="store_true",
+        default=False,
+        help="Take a fresh backup even when scan finds no files to process or remove",
+    )
+
+    parser.add_argument(
         "--log-level",
         type=str,
         default=config.LOG_LEVEL,
@@ -374,6 +384,7 @@ def main() -> int:
     logger.info("  Database Names: %s", config.get_database_names())
     logger.info("  Dry Run: %s", args.dry_run)
     logger.info("  Force: %s", args.force)
+    logger.info("  Backup On No Changes: %s", args.backup_even_if_no_changes)
 
     scan_result = None
     extraction_result = ExtractionResult()
@@ -393,18 +404,51 @@ def main() -> int:
             force=args.force,
         )
 
+        files_to_process = scan_result.files_to_process
+        files_to_remove = scan_result.files_to_remove
+        has_mutations = bool(files_to_process or files_to_remove)
+        backup_enabled_live = config.BACKUP_ENABLED and not args.dry_run
+        backup_requested = backup_enabled_live and (
+            has_mutations or args.backup_even_if_no_changes
+        )
+        backup_stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
         audit_documents = []
-        if not scan_result.files_to_process and not scan_result.files_to_remove:
+        if backup_requested:
+            backup_phase = "before" if has_mutations else "snapshot"
+            backup_success, backup_files = backup.run_backup(
+                config.BACKUP_PATH,
+                file_source=file_source,
+                backup_stamp=backup_stamp,
+                backup_phase=backup_phase,
+                db_name=config.DB_NAME,
+            )
+            if backup_success:
+                logger.info(
+                    "Pre-run backup (%s) completed: %s",
+                    backup_phase,
+                    backup_files,
+                )
+            else:
+                logger.error(
+                    "Pre-run backup failed; aborting pipeline to prevent data loss. "
+                    "Disable BACKUP_ENABLED to skip backups."
+                )
+                return 1
+        elif config.BACKUP_ENABLED and args.dry_run:
+            logger.info("DRY RUN: Skipping backup")
+
+        if not has_mutations:
             logger.info("No files to process or remove. Pipeline complete.")
         else:
             # Handle deletions (batch, before per-file loop — no LLM cost)
-            if scan_result.files_to_remove:
+            if files_to_remove:
                 logger.info(
                     "Removing %d deleted/changed files from database",
-                    len(scan_result.files_to_remove),
+                    len(files_to_remove),
                 )
                 if not args.dry_run:
-                    for file_info in scan_result.files_to_remove:
+                    for file_info in files_to_remove:
                         doc_path = file_info.get("file_path", "")
                         try:
                             removed = remove_document(
@@ -417,7 +461,7 @@ def main() -> int:
                             logger.error(error_msg)
                             database_result.errors.append(error_msg)
                 else:
-                    for file_info in scan_result.files_to_remove:
+                    for file_info in files_to_remove:
                         logger.info(
                             "DRY RUN: Would remove %s/%s",
                             file_info["db_source"],
@@ -425,25 +469,7 @@ def main() -> int:
                         )
                         database_result.documents_removed += 1
 
-            # Backup before any inserts
-            if scan_result.files_to_process:
-                if config.BACKUP_ENABLED and not args.dry_run:
-                    backup_success, backup_files = backup.run_backup(
-                        config.BACKUP_PATH, file_source=file_source
-                    )
-                    if backup_success:
-                        logger.info("Backup completed: %s", backup_files)
-                    else:
-                        logger.error(
-                            "Backup failed; aborting pipeline to prevent data loss. "
-                            "Disable BACKUP_ENABLED to skip backups."
-                        )
-                        return 1
-                elif config.BACKUP_ENABLED and args.dry_run:
-                    logger.info("DRY RUN: Skipping backup")
-
             # Per-file pipeline: extract → process → validate → insert
-            files_to_process = scan_result.files_to_process
             if files_to_process:
                 total = len(files_to_process)
                 max_workers = config.MAX_DOCUMENT_WORKERS
@@ -521,6 +547,23 @@ def main() -> int:
             output_path=args.output,
             file_source=file_source,
         )
+
+        if backup_enabled_live and has_mutations:
+            backup_success, backup_files = backup.run_backup(
+                config.BACKUP_PATH,
+                file_source=file_source,
+                backup_stamp=backup_stamp,
+                backup_phase="after",
+                db_name=config.DB_NAME,
+            )
+            if backup_success:
+                logger.info("Post-run backup (after) completed: %s", backup_files)
+            else:
+                logger.error(
+                    "Post-run backup failed after database updates. "
+                    "Capture a manual backup before the next run."
+                )
+                return 1
 
         has_errors = False
         if scan_result and scan_result.scan_errors:

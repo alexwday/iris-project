@@ -5,6 +5,10 @@ Reads iris_document_metadata.csv and iris_document_chunks.csv from a backup
 directory and inserts them into PostgreSQL. Preserves original UUIDs and
 embeddings so all foreign key relationships remain intact.
 
+Supports both legacy backup layout (CSV files directly in backup directory)
+and phased layout (for example backup_YYYYMMDD_HHMMSS/before|after|snapshot
+with timestamped file names).
+
 Usage:
     python -m doc_refresh.restore <backup_dir> [--db-sources source1,source2]
 
@@ -42,8 +46,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "backup_dir",
         type=str,
-        help="Path to backup directory containing iris_document_metadata.csv "
-        "and iris_document_chunks.csv",
+        help="Path to backup directory (root or phase subfolder) containing "
+        "metadata/chunk CSV backups",
     )
 
     parser.add_argument(

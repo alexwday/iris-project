@@ -64,10 +64,12 @@ def _export_table(
 
 
 def export_metadata_csv(
-    backup_dir: str, file_source: Optional[FileSource] = None
+    backup_dir: str,
+    file_source: Optional[FileSource] = None,
+    file_name: str = "iris_document_metadata.csv",
 ) -> str:
     """Export iris_document_metadata table to CSV."""
-    file_path = os.path.join(backup_dir, "iris_document_metadata.csv")
+    file_path = os.path.join(backup_dir, file_name)
     return _export_table(
         """
         SELECT *
@@ -80,10 +82,12 @@ def export_metadata_csv(
 
 
 def export_chunks_csv(
-    backup_dir: str, file_source: Optional[FileSource] = None
+    backup_dir: str,
+    file_source: Optional[FileSource] = None,
+    file_name: str = "iris_document_chunks.csv",
 ) -> str:
     """Export iris_document_chunks table to CSV."""
-    file_path = os.path.join(backup_dir, "iris_document_chunks.csv")
+    file_path = os.path.join(backup_dir, file_name)
     return _export_table(
         """
         SELECT *
@@ -96,7 +100,11 @@ def export_chunks_csv(
 
 
 def run_backup(
-    backup_path: str, file_source: Optional[FileSource] = None
+    backup_path: str,
+    file_source: Optional[FileSource] = None,
+    backup_stamp: Optional[str] = None,
+    backup_phase: Optional[str] = None,
+    db_name: Optional[str] = None,
 ) -> Tuple[bool, List[str]]:
     """
     Run full database backup to CSV files.
@@ -104,6 +112,11 @@ def run_backup(
     Args:
         backup_path: Base directory to write backups.
         file_source: Optional FileSource for writing to NAS.
+        backup_stamp: Shared timestamp token (`YYYYMMDD_HHMMSS`) used to group
+            related backups from one pipeline run.
+        backup_phase: Optional subfolder under the timestamped backup folder
+            (for example "before", "after", "snapshot").
+        db_name: Optional database name used in output CSV filenames.
 
     Returns:
         Tuple of (success flag, list of created files).
@@ -112,8 +125,29 @@ def run_backup(
         logger.warning("Backup path not configured; skipping backup")
         return False, []
 
-    timestamp = datetime.now().strftime("backup_%Y%m%d_%H%M%S")
-    backup_dir = os.path.join(backup_path, timestamp)
+    timestamp = backup_stamp or datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_root = os.path.join(backup_path, f"backup_{timestamp}")
+
+    backup_dir = backup_root
+    if backup_phase:
+        safe_phase = "".join(
+            ch if (ch.isalnum() or ch in {"_", "-"}) else "_"
+            for ch in backup_phase.strip()
+        ).strip("_")
+        if safe_phase:
+            backup_dir = os.path.join(backup_root, safe_phase)
+
+    safe_db_name = "database"
+    if db_name:
+        candidate = "".join(
+            ch if (ch.isalnum() or ch in {"_", "-"}) else "_"
+            for ch in db_name.strip()
+        ).strip("_")
+        if candidate:
+            safe_db_name = candidate
+
+    metadata_file_name = f"{safe_db_name}_{timestamp}_iris_document_metadata.csv"
+    chunks_file_name = f"{safe_db_name}_{timestamp}_iris_document_chunks.csv"
 
     try:
         if file_source is not None:
@@ -128,10 +162,18 @@ def run_backup(
 
     try:
         created_files.append(
-            export_metadata_csv(backup_dir, file_source=file_source)
+            export_metadata_csv(
+                backup_dir,
+                file_source=file_source,
+                file_name=metadata_file_name,
+            )
         )
         created_files.append(
-            export_chunks_csv(backup_dir, file_source=file_source)
+            export_chunks_csv(
+                backup_dir,
+                file_source=file_source,
+                file_name=chunks_file_name,
+            )
         )
         logger.info("Backup completed: %s", created_files)
         return True, created_files
@@ -150,6 +192,51 @@ def _read_csv(file_path: str) -> Tuple[List[str], List[Dict[str, str]]]:
 
     logger.info("Read %d rows from %s", len(rows), file_path)
     return columns, rows
+
+
+def _list_backup_csv_files(
+    backup_dir: str, file_source: Optional[FileSource] = None
+) -> List[str]:
+    """List CSV files under a backup directory (recursive)."""
+    if file_source is not None:
+        files = file_source.list_files(backup_dir, extensions=[".csv"])
+        return sorted(f["path"] for f in files)
+
+    if not os.path.exists(backup_dir):
+        return []
+
+    csv_files: List[str] = []
+    for root, _, files in os.walk(backup_dir):
+        for name in files:
+            if name.lower().endswith(".csv"):
+                csv_files.append(os.path.join(root, name))
+    return sorted(csv_files)
+
+
+def _select_backup_csv_path(csv_paths: List[str], base_name: str) -> Optional[str]:
+    """Pick the best CSV match for a table from available backup paths."""
+    matches = []
+    for path in csv_paths:
+        filename = os.path.basename(path)
+        if filename == base_name or filename.endswith(f"_{base_name}"):
+            matches.append(path)
+
+    if not matches:
+        return None
+
+    def phase_rank(path: str) -> int:
+        norm = path.replace("\\", "/").lower()
+        if "/after/" in norm:
+            return 0
+        if "/snapshot/" in norm:
+            return 1
+        if "/before/" in norm:
+            return 2
+        return 3
+
+    best_phase = min(phase_rank(path) for path in matches)
+    phase_matches = [path for path in matches if phase_rank(path) == best_phase]
+    return max(phase_matches)
 
 
 def _normalize_value(value: str, column: str) -> Optional[str]:
@@ -335,8 +422,17 @@ def run_restore(
     Returns:
         Tuple of (success, metadata_count, chunks_count).
     """
-    metadata_csv = os.path.join(backup_dir, "iris_document_metadata.csv")
-    chunks_csv = os.path.join(backup_dir, "iris_document_chunks.csv")
+    csv_paths = _list_backup_csv_files(backup_dir, file_source=file_source)
+    metadata_csv = _select_backup_csv_path(csv_paths, "iris_document_metadata.csv")
+    chunks_csv = _select_backup_csv_path(csv_paths, "iris_document_chunks.csv")
+
+    if not metadata_csv:
+        logger.error("Metadata CSV not found under backup dir: %s", backup_dir)
+        return False, 0, 0
+
+    if not chunks_csv:
+        logger.error("Chunks CSV not found under backup dir: %s", backup_dir)
+        return False, 0, 0
 
     if file_source is not None:
         import tempfile
@@ -344,14 +440,6 @@ def run_restore(
         logger.info("Copying backup CSVs from NAS to %s", local_tmp)
         metadata_csv = file_source.copy_to_local(metadata_csv, local_tmp)
         chunks_csv = file_source.copy_to_local(chunks_csv, local_tmp)
-
-    if not os.path.exists(metadata_csv):
-        logger.error("Metadata CSV not found: %s", metadata_csv)
-        return False, 0, 0
-
-    if not os.path.exists(chunks_csv):
-        logger.error("Chunks CSV not found: %s", chunks_csv)
-        return False, 0, 0
 
     try:
         _, metadata_rows = _read_csv(metadata_csv)
