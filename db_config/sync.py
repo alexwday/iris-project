@@ -20,7 +20,7 @@ Usage:
 
     # Sync only prompts or only registry
     python db_config/sync.py download --prompts-only
-    python db_config/sync.py download --registry-only
+    python db_config/sync.py upload --registry-only
 
     # Dry run (show what would happen without making changes)
     python db_config/sync.py upload --dry-run
