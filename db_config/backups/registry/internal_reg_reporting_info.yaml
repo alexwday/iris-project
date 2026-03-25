@@ -1,0 +1,61 @@
+db_source: internal_reg_reporting_info
+db_name: Regulatory Reporting Return Templates
+db_summary: Sample templates and specifications for all regulatory returns (M4, Z4, R2, I3, GR, GQ, T2, S1, E3, C3, C1, A4,
+  A2, N3, J2, B2, and others), with each return's template stored as an individual sheet-level document plus summary and checklist
+  sheets.
+db_description: '**Content:** Regulatory reporting return templates where each document represents a single return template
+  sheet (for example M4, Z4, R2, I3 Consolidated, I3 CAD, I3 USD, QS STC 2025, GR, GQ, T2, S1 STC 2025, E3, C3, CS3 STC 2025,
+  C1, A4, A2, AS STC 2025, E2, ES STC 2025, N3, J2, B2, and others). Includes a summary/checklist sheet listing all return
+  codes and names, and a list of returns sheet with return-specific details.
+
+
+  **Tier/Priority:** DOMAIN EXPERT - Specialized regulatory reporting source for return template lookup, field definitions,
+  and reporting structure reference.
+
+
+  **Usage Guidance:** Use this database to look up specific regulatory return templates, understand return structures and fields,
+  compare returns, or find which returns cover specific reporting areas. Each sheet is processed as an independent document with
+  cross-references to related sheets in the same workbook.
+
+
+  **When to Select:** Queries about regulatory return templates, return field definitions, return structures, reporting codes,
+  or questions like "what does return M4 contain" or "which returns cover capital adequacy".
+
+
+  **Query Tips:** Include return codes (M4, Z4, R2, I3, etc.), return names, field names, reporting area terms (capital, liquidity,
+  leverage, credit risk), and regulatory framework references (OSFI, Basel, STC).
+
+
+  **Query Type:** semantic search'
+enabled: true
+search_modes:
+- catalog
+- semantic
+ad_groups:
+- all_users
+- local_dev
+batch_size: 10
+max_selected_files: 25
+top_chunks_in_catalog_selection: 1
+top_chunks_in_metadata_research: 3
+page_threshold_for_full_content: 150
+enable_db_wide_deep_research: true
+max_parallel_files: 10
+max_chunks_per_file: 20
+max_pages_for_full_context: 6
+max_primary_section_page_count: 6
+max_subsection_page_count: 3
+max_neighbour_chunks: 2
+max_gap_fill_pages: 2
+metadata_context_fields:
+- document_summary
+- document_description
+- document_usage
+catalog_config: null
+semantic_config: null
+metadata_config: null
+sample_questions:
+- What fields are in the M4 regulatory return?
+- Which regulatory returns cover capital adequacy?
+- What is the structure of the I3 Consolidated return?
+- What returns are related to liquidity reporting?
