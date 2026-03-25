@@ -7,6 +7,9 @@ Compares:
 2) Row-level differences keyed by db_source
 3) Field-level value differences for overlapping columns
 
+Usage:
+    python db_config/compare_registry_seed_to_db.py
+
 Uses the same DB env vars as populate_initial_data.py:
   VECTOR_POSTGRES_DB_HOST
   VECTOR_POSTGRES_DB_PORT
