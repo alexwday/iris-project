@@ -13,9 +13,9 @@ db_description: '**Content:** Regulatory reporting return templates where each d
   and reporting structure reference.
 
 
-  **Usage Guidance:** Use this database to look up specific regulatory return templates, understand return structures and fields,
-  compare returns, or find which returns cover specific reporting areas. Each sheet is processed as an independent document with
-  cross-references to related sheets in the same workbook.
+  **Usage Guidance:** Use this database to look up specific regulatory return templates, understand return structures and
+  fields, compare returns, or find which returns cover specific reporting areas. Each sheet is processed as an independent
+  document with cross-references to related sheets in the same workbook.
 
 
   **When to Select:** Queries about regulatory return templates, return field definitions, return structures, reporting codes,
@@ -33,6 +33,7 @@ search_modes:
 - semantic
 ad_groups:
 - APP_0MF0_MAVEN_FINANCE_ASSIST
+- G_CxONE_CL_DEV_Admin
 batch_size: 10
 max_selected_files: 25
 top_chunks_in_catalog_selection: 1

@@ -1,7 +1,7 @@
 db_source: internal_sox
 db_name: Internal SOX Controls
-db_summary: RBC's SOX controls inventory, where each document represents an individual control with associated attributes such
-  as control objective, process area, systems, and testing context.
+db_summary: RBC's SOX controls inventory, where each document represents an individual control with associated attributes
+  such as control objective, process area, systems, and testing context.
 db_description: '**Content:** Internal SOX controls repository where each document represents a single control record (for
   example control ID, control statement, process area, system references, and related control metadata).
 
@@ -28,6 +28,7 @@ search_modes:
 - semantic
 ad_groups:
 - APP_0MF0_MAVEN_FINANCE_ASSIST
+- G_CxONE_CL_DEV_Admin
 batch_size: 20
 max_selected_files: 40
 top_chunks_in_catalog_selection: 1
@@ -53,4 +54,3 @@ sample_questions:
 - What are all the controls that mention access reviews?
 - What controls involve the SAP system?
 - Which SOX controls relate to change management?
-

@@ -29,8 +29,8 @@ search_modes:
 - catalog
 - semantic
 ad_groups:
-- all_users
-- local_dev
+- APP_0MF0_MAVEN_FINANCE_ASSIST
+- G_CxONE_CL_DEV_Admin
 batch_size: 10
 max_selected_files: 10
 top_chunks_in_catalog_selection: 1
