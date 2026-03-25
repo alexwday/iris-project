@@ -27,13 +27,15 @@ See documentation for full configuration options.
 """
 
 import argparse
+import collections
 import logging
 import sys
 import tempfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import List, Optional
+from pathlib import Path
+from typing import Dict, List, Optional
 
 from .connections.file_source import FileSource, get_file_source
 from .stages import (
@@ -278,6 +280,197 @@ def _aggregate_document_result(
         audit_documents.append(doc_result.audit_summary)
 
 
+REFERENCE_SHEET_KEYWORDS = frozenset({
+    "summary", "index", "definitions", "toc", "overview",
+    "glossary", "legend", "reference", "contents",
+})
+
+
+def _process_xlsx_extract_and_process(
+    file_info: FileInfo,
+    file_source: FileSource,
+    auth_token: str,
+) -> DocumentPipelineResult:
+    """Run extract and process (stages 2-3) for one xlsx sheet document.
+
+    Stops after Stage 3 so that cross-referencing can enrich the
+    document_description before validation and database insert.
+    """
+    result = DocumentPipelineResult(file_info=file_info)
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        try:
+            extracted = extract_file(file_info, file_source, temp_dir)
+        except Exception as exc:
+            logger.error("Error extracting %s: %s", file_info.file_name, exc)
+            result.extracted = ExtractedDocument(
+                file_info=file_info, extraction_error=str(exc)
+            )
+            result.extraction_failed = True
+            result.stage_reached = "extraction"
+            return result
+
+        if not extracted.is_valid:
+            logger.warning(
+                "Extraction failed for %s: %s",
+                file_info.file_name,
+                extracted.extraction_error,
+            )
+            result.extracted = extracted
+            result.extraction_failed = True
+            result.stage_reached = "extraction"
+            return result
+
+        result.extracted = extracted
+        result.stage_reached = "extraction"
+
+        audit_trail = create_audit_trail(
+            config.AUDIT_PATH, file_info.db_source, file_info.relative_path
+        )
+
+        try:
+            processed = process_document(
+                extracted, auth_token, audit_trail=audit_trail
+            )
+        except Exception as exc:
+            logger.error("Error processing %s: %s", file_info.file_name, exc)
+            result.processed = ProcessedDocument(
+                file_info=file_info,
+                structure_type=StructureType.SEMANTIC,
+                structure_confidence="low",
+                page_count=extracted.page_count,
+                processing_error=str(exc),
+            )
+            result.processing_failed = True
+            result.stage_reached = "processing"
+            return result
+
+        if not processed.is_valid:
+            logger.warning(
+                "Processing failed for %s: %s",
+                file_info.file_name,
+                processed.processing_error,
+            )
+            result.processed = processed
+            result.processing_failed = True
+            result.stage_reached = "processing"
+            return result
+
+        result.processed = processed
+        result.stage_reached = "processing"
+
+        audit_trail.finalize()
+        audit_summary = audit_trail.get_summary()
+        if audit_summary:
+            result.audit_summary = audit_summary
+
+    return result
+
+
+def _enrich_workbook_descriptions(
+    workbook_results: List[DocumentPipelineResult],
+    workbook_name: str,
+) -> None:
+    """Append related-sheet cross-references to each sheet's document_description."""
+    processed_sheets = [
+        r for r in workbook_results
+        if r.processed and r.processed.is_valid
+    ]
+
+    if len(processed_sheets) < 2:
+        return
+
+    logger.info(
+        "Enriching %d sheet descriptions for workbook '%s'",
+        len(processed_sheets),
+        workbook_name,
+    )
+
+    for sheet_result in processed_sheets:
+        doc = sheet_result.processed
+        lines = [f'\nRelated Sheets in "{workbook_name}":']
+
+        for other in processed_sheets:
+            if other is sheet_result:
+                continue
+            other_name = other.file_info.sheet_name or "Unknown"
+            other_desc = other.processed.document_description or other_name
+            is_reference = any(
+                kw in other_name.lower() for kw in REFERENCE_SHEET_KEYWORDS
+            )
+            if is_reference:
+                lines.append(f"- **{other_name}** [reference sheet]: {other_desc}")
+            else:
+                lines.append(f"- **{other_name}**: {other_desc}")
+
+        doc.document_description = (doc.document_description or "") + "\n".join(lines)
+
+
+def _validate_and_insert_document(
+    doc_result: DocumentPipelineResult,
+    dry_run: bool,
+) -> DocumentPipelineResult:
+    """Run validate and insert (stages 4-5) on an already-processed document."""
+    processed = doc_result.processed
+    file_info = doc_result.file_info
+
+    errors = validate_document(processed)
+    hard_errors = [e for e in errors if e.severity == "error"]
+    warnings = [e for e in errors if e.severity == "warning"]
+    doc_result.validation_errors = errors
+    doc_result.validation_warnings = warnings
+
+    if hard_errors:
+        for error in hard_errors:
+            logger.error(
+                "Validation error for %s: [%s] %s",
+                error.document_name,
+                error.error_type,
+                error.message,
+            )
+        doc_result.validation_failed = True
+        doc_result.stage_reached = "validation"
+        return doc_result
+
+    doc_result.validated = ValidatedDocument(document=processed, warnings=warnings)
+    doc_result.stage_reached = "validation"
+
+    if warnings:
+        for warning in warnings:
+            logger.warning(
+                "Validation warning for %s: [%s] %s",
+                warning.document_name,
+                warning.error_type,
+                warning.message,
+            )
+
+    if not dry_run:
+        try:
+            sections, chunks = replace_single_document(processed)
+            doc_result.db_inserted = True
+            doc_result.db_sections_inserted = sections
+            doc_result.db_chunks_inserted = chunks
+        except Exception as exc:
+            error_msg = f"Failed to insert {file_info.file_name}: {exc}"
+            logger.error(error_msg)
+            doc_result.db_error = error_msg
+            doc_result.stage_reached = "database"
+            return doc_result
+    else:
+        logger.info(
+            "DRY RUN: Would insert %s (%d sections, %d chunks)",
+            file_info.file_name,
+            len(processed.sections),
+            len(processed.chunks),
+        )
+        doc_result.db_inserted = True
+        doc_result.db_sections_inserted = len(processed.sections)
+        doc_result.db_chunks_inserted = len(processed.chunks)
+
+    doc_result.stage_reached = "complete"
+    return doc_result
+
+
 def parse_args() -> argparse.Namespace:
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
@@ -470,12 +663,21 @@ def main() -> int:
 
             # Per-file pipeline: extract → process → validate → insert
             if files_to_process:
+                regular_files = [
+                    fi for fi in files_to_process if fi.sheet_name is None
+                ]
+                xlsx_sheets = [
+                    fi for fi in files_to_process if fi.sheet_name is not None
+                ]
+
                 total = len(files_to_process)
                 max_workers = config.MAX_DOCUMENT_WORKERS
                 logger.info("-" * 60)
                 logger.info(
-                    "Processing %d files (per-file pipeline, %d workers)",
+                    "Processing %d files (%d regular, %d xlsx sheets, %d workers)",
                     total,
+                    len(regular_files),
+                    len(xlsx_sheets),
                     max_workers,
                 )
                 logger.info("-" * 60)
@@ -492,7 +694,7 @@ def main() -> int:
                             auth_token,
                             args.dry_run,
                         ): fi
-                        for fi in files_to_process
+                        for fi in regular_files
                     }
                     for future in as_completed(futures):
                         fi = futures[future]
@@ -527,6 +729,91 @@ def main() -> int:
                             completed_count,
                             total,
                             fi.file_name,
+                        )
+
+                if xlsx_sheets:
+                    logger.info("-" * 60)
+                    logger.info(
+                        "Processing %d xlsx sheet documents (stages 2-3)",
+                        len(xlsx_sheets),
+                    )
+                    logger.info("-" * 60)
+
+                    xlsx_results: List[DocumentPipelineResult] = []
+                    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                        futures = {
+                            executor.submit(
+                                _process_xlsx_extract_and_process,
+                                fi,
+                                file_source,
+                                auth_token,
+                            ): fi
+                            for fi in xlsx_sheets
+                        }
+                        for future in as_completed(futures):
+                            fi = futures[future]
+                            try:
+                                doc_result = future.result()
+                            except Exception as exc:
+                                logger.error(
+                                    "Unexpected error processing xlsx sheet %s: %s",
+                                    fi.file_name,
+                                    exc,
+                                )
+                                extraction_result.failed_documents.append(
+                                    ExtractedDocument(
+                                        file_info=fi,
+                                        extraction_error=str(exc),
+                                    )
+                                )
+                                completed_count += 1
+                                continue
+
+                            xlsx_results.append(doc_result)
+                            completed_count += 1
+                            logger.info(
+                                "Completed xlsx stages 2-3 %d/%d: %s",
+                                completed_count,
+                                total,
+                                fi.file_name,
+                            )
+
+                    workbook_groups: Dict[str, List[DocumentPipelineResult]] = (
+                        collections.defaultdict(list)
+                    )
+                    for r in xlsx_results:
+                        workbook_groups[r.file_info.file_path].append(r)
+
+                    for wb_path, wb_results in workbook_groups.items():
+                        wb_name = Path(wb_path).stem
+                        _enrich_workbook_descriptions(wb_results, wb_name)
+
+                    logger.info(
+                        "Running validation and insert for %d xlsx sheet documents",
+                        len(xlsx_results),
+                    )
+                    for doc_result in xlsx_results:
+                        if doc_result.extraction_failed or doc_result.processing_failed:
+                            _aggregate_document_result(
+                                doc_result,
+                                extraction_result,
+                                processing_result,
+                                validation_result,
+                                database_result,
+                                audit_documents,
+                            )
+                            continue
+
+                        doc_result = _validate_and_insert_document(
+                            doc_result, args.dry_run
+                        )
+                        _aggregate_document_result(
+                            doc_result,
+                            extraction_result,
+                            processing_result,
+                            validation_result,
+                            database_result,
+                            audit_documents,
                         )
 
         if audit_documents:

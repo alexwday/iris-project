@@ -16,7 +16,9 @@ Functions:
 """
 
 import logging
+import tempfile
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
 from sqlalchemy import text
@@ -25,10 +27,11 @@ from sqlalchemy.exc import ProgrammingError
 from ..connections.file_source import FileSource, get_file_source
 from ..connections.postgres import get_database_session
 from ..utils.env_config import config
+from ..utils.xlsx_extractor import get_xlsx_sheet_names, sanitize_sheet_name
 
 logger = logging.getLogger(__name__)
 
-SUPPORTED_EXTENSIONS = [".pdf", ".docx"]
+SUPPORTED_EXTENSIONS = [".pdf", ".docx", ".xlsx"]
 
 
 @dataclass
@@ -43,6 +46,7 @@ class FileInfo:
     db_source: str
     modified_time: float
     action: str = "new"  # "new" or "update"
+    sheet_name: Optional[str] = None
 
 
 @dataclass
@@ -166,6 +170,131 @@ def run_stage(
         raise
 
 
+def _expand_xlsx_to_sheet_infos(
+    file_info: Dict,
+    file_hash: str,
+    db_name: str,
+    db_files_map: Dict[str, Dict],
+    force: bool,
+    temp_dir: str,
+    file_source: FileSource,
+) -> Tuple[List[FileInfo], Set[str], int]:
+    """Expand one xlsx file into per-sheet FileInfo objects.
+
+    Args:
+        file_info: File dict from FileSource.list_files().
+        file_hash: Pre-computed hash of the parent xlsx.
+        db_name: Database source identifier.
+        db_files_map: Map of relative_path -> DB record for this db_source.
+        force: If True, mark all sheets for processing.
+        temp_dir: Temporary directory for downloading files in NAS mode.
+        file_source: FileSource instance for file access.
+
+    Returns:
+        Tuple of (sheet FileInfo list, synthetic source paths, unchanged count).
+    """
+    relative_path = file_info["relative_path"]
+    xlsx_path = file_info["path"]
+    xlsx_stem = Path(relative_path).stem
+    xlsx_dir = str(Path(relative_path).parent)
+    if xlsx_dir == ".":
+        xlsx_dir = ""
+
+    if config.FILE_SOURCE_MODE == "nas":
+        local_xlsx = file_source.copy_to_local(xlsx_path, temp_dir)
+    else:
+        local_xlsx = xlsx_path
+
+    try:
+        sheet_names = get_xlsx_sheet_names(local_xlsx)
+    except Exception as exc:
+        logger.error(
+            "Failed reading sheets from %s/%s: %s", db_name, relative_path, exc
+        )
+        return [], set(), 0
+
+    if not sheet_names:
+        logger.info("No non-empty sheets in %s/%s", db_name, relative_path)
+        return [], set(), 0
+
+    logger.info(
+        "Expanding %s/%s into %d sheet documents",
+        db_name,
+        relative_path,
+        len(sheet_names),
+    )
+
+    sheet_file_infos: List[FileInfo] = []
+    sheet_paths: Set[str] = set()
+    unchanged = 0
+
+    for sheet_name in sheet_names:
+        safe_name = sanitize_sheet_name(sheet_name)
+        if xlsx_dir:
+            sheet_relative = f"{xlsx_dir}/{xlsx_stem}/{safe_name}.xlsx"
+        else:
+            sheet_relative = f"{xlsx_stem}/{safe_name}.xlsx"
+        sheet_file_name = f"{xlsx_stem} - {sheet_name}.xlsx"
+
+        sheet_paths.add(sheet_relative)
+
+        db_file = db_files_map.get(sheet_relative)
+
+        if db_file is None:
+            sheet_file_infos.append(
+                FileInfo(
+                    file_path=xlsx_path,
+                    relative_path=sheet_relative,
+                    file_name=sheet_file_name,
+                    file_hash=file_hash,
+                    file_size=file_info["size"],
+                    db_source=db_name,
+                    modified_time=file_info["modified_time"],
+                    action="new",
+                    sheet_name=sheet_name,
+                )
+            )
+            logger.debug("New xlsx sheet: %s", sheet_relative)
+
+        elif force:
+            sheet_file_infos.append(
+                FileInfo(
+                    file_path=xlsx_path,
+                    relative_path=sheet_relative,
+                    file_name=sheet_file_name,
+                    file_hash=file_hash,
+                    file_size=file_info["size"],
+                    db_source=db_name,
+                    modified_time=file_info["modified_time"],
+                    action="update",
+                    sheet_name=sheet_name,
+                )
+            )
+            logger.debug("Force reprocess xlsx sheet: %s", sheet_relative)
+
+        else:
+            db_hash = db_file.get("file_hash", "")
+            if db_hash and file_hash == db_hash:
+                unchanged += 1
+            else:
+                sheet_file_infos.append(
+                    FileInfo(
+                        file_path=xlsx_path,
+                        relative_path=sheet_relative,
+                        file_name=sheet_file_name,
+                        file_hash=file_hash,
+                        file_size=file_info["size"],
+                        db_source=db_name,
+                        modified_time=file_info["modified_time"],
+                        action="update",
+                        sheet_name=sheet_name,
+                    )
+                )
+                logger.debug("Hash changed, xlsx sheet needs update: %s", sheet_relative)
+
+    return sheet_file_infos, sheet_paths, unchanged
+
+
 def scan_folder(
     file_source: FileSource,
     db_name: str,
@@ -213,58 +342,53 @@ def scan_folder(
     db_files_map = {f["file_path"]: f for f in db_files_list}
     source_paths: Set[str] = set()
 
-    for file_info in files:
-        relative_path = file_info["relative_path"]
-        file_name = file_info["name"]
-        source_paths.add(relative_path)
+    with tempfile.TemporaryDirectory(prefix="scan_xlsx_") as temp_dir:
+        for file_info in files:
+            relative_path = file_info["relative_path"]
+            file_name = file_info["name"]
 
-        try:
-            file_hash = file_source.get_file_hash(
-                f"{db_name}/{relative_path}" if config.FILE_SOURCE_MODE == "local" else file_info["path"]
-            )
-
-            db_file = db_files_map.get(relative_path)
-
-            if db_file is None:
-                # New file
-                result.files_to_process.append(
-                    FileInfo(
-                        file_path=file_info["path"],
-                        relative_path=relative_path,
-                        file_name=file_name,
-                        file_hash=file_hash,
-                        file_size=file_info["size"],
-                        db_source=db_name,
-                        modified_time=file_info["modified_time"],
-                        action="new",
-                    )
+            try:
+                file_hash = file_source.get_file_hash(
+                    f"{db_name}/{relative_path}" if config.FILE_SOURCE_MODE == "local" else file_info["path"]
                 )
-                logger.debug("New file: %s", file_name)
 
-            elif force:
-                # Force reprocess
-                result.files_to_process.append(
-                    FileInfo(
-                        file_path=file_info["path"],
-                        relative_path=relative_path,
-                        file_name=file_name,
+                is_xlsx = file_name.lower().endswith(".xlsx")
+
+                if is_xlsx:
+                    sheet_infos, sheet_paths, unchanged = _expand_xlsx_to_sheet_infos(
+                        file_info=file_info,
                         file_hash=file_hash,
-                        file_size=file_info["size"],
-                        db_source=db_name,
-                        modified_time=file_info["modified_time"],
-                        action="update",
+                        db_name=db_name,
+                        db_files_map=db_files_map,
+                        force=force,
+                        temp_dir=temp_dir,
+                        file_source=file_source,
                     )
-                )
-                logger.debug("Force reprocess: %s", file_name)
+                    result.files_to_process.extend(sheet_infos)
+                    source_paths.update(sheet_paths)
+                    result.files_unchanged += unchanged
+                    continue
 
-            else:
-                # Compare file hashes to detect changes
-                db_hash = db_file.get("file_hash", "")
-                if db_hash and file_hash == db_hash:
-                    # Hash matches - file unchanged
-                    result.files_unchanged += 1
-                else:
-                    # Hash differs or missing - needs update
+                source_paths.add(relative_path)
+
+                db_file = db_files_map.get(relative_path)
+
+                if db_file is None:
+                    result.files_to_process.append(
+                        FileInfo(
+                            file_path=file_info["path"],
+                            relative_path=relative_path,
+                            file_name=file_name,
+                            file_hash=file_hash,
+                            file_size=file_info["size"],
+                            db_source=db_name,
+                            modified_time=file_info["modified_time"],
+                            action="new",
+                        )
+                    )
+                    logger.debug("New file: %s", file_name)
+
+                elif force:
                     result.files_to_process.append(
                         FileInfo(
                             file_path=file_info["path"],
@@ -277,12 +401,31 @@ def scan_folder(
                             action="update",
                         )
                     )
-                    logger.debug("Hash changed, needs update: %s", file_name)
+                    logger.debug("Force reprocess: %s", file_name)
 
-        except Exception as exc:
-            error_msg = f"Error processing file {relative_path}: {exc}"
-            logger.warning(error_msg)
-            result.scan_errors.append(error_msg)
+                else:
+                    db_hash = db_file.get("file_hash", "")
+                    if db_hash and file_hash == db_hash:
+                        result.files_unchanged += 1
+                    else:
+                        result.files_to_process.append(
+                            FileInfo(
+                                file_path=file_info["path"],
+                                relative_path=relative_path,
+                                file_name=file_name,
+                                file_hash=file_hash,
+                                file_size=file_info["size"],
+                                db_source=db_name,
+                                modified_time=file_info["modified_time"],
+                                action="update",
+                            )
+                        )
+                        logger.debug("Hash changed, needs update: %s", file_name)
+
+            except Exception as exc:
+                error_msg = f"Error processing file {relative_path}: {exc}"
+                logger.warning(error_msg)
+                result.scan_errors.append(error_msg)
 
     for file_path, db_file in db_files_map.items():
         if file_path not in source_paths:

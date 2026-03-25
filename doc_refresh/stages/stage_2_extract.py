@@ -5,10 +5,11 @@ This stage extracts text content from files identified in Stage 1.
 Uses the content_extractor utility which supports:
 - PDF files via pymupdf4llm
 - DOCX files via LibreOffice headless conversion then pymupdf4llm
+- XLSX files via openpyxl to markdown conversion (one sheet per document)
 
-When OUTPUT_PATH is configured, copies the final PDF (original or converted)
-to an output folder preserving subdirectory structure:
-{OUTPUT_PATH}/{db_source}/{relative_path_as_pdf}.
+When OUTPUT_PATH is configured, copies the output file to a folder preserving
+subdirectory structure: {OUTPUT_PATH}/{db_source}/{relative_path}.
+For PDF/DOCX this is a PDF; for XLSX sheets this is a single-sheet xlsx.
 
 Functions:
     run_stage: Execute the extraction stage
@@ -27,6 +28,7 @@ from ..connections.file_source import FileSource, get_file_source
 from ..stages.stage_1_scan import FileInfo
 from ..utils.content_extractor import extract_pages
 from ..utils.env_config import config
+from ..utils.xlsx_extractor import create_single_sheet_xlsx, xlsx_sheet_to_markdown
 
 logger = logging.getLogger(__name__)
 
@@ -156,6 +158,11 @@ def extract_file(
     extracted = ExtractedDocument(file_info=file_info)
 
     try:
+        is_xlsx_sheet = file_info.sheet_name is not None
+
+        if is_xlsx_sheet:
+            return _extract_xlsx_sheet(extracted, file_info, file_source, temp_dir)
+
         is_docx = file_info.file_name.lower().endswith(".docx")
         needs_cleanup = False
 
@@ -206,6 +213,42 @@ def extract_file(
         return extracted
 
 
+def _extract_xlsx_sheet(
+    extracted: ExtractedDocument,
+    file_info: FileInfo,
+    file_source: FileSource,
+    temp_dir: str,
+) -> ExtractedDocument:
+    """Extract markdown content from a single xlsx worksheet."""
+    if config.FILE_SOURCE_MODE == "nas":
+        local_path = file_source.copy_to_local(file_info.file_path, temp_dir)
+    else:
+        local_path = file_info.file_path
+
+    if not os.path.exists(local_path):
+        extracted.extraction_error = f"File not found: {local_path}"
+        return extracted
+
+    workbook_label = Path(file_info.file_path).stem
+    markdown = xlsx_sheet_to_markdown(
+        local_path, file_info.sheet_name, workbook_label
+    )
+
+    if not markdown or not markdown.strip():
+        extracted.extraction_error = "No content extracted from xlsx sheet"
+        return extracted
+
+    extracted.pages = [markdown]
+    extracted.page_count = 1
+
+    if config.OUTPUT_PATH:
+        _copy_xlsx_sheet_to_output(
+            local_path, file_info, file_source, temp_dir
+        )
+
+    return extracted
+
+
 def _copy_pdf_to_output(
     pdf_path: str, file_info: FileInfo, file_source: FileSource
 ) -> None:
@@ -225,3 +268,30 @@ def _copy_pdf_to_output(
         logger.debug("Copied PDF to output: %s", output_file)
     except Exception as exc:
         logger.warning("Failed to copy PDF to output folder: %s", exc)
+
+
+def _copy_xlsx_sheet_to_output(
+    xlsx_path: str,
+    file_info: FileInfo,
+    file_source: FileSource,
+    temp_dir: str,
+) -> None:
+    """Create a single-sheet xlsx and copy to the output folder."""
+    temp_output = os.path.join(temp_dir, "sheet_output.xlsx")
+
+    try:
+        create_single_sheet_xlsx(xlsx_path, file_info.sheet_name, temp_output)
+
+        output_file = str(
+            Path(config.OUTPUT_PATH) / file_info.db_source / file_info.relative_path
+        )
+        file_source.copy_from_local(temp_output, output_file)
+        logger.debug("Copied xlsx sheet to output: %s", output_file)
+    except Exception as exc:
+        logger.warning("Failed to copy xlsx sheet to output folder: %s", exc)
+    finally:
+        if os.path.exists(temp_output):
+            try:
+                os.remove(temp_output)
+            except OSError:
+                pass

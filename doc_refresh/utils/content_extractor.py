@@ -289,6 +289,7 @@ def get_supported_extensions() -> List[str]:
     if _PYMUPDF4LLM_AVAILABLE:
         extensions.append(".pdf")
         extensions.append(".docx")
+    extensions.append(".xlsx")
     return extensions
 
 
@@ -303,4 +304,5 @@ def check_dependencies() -> dict:
         "pymupdf4llm": _PYMUPDF4LLM_AVAILABLE,
         "pdf_support": _PYMUPDF4LLM_AVAILABLE,
         "docx_support": _PYMUPDF4LLM_AVAILABLE,
+        "xlsx_support": True,
     }
