@@ -37,7 +37,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
+import json
+
 from .connections.file_source import FileSource, get_file_source
+from .connections.llm import execute_llm_call
 from .stages import (
     stage_1_scan,
     stage_6_report,
@@ -282,12 +285,6 @@ def _aggregate_document_result(
         audit_documents.append(doc_result.audit_summary)
 
 
-REFERENCE_SHEET_KEYWORDS = frozenset({
-    "summary", "index", "definitions", "toc", "overview",
-    "glossary", "legend", "reference", "contents",
-})
-
-
 def _process_xlsx_extract_and_process(
     file_info: FileInfo,
     file_source: FileSource,
@@ -370,11 +367,75 @@ def _process_xlsx_extract_and_process(
     return result
 
 
+_RELATED_SHEETS_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "flag_related_sheets",
+        "description": "Identify sheets from the same workbook that are highly relevant to the target sheet.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "related_sheet_names": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Names of sheets that are highly relevant to the target sheet. Include index/summary/definitions sheets that provide context, plus any sheets with directly related content. Only include sheets that a user researching the target sheet would also want to see.",
+                },
+            },
+            "required": ["related_sheet_names"],
+        },
+    },
+}
+
+_RELATED_SHEETS_SYSTEM = """You are analyzing sheets in an Excel workbook to identify cross-references.
+Given a target sheet and a list of all sheets in the workbook (with descriptions), identify which other sheets are highly relevant to the target sheet.
+
+Include:
+- Any summary, index, definitions, or overview sheets that provide context for the target sheet
+- Sheets with directly related or complementary content
+
+Be selective. Only flag sheets a user would genuinely need alongside the target sheet. Do not flag every sheet."""
+
+
+def _find_related_sheets_for_one(
+    target_name: str,
+    sheet_catalog: str,
+    auth_token: str,
+) -> List[str]:
+    """Call LLM to identify related sheets for one target sheet."""
+    user_prompt = (
+        f"Target sheet: {target_name}\n\n"
+        f"All sheets in this workbook:\n{sheet_catalog}"
+    )
+
+    try:
+        response, usage = execute_llm_call(
+            auth_token,
+            messages=[
+                {"role": "system", "content": _RELATED_SHEETS_SYSTEM},
+                {"role": "user", "content": user_prompt},
+            ],
+            model=config.MODEL_SMALL,
+            temperature=0.0,
+            max_tokens=1024,
+            tools=[_RELATED_SHEETS_TOOL],
+            tool_choice={"type": "function", "function": {"name": "flag_related_sheets"}},
+        )
+
+        message = response.choices[0].message
+        if message.tool_calls:
+            args = json.loads(message.tool_calls[0].function.arguments)
+            return args.get("related_sheet_names", [])
+    except Exception as exc:
+        logger.warning("Failed to identify related sheets for '%s': %s", target_name, exc)
+
+    return []
+
+
 def _enrich_workbook_descriptions(
     workbook_results: List[DocumentPipelineResult],
     workbook_name: str,
 ) -> None:
-    """Append related-sheet cross-references to each sheet's document_description."""
+    """Use LLM to identify related sheets and append cross-references to each description."""
     processed_sheets = [
         r for r in workbook_results
         if r.processed and r.processed.is_valid
@@ -389,24 +450,46 @@ def _enrich_workbook_descriptions(
         workbook_name,
     )
 
+    sheet_catalog_lines = []
+    for r in processed_sheets:
+        name = r.file_info.sheet_name or "Unknown"
+        desc = r.processed.document_description or name
+        sheet_catalog_lines.append(f"- {name}: {desc}")
+    sheet_catalog = "\n".join(sheet_catalog_lines)
+
+    auth_token = resolve_auth_token()
+    max_workers = config.MAX_DOCUMENT_WORKERS
+
+    results_map: Dict[str, List[str]] = {}
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {
+            executor.submit(
+                _find_related_sheets_for_one,
+                r.file_info.sheet_name or "Unknown",
+                sheet_catalog,
+                auth_token,
+            ): r.file_info.sheet_name or "Unknown"
+            for r in processed_sheets
+        }
+        for future in as_completed(futures):
+            name = futures[future]
+            try:
+                results_map[name] = future.result()
+            except Exception as exc:
+                logger.warning("Related sheets call failed for '%s': %s", name, exc)
+                results_map[name] = []
+
     for sheet_result in processed_sheets:
         doc = sheet_result.processed
-        lines = [f'\nRelated Sheets in "{workbook_name}":']
+        current_name = sheet_result.file_info.sheet_name or "Unknown"
+        related = results_map.get(current_name, [])
 
-        for other in processed_sheets:
-            if other is sheet_result:
-                continue
-            other_name = other.file_info.sheet_name or "Unknown"
-            other_desc = other.processed.document_description or other_name
-            is_reference = any(
-                kw in other_name.lower() for kw in REFERENCE_SHEET_KEYWORDS
+        if related:
+            doc.document_description = (
+                (doc.document_description or "")
+                + f"\nRelated sheets in workbook \"{workbook_name}\": "
+                + ", ".join(related)
             )
-            if is_reference:
-                lines.append(f"- **{other_name}** [reference sheet]: {other_desc}")
-            else:
-                lines.append(f"- **{other_name}**: {other_desc}")
-
-        doc.document_description = (doc.document_description or "") + "\n".join(lines)
 
 
 def _validate_and_insert_document(
