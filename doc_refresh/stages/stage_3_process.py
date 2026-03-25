@@ -34,7 +34,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from ..connections.llm import OpenAIConnectorError, calculate_token_cost, execute_llm_call
-from ..connections.oauth import fetch_oauth_token
+from ..connections.oauth import OAuthTokenManager, fetch_oauth_token
 from ..stages.stage_2_extract import ExtractedDocument
 from ..utils.audit_trail import AuditTrail, NullAuditTrail
 from ..utils.env_config import config
@@ -270,11 +270,22 @@ CHUNK_SUMMARY_CONTEXT_TOKENS = 800
 MAX_LLM_WORKERS = 4
 
 
+_token_manager: Optional[OAuthTokenManager] = None
+
+
 def resolve_auth_token() -> str:
-    """Return an auth token using OPENAI key when available, otherwise OAuth."""
+    """Return an auth token, auto-refreshing OAuth tokens before expiry.
+
+    For local development (OPENAI_API_KEY set), returns the static key.
+    For RBC environments (OAuth), uses a shared OAuthTokenManager that
+    automatically refreshes the token before it expires.
+    """
+    global _token_manager
     if config.OPENAI_API_KEY:
         return config.OPENAI_API_KEY
-    return fetch_oauth_token()
+    if _token_manager is None:
+        _token_manager = OAuthTokenManager()
+    return _token_manager.get_token()
 
 
 def _get_model_costs(model_name: str) -> Tuple[float, float]:

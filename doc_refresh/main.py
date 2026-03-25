@@ -96,13 +96,14 @@ class DocumentPipelineResult:
 def _process_single_file(
     file_info: FileInfo,
     file_source: FileSource,
-    auth_token: str,
     dry_run: bool,
 ) -> DocumentPipelineResult:
     """Run extract-process-validate-insert for a single document.
 
     Each invocation creates its own temp directory, which is cleaned up
     when the document finishes — preventing file-descriptor accumulation.
+    Auth token is resolved per-call via resolve_auth_token() to ensure
+    automatic refresh for long-running pipeline runs.
     """
     result = DocumentPipelineResult(file_info=file_info)
 
@@ -136,6 +137,7 @@ def _process_single_file(
             config.AUDIT_PATH, file_info.db_source, file_info.relative_path
         )
 
+        auth_token = resolve_auth_token()
         try:
             processed = process_document(
                 extracted, auth_token, audit_trail=audit_trail
@@ -289,12 +291,12 @@ REFERENCE_SHEET_KEYWORDS = frozenset({
 def _process_xlsx_extract_and_process(
     file_info: FileInfo,
     file_source: FileSource,
-    auth_token: str,
 ) -> DocumentPipelineResult:
     """Run extract and process (stages 2-3) for one xlsx sheet document.
 
     Stops after Stage 3 so that cross-referencing can enrich the
     document_description before validation and database insert.
+    Auth token is resolved per-call via resolve_auth_token().
     """
     result = DocumentPipelineResult(file_info=file_info)
 
@@ -328,6 +330,7 @@ def _process_xlsx_extract_and_process(
             config.AUDIT_PATH, file_info.db_source, file_info.relative_path
         )
 
+        auth_token = resolve_auth_token()
         try:
             processed = process_document(
                 extracted, auth_token, audit_trail=audit_trail
@@ -682,7 +685,6 @@ def main() -> int:
                 )
                 logger.info("-" * 60)
 
-                auth_token = resolve_auth_token()
                 completed_count = 0
 
                 with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -691,7 +693,6 @@ def main() -> int:
                             _process_single_file,
                             fi,
                             file_source,
-                            auth_token,
                             args.dry_run,
                         ): fi
                         for fi in regular_files
@@ -746,7 +747,6 @@ def main() -> int:
                                 _process_xlsx_extract_and_process,
                                 fi,
                                 file_source,
-                                auth_token,
                             ): fi
                             for fi in xlsx_sheets
                         }

@@ -1,6 +1,13 @@
-"""OAuth helpers for retrieving RBC API tokens with retries."""
+"""OAuth helpers for retrieving RBC API tokens with retries.
+
+Provides fetch_oauth_token() for single token fetches and OAuthTokenManager
+for long-running processes that need automatic token refresh before expiry.
+The token manager is thread-safe and used by the doc_refresh pipeline to
+avoid token expiration during multi-hour processing runs.
+"""
 
 import logging
+import threading
 import time
 
 import requests
@@ -114,3 +121,37 @@ def fetch_oauth_token() -> str:
 
     # Should never reach here due to raise in final attempt, but for clarity:
     raise ValueError("OAuth token acquisition failed")
+
+
+TOKEN_REFRESH_MARGIN_SECONDS = 300
+
+
+class OAuthTokenManager:
+    """Thread-safe OAuth token manager with automatic refresh before expiry.
+
+    Caches the current token and refreshes it when it is within
+    TOKEN_REFRESH_MARGIN_SECONDS of expiring. Safe for concurrent use
+    from ThreadPoolExecutor workers.
+    """
+
+    def __init__(self, token_lifetime_seconds: int = 3600):
+        self._lock = threading.Lock()
+        self._token: str = ""
+        self._fetched_at: float = 0.0
+        self._lifetime = token_lifetime_seconds
+
+    def get_token(self) -> str:
+        """Return a valid token, refreshing if near expiry."""
+        with self._lock:
+            age = time.time() - self._fetched_at
+            if self._token and age < (self._lifetime - TOKEN_REFRESH_MARGIN_SECONDS):
+                return self._token
+
+            logger.info(
+                "Refreshing OAuth token (age=%.0fs, lifetime=%ds)",
+                age,
+                self._lifetime,
+            )
+            self._token = fetch_oauth_token()
+            self._fetched_at = time.time()
+            return self._token
