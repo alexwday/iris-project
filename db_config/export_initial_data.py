@@ -20,6 +20,14 @@ from typing import Any, Dict, List, Optional
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv()
+    load_dotenv(".env.local", override=True)
+except ImportError:
+    pass
+
 DB_HOST = os.getenv("VECTOR_POSTGRES_DB_HOST", "localhost")
 DB_PORT = os.getenv("VECTOR_POSTGRES_DB_PORT", "34532")
 DB_NAME = os.getenv("VECTOR_POSTGRES_DB_NAME", "maven-finance")
