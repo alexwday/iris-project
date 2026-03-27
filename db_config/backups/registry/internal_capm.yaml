@@ -30,16 +30,16 @@ ad_groups:
 - APP_0MF0_MAVEN_FINANCE_ASSIST
 - G_CxONE_CL_DEV_Admin
 batch_size: 10
-max_selected_files: 10
+max_selected_files: 15
 top_chunks_in_catalog_selection: 1
 top_chunks_in_metadata_research: 3
-page_threshold_for_full_content: 100
+page_threshold_for_full_content: 200
 enable_db_wide_deep_research: true
-max_parallel_files: 20
+max_parallel_files: 5
 max_chunks_per_file: 20
-max_pages_for_full_context: 100
-max_primary_section_page_count: 6
-max_subsection_page_count: 3
+max_pages_for_full_context: 200
+max_primary_section_page_count: 20
+max_subsection_page_count: 10
 max_neighbour_chunks: 4
 max_gap_fill_pages: 5
 metadata_context_fields:
@@ -54,3 +54,8 @@ sample_questions:
 - Is a call option in a financial instrument an embedded derivative?
 - What threshold is considered to be probable under IFRS?
 - What are the main criteria to derecognize a financial asset under IFRS?
+query_type: semantic search
+content_type: general content
+use_when: null
+display_order: 100
+is_internal: true

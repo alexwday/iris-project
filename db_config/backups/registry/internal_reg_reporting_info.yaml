@@ -38,13 +38,13 @@ batch_size: 10
 max_selected_files: 25
 top_chunks_in_catalog_selection: 1
 top_chunks_in_metadata_research: 3
-page_threshold_for_full_content: 150
+page_threshold_for_full_content: 10
 enable_db_wide_deep_research: true
-max_parallel_files: 10
+max_parallel_files: 20
 max_chunks_per_file: 20
-max_pages_for_full_context: 6
-max_primary_section_page_count: 6
-max_subsection_page_count: 3
+max_pages_for_full_context: 10
+max_primary_section_page_count: 3
+max_subsection_page_count: 2
 max_neighbour_chunks: 2
 max_gap_fill_pages: 2
 metadata_context_fields:
@@ -59,3 +59,8 @@ sample_questions:
 - Which regulatory returns cover capital adequacy?
 - What is the structure of the I3 Consolidated return?
 - What returns are related to liquidity reporting?
+query_type: semantic search
+content_type: general content
+use_when: null
+display_order: 100
+is_internal: true

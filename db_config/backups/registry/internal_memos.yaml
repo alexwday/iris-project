@@ -30,19 +30,18 @@ search_modes:
 - catalog
 - semantic
 ad_groups:
-- all_users
-- local_dev
+- APP_0MF0_MAVEN_APG_IRIS
 batch_size: 10
 max_selected_files: 10
 top_chunks_in_catalog_selection: 1
 top_chunks_in_metadata_research: 3
-page_threshold_for_full_content: 100
+page_threshold_for_full_content: 150
 enable_db_wide_deep_research: true
-max_parallel_files: 20
+max_parallel_files: 10
 max_chunks_per_file: 20
-max_pages_for_full_context: 100
-max_primary_section_page_count: 6
-max_subsection_page_count: 3
+max_pages_for_full_context: 150
+max_primary_section_page_count: 10
+max_subsection_page_count: 5
 max_neighbour_chunks: 4
 max_gap_fill_pages: 5
 metadata_context_fields:
@@ -53,7 +52,10 @@ catalog_config: null
 semantic_config: null
 metadata_config: null
 sample_questions:
-- What was APG's documented reasoning for the accounting treatment of cloud computing implementation costs?
-- Is there a memo explaining why RBC chose a particular approach for syndicated loan derecognition?
-- What alternatives were considered for expected credit loss modeling on off-balance-sheet commitments?
-- Has APG issued a formal position on embedded derivative assessment for structured products?
+- What was APG's conclusion on hedge accounting for cross-currency swaps?
+- How did APG resolve the accounting treatment for modified debt instruments?
+query_type: semantic search
+content_type: general content
+use_when: null
+display_order: 100
+is_internal: true

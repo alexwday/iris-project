@@ -27,21 +27,20 @@ search_modes:
 - catalog
 - semantic
 ad_groups:
-- all_users
-- local_dev
+- APP_0MF0_MAVEN_APG_EXTERNAL_IRIS
 batch_size: 10
-max_selected_files: 10
+max_selected_files: 8
 top_chunks_in_catalog_selection: 2
 top_chunks_in_metadata_research: 3
 page_threshold_for_full_content: 100
 enable_db_wide_deep_research: true
-max_parallel_files: 20
+max_parallel_files: 5
 max_chunks_per_file: 20
-max_pages_for_full_context: 100
-max_primary_section_page_count: 6
-max_subsection_page_count: 3
-max_neighbour_chunks: 4
-max_gap_fill_pages: 5
+max_pages_for_full_context: 20
+max_primary_section_page_count: 15
+max_subsection_page_count: 8
+max_neighbour_chunks: 3
+max_gap_fill_pages: 3
 metadata_context_fields:
 - document_summary
 - document_description
@@ -53,5 +52,8 @@ sample_questions:
 - Under IFRS, what are examples of temporary differences that lead to a deferred tax liability?
 - Under IFRS, what are the presentation requirements for compound financial instruments? Please specify the relevant standard
   and sections.
-- What does IFRS 16 require for lease modification accounting?
-- What are the recognition criteria for intangible assets under IAS 38?
+query_type: semantic search
+content_type: general content
+use_when: null
+display_order: 100
+is_internal: false
