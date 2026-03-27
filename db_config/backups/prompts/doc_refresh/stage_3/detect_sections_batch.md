@@ -129,13 +129,13 @@ Call the detect_section_breaks tool with:
           },
           "description": "Detected level-1 section breaks in this batch"
         },
-        "continued_section_title": {
-          "type": "string",
-          "description": "Title of section continued from previous batch, or null if first batch"
-        },
         "no_sections_reason": {
           "type": "string",
           "description": "Required when sections array is empty. Explain why no section breaks were found (e.g., 'Short single-topic document with no structural or thematic divisions')"
+        },
+        "continued_section_title": {
+          "type": "string",
+          "description": "Title of section continued from previous batch, or null if first batch"
         }
       }
     },
