@@ -1943,10 +1943,10 @@ def generate_summary_embedding(
         token_count = count_tokens(clean_summary)
         if token_count > 8000:
             logger.warning(
-                "Document summary exceeds 8000 tokens (%d tokens), "
-                "embedding may be truncated by the model",
+                "Document summary exceeds 8000 tokens (%d tokens), truncating for embedding",
                 token_count,
             )
+            clean_summary = truncate_to_tokens(clean_summary, 8000)
         embeddings, _ = _create_embedding(
             auth_token,
             [clean_summary],
