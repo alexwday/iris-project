@@ -240,31 +240,34 @@ def create_single_sheet_xlsx(
         merged_map = _build_merged_cell_map(source_ws)
 
         dest_wb = Workbook()
-        dest_ws = dest_wb.active
-        dest_ws.title = sheet_name
+        try:
+            dest_ws = dest_wb.active
+            dest_ws.title = sheet_name
 
-        for row_idx, source_row in enumerate(
-            source_ws.iter_rows(
-                min_row=source_ws.min_row,
-                max_row=source_ws.max_row,
-                min_col=source_ws.min_column,
-                max_col=source_ws.max_column,
-            ),
-            start=1,
-        ):
-            for col_idx, source_cell in enumerate(source_row, start=1):
-                value = source_cell.value
-                if isinstance(source_cell, MergedCell):
-                    actual_row = (source_ws.min_row or 1) + row_idx - 1
-                    actual_col = (source_ws.min_column or 1) + col_idx - 1
-                    value = merged_map.get((actual_row, actual_col))
-                dest_ws.cell(row=row_idx, column=col_idx, value=value)
+            for row_idx, source_row in enumerate(
+                source_ws.iter_rows(
+                    min_row=source_ws.min_row,
+                    max_row=source_ws.max_row,
+                    min_col=source_ws.min_column,
+                    max_col=source_ws.max_column,
+                ),
+                start=1,
+            ):
+                for col_idx, source_cell in enumerate(source_row, start=1):
+                    value = source_cell.value
+                    if isinstance(source_cell, MergedCell):
+                        actual_row = (source_ws.min_row or 1) + row_idx - 1
+                        actual_col = (source_ws.min_column or 1) + col_idx - 1
+                        value = merged_map.get((actual_row, actual_col))
+                    dest_ws.cell(row=row_idx, column=col_idx, value=value)
 
-        for col_letter, dim in source_ws.column_dimensions.items():
-            if dim.width:
-                dest_ws.column_dimensions[col_letter].width = dim.width
+            for col_letter, dim in source_ws.column_dimensions.items():
+                if dim.width:
+                    dest_ws.column_dimensions[col_letter].width = dim.width
 
-        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-        dest_wb.save(output_path)
+            Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+            dest_wb.save(output_path)
+        finally:
+            dest_wb.close()
     finally:
         source_wb.close()

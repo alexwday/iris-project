@@ -85,12 +85,32 @@ def _extract_pdf_pages(file_path: str) -> List[str]:
 
 def _extract_pdf_with_pymupdf4llm(file_path: str) -> List[str]:
     """Extract PDF pages using pymupdf4llm for markdown output."""
-    pages_data = pymupdf4llm.to_markdown(
-        file_path,
-        page_chunks=True,
-        write_images=False,
-        show_progress=False,
-    )
+    try:
+        pages_data = pymupdf4llm.to_markdown(
+            file_path,
+            page_chunks=True,
+            write_images=False,
+            show_progress=False,
+        )
+    except AttributeError as exc:
+        if "tables" in str(exc):
+            logger.warning(
+                "Table detection failed for %s (%s), retrying without table extraction",
+                file_path,
+                exc,
+            )
+            pages_data = pymupdf4llm.to_markdown(
+                file_path,
+                page_chunks=True,
+                write_images=False,
+                show_progress=False,
+                table_strategy="",
+            )
+        else:
+            raise
+
+    if not pages_data:
+        return []
 
     pages = []
     for page_data in pages_data:
