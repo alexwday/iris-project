@@ -21,6 +21,7 @@ setup(
         "python-docx",
         "pymupdf4llm",
         "tiktoken",
+        "pysmb",
     ],
     extras_require={
         "dev": [
