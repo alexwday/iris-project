@@ -197,16 +197,16 @@ Research found only tangential information.
 Approach: Use hedging language ("The available sources provide limited guidance..."), acknowledge limitations, suggest what additional research might help.
 
 EXAMPLE 4 - Per-document enumeration across multiple documents (use markdown table):
-Research Statement: "Which Summary of Uncorrected Misstatements did we have in Q3 2024?"
-Findings: A quarterly summary sheet lists 5 SAB 99 memos with their amounts, functional areas, and root causes [REF:1] through [REF:5].
+Research Statement: "Identify the SAB 99 memos from Q3 2024 (documenting uncorrected misstatements from the Summary of Uncorrected Misstatements process)."
+Findings: A Q3 2024 quarterly summary sheet lists 5 SAB 99 memos with their amounts, functional areas, and root causes [REF:1] through [REF:5].
 
 Output format:
 
-"## Summary of Uncorrected Misstatements — Q3 2024
+"## SAB 99 Memos — Q3 2024
 
-The Q3 2024 quarterly summary sheet documents five Summary of Uncorrected Misstatements exceeding the $120MM materiality threshold.
+The Q3 2024 quarterly summary sheet documents five SAB 99 materiality assessment memos written for uncorrected misstatements that exceeded the $120MM threshold.
 
-| Memo | Amount | Functional Area | Root Cause |
+| SAB 99 Memo | Amount | Functional Area | Root Cause |
 |---|---|---|---|
 | Deposit Reconciliation [REF:1] | $145MM | Retail Deposits | EUDA spreadsheet error in manual reconciliation |
 | Wire Transfer [REF:2] | $200MM | Payments | Control deficiency in hedge accounting system |
@@ -217,21 +217,21 @@ The Q3 2024 quarterly summary sheet documents five Summary of Uncorrected Missta
 ---
 This information is general guidance. Please verify with the appropriate contact before implementation."
 
-Why this format: The query is pure enumeration (list the SUMs from Q3), all 5 memos share the same attribute structure (memo name, amount, area, root cause), and each row's content fits in 1-2 short phrases per cell. A wall of 5 parallel paragraphs would be hard to skim; the table lets the reader compare amounts and root causes at a glance.
+Why this format: The query is pure enumeration (list the SAB 99 memos from Q3), all 5 memos share the same attribute structure (memo name, amount, area, root cause), and each row's content fits in 1-2 short phrases per cell. A wall of 5 parallel paragraphs would be hard to skim; the table lets the reader compare amounts and root causes at a glance. Note the distinction in terminology: the memos are "SAB 99 memos" (the memo type, under SEC Staff Accounting Bulletin No. 99); the "Summary of Uncorrected Misstatements" (SUMs) is the internal process that identifies the underlying errors.
 
 EXAMPLE 5 - Cross-document synthesis plus per-item detail (use narrative followed by table):
-Research Statement: "Summarize the SAB 99 errors from Q3 2024 and identify any common themes."
-Findings: Same 5 memos as above, plus cross-document analysis observing that EUDA-related failures and system migration workarounds are recurring themes.
+Research Statement: "Summarize the SAB 99 memos from Q3 2024 and identify any common themes across the uncorrected misstatements they document."
+Findings: Same 5 SAB 99 memos as Example 4, plus cross-document analysis observing that EUDA-related failures and system migration workarounds are recurring themes.
 
 Output format:
 
 "## SAB 99 Summary for Q3 2024
 
-Q3 2024 had five Summary of Uncorrected Misstatements totaling $788MM in aggregate exposure. A recurring theme across the five memos is the role of **End-User Developed Applications (EUDAs)** and manual spreadsheet processes as either primary or contributing causes — three of the five memos cite EUDA-related failures [REF:1] [REF:3] [REF:4]. The remaining two memos attribute their errors to manual workarounds introduced during the core banking migration [REF:2] [REF:5], suggesting control gaps during transition periods.
+Q3 2024 produced five SAB 99 materiality assessment memos for uncorrected misstatements totaling $788MM in aggregate exposure. A recurring theme across the five memos is the role of **End-User Developed Applications (EUDAs)** and manual spreadsheet processes as either primary or contributing causes — three of the five memos cite EUDA-related failures [REF:1] [REF:3] [REF:4]. The remaining two memos attribute their errors to manual workarounds introduced during the core banking migration [REF:2] [REF:5], suggesting control gaps during transition periods.
 
-### Individual Memos
+### Individual SAB 99 Memos
 
-| Memo | Amount | Root Cause |
+| SAB 99 Memo | Amount | Root Cause |
 |---|---|---|
 | Deposit Reconciliation [REF:1] | $145MM | EUDA spreadsheet error |
 | Wire Transfer [REF:2] | $200MM | Migration workaround |
@@ -242,7 +242,7 @@ Q3 2024 had five Summary of Uncorrected Misstatements totaling $788MM in aggrega
 ---
 This information is general guidance. Please verify with the appropriate contact before implementation."
 
-Why this format: The query asks for both synthesis ("identify any common themes") and enumeration ("summarize the errors"). The narrative paragraph up front earns its place by aggregating the total exposure and identifying themes that no individual row reveals. The table below gives the reader per-item detail for scanning without forcing them to read 5 parallel paragraphs. The narrative and table are complementary — the narrative adds value the table cannot show, and the table adds value the narrative would bury.
+Why this format: The query asks for both synthesis ("identify any common themes") and enumeration ("summarize the memos"). The narrative paragraph up front earns its place by aggregating the total exposure and identifying themes that no individual row reveals. The table below gives the reader per-item detail for scanning without forcing them to read 5 parallel paragraphs. The narrative and table are complementary — the narrative adds value the table cannot show, and the table adds value the narrative would bury. Note the terminology: these are "SAB 99 memos" (documents in the database), which document assessments of uncorrected misstatements identified through the SUMs (Summary of Uncorrected Misstatements) process — the two are related but distinct.
 </examples>
 ```
 
