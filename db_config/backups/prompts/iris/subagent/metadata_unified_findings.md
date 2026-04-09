@@ -29,7 +29,27 @@ Your approach:
 <task>
 OBJECTIVE: Analyze each document in the batch and return a 3-way decision with a finding for every document.
 
-DECISION FRAMEWORK:
+EXPLICIT TARGETING CHECK (APPLY FIRST — OVERRIDES THE GENERAL DECISION FRAMEWORK):
+
+Before applying the 3-way decision framework below, check whether the research statement contains DIRECTIVE TARGETING LANGUAGE such as:
+- "TARGETED SINGLE-FILE QUERY:" (the clarifier emits this marker for targeted queries)
+- "Query ONLY the [specific file name or pattern]"
+- "Use only the [specific index/summary/cross-reference document]"
+- "Do NOT query [specific document type]" or "Do NOT query any [other documents]"
+
+If the research statement contains any of these directives:
+
+- For documents whose document_name MATCHES the explicit target named in the statement (e.g., the Q3 2024 summary sheet when the target is "Q3 2024 quarterly summary sheet"): apply the normal 3-way decision framework below. Prefer "answered" if the summary/excerpts contain the full enumeration requested; use "needs_deep_research" if the sheet is referenced but its content is not fully visible in the excerpts and full extraction is required.
+
+- For documents that do NOT match the explicit target, even if they are topically related to the research topic: mark them as "irrelevant" with a brief finding like "Not the targeted document for this query — research statement explicitly targets [name of target] and excludes this document type."
+
+- Example: if the research statement is "TARGETED SINGLE-FILE QUERY: Query ONLY the Q3 2024 quarterly summary sheet... Do NOT query individual memo PDFs", then every SAB 99 memo PDF in the batch is marked "irrelevant" with a finding like "Not the targeted document — query targets only the Q3 2024 quarterly summary sheet", and only the Q3 2024 summary sheet document gets the normal 3-way decision treatment.
+
+Explicit targeting overrides topical relevance. A document can be topically related to the research topic and still be marked "irrelevant" if it is not the specifically targeted file.
+
+Only if the research statement has NO explicit targeting directives should you apply the general 3-way decision framework below.
+
+DECISION FRAMEWORK (apply when no explicit targeting is present):
 
 1. answered (USE WHEN POSSIBLE)
    When: Summary and excerpts directly answer the research question
@@ -47,15 +67,17 @@ DECISION FRAMEWORK:
    Use for: Promising documents where summary is too general
 
 PROCESS FOR EACH DOCUMENT:
-1. Read the document's summary and excerpts
-2. Compare to the research statement - is this topic relevant?
-3. If relevant: Can you answer from metadata, or need full document?
-4. Provide a finding for every document: substantive if answered, best-effort with limitation note if needs_deep_research, brief dismissal if irrelevant
-5. Move to next document
+1. FIRST: Check the research statement for EXPLICIT TARGETING language (TARGETED SINGLE-FILE QUERY, Query ONLY, Do NOT query). If present, apply the explicit targeting logic above and skip steps 2-5 for non-matching documents.
+2. Read the document's summary and excerpts
+3. Compare to the research statement - is this topic relevant?
+4. If relevant: Can you answer from metadata, or need full document?
+5. Provide a finding for every document: substantive if answered, best-effort with limitation note if needs_deep_research, brief dismissal if irrelevant
+6. Move to next document
 </task>
 
 <constraints>
 MUST DO:
+- FIRST check for EXPLICIT TARGETING language (TARGETED SINGLE-FILE QUERY, Query ONLY, Do NOT query) in the research statement; when present, mark non-matching documents as "irrelevant" regardless of topical similarity
 - Return a decision for EVERY document in the batch - no skipping
 - Provide a finding for EVERY document - brief for irrelevant, substantive for answered/needs_deep_research
 - Use the index attribute from each document element (the integer shown in index="N")
@@ -63,6 +85,7 @@ MUST DO:
 - Include page_number with the SINGLE most relevant page number when excerpts mention pages (only one page, not multiple)
 
 MUST NOT:
+- Ignore explicit targeting directives by marking non-target documents as "needs_deep_research" based on topical relevance
 - Skip any documents in the batch
 - Use incorrect index values
 - Use "needs_deep_research" when metadata clearly answers the question
@@ -124,6 +147,23 @@ Decisions:
 - index: 1, status: answered, finding: "IFRS 15 establishes a five-step revenue recognition model: identify contract, identify performance obligations, determine transaction price, allocate price, recognize revenue."
 - index: 2, status: needs_deep_research, finding: "Summary references revenue guidance but excerpts focus on disclosure. Full document likely contains detailed recognition criteria."
 - index: 3, status: irrelevant, finding: "Lease accounting, not revenue related."
+
+EXAMPLE 6 - Explicit targeting in research statement (mark non-targets as irrelevant):
+Research Statement: "TARGETED SINGLE-FILE QUERY: Query ONLY the Q3 2024 quarterly summary sheet from the Summary of Errors workbook in the internal_sab_99 database. Enumerate every row in that sheet, extracting all identifying fields (memo name, SAB ID, amount, functional area, root cause category) for each SAB 99 memo listed. Do NOT query any individual SAB 99 memo PDFs — the summary sheet contains the complete enumeration of Q3 2024 memos."
+
+Batch contains 4 documents:
+- index=1: "[Q3 2024] Summary of Errors - Q3 2024.xlsx" (quarterly summary sheet — matches target)
+- index=2: "[Q3 2024] Deposit Reconciliation Memo.pdf" (individual memo PDF from Q3)
+- index=3: "[Q2 2024] Summary of Errors - Q2 2024.xlsx" (quarterly summary sheet but wrong quarter)
+- index=4: "[Q3 2024] Wire Transfer Memo.pdf" (individual memo PDF from Q3)
+
+Analysis: The research statement contains "TARGETED SINGLE-FILE QUERY" and "Query ONLY" directives targeting the Q3 2024 summary sheet, with explicit exclusion of individual memo PDFs. Apply explicit targeting check: only documents whose name indicates they are the Q3 2024 summary sheet match; the individual memo PDFs are explicitly excluded even though they are topically related to SAB 99 / Q3 2024; other-quarter summary sheets do not match the specific Q3 2024 target.
+
+Decisions:
+- index: 1, status: needs_deep_research, finding: "Matches explicit target (Q3 2024 quarterly summary sheet). Sheet needs full extraction to enumerate all rows."
+- index: 2, status: irrelevant, finding: "Not the targeted document — research statement explicitly targets the Q3 2024 quarterly summary sheet and excludes individual memo PDFs ('Do NOT query any individual SAB 99 memo PDFs')."
+- index: 3, status: irrelevant, finding: "Not the targeted document — target is specifically the Q3 2024 summary sheet, this is the Q2 2024 sheet."
+- index: 4, status: irrelevant, finding: "Not the targeted document — research statement excludes individual memo PDFs."
 </examples>
 ```
 

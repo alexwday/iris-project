@@ -75,13 +75,17 @@ Step 2a: Does an authoritative index document cover the query dimension?
 
    Apply this branching logic:
 
-   BRANCH 1 — Authoritative index exists AND the query is PURE enumeration (asks only for the list, count, or summary, without requesting per-item detail):
+   BRANCH 1 — Authoritative index exists AND the query is PURE enumeration (asks only for the list, count, or summary of entries in the index, optionally including attributes that are already present in the index itself such as IDs, amounts, categories, dates; does NOT request per-item analytical detail that would require reading the underlying documents behind the index):
      → proceed_with_research
      → is_db_wide=false
-     → Research statement explicitly references the index document as the primary source
-     → Rationale: the index already pre-computes the answer; db_wide scanning would be wasteful
+     → Research statement MUST use DIRECTIVE TARGETING LANGUAGE. Do not just mention the index document — explicitly instruct downstream agents to query ONLY that file and not any other documents in the database. Use this template:
 
-   BRANCH 2 — Authoritative index exists BUT the query also requests per-item detail (e.g., "list X and explain the root cause of each", "enumerate Y and describe how each was resolved", "which X are from Q3 and tell me about them"):
+         "TARGETED SINGLE-FILE QUERY: Query ONLY the '[specific document name or identifying pattern, e.g., Q3 2024 quarterly summary sheet from the Summary of Errors workbook]' in the [database name] database. Enumerate every row/entry in that file, extracting all identifying fields (e.g., [ID, name, amount, category, etc. — list the specific attributes relevant to the query]) for each entry. Do NOT query any other documents in the database — the targeted file contains the complete enumeration."
+
+     → Rationale: the index already pre-computes the answer; db_wide scanning would be wasteful and would surface findings from documents that do not directly answer the query. The directive language (TARGETED SINGLE-FILE QUERY, Query ONLY, Do NOT query, Enumerate every) instructs the downstream file selection and research agents to respect the explicit targeting rather than dragging in topically-related documents.
+     → Important: attributes already present in the index document (e.g., SAB IDs, error amounts, functional area labels, root cause categories that the index lists) count as part of the enumeration, not as "per-item detail". Branch 2 is only triggered when the query asks for something NOT in the index — e.g., full root cause narrative, remediation steps, qualitative analysis — which requires reading the underlying documents.
+
+   BRANCH 2 — Authoritative index exists BUT the query also requests per-item detail that goes BEYOND the attributes captured in the index itself (e.g., "list X and explain the full root cause analysis of each", "enumerate Y and describe the detailed remediation narrative for each", "which X are from Q3 and tell me about the qualitative analysis of each"):
      → request_deep_research_approval
      → is_db_wide=true
      → Rationale: the index provides the enumeration but the underlying per-item documents are needed for the detail
@@ -253,9 +257,9 @@ deep_research_approved: true
 
 EXAMPLE 10 - Pure enumeration with authoritative index available (Step 2a Branch 1):
 User: "Which SUMs did we have in Q3 2024?"
-Analysis: "SUMs" refers to uncorrected misstatements identified through the Summary of Uncorrected Misstatements process; these errors are documented in SAB 99 memos in this database. Step 2 flags the query as implicit enumeration completeness. Step 2a check: the SAB 99 database description in AVAILABLE_DATABASES explicitly identifies quarterly summary sheets as the authoritative cross-reference for quarter-level questions — they enumerate all SAB 99 memos for each fiscal quarter. The user is asking for pure enumeration (just the list) with no request for per-memo detail like root causes or remediation. The Q3 2024 summary sheet alone contains the complete answer. Branch 1 applies.
+Analysis: "SUMs" refers to uncorrected misstatements identified through the Summary of Uncorrected Misstatements process; these errors are documented in SAB 99 memos in this database. Step 2 flags the query as implicit enumeration completeness. Step 2a check: the SAB 99 database description in AVAILABLE_DATABASES explicitly identifies quarterly summary sheets as the authoritative cross-reference for quarter-level questions — they enumerate all SAB 99 memos for each fiscal quarter. The user is asking for pure enumeration (just the list) with no request for per-memo detail like full root cause narrative or remediation steps. The Q3 2024 summary sheet alone contains the complete answer. Branch 1 applies — must use DIRECTIVE TARGETING LANGUAGE in the research statement.
 Action: proceed_with_research
-Output: "Identify the SAB 99 memos listed in the Q3 2024 quarterly summary sheet from the Summary of Errors workbook — these memos document materiality assessments of uncorrected misstatements (from the Summary of Uncorrected Misstatements process) for the quarter."
+Output: "TARGETED SINGLE-FILE QUERY: Query ONLY the Q3 2024 quarterly summary sheet from the Summary of Errors workbook (the document whose name indicates it is the Q3 2024 sheet) in the internal_sab_99 database. Enumerate every row in that sheet, extracting all identifying fields (memo name, SAB ID, amount, functional area, root cause category, and any other columns present) for each SAB 99 memo listed. Do NOT query any individual SAB 99 memo PDFs — the summary sheet contains the complete enumeration of Q3 2024 memos."
 is_db_wide: false
 
 EXAMPLE 11 - Enumeration plus per-item detail (Step 2a Branch 2):

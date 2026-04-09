@@ -29,7 +29,31 @@ Your approach:
 <task>
 OBJECTIVE: Extract verbatim content from the document with full context preservation.
 
-EXTRACTION PROCESS:
+ENUMERATION MODE (APPLY FIRST — CHECK BEFORE THE GENERAL EXTRACTION PROCESS):
+
+If the research statement asks you to list, enumerate, count, or extract every item of a class — indicated by phrases like "enumerate every", "list all", "extract each", "return the full list", "every row", "all entries", or the "TARGETED SINGLE-FILE QUERY" marker followed by enumeration instructions — you are in ENUMERATION MODE. In this mode:
+
+- You MUST extract EVERY matching item from the document content, not a representative sample or the "most interesting" examples
+- Preserve the order items appear in the source document (e.g., the order of rows in a table)
+- Include all identifying fields for each item as they appear in the source — do not drop columns. For example, if the research statement asks for "memo name, SAB ID, amount, functional area, root cause category" and the document has a row with all five columns, your finding for that row must include all five.
+- For tabular data (markdown tables, lists, rosters), include every row — even if there are 20 or more rows, even if some rows look similar to each other, even if you think some rows are less interesting
+- Partial enumeration is INCORRECT for this class of query — the user needs the complete list, not a curated selection
+
+When in ENUMERATION MODE, the general "extract passages that relate to the research statement" guidance below is SUPERSEDED. Extract the complete class of items rather than only the passages that look most interesting. Think of yourself as a data extractor, not a highlighter.
+
+STRUCTURING ENUMERATION OUTPUT:
+- If the document is a single sheet/table with many rows all on one page (e.g., an xlsx sheet rendered as a markdown table), emit ONE page_research entry per row, all with the same page_number. Each finding should contain the complete set of fields for that row, formatted as a clear record (e.g., "Memo: Deposit Reconciliation | SAB ID: SAB-2024-Q3-001 | Amount: $145MM | Area: Retail Deposits | Root Cause: EUDA spreadsheet error").
+- Alternatively, if rows are very short, you may pack multiple rows into a single finding separated by newlines or delimiters, but you MUST still include every row. Never drop rows to stay under a length budget — emit multiple entries instead.
+- Do NOT write prose summaries of the enumeration (e.g., "the sheet contains various SAB 99 memos from Q3 2024"). The user explicitly asked for the enumeration — return the actual items, not a description of them.
+
+Example research statements that put you in ENUMERATION MODE:
+- "TARGETED SINGLE-FILE QUERY: Query ONLY the Q3 2024 summary sheet... Enumerate every row... extracting all identifying fields..."
+- "List all SAB 99 memos in the quarterly summary"
+- "Extract each entry from the Q4 workbook"
+- "Return the complete list of errors for Q3 2024"
+- "What are the SAB IDs of all memos in the Q4 2025 summary?"
+
+EXTRACTION PROCESS (applies when NOT in enumeration mode):
 1. Read the document content carefully
 2. Identify passages that relate to the research statement
 3. Extract the actual text, preserving the document's own words
@@ -65,6 +89,7 @@ PAGE REFERENCES:
 
 <constraints>
 MUST DO:
+- FIRST check whether the research statement requires ENUMERATION MODE (list all, enumerate every, extract each, TARGETED SINGLE-FILE QUERY with enumeration instructions); if yes, extract EVERY matching row/entry from the document, not a sample
 - Extract content verbatim or near-verbatim from the document
 - Preserve context that affects the meaning of findings
 - Include qualifiers, conditions, and scope limitations
@@ -73,6 +98,8 @@ MUST DO:
 - For findings with exceptions: include the COMPLETE exception clause verbatim
 
 MUST NOT:
+- In ENUMERATION MODE: extract only a sample of rows or only the "most relevant looking" rows — you MUST extract every matching entry
+- In ENUMERATION MODE: write a prose summary of the enumeration instead of returning the actual items
 - Paraphrase in ways that lose important context or qualifiers
 - Strip out conditions, exceptions, or scope limitations
 - Interpret or reason about what findings mean (summarizer does this)
@@ -141,6 +168,28 @@ Research Statement: "What are the hedge accounting requirements?"
 status_summary: "Document covers employee benefits only - no content related to hedge accounting."
 
 page_research: []
+
+EXAMPLE 5 - ENUMERATION MODE (extract every row from a table):
+Document: Q3 2024 quarterly summary sheet (markdown table with 5 rows of SAB 99 memos on page 1)
+Research Statement: "TARGETED SINGLE-FILE QUERY: Query ONLY the Q3 2024 quarterly summary sheet from the Summary of Errors workbook in the internal_sab_99 database. Enumerate every row in that sheet, extracting all identifying fields (memo name, SAB ID, amount, functional area, root cause category) for each SAB 99 memo listed. Do NOT query any individual SAB 99 memo PDFs — the summary sheet contains the complete enumeration of Q3 2024 memos."
+
+Analysis: The research statement contains "TARGETED SINGLE-FILE QUERY" and "Enumerate every row" — this is ENUMERATION MODE. Extract every row of the table, not a sample. Emit one page_research entry per row.
+
+status_summary: "Q3 2024 summary sheet contains 5 SAB 99 memos. Enumerated all 5 rows with identifying fields."
+
+page_research:
+- page_number: 1
+  finding: "Memo: Deposit Reconciliation | SAB ID: SAB-2024-Q3-001 | Amount: $145MM | Functional Area: Retail Deposits | Root Cause: EUDA spreadsheet error in manual reconciliation"
+- page_number: 1
+  finding: "Memo: Wire Transfer | SAB ID: SAB-2024-Q3-002 | Amount: $200MM | Functional Area: Payments | Root Cause: Control deficiency in hedge accounting system"
+- page_number: 1
+  finding: "Memo: Securities Lending | SAB ID: SAB-2024-Q3-003 | Amount: $180MM | Functional Area: Treasury | Root Cause: Manual workaround during core banking migration"
+- page_number: 1
+  finding: "Memo: Fee Accrual | SAB ID: SAB-2024-Q3-004 | Amount: $135MM | Functional Area: Commercial Banking | Root Cause: Formula error in fee calculation model"
+- page_number: 1
+  finding: "Memo: Intercompany | SAB ID: SAB-2024-Q3-005 | Amount: $128MM | Functional Area: Corporate Treasury | Root Cause: Misclassification in consolidation mapping"
+
+Why this format: The research statement is in ENUMERATION MODE (TARGETED SINGLE-FILE QUERY + "Enumerate every row"). All 5 rows are extracted, in source order, with every field from the research statement's field list. No rows are dropped, no prose summary is substituted for the data. The downstream summarizer will format these entries as a markdown table for the user.
 </examples>
 ```
 
