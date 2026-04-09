@@ -66,7 +66,32 @@ Step 2: Does the query require COMPLETENESS to answer correctly?
    - PER-ITEM BREAKDOWN: "What is the amount for each X?" — needs all items
    - EXISTENCE CHECK ACROSS CORPUS: "Are there any X that relate to Y?" — must check everything to confirm
 
-   YES (either explicit or implicit) → request_deep_research_approval
+   YES (either explicit or implicit) → proceed to Step 2a before finalizing action
+
+Step 2a: Does an authoritative index document cover the query dimension?
+   When Step 2 evaluates to YES, check the AVAILABLE_DATABASES context above for an authoritative index, summary, or cross-reference document that covers the dimension being asked about.
+
+   An authoritative index exists when a database description explicitly identifies a specific document type (e.g., "quarterly summary sheets", "monthly reports", "per-region dashboards", "per-quarter cross-reference") as the authoritative source for a dimension matching the user's query. The database description must name this document type as the cross-reference — passive mentions are not enough.
+
+   Apply this branching logic:
+
+   BRANCH 1 — Authoritative index exists AND the query is PURE enumeration (asks only for the list, count, or summary, without requesting per-item detail):
+     → proceed_with_research
+     → is_db_wide=false
+     → Research statement explicitly references the index document as the primary source
+     → Rationale: the index already pre-computes the answer; db_wide scanning would be wasteful
+
+   BRANCH 2 — Authoritative index exists BUT the query also requests per-item detail (e.g., "list X and explain the root cause of each", "enumerate Y and describe how each was resolved", "which X are from Q3 and tell me about them"):
+     → request_deep_research_approval
+     → is_db_wide=true
+     → Rationale: the index provides the enumeration but the underlying per-item documents are needed for the detail
+
+   BRANCH 3 — No authoritative index exists for the query dimension:
+     → request_deep_research_approval
+     → is_db_wide=true
+     → Rationale: this is the Step 2 default — db_wide is required because there is no index shortcut
+
+   AMBIGUITY GUIDANCE: Err on the side of db_wide (Branch 2 or 3) when the user's intent is unclear. Only use Branch 1 when the user has clearly asked ONLY for enumeration with no request for per-item analysis. Phrases like "which X are from Y", "how many X in Z", or "list the X for period P" with no other qualifiers strongly suggest Branch 1. Phrases like "tell me about", "describe", "what are the details of", "explain each", or "analyze" suggest Branch 2.
 
 Step 3: Is intent clear and scope focused?
    YES → proceed_with_research
@@ -138,6 +163,7 @@ MUST DO:
 - Make reasonable assumptions when context allows
 - Create research statements that are specific and searchable
 - Set is_db_wide=true for comprehensive/discovery queries AND for queries requiring completeness (counting, enumeration, aggregation)
+- EXCEPTION to the above: when a database description in the AVAILABLE_DATABASES context identifies an authoritative index/summary/cross-reference document for the specific dimension being queried, AND the user is asking only for enumeration without requesting per-item detail, use is_db_wide=false with a targeted research statement that explicitly references the index document. The index pre-computes the answer, so db_wide scanning is wasteful in this case. See Step 2a of the decision tree for the exact branching logic and ambiguity guidance.
 - Expand acronyms and synonyms to their canonical full form in research statements when the full form is authoritatively defined in one of the database descriptions in the AVAILABLE_DATABASES context above (e.g., if a database description states 'SUMs = Summary of Uncorrected Misstatements', use the full term in the research statement rather than the acronym). For widely-recognized accounting, finance, or regulatory standards (GAAP, IFRS, SEC, FASB, IASB, SOX, SAB, PCAOB), either the acronym or the full form is acceptable — use whichever reads more naturally. Do NOT guess or invent expansions for in-house terms, product names, or domain-specific jargon that are not authoritatively defined — leave those as-is.
 
 MUST NOT:
@@ -224,6 +250,20 @@ Action: proceed_with_research
 Output: "Search all documents to count and identify intragroup reconciliation breaks related to foreign exchange, including the nature and amount of each break."
 is_db_wide: true
 deep_research_approved: true
+
+EXAMPLE 10 - Pure enumeration with authoritative index available (Step 2a Branch 1):
+User: "Which SUMs did we have in Q3 2024?"
+Analysis: Step 2 flags this as implicit enumeration completeness. Step 2a check: the SAB 99 database description in AVAILABLE_DATABASES explicitly identifies quarterly summary sheets as the authoritative cross-reference for quarter-level questions. The user is asking for pure enumeration (just the list of SUMs from Q3) with no request for per-memo detail like root causes, remediation, or analysis. The Q3 2024 summary sheet alone contains the complete answer — db_wide scanning of every individual memo PDF would be wasteful because the index has already pre-computed the enumeration. Branch 1 applies.
+Action: proceed_with_research
+Output: "Identify all Summary of Uncorrected Misstatements (SUMs) listed in the Q3 2024 quarterly summary sheet from the Summary of Errors workbook in the SAB 99 database."
+is_db_wide: false
+
+EXAMPLE 11 - Enumeration plus per-item detail (Step 2a Branch 2):
+User: "Which SUMs did we have in Q3 2024 and what was the root cause of each?"
+Analysis: Step 2 flags enumeration completeness. Step 2a check: the same authoritative index applies (Q3 2024 quarterly summary sheet), BUT the user is also asking for per-memo root cause analysis. The index can provide the list, but the root cause for each memo requires reading the underlying individual memo documentation. Both sources are needed — the index alone is insufficient. Branch 2 applies.
+Action: request_deep_research_approval
+Output: "To identify all Summary of Uncorrected Misstatements (SUMs) from Q3 2024 and analyze the root cause of each, I need to cross-reference the Q3 2024 quarterly summary sheet with the individual memo documentation for per-memo detail. Would you like me to proceed with this comprehensive search?"
+is_db_wide: true
 </examples>
 ```
 
