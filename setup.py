@@ -10,13 +10,17 @@ setup(
         "cryptography",
         "psycopg2-binary",
         "pgvector",
+        "sqlalchemy",
         "jupyter",
         "python-dotenv",
+        "pyyaml",
         "fastapi>=0.104.1",
         "uvicorn[standard]>=0.24.0",
         "pydantic>=2.5.0",
         "openpyxl",
         "python-docx",
+        "pymupdf4llm",
+        "tiktoken",
     ],
     extras_require={
         "dev": [
