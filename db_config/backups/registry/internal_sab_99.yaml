@@ -4,7 +4,13 @@ db_summary: Internal documents justifying the materiality assessment of financia
   Accounting Bulletin No. 99. These memos are completed when financial statement errors exceed $120MM and include root cause
   analysis, control assessment, qualitative factor analysis, and remediation plans.
 db_description: |-
-  **Content:** Internal SAB 99 memos — materiality assessment memos written under SEC Staff Accounting Bulletin No. 99 — stored as two complementary document types: (1) individual memo PDFs, one per SAB 99 materiality assessment, documenting root cause analysis, control assessment, qualitative factor analysis, and remediation plans for financial statement errors exceeding the $120MM threshold; and (2) quarterly summary sheets extracted from the "Summary of Errors" workbook (one document per fiscal quarter) which list and cross-reference all SAB 99 memos for that quarter with summary metadata such as error amounts, functional areas, and root cause categories.
+  **Content:** Internal SAB 99 memos — materiality assessment memos written under SEC Staff Accounting Bulletin No. 99 — stored as two complementary document types.
+
+  **(1) Individual memo PDFs** — one per SAB 99 materiality assessment — contain the full long-form narrative documentation for each error exceeding the $120MM threshold, including detailed root cause analysis, detailed remediation plan text, qualitative factor analysis, control deficiency narrative, and any cited references or supporting memos. The PDFs are the source of truth for paragraph-level narrative content.
+
+  **(2) Quarterly summary sheets** extracted from the "Summary of Errors" workbook (one document per fiscal quarter) — these are rich structured metadata tables containing one row per SAB 99 memo for that quarter. For each memo, the sheet contains the following structured fields: SAB ID, memo name/title, brief description/summary, root cause (short form), status, review status, $ impact (error amount), segment, region, internal/external classification, historical/current classification, retrospective/prospective classification, financial statement area (balance sheet / P&L / cash flow statement / disclosure), annual-only disclosure flag, SOX deficiency flag, control assessment flag, contacts, and references. The sheet is the source of truth for all structured metadata and short-form summaries about each memo.
+
+  **Primary vs. fallback guidance:** For any query that can be answered from the structured fields listed above, the quarterly summary sheet is PRIMARY and sufficient — the individual memo PDFs are NOT needed. Fall back to the PDFs ONLY when the query requires long-form narrative content that is not captured as a structured field, such as the full remediation plan narrative, the detailed qualitative factor analysis section, or specific controls cited in the memo text.
 
   **Terminology:** This database concerns two related but distinct concepts that must not be conflated.
 
@@ -16,11 +22,29 @@ db_description: |-
 
   **Tier/Priority:** DOMAIN EXPERT - Specialized documentation for SAB 99 materiality assessments.
 
-  **Usage Guidance:** For quarter-level questions (e.g., "which SUMs did we have in Q3 2024?", "list the SAB 99 memos for Q2", "how many materiality assessments in FY2024?"), prioritize the quarterly summary sheets as the authoritative cross-reference — they enumerate all SAB 99 memos for each fiscal quarter. For per-memo detail questions (e.g., "what was the root cause of the deposit error memo?", "what remediation was performed for the reconciliation break memo?"), prioritize the individual memo PDFs. Both document types may be relevant when a question combines quarter context with memo-specific detail.
+  **Usage Guidance:** The quarterly summary sheets are the PRIMARY source for almost all SAB 99 queries — they contain rich structured metadata for every memo (SAB ID, root cause, $ impact, status, segment, region, classification flags, and more). Prioritize the quarterly summary sheets for ANY query about attributes that are stored as structured fields in the sheet, including:
 
-  **When to Select:** Queries about SAB 99 memos, materiality evaluations under SEC Staff Accounting Bulletin No. 99, the Summary of Uncorrected Misstatements (SUMs) process, the $120MM materiality threshold, quarterly error summaries, per-memo root cause and remediation analysis, qualitative factor analysis, control deficiency assessments, quantitative materiality thresholds, or documentation of immaterial versus material misstatements.
+  - Enumeration: "which SABs are from Q4 2025", "list the Q3 2024 memos"
+  - Root cause (short form): "what are the root causes of the Q4 memos", "which Q3 memos had EUDA-related root causes"
+  - Status / review: "which Q4 memos are still open", "what is the review status of each Q3 memo"
+  - $ impact: "which Q4 memos exceeded $200MM", "what is the aggregate $ impact for Q3"
+  - Classifications: "which Q4 memos are historical vs current", "which Q3 memos affected the P&L vs the balance sheet"
+  - Flags: "which Q4 memos have a SOX deficiency flag", "which Q3 memos require control assessment"
+  - Segment / region: "which Q4 memos affected the Retail segment", "which Q3 memos are from the US region"
+  - Brief description / summary: "give me a one-line summary of each Q4 memo"
+  - Contacts / references: "who are the contacts for each Q3 memo"
 
-  **Query Tips:** Use precise terminology: "SAB 99" or "SEC Staff Accounting Bulletin No. 99" refers to the regulatory framework and the memo type; "Summary of Uncorrected Misstatements" (preferred over the "SUMs" acronym) refers to the internal process that identifies misstatements. Relevant search terms include: "SAB 99", "SAB 99 memo", "SEC Staff Accounting Bulletin No. 99", "materiality assessment", "Summary of Uncorrected Misstatements", "SUMs process", "uncorrected misstatement", "financial statement error", "$120MM threshold", "quantitative materiality", "qualitative factors", "root cause analysis", "control deficiency", "remediation plan", "error correction", "restatement assessment", "immaterial misstatement", "intentional misstatement", "earnings management", "quarterly error summary", "per-quarter SAB 99 listing".
+  Fall back to the individual memo PDFs ONLY when the query needs long-form narrative content that is NOT captured as a structured field in the sheet, such as:
+  - The full remediation plan narrative ("describe the detailed remediation steps for memo X")
+  - The detailed qualitative factor analysis section ("walk me through the qualitative factor analysis for each Q3 memo")
+  - Specific controls or memos cited in the memo text ("what internal controls did the deposit reconciliation memo cite")
+  - Paragraph-level explanations or rationales beyond the short-form summary
+
+  Important: do NOT confuse short-form structured fields with long-form narrative. The sheet has a "root cause" field that gives the short categorical answer (e.g., "EUDA spreadsheet error in manual reconciliation"). The PDF contains the multi-paragraph detailed root cause analysis. A query asking "what is the root cause of each Q4 memo" is satisfied by the sheet. A query asking "walk me through the detailed root cause analysis section for each Q4 memo" requires the PDFs.
+
+  **When to Select:** Queries about SAB 99 memos, materiality evaluations under SEC Staff Accounting Bulletin No. 99, the Summary of Uncorrected Misstatements (SUMs) process, the $120MM materiality threshold, quarterly error summaries, per-memo metadata (root cause, status, $ impact, segment, region, classifications, SOX deficiency flag, control assessment flag, contacts, references, internal/external, historical/current, retrospective/prospective, BS/P&L/SCF/disclosure area, annual-only flag), per-memo narrative analysis (full root cause analysis, detailed remediation plans, qualitative factor analysis, control deficiency narrative), quarterly aggregations, theme analysis across multiple memos, or documentation of immaterial versus material misstatements.
+
+  **Query Tips:** Use precise terminology: "SAB 99" or "SEC Staff Accounting Bulletin No. 99" refers to the regulatory framework and the memo type; "Summary of Uncorrected Misstatements" (preferred over the "SUMs" acronym) refers to the internal process that identifies misstatements. Relevant search terms include: "SAB 99", "SAB 99 memo", "SEC Staff Accounting Bulletin No. 99", "materiality assessment", "Summary of Uncorrected Misstatements", "SUMs process", "uncorrected misstatement", "SAB ID", "memo status", "review status", "$ impact", "error amount", "segment", "region", "internal/external", "historical/current", "retrospective/prospective", "balance sheet impact", "P&L impact", "cash flow statement impact", "disclosure impact", "annual-only disclosure", "SOX deficiency", "SOX deficiency flag", "control assessment", "control assessment flag", "contacts", "references", "financial statement error", "$120MM threshold", "quantitative materiality", "qualitative factors", "root cause", "root cause analysis", "control deficiency", "remediation plan", "error correction", "restatement assessment", "immaterial misstatement", "intentional misstatement", "earnings management", "quarterly error summary", "per-quarter SAB 99 listing".
 
   **Query Type:** semantic search
 enabled: true

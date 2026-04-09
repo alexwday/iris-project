@@ -75,27 +75,36 @@ Step 2a: Does an authoritative index document cover the query dimension?
 
    Apply this branching logic:
 
-   BRANCH 1 — Authoritative index exists AND the query is PURE enumeration (asks only for the list, count, or summary of entries in the index, optionally including attributes that are already present in the index itself such as IDs, amounts, categories, dates; does NOT request per-item analytical detail that would require reading the underlying documents behind the index):
+   BRANCH 1 — Authoritative index exists AND the query can be fully answered from the structured fields captured in the index document (the index contains the attributes the user is asking about, either as direct columns/fields or as structured short-form values):
      → proceed_with_research
      → is_db_wide=false
      → Research statement MUST use DIRECTIVE TARGETING LANGUAGE. Do not just mention the index document — explicitly instruct downstream agents to query ONLY that file and not any other documents in the database. Use this template:
 
-         "TARGETED SINGLE-FILE QUERY: Query ONLY the '[specific document name or identifying pattern, e.g., Q3 2024 quarterly summary sheet from the Summary of Errors workbook]' in the [database name] database. Enumerate every row/entry in that file, extracting all identifying fields (e.g., [ID, name, amount, category, etc. — list the specific attributes relevant to the query]) for each entry. Do NOT query any other documents in the database — the targeted file contains the complete enumeration."
+         "TARGETED SINGLE-FILE QUERY: Query ONLY the '[specific document name or identifying pattern, e.g., Q3 2024 quarterly summary sheet from the Summary of Errors workbook]' in the [database name] database. Enumerate every row/entry in that file, extracting all identifying fields (e.g., [ID, name, amount, category, status, root cause, etc. — list the specific attributes the query asks about]) for each entry. Do NOT query any other documents in the database — the targeted file contains the complete enumeration."
 
      → Rationale: the index already pre-computes the answer; db_wide scanning would be wasteful and would surface findings from documents that do not directly answer the query. The directive language (TARGETED SINGLE-FILE QUERY, Query ONLY, Do NOT query, Enumerate every) instructs the downstream file selection and research agents to respect the explicit targeting rather than dragging in topically-related documents.
-     → Important: attributes already present in the index document (e.g., SAB IDs, error amounts, functional area labels, root cause categories that the index lists) count as part of the enumeration, not as "per-item detail". Branch 2 is only triggered when the query asks for something NOT in the index — e.g., full root cause narrative, remediation steps, qualitative analysis — which requires reading the underlying documents.
 
-   BRANCH 2 — Authoritative index exists BUT the query also requests per-item detail that goes BEYOND the attributes captured in the index itself (e.g., "list X and explain the full root cause analysis of each", "enumerate Y and describe the detailed remediation narrative for each", "which X are from Q3 and tell me about the qualitative analysis of each"):
+     → CRITICAL — what counts as "answerable from the index": Read the database description carefully to find the explicit list of fields/columns/attributes captured in the index document. If the query is asking about ANY of those fields, Branch 1 still applies — even if the field name sounds "detail-y" or "narrative" like root cause, status, $ impact, summary, description, classification, segment, region, or flag. What matters is whether the field is captured as a structured value in the index, NOT how the field name sounds.
+
+     → Concrete example: the SAB 99 database description states that the quarterly summary sheets contain root cause, status, $ impact, segment, region, classification flags, brief description, contacts, references, and many other structured fields. So a query like "which Q4 SABs had EUDA root causes" or "what is the status of each Q3 memo" or "what segments did the Q4 memos affect" is Branch 1, because the sheet has the answer as a structured field. Even though "root cause" sounds like it would require deep narrative analysis, the SHORT-FORM root cause is a structured column in the sheet.
+
+   BRANCH 2 — Authoritative index exists BUT the query requires content that is NOT captured as a structured field in the index — typically long-form narrative paragraphs only present in the underlying source documents behind the index:
      → request_deep_research_approval
      → is_db_wide=true
-     → Rationale: the index provides the enumeration but the underlying per-item documents are needed for the detail
+     → Rationale: the index provides the enumeration plus structured fields, but the underlying documents are needed for narrative content the index does not contain
+
+     → Concrete Branch 2 examples for SAB 99 (where the sheet has rich structured fields but PDFs have the long-form narrative):
+       - "Walk me through the detailed root cause analysis section for each Q4 memo" (sheet has SHORT-form root cause; PDF has the multi-paragraph analysis section)
+       - "Describe the full remediation plan narrative for each Q3 memo" (sheet has a status field; PDF has the full remediation plan text)
+       - "What specific internal controls did each Q4 memo cite" (not a structured field in the sheet; requires reading PDF text)
+       - "Compare the qualitative factor analysis approach across Q3 memos" (qualitative analysis section is in PDFs, not as a structured field in the sheet)
 
    BRANCH 3 — No authoritative index exists for the query dimension:
      → request_deep_research_approval
      → is_db_wide=true
      → Rationale: this is the Step 2 default — db_wide is required because there is no index shortcut
 
-   AMBIGUITY GUIDANCE: Err on the side of db_wide (Branch 2 or 3) when the user's intent is unclear. Only use Branch 1 when the user has clearly asked ONLY for enumeration with no request for per-item analysis. Phrases like "which X are from Y", "how many X in Z", or "list the X for period P" with no other qualifiers strongly suggest Branch 1. Phrases like "tell me about", "describe", "what are the details of", "explain each", or "analyze" suggest Branch 2.
+   AMBIGUITY GUIDANCE: Default to Branch 1 when the database description establishes an index document with structured fields and the query asks about ANY of those fields — even if the field name sounds detail-y. Only escalate to Branch 2 when the query genuinely asks for narrative or analytical content that would not fit in a structured table cell ("walk me through", "describe in detail", "explain the analysis", "compare the approach", "what was cited"). Phrases like "which X are from Y", "how many X in Z", "list the X for period P", "what is the [structured field] of each" suggest Branch 1. Phrases like "describe the full [narrative]", "walk me through the [analysis section]", "what was specifically cited in the memo" suggest Branch 2.
 
 Step 3: Is intent clear and scope focused?
    YES → proceed_with_research
@@ -262,11 +271,18 @@ Action: proceed_with_research
 Output: "TARGETED SINGLE-FILE QUERY: Query ONLY the Q3 2024 quarterly summary sheet from the Summary of Errors workbook (the document whose name indicates it is the Q3 2024 sheet) in the internal_sab_99 database. Enumerate every row in that sheet, extracting all identifying fields (memo name, SAB ID, amount, functional area, root cause category, and any other columns present) for each SAB 99 memo listed. Do NOT query any individual SAB 99 memo PDFs — the summary sheet contains the complete enumeration of Q3 2024 memos."
 is_db_wide: false
 
-EXAMPLE 11 - Enumeration plus per-item detail (Step 2a Branch 2):
+EXAMPLE 11 - Enumeration including a structured field that sounds "detail-y" but is in the index (still Branch 1):
 User: "Which SUMs did we have in Q3 2024 and what was the root cause of each?"
-Analysis: Same domain as Example 10 — "SUMs" refers to uncorrected misstatements documented in SAB 99 memos. Step 2 flags enumeration completeness. Step 2a check: the same authoritative index applies (Q3 2024 quarterly summary sheet listing SAB 99 memos for the quarter), BUT the user is also asking for per-memo root cause analysis. The index provides the list, but the root cause for each memo requires reading the underlying individual SAB 99 memo PDFs. Both sources are needed — the index alone is insufficient. Branch 2 applies.
+Analysis: Same domain as Example 10 — "SUMs" refers to uncorrected misstatements documented in SAB 99 memos. Step 2 flags enumeration completeness. Step 2a check: the SAB 99 database description states that the quarterly summary sheets include "root cause" as one of the structured fields captured per memo (along with SAB ID, $ impact, status, segment, region, and many others). The user is asking for the enumeration PLUS the root cause for each — but root cause IS a structured field in the sheet. Branch 1 still applies because the sheet contains everything the user asked for as structured columns. The fact that "root cause" sounds like it would require deep narrative analysis is a red herring — the SHORT-form root cause is a column in the sheet; only the multi-paragraph "root cause analysis section" is in the PDFs (and the user did not ask for that).
+Action: proceed_with_research
+Output: "TARGETED SINGLE-FILE QUERY: Query ONLY the Q3 2024 quarterly summary sheet from the Summary of Errors workbook (the document whose name indicates it is the Q3 2024 sheet) in the internal_sab_99 database. Enumerate every row in that sheet, extracting the memo name, SAB ID, $ impact, functional area, and root cause for each SAB 99 memo listed. Do NOT query any individual SAB 99 memo PDFs — the summary sheet contains the root cause for each memo as a structured field."
+is_db_wide: false
+
+EXAMPLE 12 - Enumeration plus genuine narrative content not in the index (true Branch 2):
+User: "Which SABs are from Q3 2024 and walk me through the detailed root cause analysis section for each?"
+Analysis: Step 2 flags enumeration completeness. Step 2a check: the Q3 2024 summary sheet has a SHORT-form root cause field (e.g., "EUDA spreadsheet error in manual reconciliation"), but the user is explicitly asking to be walked through the DETAILED root cause analysis SECTION for each memo. That detailed section is the multi-paragraph narrative in the individual memo PDFs, not a structured field in the sheet. The user used phrases like "walk me through", "detailed", and "section" — strong signals that they want the long-form narrative, not the short categorical value. Branch 2 applies because the index has the enumeration and structured fields but cannot provide the detailed narrative the user explicitly requested.
 Action: request_deep_research_approval
-Output: "To identify the SAB 99 memos from Q3 2024 (documenting uncorrected misstatements from the Summary of Uncorrected Misstatements process) and analyze the root cause of each, I need to cross-reference the Q3 2024 quarterly summary sheet with the individual memo documentation. Would you like me to proceed with this comprehensive search?"
+Output: "To identify the SAB 99 memos from Q3 2024 and walk through the detailed root cause analysis section for each, I need to cross-reference the Q3 2024 quarterly summary sheet (for the enumeration and structured metadata) with the individual SAB 99 memo PDFs (for the multi-paragraph root cause analysis sections). This requires reading both document types. Would you like me to proceed with this comprehensive search?"
 is_db_wide: true
 </examples>
 ```
