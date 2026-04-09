@@ -227,6 +227,7 @@ class ProcessedDocument:
     document_summary: str = ""
     document_description: str = ""
     document_usage: str = ""
+    document_display_name: str = ""
     summary_embedding: Optional[List[float]] = None
     processing_error: Optional[str] = None
 
@@ -729,6 +730,72 @@ def run_stage(
     return result
 
 
+def _extract_folder_context(file_info: Any) -> Optional[str]:
+    """Return slash-joined parent folder names from a file's relative path.
+
+    Returns None when the file lives at the database root or the relative
+    path is empty/invalid. For xlsx sheet documents (synthetic per-sheet
+    expansion in stage 1), strips the synthetic '<workbook_stem>/<sheet>.xlsx'
+    suffix so only the real parent folders are returned.
+    """
+    relative_path = getattr(file_info, "relative_path", "") or ""
+    if not relative_path:
+        return None
+
+    normalized = relative_path.replace("\\", "/")
+    parts = Path(normalized).parts
+    is_xlsx_sheet = getattr(file_info, "sheet_name", None) is not None
+
+    if is_xlsx_sheet:
+        candidate_parts = parts[:-2]
+    else:
+        candidate_parts = parts[:-1]
+
+    folder_parts = [
+        p.strip()
+        for p in candidate_parts
+        if p and p.strip() and p not in (".", "..")
+    ]
+    if not folder_parts:
+        return None
+
+    return " / ".join(folder_parts)
+
+
+def _build_folder_prefixed_name(file_name: str, folder_context: str) -> str:
+    """Return a file name with the folder context prefixed in [brackets]."""
+    prefix = f"[{folder_context}] "
+    if file_name.startswith(prefix):
+        return file_name
+    return prefix + file_name
+
+
+def _prepend_folder_context_to_summary(
+    document_summary: str,
+    folder_context: str,
+) -> str:
+    """Prepend a Source Folder Context block to a document summary."""
+    header = (
+        "# Source Folder Context\n"
+        f"This document is filed under the folder path: **{folder_context}**\n\n"
+        "The folder name is meaningful organizational context — typically a "
+        "fiscal period, event name, or category — and should be treated as "
+        "authoritative metadata describing this document. Incorporate the "
+        "folder name when characterizing the document's scope, applicability, "
+        "and the queries it should match.\n\n"
+    )
+    return header + document_summary
+
+
+def _ensure_folder_prefix(text: str, folder_context: str) -> str:
+    """Prepend [Folder: X] to a generated text field. Idempotent."""
+    if not text:
+        return f"[Folder: {folder_context}]"
+    if folder_context in text:
+        return text
+    return f"[Folder: {folder_context}] {text}"
+
+
 def process_document(
     extracted: ExtractedDocument,
     auth_token: str,
@@ -750,11 +817,26 @@ def process_document(
 
     pages = extracted.pages
 
+    folder_context = _extract_folder_context(extracted.file_info)
+    display_name = ""
+    if folder_context:
+        display_name = _build_folder_prefixed_name(
+            extracted.file_info.file_name, folder_context
+        )
+        if display_name != extracted.file_info.file_name:
+            logger.info(
+                "Tagging document_name with folder context '%s': %s -> %s",
+                folder_context,
+                extracted.file_info.file_name,
+                display_name,
+            )
+
     processed = ProcessedDocument(
         file_info=extracted.file_info,
         structure_type=StructureType.SEMANTIC,
         structure_confidence="low",
         page_count=len(pages),
+        document_display_name=display_name,
     )
 
     try:
@@ -785,6 +867,12 @@ def process_document(
         processed.sections = sections
 
         document_summary = build_document_summary(metadata, sections, len(pages))
+
+        if folder_context:
+            document_summary = _prepend_folder_context_to_summary(
+                document_summary, folder_context
+            )
+
         processed.document_summary = document_summary
 
         with ThreadPoolExecutor(max_workers=2) as executor:
@@ -856,6 +944,14 @@ def process_document(
                 "Document processing degraded for %s: %s",
                 processed.file_info.file_name,
                 processed.processing_error,
+            )
+
+        if folder_context:
+            processed.document_description = _ensure_folder_prefix(
+                processed.document_description, folder_context
+            )
+            processed.document_usage = _ensure_folder_prefix(
+                processed.document_usage, folder_context
             )
 
         return processed

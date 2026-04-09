@@ -348,7 +348,7 @@ def _insert_document_impl(doc: Any, session: Session) -> Tuple[int, int]:
         insert_metadata,
         {
             "db_source": doc.file_info.db_source,
-            "document_name": doc.file_info.file_name,
+            "document_name": getattr(doc, "document_display_name", "") or doc.file_info.file_name,
             "document_type": doc.structure_type.value,
             "document_summary": doc.document_summary,
             "summary_embedding": summary_embedding_str,
