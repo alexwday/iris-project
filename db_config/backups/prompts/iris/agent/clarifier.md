@@ -138,6 +138,7 @@ MUST DO:
 - Make reasonable assumptions when context allows
 - Create research statements that are specific and searchable
 - Set is_db_wide=true for comprehensive/discovery queries AND for queries requiring completeness (counting, enumeration, aggregation)
+- Expand acronyms and synonyms to their canonical full form in research statements when the full form is authoritatively defined in one of the database descriptions in the AVAILABLE_DATABASES context above (e.g., if a database description states 'SUMs = Summary of Unadjusted Misstatements', use the full term in the research statement rather than the acronym). For widely-recognized accounting, finance, or regulatory standards (GAAP, IFRS, SEC, FASB, IASB, SOX, SAB, PCAOB), either the acronym or the full form is acceptable — use whichever reads more naturally. Do NOT guess or invent expansions for in-house terms, product names, or domain-specific jargon that are not authoritatively defined — leave those as-is.
 
 MUST NOT:
 - Ask for clarification when you can make a reasonable assumption

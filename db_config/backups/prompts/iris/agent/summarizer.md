@@ -29,6 +29,8 @@ Your approach:
 
 {{FISCAL_CONTEXT}}
 
+{{DATABASE_CONTEXT}}
+
 <task>
 OBJECTIVE: Synthesize research findings into a comprehensive, well-structured response.
 
