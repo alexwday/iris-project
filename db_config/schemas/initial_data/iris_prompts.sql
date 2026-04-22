@@ -1,5 +1,5 @@
 -- IRIS Prompts Initial Data
--- Generated: 2026-04-22T14:40:31.126027
+-- Generated: 2026-04-22T14:44:46.713782
 -- 
 -- Import with: psql -f iris_prompts.sql
 -- Or run in pgAdmin/DBeaver
@@ -83,7 +83,7 @@ Step 2a: Does an authoritative index or other explicit routing shortcut cover th
 
      → Default template for a true index/single-file shortcut:
 
-         "TARGETED SINGLE-FILE QUERY: Query ONLY the ''[specific document name or identifying pattern, e.g., Q3 2024 quarterly summary sheet]'' in the [database name] database. Enumerate every row/entry in that file, extracting all identifying fields (e.g., [ID, name, amount, category, status, root cause, etc. — list the specific attributes the query asks about]) for each entry. Do NOT query any other documents in the database — the targeted file contains the complete enumeration."
+         "TARGETED SINGLE-FILE QUERY: Query ONLY the ''[specific document name or identifying pattern, e.g., March 2026 regional exceptions report]'' in the [database name] database. Enumerate every row/entry in that file, extracting all identifying fields (e.g., [ID, name, amount, category, status, root cause, etc. — list the specific attributes the query asks about]) for each entry. Do NOT query any other documents in the database — the targeted file contains the complete enumeration."
 
      → Adapted template for an explicitly-described targeted document set rather than one file (currently relevant to SAB 99 quarter folder-context routing):
 
