@@ -57,6 +57,53 @@ QueryContext = Dict[str, Any]
 logger = logging.getLogger(__name__)
 
 
+def _requires_db_wide_folder_scope_review(
+    database: str,
+    research_statement: str,
+) -> bool:
+    """Return True when a folder-scoped SAB 99 query still needs DB-wide review.
+
+    SAB 99 folder context is a storage-location filter, not a precomputed index.
+    Completeness-sensitive queries such as enumeration, counts, aggregations, and
+    per-memo summaries/root causes must review the full catalog so matching memos
+    are not truncated by selective file-picking.
+    """
+    if database != "internal_sab_99" or not research_statement:
+        return False
+
+    statement = research_statement.lower()
+    has_folder_scope = any(
+        phrase in statement
+        for phrase in (
+            "source folder context",
+            "folder context",
+            "stored under",
+            "filed under",
+            " in the q1 ",
+            " in the q2 ",
+            " in the q3 ",
+            " in the q4 ",
+        )
+    )
+    has_completeness_requirement = any(
+        phrase in statement
+        for phrase in (
+            "enumerate every",
+            "list all",
+            "extract each",
+            "for each",
+            "each memo",
+            "summarize each",
+            "summary of each",
+            "how many",
+            "count",
+            "total",
+            "aggregate",
+        )
+    )
+    return has_folder_scope and has_completeness_requirement
+
+
 def route_query_with_cascading_retrieval(
     database: str,
     token: Optional[str] = None,
@@ -93,11 +140,20 @@ def route_query_with_cascading_retrieval(
     query_embedding = query_context.get("query_embedding")
     is_db_wide = query_context.get("is_db_wide", False)
     deep_research_approved = query_context.get("deep_research_approved", False)
+    forced_db_wide = _requires_db_wide_folder_scope_review(database, research_statement)
+    if forced_db_wide and not is_db_wide:
+        logger.info(
+            "Forcing DB-wide routing for %s because folder-scoped completeness "
+            "queries must review the full catalog: %s",
+            database,
+            research_statement[:300],
+        )
+    effective_is_db_wide = is_db_wide or forced_db_wide
 
     research_config = DatabaseMetadataCache().get_research_config(database)
     enable_db_wide_deep_research = research_config["enable_db_wide_deep_research"]
 
-    if is_db_wide:
+    if effective_is_db_wide:
         if deep_research_approved and enable_db_wide_deep_research:
             path = "B"
             mode = "metadata_research"
@@ -110,13 +166,14 @@ def route_query_with_cascading_retrieval(
 
     logger.info(
         "Cascading query to %s: Path %s (is_db_wide=%s, deep_research_approved=%s, "
-        "enable_db_wide_deep_research=%s, mode=%s)",
+        "enable_db_wide_deep_research=%s, mode=%s, forced_db_wide=%s)",
         database,
         path,
-        is_db_wide,
+        effective_is_db_wide,
         deep_research_approved,
         enable_db_wide_deep_research,
         mode,
+        forced_db_wide,
     )
     stage_name = query_stage_name or f"db_cascading_{database}"
 

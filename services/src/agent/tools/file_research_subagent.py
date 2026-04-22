@@ -57,6 +57,8 @@ class FileResearchError(Exception):
 MODEL_CAPABILITY = "small"
 MODEL_MAX_TOKENS = 16384
 MODEL_TEMPERATURE = 0.2
+SOURCE_FOLDER_CONTEXT_HEADER = "# Source Folder Context\n"
+SOURCE_FOLDER_CONTEXT_TRAILER = "periods, scope, and applicability.\n\n"
 
 SynthesisContext = Dict[str, Any]
 ResearchContext = Dict[str, Any]
@@ -136,6 +138,7 @@ class DocumentChunks(TypedDict):
     document_id: str
     document_name: str
     file_name: Optional[str]
+    source_folder_context: NotRequired[Optional[str]]
     chunks: List[ChunkData]
     chunk_groups: NotRequired[List[ChunkGroup]]
     expansion_metrics: NotRequired[ExpansionMetrics]
@@ -259,7 +262,7 @@ def _fetch_document_metadata(
     doc_result = session.execute(
         text(
             """
-            SELECT id, document_name, file_name, page_count
+            SELECT id, document_name, file_name, page_count, document_summary
             FROM iris_document_metadata
             WHERE id = :doc_id AND db_source = :db_source
         """
@@ -276,7 +279,27 @@ def _fetch_document_metadata(
         "document_name": doc_row["document_name"],
         "file_name": doc_row.get("file_name"),
         "page_count": doc_row.get("page_count"),
+        "source_folder_context": _extract_source_folder_context_block(
+            doc_row.get("document_summary")
+        ),
     }
+
+
+def _extract_source_folder_context_block(
+    document_summary: Optional[str],
+) -> Optional[str]:
+    """Extract the injected Source Folder Context block from document_summary."""
+    if not document_summary or SOURCE_FOLDER_CONTEXT_HEADER not in document_summary:
+        return None
+
+    start = document_summary.find(SOURCE_FOLDER_CONTEXT_HEADER)
+    end_marker = document_summary.find(SOURCE_FOLDER_CONTEXT_TRAILER, start)
+    if end_marker == -1:
+        return None
+
+    end = end_marker + len(SOURCE_FOLDER_CONTEXT_TRAILER)
+    block = document_summary[start:end].strip()
+    return block or None
 
 
 def _fetch_all_chunks_for_document(
@@ -1109,6 +1132,9 @@ def fetch_chunks_with_hierarchical_expansion(
                             "document_id": metadata["id"],
                             "document_name": metadata["document_name"],
                             "file_name": metadata.get("file_name"),
+                            "source_folder_context": metadata.get(
+                                "source_folder_context"
+                            ),
                             "chunks": all_chunks,
                             "chunk_groups": chunk_groups,
                             "expansion_metrics": metrics,
@@ -1209,6 +1235,7 @@ def fetch_chunks_with_hierarchical_expansion(
                         "document_id": metadata["id"],
                         "document_name": metadata["document_name"],
                         "file_name": metadata.get("file_name"),
+                        "source_folder_context": metadata.get("source_folder_context"),
                         "chunks": aggregated_chunks,
                         "chunk_groups": expanded_groups,
                         "expansion_metrics": metrics,
@@ -1277,7 +1304,19 @@ def format_document_chunks_for_llm(document: DocumentChunks) -> str:
     if not chunk_groups:
         return "No content available.\n"
 
-    return _format_chunk_groups_xml(document, chunk_groups)
+    formatted_chunks = _format_chunk_groups_xml(document, chunk_groups)
+    source_folder_context = document.get("source_folder_context")
+    if not source_folder_context:
+        return formatted_chunks
+
+    return (
+        "<document_context>\n"
+        "  <source_folder_context>\n"
+        f"{source_folder_context}\n"
+        "  </source_folder_context>\n"
+        "</document_context>\n"
+        f"{formatted_chunks}"
+    )
 
 
 def _format_chunk_xml(chunk: ChunkData, indent: str = "  ") -> List[str]:

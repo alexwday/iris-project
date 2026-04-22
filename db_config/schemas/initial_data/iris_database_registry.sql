@@ -1,5 +1,5 @@
 -- IRIS Database Registry Initial Data
--- Generated: 2026-04-22T15:13:53.334241
+-- Generated: 2026-04-22T15:33:13.328216
 -- 
 -- Import with: psql -f iris_database_registry.sql
 -- Or run in pgAdmin/DBeaver
@@ -1224,7 +1224,7 @@ Treat the folder context as meaningful searchable metadata for storage-location 
 
 **Memo content:** Each SAB 99 memo contains the long-form narrative documentation for a single error, including detailed root cause analysis, detailed remediation plan text, qualitative factor analysis, control deficiency narrative, and any cited references or supporting memos. The generated metadata and excerpts may also surface short-form identifying fields useful for retrieval and enumeration, such as memo title, SAB ID when present, brief description, root cause (short form), status, review status, $ impact, segment, region, classifications, contacts, and references. The memo itself remains the source of truth.
 
-**Primary vs. fallback guidance:** For storage-folder-scoped or category-scoped queries, first use source folder context to identify the relevant memo set (for example, memos stored under folder context `Q3 2024`). If the question asks only for identifying or short-form fields that appear in document metadata, summaries, descriptions, usage text, or excerpts, metadata-first retrieval may be sufficient. If the user is asking about the memo''s actual covered period or the error period discussed in the memo, do not assume the folder context alone proves that substantive period. Fall back to full memo content when the query requires long-form narrative content that is not captured in the metadata or excerpts, such as the full remediation plan narrative, the detailed qualitative factor analysis section, or specific controls cited in the memo text.
+**Primary vs. fallback guidance:** For storage-folder-scoped or category-scoped queries, first use source folder context to identify the relevant memo set (for example, memos stored under folder context `Q3 2024`). If the question asks only for identifying or short-form fields that appear in document metadata, summaries, descriptions, usage text, or excerpts, metadata-first retrieval may be sufficient. If the user is asking about the memo''s actual covered period or the error period discussed in the memo, do not assume the folder context alone proves that substantive period. For folder-scoped completeness requests such as "list every memo in Q2 2025", "summarize each Q2 2025 memo", "count the Q2 2025 memos", or "what is the root cause of each memo in the Q2 2025 folder", treat source folder context as a filter to apply during database-wide review of the catalog rather than as a shortcut that justifies researching only a selected subset of files. Fall back to full memo content when the query requires long-form narrative content that is not captured in the metadata or excerpts, such as the full remediation plan narrative, the detailed qualitative factor analysis section, or specific controls cited in the memo text.
 
 **Terminology:** This database concerns two related but distinct concepts that must not be conflated.
 
