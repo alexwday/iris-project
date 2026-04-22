@@ -1,5 +1,5 @@
 -- IRIS Database Registry Initial Data
--- Generated: 2026-03-27T11:49:20.224018
+-- Generated: 2026-04-22T14:09:05.360277
 -- 
 -- Import with: psql -f iris_database_registry.sql
 -- Or run in pgAdmin/DBeaver
@@ -1211,15 +1211,55 @@ VALUES (
     'internal_sab_99',
     'SAB 99 Memos',
     'Internal documents justifying the materiality assessment of financial statement errors, as guided by SEC Staff Accounting Bulletin No. 99. These memos are completed when financial statement errors exceed $120MM and include root cause analysis, control assessment, qualitative factor analysis, and remediation plans.',
-    '**Content:** Internal documents justifying the materiality assessment of financial statement errors under SEC Staff Accounting Bulletin No. 99, including root cause analysis, control assessment, qualitative factor analysis, and remediation plans for errors exceeding $120MM.
+    '**Content:** Internal SAB 99 memos — materiality assessment memos written under SEC Staff Accounting Bulletin No. 99 — stored as individual memo documents, typically one memo per financial statement error exceeding the $120MM threshold.
+
+**Repository organization and quarter context:** The source repository organizes SAB 99 memos into fiscal-quarter subfolders (for example, `Q3 2024`, `Q4 2024`). That folder name is authoritative organizational metadata and is injected by the doc_refresh pipeline into retrieval artifacts. During ingestion and retrieval:
+
+- `document_name` is prefixed with the folder context (for example, `[Q3 2024] Deposit Reconciliation Memo.pdf`)
+- `document_summary` includes a "Source Folder Context" block naming the folder path
+- `document_description` and `document_usage` are prefixed with the folder context
+- full-document retrieval preserves that folder context alongside the memo content
+
+Treat the folder context as meaningful searchable metadata that identifies the fiscal quarter or category of the memo. There is no separate quarterly Excel summary file required for quarter-level retrieval.
+
+**Memo content:** Each SAB 99 memo contains the long-form narrative documentation for a single error, including detailed root cause analysis, detailed remediation plan text, qualitative factor analysis, control deficiency narrative, and any cited references or supporting memos. The generated metadata and excerpts may also surface short-form identifying fields useful for retrieval and enumeration, such as memo title, SAB ID when present, brief description, root cause (short form), status, review status, $ impact, segment, region, classifications, contacts, and references. The memo itself remains the source of truth.
+
+**Primary vs. fallback guidance:** For quarter-scoped or category-scoped queries, first use folder context to identify the relevant memo set (for example, memos whose folder context indicates `Q3 2024`). If the question asks only for identifying or short-form fields that appear in document metadata, summaries, descriptions, usage text, or excerpts, metadata-first retrieval may be sufficient. Fall back to full memo content when the query requires long-form narrative content that is not captured in the metadata or excerpts, such as the full remediation plan narrative, the detailed qualitative factor analysis section, or specific controls cited in the memo text.
+
+**Terminology:** This database concerns two related but distinct concepts that must not be conflated.
+
+- **SAB 99** stands for **SEC Staff Accounting Bulletin No. 99**, the SEC guidance under which these memos are prepared. The individual documents in this database are "SAB 99 memos" — internal materiality assessment memos written for financial statement errors that exceed the $120MM threshold. Either "SAB 99" or "SEC Staff Accounting Bulletin No. 99" is acceptable in research statements and responses; use whichever reads more naturally.
+
+- **SUMs** (occasionally written as "SUM") is the internal abbreviation for the **Summary of Uncorrected Misstatements** process — the internal workflow for identifying and tracking uncorrected misstatements in the financial statements. SAB 99 memos document the materiality assessments of errors surfaced through the SUMs process. Users often refer loosely to the errors or their corresponding memos as "SUMs", so when a user asks about "SUMs" they are typically asking about the uncorrected misstatements documented in SAB 99 memos. Always expand the acronym to "Summary of Uncorrected Misstatements" in research statements.
+
+- **Do not conflate SAB 99 and SUMs.** SAB 99 is the SEC regulatory framework and refers to the type of memo in this database. SUMs is the internal process that identifies uncorrected misstatements, which may then become the subject of SAB 99 memos. They are related but not synonyms — SAB 99 is the regulatory framework governing the memos, SUMs is the underlying workflow that generates the findings the memos assess.
 
 **Tier/Priority:** DOMAIN EXPERT - Specialized documentation for SAB 99 materiality assessments.
 
-**Usage Guidance:** Use for evaluating materiality of financial statement errors, understanding qualitative and quantitative factors, and reviewing remediation or control assessment details associated with identified errors.
+**Usage Guidance:** The individual SAB 99 memo documents are the primary source. Use folder context to scope the memo set by quarter, then use document metadata/excerpts for structured or short-form questions and the full memo text for narrative questions.
 
-**When to Select:** Queries about SAB 99 materiality evaluations, the $120MM threshold, qualitative factor analysis, remediation steps, root cause assessments, or documentation of immaterial versus material misstatements.
+Prioritize memo metadata plus folder context for queries about:
+- Enumeration: "which SABs are from Q4 2025", "list the Q3 2024 memos"
+- Root cause (short form): "what are the root causes of the Q4 memos", "which Q3 memos had EUDA-related root causes"
+- Status / review: "which Q4 memos are still open", "what is the review status of each Q3 memo"
+- $ impact: "which Q4 memos exceeded $200MM", "what is the aggregate $ impact for Q3"
+- Classifications: "which Q4 memos are historical vs current", "which Q3 memos affected the P&L vs the balance sheet"
+- Flags: "which Q4 memos have a SOX deficiency flag", "which Q3 memos require control assessment"
+- Segment / region: "which Q4 memos affected the Retail segment", "which Q3 memos are from the US region"
+- Brief description / summary: "give me a one-line summary of each Q4 memo"
+- Contacts / references: "who are the contacts for each Q3 memo"
 
-**Query Tips:** Use terms like ''SAB 99'', ''materiality assessment'', ''financial statement error'', ''$120MM threshold'', ''quantitative materiality'', ''qualitative factors'', ''root cause analysis'', ''control deficiency'', ''remediation plan'', ''error correction'', ''restatement assessment'', ''immaterial misstatement'', ''intentional misstatement'', ''earnings management''.
+Fall back to full memo content when the query needs long-form narrative content that is NOT captured in the metadata or excerpts, such as:
+- The full remediation plan narrative ("describe the detailed remediation steps for memo X")
+- The detailed qualitative factor analysis section ("walk me through the qualitative factor analysis for each Q3 memo")
+- Specific controls or memos cited in the memo text ("what internal controls did the deposit reconciliation memo cite")
+- Paragraph-level explanations or rationales beyond the short-form summary
+
+Important: do NOT confuse short-form metadata with long-form narrative. Metadata or excerpts may capture a short categorical root cause (for example, "EUDA spreadsheet error in manual reconciliation"), but the memo body contains the multi-paragraph detailed root cause analysis. A query asking "what is the root cause of each Q4 memo" may be satisfied from metadata/excerpts if that short-form field is present. A query asking "walk me through the detailed root cause analysis section for each Q4 memo" requires the full memo text.
+
+**When to Select:** Queries about SAB 99 memos, materiality evaluations under SEC Staff Accounting Bulletin No. 99, the Summary of Uncorrected Misstatements (SUMs) process, the $120MM materiality threshold, quarter-scoped memo sets identified by folder context, per-memo metadata (root cause, status, $ impact, segment, region, classifications, SOX deficiency flag, control assessment flag, contacts, references, internal/external, historical/current, retrospective/prospective, BS/P&L/SCF/disclosure area, annual-only flag), per-memo narrative analysis (full root cause analysis, detailed remediation plans, qualitative factor analysis, control deficiency narrative), quarterly aggregations, theme analysis across multiple memos, or documentation of immaterial versus material misstatements.
+
+**Query Tips:** Use precise terminology: "SAB 99" or "SEC Staff Accounting Bulletin No. 99" refers to the regulatory framework and the memo type; "Summary of Uncorrected Misstatements" (preferred over the "SUMs" acronym) refers to the internal process that identifies misstatements. Relevant search terms include: "SAB 99", "SAB 99 memo", "SEC Staff Accounting Bulletin No. 99", "materiality assessment", "Summary of Uncorrected Misstatements", "SUMs process", "uncorrected misstatement", "SAB ID", "memo status", "review status", "$ impact", "error amount", "segment", "region", "internal/external", "historical/current", "retrospective/prospective", "balance sheet impact", "P&L impact", "cash flow statement impact", "disclosure impact", "annual-only disclosure", "SOX deficiency", "SOX deficiency flag", "control assessment", "control assessment flag", "contacts", "references", "financial statement error", "$120MM threshold", "quantitative materiality", "qualitative factors", "root cause", "root cause analysis", "control deficiency", "remediation plan", "error correction", "restatement assessment", "immaterial misstatement", "intentional misstatement", "earnings management", "quarterly SAB 99 memos", "Q3 2024", "Q4 2025", "folder context", "quarter folder", "per-quarter SAB 99 listing".
 
 **Query Type:** semantic search',
     ARRAY['catalog','semantic']::text[],

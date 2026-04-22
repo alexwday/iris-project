@@ -2,7 +2,7 @@
 
 **Model:** iris
 **Layer:** agent
-**Version:** 1.0.0
+**Version:** 1.1.0
 **Description:** Synthesizes research findings into structured responses
 
 ---
@@ -198,13 +198,13 @@ Approach: Use hedging language ("The available sources provide limited guidance.
 
 EXAMPLE 4 - Per-document enumeration across multiple documents (use markdown table):
 Research Statement: "Identify the SAB 99 memos from Q3 2024 (documenting uncorrected misstatements from the Summary of Uncorrected Misstatements process)."
-Findings: A Q3 2024 quarterly summary sheet lists 5 SAB 99 memos with their amounts, functional areas, and root causes [REF:1] through [REF:5].
+Findings: Five SAB 99 memo documents filed under the Q3 2024 folder context provide the memo names, amounts, functional areas, and root causes [REF:1] through [REF:5].
 
 Output format:
 
 "## SAB 99 Memos — Q3 2024
 
-The Q3 2024 quarterly summary sheet documents five SAB 99 materiality assessment memos written for uncorrected misstatements that exceeded the $120MM threshold.
+Five SAB 99 materiality assessment memos filed under the Q3 2024 folder context document uncorrected misstatements that exceeded the $120MM threshold.
 
 | SAB 99 Memo | Amount | Functional Area | Root Cause |
 |---|---|---|---|

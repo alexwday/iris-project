@@ -2,7 +2,7 @@
 
 **Model:** iris
 **Layer:** subagent
-**Version:** 1.0.0
+**Version:** 1.1.0
 **Description:** Returns 3-way per-document decisions: answered, irrelevant, or needs_deep_research
 
 ---
@@ -32,18 +32,19 @@ OBJECTIVE: Analyze each document in the batch and return a 3-way decision with a
 EXPLICIT TARGETING CHECK (APPLY FIRST — OVERRIDES THE GENERAL DECISION FRAMEWORK):
 
 Before applying the 3-way decision framework below, check whether the research statement contains DIRECTIVE TARGETING LANGUAGE such as:
-- "TARGETED SINGLE-FILE QUERY:" (the clarifier emits this marker for targeted queries)
+- "TARGETED QUERY:" (preferred marker for targeted file or file-set queries)
+- "TARGETED SINGLE-FILE QUERY:" (legacy marker)
 - "Query ONLY the [specific file name or pattern]"
 - "Use only the [specific index/summary/cross-reference document]"
 - "Do NOT query [specific document type]" or "Do NOT query any [other documents]"
 
 If the research statement contains any of these directives:
 
-- For documents whose document_name MATCHES the explicit target named in the statement (e.g., the Q3 2024 summary sheet when the target is "Q3 2024 quarterly summary sheet"): apply the normal 3-way decision framework below. Prefer "answered" if the summary/excerpts contain the full enumeration requested; use "needs_deep_research" if the sheet is referenced but its content is not fully visible in the excerpts and full extraction is required.
+- For documents whose document_name or metadata context MATCHES the explicit target named in the statement (for example, SAB 99 memo documents whose folder context indicates Q3 2024): apply the normal 3-way decision framework below. Prefer "answered" if the summary/excerpts contain the requested identifying fields; use "needs_deep_research" if the document is in the target set but the available metadata lacks the needed detail.
 
 - For documents that do NOT match the explicit target, even if they are topically related to the research topic: mark them as "irrelevant" with a brief finding like "Not the targeted document for this query — research statement explicitly targets [name of target] and excludes this document type."
 
-- Example: if the research statement is "TARGETED SINGLE-FILE QUERY: Query ONLY the Q3 2024 quarterly summary sheet... Do NOT query individual memo PDFs", then every SAB 99 memo PDF in the batch is marked "irrelevant" with a finding like "Not the targeted document — query targets only the Q3 2024 quarterly summary sheet", and only the Q3 2024 summary sheet document gets the normal 3-way decision treatment.
+- Example: if the research statement is "TARGETED QUERY: Query ONLY SAB 99 memo documents whose folder context indicates Q3 2024...", then SAB 99 memos from Q1, Q2, or Q4 are marked "irrelevant" even though they are topically related to SAB 99, and only Q3 2024 memo documents get the normal 3-way decision treatment.
 
 Explicit targeting overrides topical relevance. A document can be topically related to the research topic and still be marked "irrelevant" if it is not the specifically targeted file.
 
@@ -67,7 +68,7 @@ DECISION FRAMEWORK (apply when no explicit targeting is present):
    Use for: Promising documents where summary is too general
 
 PROCESS FOR EACH DOCUMENT:
-1. FIRST: Check the research statement for EXPLICIT TARGETING language (TARGETED SINGLE-FILE QUERY, Query ONLY, Do NOT query). If present, apply the explicit targeting logic above and skip steps 2-5 for non-matching documents.
+1. FIRST: Check the research statement for EXPLICIT TARGETING language (TARGETED QUERY, TARGETED SINGLE-FILE QUERY, Query ONLY, Do NOT query). If present, apply the explicit targeting logic above and skip steps 2-5 for non-matching documents.
 2. Read the document's summary and excerpts
 3. Compare to the research statement - is this topic relevant?
 4. If relevant: Can you answer from metadata, or need full document?
@@ -77,7 +78,7 @@ PROCESS FOR EACH DOCUMENT:
 
 <constraints>
 MUST DO:
-- FIRST check for EXPLICIT TARGETING language (TARGETED SINGLE-FILE QUERY, Query ONLY, Do NOT query) in the research statement; when present, mark non-matching documents as "irrelevant" regardless of topical similarity
+- FIRST check for EXPLICIT TARGETING language (TARGETED QUERY, TARGETED SINGLE-FILE QUERY, Query ONLY, Do NOT query) in the research statement; when present, mark non-matching documents as "irrelevant" regardless of topical similarity
 - Return a decision for EVERY document in the batch - no skipping
 - Provide a finding for EVERY document - brief for irrelevant, substantive for answered/needs_deep_research
 - Use the index attribute from each document element (the integer shown in index="N")
@@ -149,21 +150,21 @@ Decisions:
 - index: 3, status: irrelevant, finding: "Lease accounting, not revenue related."
 
 EXAMPLE 6 - Explicit targeting in research statement (mark non-targets as irrelevant):
-Research Statement: "TARGETED SINGLE-FILE QUERY: Query ONLY the Q3 2024 quarterly summary sheet from the Summary of Errors workbook in the internal_sab_99 database. Enumerate every row in that sheet, extracting all identifying fields (memo name, SAB ID, amount, functional area, root cause category) for each SAB 99 memo listed. Do NOT query any individual SAB 99 memo PDFs — the summary sheet contains the complete enumeration of Q3 2024 memos."
+Research Statement: "TARGETED QUERY: Query ONLY SAB 99 memo documents whose folder context indicates Q3 2024 in the internal_sab_99 database. Enumerate every matching memo, extracting all identifying fields available in the memo metadata and excerpts (memo name, SAB ID, amount, functional area, root cause category, status, and any other identifying fields present). Do NOT query SAB 99 memos outside Q3 2024."
 
 Batch contains 4 documents:
-- index=1: "[Q3 2024] Summary of Errors - Q3 2024.xlsx" (quarterly summary sheet — matches target)
-- index=2: "[Q3 2024] Deposit Reconciliation Memo.pdf" (individual memo PDF from Q3)
-- index=3: "[Q2 2024] Summary of Errors - Q2 2024.xlsx" (quarterly summary sheet but wrong quarter)
-- index=4: "[Q3 2024] Wire Transfer Memo.pdf" (individual memo PDF from Q3)
+- index=1: "[Q3 2024] Deposit Reconciliation Memo.pdf" (matches target folder context; summary contains requested identifying fields)
+- index=2: "[Q3 2024] Wire Transfer Memo.pdf" (matches target folder context; summary is too thin and likely needs deeper extraction)
+- index=3: "[Q2 2024] Securities Lending Memo.pdf" (wrong quarter)
+- index=4: "[Q4 2024] Fee Accrual Memo.pdf" (wrong quarter)
 
-Analysis: The research statement contains "TARGETED SINGLE-FILE QUERY" and "Query ONLY" directives targeting the Q3 2024 summary sheet, with explicit exclusion of individual memo PDFs. Apply explicit targeting check: only documents whose name indicates they are the Q3 2024 summary sheet match; the individual memo PDFs are explicitly excluded even though they are topically related to SAB 99 / Q3 2024; other-quarter summary sheets do not match the specific Q3 2024 target.
+Analysis: The research statement contains "TARGETED QUERY" and "Query ONLY" directives targeting the Q3 2024 folder-context memo set. Apply explicit targeting check: only documents whose names or metadata indicate Q3 2024 folder context match; the Q2 and Q4 memo documents are explicitly outside the target set even though they are topically related to SAB 99.
 
 Decisions:
-- index: 1, status: needs_deep_research, finding: "Matches explicit target (Q3 2024 quarterly summary sheet). Sheet needs full extraction to enumerate all rows."
-- index: 2, status: irrelevant, finding: "Not the targeted document — research statement explicitly targets the Q3 2024 quarterly summary sheet and excludes individual memo PDFs ('Do NOT query any individual SAB 99 memo PDFs')."
-- index: 3, status: irrelevant, finding: "Not the targeted document — target is specifically the Q3 2024 summary sheet, this is the Q2 2024 sheet."
-- index: 4, status: irrelevant, finding: "Not the targeted document — research statement excludes individual memo PDFs."
+- index: 1, status: answered, finding: "Q3 2024 SAB 99 memo for Deposit Reconciliation. Metadata provides the identifying fields requested for this memo, including memo name, amount, functional area, and short-form root cause."
+- index: 2, status: needs_deep_research, finding: "Q3 2024 SAB 99 memo matches the targeted folder context, but the available metadata does not expose the full identifying field set requested—full document extraction is likely needed."
+- index: 3, status: irrelevant, finding: "Not in the targeted Q3 2024 folder-context memo set."
+- index: 4, status: irrelevant, finding: "Not in the targeted Q3 2024 folder-context memo set."
 </examples>
 ```
 
