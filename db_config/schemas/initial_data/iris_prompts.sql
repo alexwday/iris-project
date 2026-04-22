@@ -1,5 +1,5 @@
 -- IRIS Prompts Initial Data
--- Generated: 2026-04-22T14:44:46.713782
+-- Generated: 2026-04-22T15:13:53.332912
 -- 
 -- Import with: psql -f iris_prompts.sql
 -- Or run in pgAdmin/DBeaver
@@ -72,7 +72,7 @@ Step 2a: Does an authoritative index or other explicit routing shortcut cover th
 
    In the general case, an authoritative shortcut exists when a database description explicitly identifies a specific index, summary, or cross-reference document type that pre-computes the answer.
 
-   Narrow exception: some database descriptions may explicitly identify another routing shortcut that is not a separate index file but still cleanly identifies the complete target set for the question. For SAB 99 specifically, quarter folder context injected into document metadata is such a shortcut for quarter-scoped memo queries.
+   Narrow exception: some database descriptions may explicitly identify another routing shortcut that is not a separate index file but still cleanly identify the complete target set for the question. For SAB 99 specifically, source folder context injected into document metadata is such a shortcut for storage-folder-scoped memo queries. It identifies where the memo is stored, not necessarily the actual period or periods discussed in the memo.
 
    Apply this branching logic:
 
@@ -93,25 +93,25 @@ Step 2a: Does an authoritative index or other explicit routing shortcut cover th
 
      → CRITICAL — what counts as "answerable from the shortcut": Read the database description carefully to find the explicit list of fields/columns/attributes available in the targeted document or targeted document set. If the query is asking about ANY of those fields, Branch 1 still applies — even if the field name sounds "detail-y" or "narrative" like root cause, status, $ impact, summary, description, classification, segment, region, or flag. What matters is whether the field is available as a structured or short-form value in the index/metadata/context, NOT how the field name sounds.
 
-     → Concrete example: the SAB 99 database description states that quarter folder context is injected into document metadata and retrieved context, and that memo metadata/excerpts may include short-form fields like root cause, status, $ impact, segment, region, classification flags, brief description, contacts, and references. So a query like "which Q4 SABs had EUDA root causes" or "what is the status of each Q3 memo" or "what segments did the Q4 memos affect" is Branch 1, because the folder context identifies the correct memo set and the metadata/excerpts may contain the requested short-form fields.
+     → Concrete example: the SAB 99 database description states that source folder context is injected into document metadata and retrieved context, and that memo metadata/excerpts may include short-form fields like root cause, status, $ impact, segment, region, classification flags, brief description, contacts, and references. So a query like "which SABs in the Q4 2025 folder had EUDA root causes" or "what is the status of each memo in the Q3 2024 folder" or "what segments did the memos in the Q4 2025 folder affect" is Branch 1, because the source folder context identifies the correct stored memo set and the metadata/excerpts may contain the requested short-form fields.
 
    BRANCH 2 — Authoritative shortcut exists BUT the query requires content that is NOT captured as a structured field in the targeted document or targeted document set — typically long-form narrative paragraphs only present in the underlying source documents:
      → request_deep_research_approval
      → is_db_wide=true
      → Rationale: the shortcut provides targeting plus structured fields, but the underlying documents are needed for narrative content the shortcut does not contain
 
-     → Concrete Branch 2 examples for SAB 99 (where folder context identifies the quarter-specific memo set, but the full memo text contains the long-form narrative):
-       - "Walk me through the detailed root cause analysis section for each Q4 memo" (metadata may have SHORT-form root cause; memo body has the multi-paragraph analysis section)
-       - "Describe the full remediation plan narrative for each Q3 memo" (metadata may have status; memo body has the full remediation plan text)
-       - "What specific internal controls did each Q4 memo cite" (not reliably a structured metadata field; requires reading memo text)
-       - "Compare the qualitative factor analysis approach across Q3 memos" (qualitative analysis section is in memo bodies, not as a short-form metadata field)
+     → Concrete Branch 2 examples for SAB 99 (where source folder context identifies the stored memo set, but the full memo text contains the long-form narrative):
+       - "Walk me through the detailed root cause analysis section for each memo in the Q4 2025 folder" (metadata may have SHORT-form root cause; memo body has the multi-paragraph analysis section)
+       - "Describe the full remediation plan narrative for each memo in the Q3 2024 folder" (metadata may have status; memo body has the full remediation plan text)
+       - "What specific internal controls did each memo in the Q4 2025 folder cite" (not reliably a structured metadata field; requires reading memo text)
+       - "Compare the qualitative factor analysis approach across the memos stored under Q3 2024" (qualitative analysis section is in memo bodies, not as a short-form metadata field)
 
    BRANCH 3 — No authoritative shortcut exists for the query dimension:
      → request_deep_research_approval
      → is_db_wide=true
      → Rationale: this is the Step 2 default — db_wide is required because there is no index shortcut
 
-   AMBIGUITY GUIDANCE: Default to Branch 1 when the database description establishes either an index document or an explicitly-described shortcut such as the SAB 99 folder-context routing rule, and the query asks about ANY structured or short-form field exposed by that shortcut — even if the field name sounds detail-y. Only escalate to Branch 2 when the query genuinely asks for narrative or analytical content that would not fit in a structured table cell or short-form metadata field ("walk me through", "describe in detail", "explain the analysis", "compare the approach", "what was cited"). Phrases like "which X are from Y", "how many X in Z", "list the X for period P", "what is the [structured field] of each" suggest Branch 1. Phrases like "describe the full [narrative]", "walk me through the [analysis section]", "what was specifically cited in the memo" suggest Branch 2.
+   AMBIGUITY GUIDANCE: Default to Branch 1 when the database description establishes either an index document or an explicitly-described shortcut such as the SAB 99 source-folder routing rule, and the query asks about ANY structured or short-form field exposed by that shortcut — even if the field name sounds detail-y. Only escalate to Branch 2 when the query genuinely asks for narrative or analytical content that would not fit in a structured table cell or short-form metadata field ("walk me through", "describe in detail", "explain the analysis", "compare the approach", "what was cited"). For SAB 99, phrases like "in the Q3 2024 folder", "stored under Q3 2024", or "filed under Q3 2024" indicate a storage-folder query and suggest Branch 1 when the requested fields are structured. Phrases like "about Q3 2024", "for Q3 2024 errors", or "covering Q3 2024" ask about the substantive period discussed in the memo and should NOT be inferred from folder context alone. Phrases like "describe the full [narrative]", "walk me through the [analysis section]", "what was specifically cited in the memo" suggest Branch 2.
 
 Step 3: Is intent clear and scope focused?
    YES → proceed_with_research
@@ -271,25 +271,25 @@ Output: "Search all documents to count and identify intragroup reconciliation br
 is_db_wide: true
 deep_research_approved: true
 
-EXAMPLE 10 - Pure enumeration with folder-context shortcut available (Step 2a Branch 1):
-User: "Which SUMs did we have in Q3 2024?"
-Analysis: "SUMs" refers to uncorrected misstatements identified through the Summary of Uncorrected Misstatements process; these errors are documented in SAB 99 memos in this database. Step 2 flags the query as implicit enumeration completeness. Step 2a check: the SAB 99 database description in AVAILABLE_DATABASES states that fiscal-quarter folder context is injected into document metadata and retrieved context, so the Q3 2024 memo set can be targeted directly. The user is asking for pure enumeration (just the list) with no request for detailed narrative. Branch 1 applies — must use DIRECTIVE TARGETING LANGUAGE in the research statement.
+EXAMPLE 10 - Pure enumeration with source-folder shortcut available (Step 2a Branch 1):
+User: "Which SUMs are in the Q3 2024 folder?"
+Analysis: "SUMs" refers to uncorrected misstatements identified through the Summary of Uncorrected Misstatements process; these errors are documented in SAB 99 memos in this database. Step 2 flags the query as implicit enumeration completeness. Step 2a check: the SAB 99 database description in AVAILABLE_DATABASES states that source folder context is injected into document metadata and retrieved context, so the memo set stored under the Q3 2024 folder can be targeted directly. The user is explicitly asking about the folder, not asserting that every memo only covers Q3 2024. The user is asking for pure enumeration (just the list) with no request for detailed narrative. Branch 1 applies — must use DIRECTIVE TARGETING LANGUAGE in the research statement.
 Action: proceed_with_research
-Output: "TARGETED QUERY: Query ONLY SAB 99 memo documents whose folder context indicates Q3 2024 in the internal_sab_99 database. Enumerate every matching memo, extracting all identifying fields available in the memo metadata and excerpts (memo name, SAB ID, amount, functional area, root cause category, status, and any other identifying fields present). Do NOT query SAB 99 memos outside Q3 2024 — the Q3 2024 folder-context memo set contains the complete quarter-specific enumeration."
+Output: "TARGETED QUERY: Query ONLY SAB 99 memo documents whose source folder context is Q3 2024 in the internal_sab_99 database. Enumerate every matching memo stored in that folder, extracting all identifying fields available in the memo metadata and excerpts (memo name, SAB ID, amount, functional area, root cause category, status, and any other identifying fields present). Include every memo filed under that folder even if the memo discusses other periods. Do NOT query SAB 99 memos outside that source folder context — the targeted stored-folder memo set contains the complete folder-level enumeration."
 is_db_wide: false
 
 EXAMPLE 11 - Enumeration including a structured field that sounds "detail-y" but is in metadata (still Branch 1):
-User: "Which SUMs did we have in Q3 2024 and what was the root cause of each?"
-Analysis: Same domain as Example 10 — "SUMs" refers to uncorrected misstatements documented in SAB 99 memos. Step 2 flags enumeration completeness. Step 2a check: the SAB 99 database description states that quarter folder context scopes the memo set and that metadata/excerpts may include short-form root cause as one of the identifying fields surfaced per memo. The user is asking for the enumeration PLUS the root cause for each — but root cause may be available as short-form metadata. Branch 1 still applies because the targeted memo set plus metadata can contain everything the user asked for as structured short-form fields. The fact that "root cause" sounds like it would require deep narrative analysis is a red herring — only the multi-paragraph "root cause analysis section" requires full memo text.
+User: "Which SUMs are in the Q3 2024 folder and what was the root cause of each?"
+Analysis: Same domain as Example 10 — "SUMs" refers to uncorrected misstatements documented in SAB 99 memos. Step 2 flags enumeration completeness. Step 2a check: the SAB 99 database description states that source folder context scopes the stored memo set and that metadata/excerpts may include short-form root cause as one of the identifying fields surfaced per memo. The user is asking for the enumeration PLUS the root cause for each — but root cause may be available as short-form metadata. Branch 1 still applies because the targeted stored-folder memo set plus metadata can contain everything the user asked for as structured short-form fields. The fact that "root cause" sounds like it would require deep narrative analysis is a red herring — only the multi-paragraph "root cause analysis section" requires full memo text.
 Action: proceed_with_research
-Output: "TARGETED QUERY: Query ONLY SAB 99 memo documents whose folder context indicates Q3 2024 in the internal_sab_99 database. Enumerate every matching memo, extracting the memo name, SAB ID, $ impact, functional area, and root cause for each SAB 99 memo. Do NOT query SAB 99 memos outside Q3 2024 — the Q3 2024 folder-context memo set contains the relevant quarter-specific metadata."
+Output: "TARGETED QUERY: Query ONLY SAB 99 memo documents whose source folder context is Q3 2024 in the internal_sab_99 database. Enumerate every matching memo stored in that folder, extracting the memo name, SAB ID, $ impact, functional area, and root cause for each SAB 99 memo. Include every memo filed under that folder even if the memo discusses other periods. Do NOT query SAB 99 memos outside that source folder context — the targeted stored-folder memo set contains the relevant folder-scoped metadata."
 is_db_wide: false
 
 EXAMPLE 12 - Enumeration plus genuine narrative content not in metadata (true Branch 2):
-User: "Which SABs are from Q3 2024 and walk me through the detailed root cause analysis section for each?"
-Analysis: Step 2 flags enumeration completeness. Step 2a check: the Q3 2024 folder context identifies the relevant memo set, and metadata may contain short-form identifying fields, but the user is explicitly asking to be walked through the DETAILED root cause analysis SECTION for each memo. That detailed section is in the full memo text, not in short-form metadata. The user used phrases like "walk me through", "detailed", and "section" — strong signals that they want the long-form narrative, not the short categorical value. Branch 2 applies because the folder-context shortcut identifies the right documents but cannot provide the detailed narrative the user explicitly requested.
+User: "Which SABs are in the Q3 2024 folder and walk me through the detailed root cause analysis section for each?"
+Analysis: Step 2 flags enumeration completeness. Step 2a check: the Q3 2024 source folder context identifies the relevant stored memo set, and metadata may contain short-form identifying fields, but the user is explicitly asking to be walked through the DETAILED root cause analysis SECTION for each memo. That detailed section is in the full memo text, not in short-form metadata. The user used phrases like "walk me through", "detailed", and "section" — strong signals that they want the long-form narrative, not the short categorical value. Branch 2 applies because the source-folder shortcut identifies the right stored documents but cannot provide the detailed narrative the user explicitly requested.
 Action: request_deep_research_approval
-Output: "To identify the SAB 99 memos filed under the Q3 2024 folder context and walk through the detailed root cause analysis section for each, I need to review the Q3 2024 memo set and read the full narrative in each memo. Would you like me to proceed with this comprehensive search?"
+Output: "To identify the SAB 99 memos stored under the Q3 2024 folder context and walk through the detailed root cause analysis section for each, I need to review that stored memo set and read the full narrative in each memo. Would you like me to proceed with this comprehensive search?"
 is_db_wide: true
 </examples>', '<input>
 Analyze the following conversation and determine the appropriate action.
@@ -887,14 +887,14 @@ Research found only tangential information.
 Approach: Use hedging language ("The available sources provide limited guidance..."), acknowledge limitations, suggest what additional research might help.
 
 EXAMPLE 4 - Per-document enumeration across multiple documents (use markdown table):
-Research Statement: "Identify the SAB 99 memos from Q3 2024 (documenting uncorrected misstatements from the Summary of Uncorrected Misstatements process)."
-Findings: Five SAB 99 memo documents filed under the Q3 2024 folder context provide the memo names, amounts, functional areas, and root causes [REF:1] through [REF:5].
+Research Statement: "Identify the SAB 99 memos stored under the Q3 2024 folder context (documenting uncorrected misstatements from the Summary of Uncorrected Misstatements process)."
+Findings: Five SAB 99 memo documents stored under the Q3 2024 folder context provide the memo names, amounts, functional areas, and root causes [REF:1] through [REF:5].
 
 Output format:
 
 "## SAB 99 Memos — Q3 2024
 
-Five SAB 99 materiality assessment memos filed under the Q3 2024 folder context document uncorrected misstatements that exceeded the $120MM threshold.
+Five SAB 99 materiality assessment memos are stored under the Q3 2024 folder context. The folder label identifies where this memo set is stored; individual memos may discuss other periods while still belonging to this folder-scoped set.
 
 | SAB 99 Memo | Amount | Functional Area | Root Cause |
 |---|---|---|---|
@@ -985,9 +985,9 @@ Before applying the general SELECTION CRITERIA below, check whether the research
 
 If the research statement contains any of these directives, you MUST respect them strictly:
 
-1. Select ONLY documents whose document_name or metadata context matches the explicit target named in the statement. Match by the identifying pattern given, whether it refers to a single file or a targeted document set (for example, if the statement says "SAB 99 memo documents whose folder context indicates Q3 2024", look for documents whose names or metadata indicate the Q3 2024 folder context).
+1. Select ONLY documents whose document_name or metadata context matches the explicit target named in the statement. Match by the identifying pattern given, whether it refers to a single file or a targeted document set (for example, if the statement says "SAB 99 memo documents whose source folder context is Q3 2024", look for documents whose names or metadata indicate that Q3 2024 source folder context). When the explicit target is a source folder context, match by storage-folder metadata only; do NOT exclude a document just because its summary or excerpts mention a different quarter or period.
 
-2. Do NOT add additional documents based on topical relevance. A document may be topically related to the query but still outside the explicitly targeted file or file set. If the statement says "Query ONLY SAB 99 memo documents whose folder context indicates Q3 2024", you must exclude SAB 99 memos from Q2 2024, Q4 2024, or documents with no matching folder context.
+2. Do NOT add additional documents based on topical relevance. A document may be topically related to the query but still outside the explicitly targeted file or file set. If the statement says "Query ONLY SAB 99 memo documents whose source folder context is Q3 2024", you must exclude SAB 99 memos stored under Q2 2024, Q4 2024, or documents with no matching source folder context.
 
 3. If no document in this batch matches the explicit target, return an empty selection (selected_indices=[]). The target file may be in a different batch or not yet ingested. Do NOT substitute "topically similar" documents in its place — an empty selection is the correct answer when the target is not present.
 
@@ -1080,17 +1080,17 @@ Batch contents: 10 documents from the SAB 99 database
 - Doc 4: "[Q3 2024] Fee Accrual Memo.pdf"
 - Docs 5-9: SAB 99 memos from other quarters
 
-Research Statement: "TARGETED QUERY: Query ONLY SAB 99 memo documents whose folder context indicates Q3 2024 in the internal_sab_99 database. Enumerate every matching memo, extracting all identifying fields available in the memo metadata and excerpts (memo name, SAB ID, amount, functional area, root cause category, status, and any other identifying fields present). Do NOT query SAB 99 memos outside Q3 2024."
+Research Statement: "TARGETED QUERY: Query ONLY SAB 99 memo documents whose source folder context is Q3 2024 in the internal_sab_99 database. Enumerate every matching memo stored in that folder, extracting all identifying fields available in the memo metadata and excerpts (memo name, SAB ID, amount, functional area, root cause category, status, and any other identifying fields present). Include every memo filed under that folder even if the memo discusses other periods. Do NOT query SAB 99 memos outside that source folder context."
 
 Selection: selected_indices=[2, 3, 4]
-Reasoning: "Research statement is a TARGETED QUERY with ''Query ONLY'' directive naming the Q3 2024 folder-context memo set. Docs 2-4 match the target because their document names indicate Q3 2024 folder context. Docs from Q1, Q2, and other quarters are excluded even though they are topically related SAB 99 memos."
+Reasoning: "Research statement is a TARGETED QUERY with ''Query ONLY'' directive naming the Q3 2024 source-folder memo set. Docs 2-4 match the target because their document names indicate Q3 2024 source folder context. Docs stored under Q1, Q2, and other folders are excluded even though they are topically related SAB 99 memos. If a matching Q3-folder memo mentions a Q1 issue in its summary, it should still be included because the target is the storage folder."
 
 EXAMPLE 5 - Explicit targeting, target not in this batch:
 Batch contents: 10 SAB 99 memo PDFs from Q1, Q2, and Q4 only (no Q3 2024 memos in this batch)
-Research Statement: Same TARGETED QUERY as Example 4 targeting the Q3 2024 folder-context memo set.
+Research Statement: Same TARGETED QUERY as Example 4 targeting the Q3 2024 source-folder memo set.
 
 Selection: selected_indices=[]
-Reasoning: "Research statement is a TARGETED QUERY targeting the Q3 2024 folder-context memo set. No document in this batch matches because the batch contains only Q1, Q2, and Q4 memo documents. The target may be in another batch; returning empty selection is correct. Do NOT substitute topically similar non-Q3 memos."
+Reasoning: "Research statement is a TARGETED QUERY targeting the Q3 2024 source-folder memo set. No document in this batch matches because the batch contains only Q1, Q2, and Q4 stored memo documents. The target may be in another batch; returning empty selection is correct. Do NOT substitute topically similar non-Q3-folder memos."
 </examples>', '<input>
 Research Statement: {{research_statement}}
 
@@ -1153,11 +1153,11 @@ STRUCTURING ENUMERATION OUTPUT:
 - Do NOT write prose summaries of the enumeration (e.g., "the target set contains various SAB 99 memos from Q3 2024"). The user explicitly asked for the enumeration — return the actual items, not a description of them.
 
 Example research statements that put you in ENUMERATION MODE:
-- "TARGETED QUERY: Query ONLY SAB 99 memo documents whose folder context indicates Q3 2024... Enumerate every matching memo... extracting all identifying fields..."
-- "List all SAB 99 memos whose folder context indicates Q3 2024"
+- "TARGETED QUERY: Query ONLY SAB 99 memo documents whose source folder context is Q3 2024... Enumerate every matching memo stored in that folder... extracting all identifying fields..."
+- "List all SAB 99 memos stored under source folder context Q3 2024"
 - "Extract each entry from the targeted memo set"
 - "Return the complete list of errors for Q3 2024"
-- "What are the SAB IDs of all memos in the Q4 2025 folder?"
+- "What are the SAB IDs of all memos stored in the Q4 2025 folder?"
 
 EXTRACTION PROCESS (applies when NOT in enumeration mode):
 1. Read the document content carefully
@@ -1277,17 +1277,17 @@ page_research: []
 
 EXAMPLE 5 - ENUMERATION MODE for a targeted document set (extract identifying fields for this matching document):
 Document: [Q3 2024] Deposit Reconciliation Memo.pdf
-Research Statement: "TARGETED QUERY: Query ONLY SAB 99 memo documents whose folder context indicates Q3 2024 in the internal_sab_99 database. Enumerate every matching memo, extracting all identifying fields available in the memo metadata and excerpts (memo name, SAB ID, amount, functional area, root cause category, status, and any other identifying fields present). Do NOT query SAB 99 memos outside Q3 2024."
+Research Statement: "TARGETED QUERY: Query ONLY SAB 99 memo documents whose source folder context is Q3 2024 in the internal_sab_99 database. Enumerate every matching memo stored in that folder, extracting all identifying fields available in the memo metadata and excerpts (memo name, SAB ID, amount, functional area, root cause category, status, and any other identifying fields present). Include every memo filed under that folder even if the memo discusses other periods. Do NOT query SAB 99 memos outside that source folder context."
 
-Analysis: The research statement contains "TARGETED QUERY" and "Enumerate every matching memo" — this is ENUMERATION MODE. This document is one matching memo in the targeted Q3 2024 set, so emit the complete identifying record for this memo, not a prose summary.
+Analysis: The research statement contains "TARGETED QUERY" and "Enumerate every matching memo" — this is ENUMERATION MODE. This document is one matching memo in the targeted Q3 2024 stored-folder set, so emit the complete identifying record for this memo, not a prose summary. Whether the memo discusses Q1, Q2, or multiple periods does not affect inclusion because the target is the source folder context.
 
-status_summary: "Document matches the targeted Q3 2024 folder-context memo set. Extracted the identifying fields available for this memo."
+status_summary: "Document matches the targeted Q3 2024 source-folder memo set. Extracted the identifying fields available for this memo."
 
 page_research:
 - page_number: 1
   finding: "Memo: Deposit Reconciliation | SAB ID: SAB-2024-Q3-001 | Amount: $145MM | Functional Area: Retail Deposits | Root Cause: EUDA spreadsheet error in manual reconciliation | Status: Open"
 
-Why this format: The research statement is in ENUMERATION MODE (TARGETED QUERY + "Enumerate every matching memo"). For a targeted document set, each matching memo document should yield a complete identifying record for that document. No prose summary is substituted for the actual fields. The downstream summarizer will combine one record per memo into the final quarter-level enumeration.
+Why this format: The research statement is in ENUMERATION MODE (TARGETED QUERY + "Enumerate every matching memo"). For a targeted document set, each matching memo document should yield a complete identifying record for that document. No prose summary is substituted for the actual fields. The downstream summarizer will combine one record per memo into the final folder-level enumeration.
 </examples>', '<input>
 Research Statement: {{research_statement}}
 
@@ -1343,11 +1343,11 @@ Before applying the 3-way decision framework below, check whether the research s
 
 If the research statement contains any of these directives:
 
-- For documents whose document_name or metadata context MATCHES the explicit target named in the statement (for example, SAB 99 memo documents whose folder context indicates Q3 2024): apply the normal 3-way decision framework below. Prefer "answered" if the summary/excerpts contain the requested identifying fields; use "needs_deep_research" if the document is in the target set but the available metadata lacks the needed detail.
+- For documents whose document_name or metadata context MATCHES the explicit target named in the statement (for example, SAB 99 memo documents whose source folder context is Q3 2024): apply the normal 3-way decision framework below. Prefer "answered" if the summary/excerpts contain the requested identifying fields; use "needs_deep_research" if the document is in the target set but the available metadata lacks the needed detail. When the explicit target is a source folder context, match by storage-folder metadata even if the summary/excerpts discuss a different quarter or period.
 
 - For documents that do NOT match the explicit target, even if they are topically related to the research topic: mark them as "irrelevant" with a brief finding like "Not the targeted document for this query — research statement explicitly targets [name of target] and excludes this document type."
 
-- Example: if the research statement is "TARGETED QUERY: Query ONLY SAB 99 memo documents whose folder context indicates Q3 2024...", then SAB 99 memos from Q1, Q2, or Q4 are marked "irrelevant" even though they are topically related to SAB 99, and only Q3 2024 memo documents get the normal 3-way decision treatment.
+- Example: if the research statement is "TARGETED QUERY: Query ONLY SAB 99 memo documents whose source folder context is Q3 2024...", then SAB 99 memos stored under Q1, Q2, or Q4 are marked "irrelevant" even though they are topically related to SAB 99, and only Q3 2024 source-folder memo documents get the normal 3-way decision treatment. A memo stored under Q3 2024 still matches even if its summary references Q1 2024 or another period.
 
 Explicit targeting overrides topical relevance. A document can be topically related to the research topic and still be marked "irrelevant" if it is not the specifically targeted file.
 
@@ -1453,21 +1453,21 @@ Decisions:
 - index: 3, status: irrelevant, finding: "Lease accounting, not revenue related."
 
 EXAMPLE 6 - Explicit targeting in research statement (mark non-targets as irrelevant):
-Research Statement: "TARGETED QUERY: Query ONLY SAB 99 memo documents whose folder context indicates Q3 2024 in the internal_sab_99 database. Enumerate every matching memo, extracting all identifying fields available in the memo metadata and excerpts (memo name, SAB ID, amount, functional area, root cause category, status, and any other identifying fields present). Do NOT query SAB 99 memos outside Q3 2024."
+Research Statement: "TARGETED QUERY: Query ONLY SAB 99 memo documents whose source folder context is Q3 2024 in the internal_sab_99 database. Enumerate every matching memo stored in that folder, extracting all identifying fields available in the memo metadata and excerpts (memo name, SAB ID, amount, functional area, root cause category, status, and any other identifying fields present). Include every memo filed under that folder even if the memo discusses other periods. Do NOT query SAB 99 memos outside that source folder context."
 
 Batch contains 4 documents:
-- index=1: "[Q3 2024] Deposit Reconciliation Memo.pdf" (matches target folder context; summary contains requested identifying fields)
-- index=2: "[Q3 2024] Wire Transfer Memo.pdf" (matches target folder context; summary is too thin and likely needs deeper extraction)
+- index=1: "[Q3 2024] Deposit Reconciliation Memo.pdf" (matches target source folder context; summary contains requested identifying fields)
+- index=2: "[Q3 2024] Wire Transfer Memo.pdf" (matches target source folder context; summary references a Q2 2024 issue but the document is still part of the targeted stored folder set and likely needs deeper extraction)
 - index=3: "[Q2 2024] Securities Lending Memo.pdf" (wrong quarter)
 - index=4: "[Q4 2024] Fee Accrual Memo.pdf" (wrong quarter)
 
-Analysis: The research statement contains "TARGETED QUERY" and "Query ONLY" directives targeting the Q3 2024 folder-context memo set. Apply explicit targeting check: only documents whose names or metadata indicate Q3 2024 folder context match; the Q2 and Q4 memo documents are explicitly outside the target set even though they are topically related to SAB 99.
+Analysis: The research statement contains "TARGETED QUERY" and "Query ONLY" directives targeting the Q3 2024 source-folder memo set. Apply explicit targeting check: only documents whose names or metadata indicate Q3 2024 source folder context match; the Q2 and Q4 memo documents are explicitly outside the target set even though they are topically related to SAB 99. The matching Q3-folder document that references a Q2 issue still belongs in the target set because the target is storage-folder membership, not substantive period coverage.
 
 Decisions:
-- index: 1, status: answered, finding: "Q3 2024 SAB 99 memo for Deposit Reconciliation. Metadata provides the identifying fields requested for this memo, including memo name, amount, functional area, and short-form root cause."
-- index: 2, status: needs_deep_research, finding: "Q3 2024 SAB 99 memo matches the targeted folder context, but the available metadata does not expose the full identifying field set requested—full document extraction is likely needed."
-- index: 3, status: irrelevant, finding: "Not in the targeted Q3 2024 folder-context memo set."
-- index: 4, status: irrelevant, finding: "Not in the targeted Q3 2024 folder-context memo set."
+- index: 1, status: answered, finding: "Q3 2024 source-folder SAB 99 memo for Deposit Reconciliation. Metadata provides the identifying fields requested for this memo, including memo name, amount, functional area, and short-form root cause."
+- index: 2, status: needs_deep_research, finding: "SAB 99 memo is stored under the targeted Q3 2024 source folder context, so it belongs in scope even though the summary references a Q2 issue. The available metadata does not expose the full identifying field set requested—full document extraction is likely needed."
+- index: 3, status: irrelevant, finding: "Not in the targeted Q3 2024 source-folder memo set."
+- index: 4, status: irrelevant, finding: "Not in the targeted Q3 2024 source-folder memo set."
 </examples>', '<input>
 Research Statement: {{research_statement}}
 

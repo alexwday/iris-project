@@ -47,11 +47,11 @@ STRUCTURING ENUMERATION OUTPUT:
 - Do NOT write prose summaries of the enumeration (e.g., "the target set contains various SAB 99 memos from Q3 2024"). The user explicitly asked for the enumeration — return the actual items, not a description of them.
 
 Example research statements that put you in ENUMERATION MODE:
-- "TARGETED QUERY: Query ONLY SAB 99 memo documents whose folder context indicates Q3 2024... Enumerate every matching memo... extracting all identifying fields..."
-- "List all SAB 99 memos whose folder context indicates Q3 2024"
+- "TARGETED QUERY: Query ONLY SAB 99 memo documents whose source folder context is Q3 2024... Enumerate every matching memo stored in that folder... extracting all identifying fields..."
+- "List all SAB 99 memos stored under source folder context Q3 2024"
 - "Extract each entry from the targeted memo set"
 - "Return the complete list of errors for Q3 2024"
-- "What are the SAB IDs of all memos in the Q4 2025 folder?"
+- "What are the SAB IDs of all memos stored in the Q4 2025 folder?"
 
 EXTRACTION PROCESS (applies when NOT in enumeration mode):
 1. Read the document content carefully
@@ -171,17 +171,17 @@ page_research: []
 
 EXAMPLE 5 - ENUMERATION MODE for a targeted document set (extract identifying fields for this matching document):
 Document: [Q3 2024] Deposit Reconciliation Memo.pdf
-Research Statement: "TARGETED QUERY: Query ONLY SAB 99 memo documents whose folder context indicates Q3 2024 in the internal_sab_99 database. Enumerate every matching memo, extracting all identifying fields available in the memo metadata and excerpts (memo name, SAB ID, amount, functional area, root cause category, status, and any other identifying fields present). Do NOT query SAB 99 memos outside Q3 2024."
+Research Statement: "TARGETED QUERY: Query ONLY SAB 99 memo documents whose source folder context is Q3 2024 in the internal_sab_99 database. Enumerate every matching memo stored in that folder, extracting all identifying fields available in the memo metadata and excerpts (memo name, SAB ID, amount, functional area, root cause category, status, and any other identifying fields present). Include every memo filed under that folder even if the memo discusses other periods. Do NOT query SAB 99 memos outside that source folder context."
 
-Analysis: The research statement contains "TARGETED QUERY" and "Enumerate every matching memo" — this is ENUMERATION MODE. This document is one matching memo in the targeted Q3 2024 set, so emit the complete identifying record for this memo, not a prose summary.
+Analysis: The research statement contains "TARGETED QUERY" and "Enumerate every matching memo" — this is ENUMERATION MODE. This document is one matching memo in the targeted Q3 2024 stored-folder set, so emit the complete identifying record for this memo, not a prose summary. Whether the memo discusses Q1, Q2, or multiple periods does not affect inclusion because the target is the source folder context.
 
-status_summary: "Document matches the targeted Q3 2024 folder-context memo set. Extracted the identifying fields available for this memo."
+status_summary: "Document matches the targeted Q3 2024 source-folder memo set. Extracted the identifying fields available for this memo."
 
 page_research:
 - page_number: 1
   finding: "Memo: Deposit Reconciliation | SAB ID: SAB-2024-Q3-001 | Amount: $145MM | Functional Area: Retail Deposits | Root Cause: EUDA spreadsheet error in manual reconciliation | Status: Open"
 
-Why this format: The research statement is in ENUMERATION MODE (TARGETED QUERY + "Enumerate every matching memo"). For a targeted document set, each matching memo document should yield a complete identifying record for that document. No prose summary is substituted for the actual fields. The downstream summarizer will combine one record per memo into the final quarter-level enumeration.
+Why this format: The research statement is in ENUMERATION MODE (TARGETED QUERY + "Enumerate every matching memo"). For a targeted document set, each matching memo document should yield a complete identifying record for that document. No prose summary is substituted for the actual fields. The downstream summarizer will combine one record per memo into the final folder-level enumeration.
 </examples>
 ```
 

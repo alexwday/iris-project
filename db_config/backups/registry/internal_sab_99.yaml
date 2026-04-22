@@ -6,18 +6,18 @@ db_summary: Internal documents justifying the materiality assessment of financia
 db_description: |-
   **Content:** Internal SAB 99 memos — materiality assessment memos written under SEC Staff Accounting Bulletin No. 99 — stored as individual memo documents, typically one memo per financial statement error exceeding the $120MM threshold.
 
-  **Repository organization and quarter context:** The source repository organizes SAB 99 memos into fiscal-quarter subfolders (for example, `Q3 2024`, `Q4 2024`). That folder name is authoritative organizational metadata and is injected by the doc_refresh pipeline into retrieval artifacts. During ingestion and retrieval:
+  **Repository organization and source folder context:** The source repository organizes SAB 99 memos into fiscal-quarter subfolders (for example, `Q3 2024`, `Q4 2024`). That folder name is searchable source-folder metadata and is injected by the doc_refresh pipeline into retrieval artifacts. It identifies where the memo was stored in the repository, not necessarily the fiscal period or periods discussed in the memo itself. A memo filed under `Q2 2025` may analyze `Q1 2025`, multiple periods, or historical items. During ingestion and retrieval:
 
   - `document_name` is prefixed with the folder context (for example, `[Q3 2024] Deposit Reconciliation Memo.pdf`)
   - `document_summary` includes a "Source Folder Context" block naming the folder path
   - `document_description` and `document_usage` are prefixed with the folder context
   - full-document retrieval preserves that folder context alongside the memo content
 
-  Treat the folder context as meaningful searchable metadata that identifies the fiscal quarter or category of the memo. There is no separate quarterly Excel summary file required for quarter-level retrieval.
+  Treat the folder context as meaningful searchable metadata for storage-location queries and memo-set scoping. Do NOT assume the folder label alone defines the memo's covered period or substantive scope. There is no separate quarterly Excel summary file required for folder-level retrieval.
 
   **Memo content:** Each SAB 99 memo contains the long-form narrative documentation for a single error, including detailed root cause analysis, detailed remediation plan text, qualitative factor analysis, control deficiency narrative, and any cited references or supporting memos. The generated metadata and excerpts may also surface short-form identifying fields useful for retrieval and enumeration, such as memo title, SAB ID when present, brief description, root cause (short form), status, review status, $ impact, segment, region, classifications, contacts, and references. The memo itself remains the source of truth.
 
-  **Primary vs. fallback guidance:** For quarter-scoped or category-scoped queries, first use folder context to identify the relevant memo set (for example, memos whose folder context indicates `Q3 2024`). If the question asks only for identifying or short-form fields that appear in document metadata, summaries, descriptions, usage text, or excerpts, metadata-first retrieval may be sufficient. Fall back to full memo content when the query requires long-form narrative content that is not captured in the metadata or excerpts, such as the full remediation plan narrative, the detailed qualitative factor analysis section, or specific controls cited in the memo text.
+  **Primary vs. fallback guidance:** For storage-folder-scoped or category-scoped queries, first use source folder context to identify the relevant memo set (for example, memos stored under folder context `Q3 2024`). If the question asks only for identifying or short-form fields that appear in document metadata, summaries, descriptions, usage text, or excerpts, metadata-first retrieval may be sufficient. If the user is asking about the memo's actual covered period or the error period discussed in the memo, do not assume the folder context alone proves that substantive period. Fall back to full memo content when the query requires long-form narrative content that is not captured in the metadata or excerpts, such as the full remediation plan narrative, the detailed qualitative factor analysis section, or specific controls cited in the memo text.
 
   **Terminology:** This database concerns two related but distinct concepts that must not be conflated.
 
@@ -29,18 +29,20 @@ db_description: |-
 
   **Tier/Priority:** DOMAIN EXPERT - Specialized documentation for SAB 99 materiality assessments.
 
-  **Usage Guidance:** The individual SAB 99 memo documents are the primary source. Use folder context to scope the memo set by quarter, then use document metadata/excerpts for structured or short-form questions and the full memo text for narrative questions.
+  **Usage Guidance:** The individual SAB 99 memo documents are the primary source. Use source folder context to scope storage-folder memo sets, then use document metadata/excerpts for structured or short-form questions and the full memo text for narrative questions. For content-period questions, rely on the memo content and extracted fields, not the folder label alone.
 
-  Prioritize memo metadata plus folder context for queries about:
-  - Enumeration: "which SABs are from Q4 2025", "list the Q3 2024 memos"
-  - Root cause (short form): "what are the root causes of the Q4 memos", "which Q3 memos had EUDA-related root causes"
-  - Status / review: "which Q4 memos are still open", "what is the review status of each Q3 memo"
-  - $ impact: "which Q4 memos exceeded $200MM", "what is the aggregate $ impact for Q3"
-  - Classifications: "which Q4 memos are historical vs current", "which Q3 memos affected the P&L vs the balance sheet"
-  - Flags: "which Q4 memos have a SOX deficiency flag", "which Q3 memos require control assessment"
-  - Segment / region: "which Q4 memos affected the Retail segment", "which Q3 memos are from the US region"
-  - Brief description / summary: "give me a one-line summary of each Q4 memo"
-  - Contacts / references: "who are the contacts for each Q3 memo"
+  Prioritize memo metadata plus source folder context for queries about:
+  - Enumeration: "which SABs are stored under the Q4 2025 folder", "list the memos in the Q3 2024 folder"
+  - Root cause (short form): "what are the root causes of the memos in the Q4 2025 folder", "which memos in the Q3 2024 folder had EUDA-related root causes"
+  - Status / review: "which memos in the Q4 2025 folder are still open", "what is the review status of each memo in the Q3 2024 folder"
+  - $ impact: "which memos in the Q4 2025 folder exceeded $200MM", "what is the aggregate $ impact for the memos stored under Q3 2024"
+  - Classifications: "which memos in the Q4 2025 folder are historical vs current", "which memos in the Q3 2024 folder affected the P&L vs the balance sheet"
+  - Flags: "which memos in the Q4 2025 folder have a SOX deficiency flag", "which memos in the Q3 2024 folder require control assessment"
+  - Segment / region: "which memos in the Q4 2025 folder affected the Retail segment", "which memos in the Q3 2024 folder are from the US region"
+  - Brief description / summary: "give me a one-line summary of each memo in the Q4 2025 folder"
+  - Contacts / references: "who are the contacts for each memo in the Q3 2024 folder"
+
+  For queries phrased as "in the Q2 2025 folder", include every memo stored there even if the memo text references Q1 2025 or another period. Only treat quarter labels as substantive period filters when the query explicitly asks about the period discussed in the memo, not merely the folder where the memo is stored.
 
   Fall back to full memo content when the query needs long-form narrative content that is NOT captured in the metadata or excerpts, such as:
   - The full remediation plan narrative ("describe the detailed remediation steps for memo X")
@@ -50,9 +52,9 @@ db_description: |-
 
   Important: do NOT confuse short-form metadata with long-form narrative. Metadata or excerpts may capture a short categorical root cause (for example, "EUDA spreadsheet error in manual reconciliation"), but the memo body contains the multi-paragraph detailed root cause analysis. A query asking "what is the root cause of each Q4 memo" may be satisfied from metadata/excerpts if that short-form field is present. A query asking "walk me through the detailed root cause analysis section for each Q4 memo" requires the full memo text.
 
-  **When to Select:** Queries about SAB 99 memos, materiality evaluations under SEC Staff Accounting Bulletin No. 99, the Summary of Uncorrected Misstatements (SUMs) process, the $120MM materiality threshold, quarter-scoped memo sets identified by folder context, per-memo metadata (root cause, status, $ impact, segment, region, classifications, SOX deficiency flag, control assessment flag, contacts, references, internal/external, historical/current, retrospective/prospective, BS/P&L/SCF/disclosure area, annual-only flag), per-memo narrative analysis (full root cause analysis, detailed remediation plans, qualitative factor analysis, control deficiency narrative), quarterly aggregations, theme analysis across multiple memos, or documentation of immaterial versus material misstatements.
+  **When to Select:** Queries about SAB 99 memos, materiality evaluations under SEC Staff Accounting Bulletin No. 99, the Summary of Uncorrected Misstatements (SUMs) process, the $120MM materiality threshold, storage-folder-scoped memo sets identified by source folder context, per-memo metadata (root cause, status, $ impact, segment, region, classifications, SOX deficiency flag, control assessment flag, contacts, references, internal/external, historical/current, retrospective/prospective, BS/P&L/SCF/disclosure area, annual-only flag), per-memo narrative analysis (full root cause analysis, detailed remediation plans, qualitative factor analysis, control deficiency narrative), quarterly aggregations, theme analysis across multiple memos, or documentation of immaterial versus material misstatements.
 
-  **Query Tips:** Use precise terminology: "SAB 99" or "SEC Staff Accounting Bulletin No. 99" refers to the regulatory framework and the memo type; "Summary of Uncorrected Misstatements" (preferred over the "SUMs" acronym) refers to the internal process that identifies misstatements. Relevant search terms include: "SAB 99", "SAB 99 memo", "SEC Staff Accounting Bulletin No. 99", "materiality assessment", "Summary of Uncorrected Misstatements", "SUMs process", "uncorrected misstatement", "SAB ID", "memo status", "review status", "$ impact", "error amount", "segment", "region", "internal/external", "historical/current", "retrospective/prospective", "balance sheet impact", "P&L impact", "cash flow statement impact", "disclosure impact", "annual-only disclosure", "SOX deficiency", "SOX deficiency flag", "control assessment", "control assessment flag", "contacts", "references", "financial statement error", "$120MM threshold", "quantitative materiality", "qualitative factors", "root cause", "root cause analysis", "control deficiency", "remediation plan", "error correction", "restatement assessment", "immaterial misstatement", "intentional misstatement", "earnings management", "quarterly SAB 99 memos", "Q3 2024", "Q4 2025", "folder context", "quarter folder", "per-quarter SAB 99 listing".
+  **Query Tips:** Use precise terminology: "SAB 99" or "SEC Staff Accounting Bulletin No. 99" refers to the regulatory framework and the memo type; "Summary of Uncorrected Misstatements" (preferred over the "SUMs" acronym) refers to the internal process that identifies misstatements. Distinguish between storage-folder queries ("memos in the Q3 2024 folder", "stored under Q4 2025", "source folder context") and substantive period queries ("memos about Q3 2024", "errors from Q4 2025"). Relevant search terms include: "SAB 99", "SAB 99 memo", "SEC Staff Accounting Bulletin No. 99", "materiality assessment", "Summary of Uncorrected Misstatements", "SUMs process", "uncorrected misstatement", "SAB ID", "memo status", "review status", "$ impact", "error amount", "segment", "region", "internal/external", "historical/current", "retrospective/prospective", "balance sheet impact", "P&L impact", "cash flow statement impact", "disclosure impact", "annual-only disclosure", "SOX deficiency", "SOX deficiency flag", "control assessment", "control assessment flag", "contacts", "references", "financial statement error", "$120MM threshold", "quantitative materiality", "qualitative factors", "root cause", "root cause analysis", "control deficiency", "remediation plan", "error correction", "restatement assessment", "immaterial misstatement", "intentional misstatement", "earnings management", "quarterly SAB 99 memos", "Q3 2024", "Q4 2025", "source folder context", "stored under", "filed under", "quarter folder", "per-folder SAB 99 listing".
 
   **Query Type:** semantic search
 enabled: true

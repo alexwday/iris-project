@@ -779,10 +779,13 @@ def _prepend_folder_context_to_summary(
         "# Source Folder Context\n"
         f"This document is filed under the folder path: **{folder_context}**\n\n"
         "The folder name is meaningful organizational context — typically a "
-        "fiscal period, event name, or category — and should be treated as "
-        "authoritative metadata describing this document. Incorporate the "
-        "folder name when characterizing the document's scope, applicability, "
-        "and the queries it should match.\n\n"
+        "storage period, event name, or category — and should be preserved "
+        "as source-folder metadata for this document. Treat it as where the "
+        "document was filed, not as definitive proof of every period, issue, "
+        "or topic discussed in the document. Incorporate the folder name when "
+        "matching storage-folder queries, while relying on the document "
+        "content and extracted metadata for the memo's actual covered "
+        "periods, scope, and applicability.\n\n"
     )
     return header + document_summary
 

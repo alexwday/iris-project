@@ -197,14 +197,14 @@ Research found only tangential information.
 Approach: Use hedging language ("The available sources provide limited guidance..."), acknowledge limitations, suggest what additional research might help.
 
 EXAMPLE 4 - Per-document enumeration across multiple documents (use markdown table):
-Research Statement: "Identify the SAB 99 memos from Q3 2024 (documenting uncorrected misstatements from the Summary of Uncorrected Misstatements process)."
-Findings: Five SAB 99 memo documents filed under the Q3 2024 folder context provide the memo names, amounts, functional areas, and root causes [REF:1] through [REF:5].
+Research Statement: "Identify the SAB 99 memos stored under the Q3 2024 folder context (documenting uncorrected misstatements from the Summary of Uncorrected Misstatements process)."
+Findings: Five SAB 99 memo documents stored under the Q3 2024 folder context provide the memo names, amounts, functional areas, and root causes [REF:1] through [REF:5].
 
 Output format:
 
 "## SAB 99 Memos — Q3 2024
 
-Five SAB 99 materiality assessment memos filed under the Q3 2024 folder context document uncorrected misstatements that exceeded the $120MM threshold.
+Five SAB 99 materiality assessment memos are stored under the Q3 2024 folder context. The folder label identifies where this memo set is stored; individual memos may discuss other periods while still belonging to this folder-scoped set.
 
 | SAB 99 Memo | Amount | Functional Area | Root Cause |
 |---|---|---|---|

@@ -39,9 +39,9 @@ Before applying the general SELECTION CRITERIA below, check whether the research
 
 If the research statement contains any of these directives, you MUST respect them strictly:
 
-1. Select ONLY documents whose document_name or metadata context matches the explicit target named in the statement. Match by the identifying pattern given, whether it refers to a single file or a targeted document set (for example, if the statement says "SAB 99 memo documents whose folder context indicates Q3 2024", look for documents whose names or metadata indicate the Q3 2024 folder context).
+1. Select ONLY documents whose document_name or metadata context matches the explicit target named in the statement. Match by the identifying pattern given, whether it refers to a single file or a targeted document set (for example, if the statement says "SAB 99 memo documents whose source folder context is Q3 2024", look for documents whose names or metadata indicate that Q3 2024 source folder context). When the explicit target is a source folder context, match by storage-folder metadata only; do NOT exclude a document just because its summary or excerpts mention a different quarter or period.
 
-2. Do NOT add additional documents based on topical relevance. A document may be topically related to the query but still outside the explicitly targeted file or file set. If the statement says "Query ONLY SAB 99 memo documents whose folder context indicates Q3 2024", you must exclude SAB 99 memos from Q2 2024, Q4 2024, or documents with no matching folder context.
+2. Do NOT add additional documents based on topical relevance. A document may be topically related to the query but still outside the explicitly targeted file or file set. If the statement says "Query ONLY SAB 99 memo documents whose source folder context is Q3 2024", you must exclude SAB 99 memos stored under Q2 2024, Q4 2024, or documents with no matching source folder context.
 
 3. If no document in this batch matches the explicit target, return an empty selection (selected_indices=[]). The target file may be in a different batch or not yet ingested. Do NOT substitute "topically similar" documents in its place — an empty selection is the correct answer when the target is not present.
 
@@ -134,17 +134,17 @@ Batch contents: 10 documents from the SAB 99 database
 - Doc 4: "[Q3 2024] Fee Accrual Memo.pdf"
 - Docs 5-9: SAB 99 memos from other quarters
 
-Research Statement: "TARGETED QUERY: Query ONLY SAB 99 memo documents whose folder context indicates Q3 2024 in the internal_sab_99 database. Enumerate every matching memo, extracting all identifying fields available in the memo metadata and excerpts (memo name, SAB ID, amount, functional area, root cause category, status, and any other identifying fields present). Do NOT query SAB 99 memos outside Q3 2024."
+Research Statement: "TARGETED QUERY: Query ONLY SAB 99 memo documents whose source folder context is Q3 2024 in the internal_sab_99 database. Enumerate every matching memo stored in that folder, extracting all identifying fields available in the memo metadata and excerpts (memo name, SAB ID, amount, functional area, root cause category, status, and any other identifying fields present). Include every memo filed under that folder even if the memo discusses other periods. Do NOT query SAB 99 memos outside that source folder context."
 
 Selection: selected_indices=[2, 3, 4]
-Reasoning: "Research statement is a TARGETED QUERY with 'Query ONLY' directive naming the Q3 2024 folder-context memo set. Docs 2-4 match the target because their document names indicate Q3 2024 folder context. Docs from Q1, Q2, and other quarters are excluded even though they are topically related SAB 99 memos."
+Reasoning: "Research statement is a TARGETED QUERY with 'Query ONLY' directive naming the Q3 2024 source-folder memo set. Docs 2-4 match the target because their document names indicate Q3 2024 source folder context. Docs stored under Q1, Q2, and other folders are excluded even though they are topically related SAB 99 memos. If a matching Q3-folder memo mentions a Q1 issue in its summary, it should still be included because the target is the storage folder."
 
 EXAMPLE 5 - Explicit targeting, target not in this batch:
 Batch contents: 10 SAB 99 memo PDFs from Q1, Q2, and Q4 only (no Q3 2024 memos in this batch)
-Research Statement: Same TARGETED QUERY as Example 4 targeting the Q3 2024 folder-context memo set.
+Research Statement: Same TARGETED QUERY as Example 4 targeting the Q3 2024 source-folder memo set.
 
 Selection: selected_indices=[]
-Reasoning: "Research statement is a TARGETED QUERY targeting the Q3 2024 folder-context memo set. No document in this batch matches because the batch contains only Q1, Q2, and Q4 memo documents. The target may be in another batch; returning empty selection is correct. Do NOT substitute topically similar non-Q3 memos."
+Reasoning: "Research statement is a TARGETED QUERY targeting the Q3 2024 source-folder memo set. No document in this batch matches because the batch contains only Q1, Q2, and Q4 stored memo documents. The target may be in another batch; returning empty selection is correct. Do NOT substitute topically similar non-Q3-folder memos."
 </examples>
 ```
 

@@ -40,11 +40,11 @@ Before applying the 3-way decision framework below, check whether the research s
 
 If the research statement contains any of these directives:
 
-- For documents whose document_name or metadata context MATCHES the explicit target named in the statement (for example, SAB 99 memo documents whose folder context indicates Q3 2024): apply the normal 3-way decision framework below. Prefer "answered" if the summary/excerpts contain the requested identifying fields; use "needs_deep_research" if the document is in the target set but the available metadata lacks the needed detail.
+- For documents whose document_name or metadata context MATCHES the explicit target named in the statement (for example, SAB 99 memo documents whose source folder context is Q3 2024): apply the normal 3-way decision framework below. Prefer "answered" if the summary/excerpts contain the requested identifying fields; use "needs_deep_research" if the document is in the target set but the available metadata lacks the needed detail. When the explicit target is a source folder context, match by storage-folder metadata even if the summary/excerpts discuss a different quarter or period.
 
 - For documents that do NOT match the explicit target, even if they are topically related to the research topic: mark them as "irrelevant" with a brief finding like "Not the targeted document for this query — research statement explicitly targets [name of target] and excludes this document type."
 
-- Example: if the research statement is "TARGETED QUERY: Query ONLY SAB 99 memo documents whose folder context indicates Q3 2024...", then SAB 99 memos from Q1, Q2, or Q4 are marked "irrelevant" even though they are topically related to SAB 99, and only Q3 2024 memo documents get the normal 3-way decision treatment.
+- Example: if the research statement is "TARGETED QUERY: Query ONLY SAB 99 memo documents whose source folder context is Q3 2024...", then SAB 99 memos stored under Q1, Q2, or Q4 are marked "irrelevant" even though they are topically related to SAB 99, and only Q3 2024 source-folder memo documents get the normal 3-way decision treatment. A memo stored under Q3 2024 still matches even if its summary references Q1 2024 or another period.
 
 Explicit targeting overrides topical relevance. A document can be topically related to the research topic and still be marked "irrelevant" if it is not the specifically targeted file.
 
@@ -150,21 +150,21 @@ Decisions:
 - index: 3, status: irrelevant, finding: "Lease accounting, not revenue related."
 
 EXAMPLE 6 - Explicit targeting in research statement (mark non-targets as irrelevant):
-Research Statement: "TARGETED QUERY: Query ONLY SAB 99 memo documents whose folder context indicates Q3 2024 in the internal_sab_99 database. Enumerate every matching memo, extracting all identifying fields available in the memo metadata and excerpts (memo name, SAB ID, amount, functional area, root cause category, status, and any other identifying fields present). Do NOT query SAB 99 memos outside Q3 2024."
+Research Statement: "TARGETED QUERY: Query ONLY SAB 99 memo documents whose source folder context is Q3 2024 in the internal_sab_99 database. Enumerate every matching memo stored in that folder, extracting all identifying fields available in the memo metadata and excerpts (memo name, SAB ID, amount, functional area, root cause category, status, and any other identifying fields present). Include every memo filed under that folder even if the memo discusses other periods. Do NOT query SAB 99 memos outside that source folder context."
 
 Batch contains 4 documents:
-- index=1: "[Q3 2024] Deposit Reconciliation Memo.pdf" (matches target folder context; summary contains requested identifying fields)
-- index=2: "[Q3 2024] Wire Transfer Memo.pdf" (matches target folder context; summary is too thin and likely needs deeper extraction)
+- index=1: "[Q3 2024] Deposit Reconciliation Memo.pdf" (matches target source folder context; summary contains requested identifying fields)
+- index=2: "[Q3 2024] Wire Transfer Memo.pdf" (matches target source folder context; summary references a Q2 2024 issue but the document is still part of the targeted stored folder set and likely needs deeper extraction)
 - index=3: "[Q2 2024] Securities Lending Memo.pdf" (wrong quarter)
 - index=4: "[Q4 2024] Fee Accrual Memo.pdf" (wrong quarter)
 
-Analysis: The research statement contains "TARGETED QUERY" and "Query ONLY" directives targeting the Q3 2024 folder-context memo set. Apply explicit targeting check: only documents whose names or metadata indicate Q3 2024 folder context match; the Q2 and Q4 memo documents are explicitly outside the target set even though they are topically related to SAB 99.
+Analysis: The research statement contains "TARGETED QUERY" and "Query ONLY" directives targeting the Q3 2024 source-folder memo set. Apply explicit targeting check: only documents whose names or metadata indicate Q3 2024 source folder context match; the Q2 and Q4 memo documents are explicitly outside the target set even though they are topically related to SAB 99. The matching Q3-folder document that references a Q2 issue still belongs in the target set because the target is storage-folder membership, not substantive period coverage.
 
 Decisions:
-- index: 1, status: answered, finding: "Q3 2024 SAB 99 memo for Deposit Reconciliation. Metadata provides the identifying fields requested for this memo, including memo name, amount, functional area, and short-form root cause."
-- index: 2, status: needs_deep_research, finding: "Q3 2024 SAB 99 memo matches the targeted folder context, but the available metadata does not expose the full identifying field set requested—full document extraction is likely needed."
-- index: 3, status: irrelevant, finding: "Not in the targeted Q3 2024 folder-context memo set."
-- index: 4, status: irrelevant, finding: "Not in the targeted Q3 2024 folder-context memo set."
+- index: 1, status: answered, finding: "Q3 2024 source-folder SAB 99 memo for Deposit Reconciliation. Metadata provides the identifying fields requested for this memo, including memo name, amount, functional area, and short-form root cause."
+- index: 2, status: needs_deep_research, finding: "SAB 99 memo is stored under the targeted Q3 2024 source folder context, so it belongs in scope even though the summary references a Q2 issue. The available metadata does not expose the full identifying field set requested—full document extraction is likely needed."
+- index: 3, status: irrelevant, finding: "Not in the targeted Q3 2024 source-folder memo set."
+- index: 4, status: irrelevant, finding: "Not in the targeted Q3 2024 source-folder memo set."
 </examples>
 ```
 
