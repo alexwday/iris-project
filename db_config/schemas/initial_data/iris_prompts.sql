@@ -1,5 +1,5 @@
 -- IRIS Prompts Initial Data
--- Generated: 2026-04-22T14:09:05.358527
+-- Generated: 2026-04-22T14:40:31.126027
 -- 
 -- Import with: psql -f iris_prompts.sql
 -- Or run in pgAdmin/DBeaver
@@ -67,25 +67,31 @@ Step 2: Does the query require COMPLETENESS to answer correctly?
 
    YES (either explicit or implicit) → proceed to Step 2a before finalizing action
 
-Step 2a: Does an authoritative shortcut cover the query dimension?
+Step 2a: Does an authoritative index or other explicit routing shortcut cover the query dimension?
    When Step 2 evaluates to YES, check the AVAILABLE_DATABASES context above for an authoritative shortcut that covers the dimension being asked about.
 
-   An authoritative shortcut exists when a database description explicitly identifies either:
-   - a specific index, summary, or cross-reference document type that pre-computes the answer, OR
-   - a folder context or other metadata attribute that cleanly identifies the complete document set for the dimension being asked about (for example, quarterly subfolders whose names are injected into document metadata during retrieval).
+   In the general case, an authoritative shortcut exists when a database description explicitly identifies a specific index, summary, or cross-reference document type that pre-computes the answer.
+
+   Narrow exception: some database descriptions may explicitly identify another routing shortcut that is not a separate index file but still cleanly identifies the complete target set for the question. For SAB 99 specifically, quarter folder context injected into document metadata is such a shortcut for quarter-scoped memo queries.
 
    Apply this branching logic:
 
    BRANCH 1 — Authoritative shortcut exists AND the query can be fully answered from the structured fields available in the targeted document or targeted document set (the shortcut contains the attributes the user is asking about, either as direct columns/fields or as structured short-form values):
      → proceed_with_research
      → is_db_wide=false
-     → Research statement MUST use DIRECTIVE TARGETING LANGUAGE. Do not just mention the shortcut — explicitly instruct downstream agents to query ONLY the named file or ONLY the targeted document set. Use this template:
+     → Research statement MUST use DIRECTIVE TARGETING LANGUAGE. Do not just mention the shortcut — explicitly instruct downstream agents to query ONLY the named file or ONLY the targeted document set.
 
-         "TARGETED QUERY: Query ONLY the documents matching ''[specific document name, identifying pattern, or folder-context constraint]'' in the [database name] database. Enumerate every matching row/document, extracting all identifying fields (e.g., [ID, name, amount, category, status, root cause, etc. — list the specific attributes the query asks about]) for each matching entry/document. Do NOT query documents outside that target set — the targeted document(s) contain the complete answer."
+     → Default template for a true index/single-file shortcut:
+
+         "TARGETED SINGLE-FILE QUERY: Query ONLY the ''[specific document name or identifying pattern, e.g., Q3 2024 quarterly summary sheet]'' in the [database name] database. Enumerate every row/entry in that file, extracting all identifying fields (e.g., [ID, name, amount, category, status, root cause, etc. — list the specific attributes the query asks about]) for each entry. Do NOT query any other documents in the database — the targeted file contains the complete enumeration."
+
+     → Adapted template for an explicitly-described targeted document set rather than one file (currently relevant to SAB 99 quarter folder-context routing):
+
+         "TARGETED QUERY: Query ONLY the documents matching ''[specific identifying pattern or folder-context constraint]'' in the [database name] database. Enumerate every matching row/document, extracting all identifying fields (e.g., [ID, name, amount, category, status, root cause, etc. — list the specific attributes the query asks about]) for each matching entry/document. Do NOT query documents outside that target set — the targeted document(s) contain the complete answer."
 
      → Rationale: the shortcut already scopes the complete answer; db_wide scanning would be wasteful and would surface findings from documents that do not directly answer the query. The directive language (TARGETED QUERY, Query ONLY, Do NOT query, Enumerate every) instructs the downstream file selection and research agents to respect the explicit targeting rather than dragging in topically-related documents.
 
-     → CRITICAL — what counts as "answerable from the shortcut": Read the database description carefully to find the explicit list of fields/columns/attributes available in the targeted document or targeted document set. If the query is asking about ANY of those fields, Branch 1 still applies — even if the field name sounds "detail-y" or "narrative" like root cause, status, $ impact, summary, description, classification, segment, region, or flag. What matters is whether the field is available as a structured or short-form value in the retrieval metadata/context, NOT how the field name sounds.
+     → CRITICAL — what counts as "answerable from the shortcut": Read the database description carefully to find the explicit list of fields/columns/attributes available in the targeted document or targeted document set. If the query is asking about ANY of those fields, Branch 1 still applies — even if the field name sounds "detail-y" or "narrative" like root cause, status, $ impact, summary, description, classification, segment, region, or flag. What matters is whether the field is available as a structured or short-form value in the index/metadata/context, NOT how the field name sounds.
 
      → Concrete example: the SAB 99 database description states that quarter folder context is injected into document metadata and retrieved context, and that memo metadata/excerpts may include short-form fields like root cause, status, $ impact, segment, region, classification flags, brief description, contacts, and references. So a query like "which Q4 SABs had EUDA root causes" or "what is the status of each Q3 memo" or "what segments did the Q4 memos affect" is Branch 1, because the folder context identifies the correct memo set and the metadata/excerpts may contain the requested short-form fields.
 
@@ -105,7 +111,7 @@ Step 2a: Does an authoritative shortcut cover the query dimension?
      → is_db_wide=true
      → Rationale: this is the Step 2 default — db_wide is required because there is no index shortcut
 
-   AMBIGUITY GUIDANCE: Default to Branch 1 when the database description establishes either an index document or a folder-context/metadata shortcut with structured fields and the query asks about ANY of those fields — even if the field name sounds detail-y. Only escalate to Branch 2 when the query genuinely asks for narrative or analytical content that would not fit in a structured table cell or short-form metadata field ("walk me through", "describe in detail", "explain the analysis", "compare the approach", "what was cited"). Phrases like "which X are from Y", "how many X in Z", "list the X for period P", "what is the [structured field] of each" suggest Branch 1. Phrases like "describe the full [narrative]", "walk me through the [analysis section]", "what was specifically cited in the memo" suggest Branch 2.
+   AMBIGUITY GUIDANCE: Default to Branch 1 when the database description establishes either an index document or an explicitly-described shortcut such as the SAB 99 folder-context routing rule, and the query asks about ANY structured or short-form field exposed by that shortcut — even if the field name sounds detail-y. Only escalate to Branch 2 when the query genuinely asks for narrative or analytical content that would not fit in a structured table cell or short-form metadata field ("walk me through", "describe in detail", "explain the analysis", "compare the approach", "what was cited"). Phrases like "which X are from Y", "how many X in Z", "list the X for period P", "what is the [structured field] of each" suggest Branch 1. Phrases like "describe the full [narrative]", "walk me through the [analysis section]", "what was specifically cited in the memo" suggest Branch 2.
 
 Step 3: Is intent clear and scope focused?
    YES → proceed_with_research
@@ -177,7 +183,7 @@ MUST DO:
 - Make reasonable assumptions when context allows
 - Create research statements that are specific and searchable
 - Set is_db_wide=true for comprehensive/discovery queries AND for queries requiring completeness (counting, enumeration, aggregation)
-- EXCEPTION to the above: when a database description in the AVAILABLE_DATABASES context identifies an authoritative shortcut for the specific dimension being queried — either an index/summary/cross-reference document or a folder-context/metadata shortcut that cleanly identifies the complete document set — AND the user is asking only for enumeration or short-form structured detail, use is_db_wide=false with a targeted research statement that explicitly references that shortcut. See Step 2a of the decision tree for the exact branching logic and ambiguity guidance.
+- EXCEPTION to the above: when a database description in the AVAILABLE_DATABASES context identifies an authoritative shortcut for the specific dimension being queried — usually an index/summary/cross-reference document, or in the SAB 99 case the explicit quarter folder-context routing rule — AND the user is asking only for enumeration or short-form structured detail, use is_db_wide=false with a targeted research statement that explicitly references that shortcut. See Step 2a of the decision tree for the exact branching logic and ambiguity guidance.
 - Expand acronyms and synonyms to their canonical full form in research statements when the full form is authoritatively defined in one of the database descriptions in the AVAILABLE_DATABASES context above. For example: if a database description defines "SUMs" as the abbreviation for "Summary of Uncorrected Misstatements" (the internal process), expand the acronym in research statements to its full form. Respect the distinctions drawn in database descriptions — do not treat related concepts as synonyms (e.g., do not use "SUMs" and "SAB 99" interchangeably if the database description establishes them as distinct — one is an internal process, the other is the SEC regulatory framework under which memos are written). For widely-recognized accounting, finance, or regulatory standards (GAAP, IFRS, SEC, FASB, IASB, SOX, SAB, PCAOB), either the acronym or the full form is acceptable — use whichever reads more naturally. Do NOT guess or invent expansions for in-house terms, product names, or domain-specific jargon that are not authoritatively defined — leave those as-is.
 
 MUST NOT:
